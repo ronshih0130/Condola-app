@@ -1,9 +1,11 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
+import { ProxyOwnerConfirmField } from "@/components/proxy-owner-confirm";
 import { actionReversePayment } from "@/server/auth-actions";
 import { actionConfirmPayment, actionRejectPayment } from "@/server/actions";
 import { moneyLabel } from "@/server/format";
+import { ownerCollectedPaymentIds } from "@/server/payment-request-status";
 import { can, rolesFor } from "@/server/perms";
 import { listPayments } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -17,6 +19,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const t = makeT(session.locale);
   const params = await searchParams;
   const rows = await listPayments(session);
+  const ownerCollected = await ownerCollectedPaymentIds(session, rows.filter(r=>r.status==="submitted").map(r=>r.id));
   const canAct = can(session.role, "pay.record");
   const canReverse = can(session.role, "pay.reverse");
   const roleLabel: Record<string, string> = {
@@ -84,6 +87,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                       <div className="row">
                         <form action={actionConfirmPayment}>
                           <input type="hidden" name="paymentId" value={row.id} />
+                          {ownerCollected.has(row.id) ? <ProxyOwnerConfirmField required /> : null}
                           <button className="btn sm pri" type="submit" data-testid="confirm-payment">
                             {t("i_confirm_received")}
                           </button>

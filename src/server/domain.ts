@@ -24,7 +24,7 @@ import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { calculateStatement } from "./statement-calculation";
 import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "./move-in-invoice";
 import { billingPreviewsEnabled } from "./billing-preview-rules";
-import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
+import { emitPaymentResult, lockOwnerPaymentResultContext, lockPaymentResultContext } from "./payment-result-events";
 import { decideConfirmation } from "./b010-proxy-confirm-rules";
 import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
 import { syncVacantOwnerExpense } from "./utility-expense";
@@ -2030,20 +2030,26 @@ export async function recordPayment(
 }
 
 export async function confirmPayment(session: Session, paymentId: string, options: {proxyOwnerConfirmed?: boolean; source?: string} = {}) {
-  assertStaff(session, ["admin", "manager", "accountant"]);
+  if (session.kind === "staff") {
+    assertStaff(session, ["admin", "manager", "accountant"]);
+  } else if (session.kind !== "owner") {
+    throw new FlowError("errors.forbidden");
+  }
+  const lockContext=session.kind === "owner" ? lockOwnerPaymentResultContext : lockPaymentResultContext;
   const result = await tx(session.userId, async (client) => {
     const initial=await maybe<{lease_id:string}>(client,`SELECT lease_id::text FROM payments WHERE id=$1 AND org_id=$2`,[paymentId,session.orgId]);
     if (!initial) throw new FlowError("errors.notFound");
-    const enabled=await lockPaymentResultContext(client,session,initial.lease_id);
+    const enabled=await lockContext(client,session,initial.lease_id);
+    if (session.kind === "owner" && !enabled) throw new FlowError("errors.forbidden");
     const center=await beginPaymentCenter(client,session,{leaseId:initial.lease_id,paymentId:paymentId,action:"confirm"});
     const payment = await maybe<{id:string;org_id:string;property_id:string;lease_id:string;currency:string;amount_minor:string;payer_contact_id:string|null;status:string}>(client,
       `SELECT id,org_id::text,property_id::text,lease_id::text,currency,amount_minor::text,payer_contact_id::text,status::text FROM payments WHERE id=$1 AND org_id=$2 FOR UPDATE`,[paymentId,session.orgId]);
     if (!payment || payment.lease_id !== initial.lease_id) throw new FlowError("errors.notFound");
-    if (enabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
+    if (enabled && !await lockContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
     if (payment.status === "confirmed") return {leaseId:payment.lease_id,enabled};
     if (payment.status !== "submitted") throw new FlowError("errors.paymentState");
     const invoices=await lockAllocationInvoices(client,session.orgId,payment.lease_id);
-    if (enabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
+    if (enabled && !await lockContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
     let decision: ReturnType<typeof decideConfirmation> | null = null;
     if (enabled) {
       const collector = await maybe<{collector:"management"|"owner";owner_contact_id:string|null}>(
@@ -2055,7 +2061,9 @@ export async function confirmPayment(session: Session, paymentId: string, option
       decision = decideConfirmation({
         collector: collector.collector,
         ownerContactId: collector.owner_contact_id,
-        actor: {kind:"staff",role:session.role,userId:session.userId},
+        actor: session.kind === "owner"
+          ? {kind:"owner",userId:session.userId,ownerContactId:collector.owner_contact_id}
+          : {kind:"staff",role:session.role,userId:session.userId},
         proxyOwnerConfirmed: options.proxyOwnerConfirmed === true,
         paymentStatus: payment.status,
       });
@@ -2069,8 +2077,8 @@ export async function confirmPayment(session: Session, paymentId: string, option
     await allocateAndLedger(client,payment,session.userId,invoices);
     if (decision?.ok) {
       await client.query(
-        `SELECT app.b010_record_confirmation($1,$2,$3,$4,'submitted','confirmed')`,
-        [payment.id,decision.confirmedVia,decision.onBehalfOfOwnerContactId,options.source ?? "staff_ui"],
+        `SELECT app.b010_record_confirmation($1,$2,$3)`,
+        [payment.id,options.proxyOwnerConfirmed === true,options.source ?? (session.kind === "owner" ? "owner_portal" : "staff_ui")],
       );
     }
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;

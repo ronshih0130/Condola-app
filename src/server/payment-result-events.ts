@@ -11,6 +11,15 @@ export async function lockPaymentResultContext(client: Client, session: Session,
   return result.rows[0].enabled;
 }
 
+export async function lockOwnerPaymentResultContext(client: Client, session: Session, leaseId: string): Promise<boolean> {
+  const exists=await client.query<{present:boolean}>(`SELECT to_regprocedure('app.b010_lock_owner_payment_context(uuid,text,uuid,uuid)') IS NOT NULL AS present`);
+  if (!exists.rows[0]?.present) return false;
+  const sessionId=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(session.sessionId) ? session.sessionId : null;
+  const result=await client.query<{enabled:boolean}>(`SELECT app.b010_lock_owner_payment_context($1,$2,$3,$4) AS enabled`,
+    [session.orgId,session.environment,sessionId,leaseId]);
+  return result.rows[0].enabled;
+}
+
 export async function emitPaymentResult(client: Client, paymentId: string, kind: "payment_confirmed" | "payment_rejected" | "payment_reversed") {
   return (await client.query<{id:string}>(`SELECT app.b010_emit_payment_event($1,$2)::text AS id`,[paymentId,kind])).rows[0].id;
 }
