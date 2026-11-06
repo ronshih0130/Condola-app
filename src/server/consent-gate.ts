@@ -58,7 +58,15 @@ export function consentGateTarget(record: StoredConsent | null, variant: "recons
 /** Where /auth/enter sends this request. Consent wins over the requested path. */
 export async function resolveEntryLocation(next: string | null, session: { userId: string; kind: string } | null) {
   const safe = sameAppPath(next) || "/auth/continue";
-  if (!session) return safe;
+  if (!session) {
+    // Vendor accounts have authentication but no staff/owner/tenant persona.
+    // Reuse the identity and acceptance flow already used by /consent.
+    if (safe.split("?")[0] !== "/vendor-account") return safe;
+    const { readSignupIdentity } = await import("./signup");
+    const identity = await readSignupIdentity();
+    if (!identity?.confirmed) return `/login?next=${encodeURIComponent(safe)}`;
+    return (await entryConsentRedirect(identity.user_id, "reconsent", safe)) || safe;
+  }
   const variant = session.kind === "owner" || session.kind === "tenant" ? "portal" : "reconsent";
   return (await entryConsentRedirect(session.userId, variant, safe)) || safe;
 }

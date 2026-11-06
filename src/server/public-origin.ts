@@ -16,10 +16,13 @@ export function isProductionAppHost(host: string | null | undefined) {
  */
 export function sameAppPath(value: string | null | undefined) {
   const raw = (value ?? "").trim();
+  // Browsers normalize backslashes to slashes in navigation URLs. Reject them
+  // and embedded control characters before accepting a relative return path.
+  if (raw.includes("\\") || Array.from(raw).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return "";
   if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
   try {
     const url = new URL(raw);
-    if (url.protocol === "https:" && isProductionAppHost(url.hostname)) {
+    if (url.protocol === "https:" && isProductionAppHost(url.hostname) && !url.pathname.startsWith("//")) {
       return `${url.pathname}${url.search}`;
     }
   } catch {

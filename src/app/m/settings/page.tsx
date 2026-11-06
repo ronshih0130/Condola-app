@@ -1,3 +1,5 @@
+import { upgradeGate } from "@/server/upgrade-gate";
+import { FREE_UNITS } from "@/server/billing";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -15,6 +17,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   await requireCurrentConsent(undefined, "page");
   const query = await searchParams;
   const session = await getSession();
+  const gate = await upgradeGate(session, FREE_UNITS);
   const t = makeT(session.locale);
   const mail = can(session.role, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   return (
@@ -50,12 +53,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </form>
       ) : null}
       <div className="card pad" style={{ maxWidth: 720 }}>
-        {session.environment === "sandbox" ? (
+        {!gate.redirectTo && session.environment === "sandbox" ? (
           <div className="alert warn" data-testid="sandbox-plan" style={{ marginBottom: 12 }}>
             {t("i_sandbox_plan")}
           </div>
         ) : null}
-        {session.environment === "sandbox" ? null : (
+        {gate.redirectTo || session.environment === "sandbox" ? null : (
           <p data-testid="settings-plan">{t("i_settings_plan")}</p>
         )}
         {isPlatformAdmin(session.email) ? (

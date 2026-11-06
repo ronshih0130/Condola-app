@@ -164,6 +164,7 @@ export default async function TicketDetailPage({
             canComment={canWrite}
             canUpload={canWrite}
             canViewPhotos={can(session.role, "tickets.update")}
+            hiddenPhotoCount={detail.hiddenPhotoCount}
             allowInternal={canWrite}
             returnTo="staff"
           />

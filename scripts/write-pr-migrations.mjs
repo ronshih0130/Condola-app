@@ -14,6 +14,42 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106235000_b028_notification_delivery_claims.sql": {
+    addOnly: false,
+    reason: "New private durable delivery tables with NOT NULL and CHECK constraints, append-only events, service-only gateways and privilege revokes. Existing producers unchanged; rollout defaults OFF.",
+  },
+  "supabase/migrations/20261106220000_b026_vendor_accounts.sql": {
+    addOnly: true,
+    reason: "Adds private vendor account invitations, links and immutable correction events, service-only gateways and default-OFF vendor_account setting. No backfill, public table/schema changes or existing function replacement.",
+  },
+  "supabase/migrations/20261106190000_b026_vendor_estimates.sql": {
+    addOnly: false,
+    reason: "Adds private immutable vendor estimate provenance, gateways and a default-OFF setting; guards on existing tables restrict scheduling/completion when a persisted estimate lacks approval. Code rollback is compatible for legacy tickets without estimates; persisted estimates remain guarded even with flags OFF, so rollback must preserve B-013 approval handling. No backfill or existing function replacement.",
+  },
+  "supabase/migrations/20261106231000_b026_closed_job_notification_read.sql": {
+    addOnly: true,
+    reason: "Adds a service-only sibling vendor notification gateway used only when the in-process vendor-link kill switch is ON; it delegates to app.b028_center_vendor unless the org is enhanced and the ticket closed, where reads are write-free and marks rejected. No table, column, existing function or flag change.",
+  },
+  "supabase/migrations/20261106070000_prop05_platform_settings_audit.sql": {
+    addOnly: true,
+    reason: "Adds an AFTER INSERT/UPDATE/DELETE audit trigger on platform_settings writing key/value/description changes to audit_log (PROP-05 override audit); no value, grant or behaviour change.",
+  },
+  "supabase/migrations/20261106232500_b027_ticket_photo_write_narrowing.sql": {
+    addOnly: false,
+    reason: "Narrows existing INSERT policies: photo-bucket file rows only for tickets.update roles; portal file/attachment inserts only for non-members; shared-photo id reads only for tickets.update roles. An old Accountant or staff-reporter insert of a ticket photo now fails.",
+  },
+  "supabase/migrations/20261106232000_b027_ticket_photo_member_read.sql": {
+    addOnly: false,
+    reason: "Narrows existing member SELECT policies: ticket-photo bucket files and ticket_attachments rows become readable only by tickets.update roles (admin/manager/maintenance); the tenant portal attachment policy keeps only its tenant half. Adds one authenticated definer count function. An old Accountant query reading photo rows now returns no rows.",
+  },
+  "supabase/migrations/20261106200000_b027_partner_consent_gate.sql": {
+    addOnly: false,
+    reason: "Adds an OFF consent gate and empty per-company approval setting, a private evidence validator and a guarded replacement of the existing partner-control writer; reuses append-only consents, no legal text/version or allowlist changes.",
+  },
+  "supabase/migrations/20261106180000_b027_partner_controls.sql": {
+    addOnly: true,
+    reason: "Adds private partner overrides and immutable events, scoped SECURITY DEFINER read/admin gateways, and two default-OFF settings; no existing grants or production allowlists change.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",
@@ -330,6 +366,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106120000_prop06_recipient_channels.sql": {
+    addOnly: true,
+    reason: "Adds a staff-only, pinned-scope SECURITY DEFINER read reporting a recipient contact's portal kind and channel availability (e-mail, in-app, LINE bound/friend) without addresses or LINE ids; no writes, flag or callers (PROP-06 foundation).",
+  },
   "supabase/migrations/20261106040000_b022_owner_title_report_replies.sql": {
     addOnly: true,
     reason: "Adds private append-only owner receipt-title revisions and report replies, authenticated SECURITY DEFINER gateways and two default-OFF settings; no existing-table schema changes or backfill. Title RPC updates only the caller owner contact receipt_title.",
@@ -337,6 +377,10 @@ const added = {
   "supabase/migrations/20261106030000_b014_owner_net_ledger.sql": {
     addOnly: true,
     reason: "Adds private append-only statement versions and mock report delivery events, authenticated SECURITY DEFINER gateways and two default-OFF platform settings; no existing-table schema or function changes.",
+  },
+  "supabase/migrations/20261106160000_b028_legacy_claim_invoice_fence.sql": {
+    addOnly: false,
+    reason: "Replaces only the legacy email_log fence trigger function to take a leading invoice FOR KEY SHARE lock on rent-overdue claims (any rollout state), serializing them with the new-owner paths that lock the invoice FOR UPDATE; no table, column, grant, flag or data change; old Worker compatible.",
   },
   "supabase/migrations/20261106020000_b010_payment_result_events.sql": {
     addOnly: true,

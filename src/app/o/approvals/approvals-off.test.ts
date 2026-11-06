@@ -32,6 +32,8 @@ test("OFF keeps the exact placeholder JSX and returns before any reader call", (
 });
 test("manager block returns nothing before reading when OFF", () => {
   const source = readFileSync(new URL("../../m/tickets/[id]/approval-panel.tsx", import.meta.url), "utf8");
-  assert.ok(source.indexOf("if (!(await repairApprovalsEnabled(session.orgId))) return null;")
-    < source.indexOf("await managerApprovalView("));
+  const policy = source.indexOf("await repairApprovalPanelPolicy(session.orgId, true)");
+  const guard = source.indexOf("if (!policy.approvals) return null;");
+  assert.ok(policy >= 0 && guard > policy && guard < source.indexOf("await managerApprovalView("));
+  assert.ok(source.includes("enabled={policy.estimates}"));
 });

@@ -28,12 +28,12 @@ async function wipe(client: Client) {
   await client.query("SET session_replication_role = replica");
   // These specific private tables refer to demo rows wiped below. Older schemas
   // may not have them yet; leave unrelated private application data alone.
-  for (const table of ["b009_row_identities", "b009_decisions"]) {
+  for (const table of ["b027_partner_override_events", "b027_partner_overrides", "b009_row_identities", "b009_decisions"]) {
     if ((await client.query("SELECT to_regclass($1) AS name", [`app.${table}`])).rows[0].name) {
       await client.query(`DELETE FROM app.${table}`);
     }
   }
-  for (const name of ["b022_report_replies", "b022_receipt_title_revisions", "b014_report_delivery_events", "b014_statement_versions", "b010_payment_confirmations", "b010_lease_collectors", "b008_monthly_rent_commands", "b008_monthly_rent_occurrences", "b013_policy_commands", "b013_override_revisions", "b013_default_revisions", "b013_default_roots", "b015_edit_commands", "b017_center_resolutions", "b028_center_mark_contexts", "b028_center_cursors", "b028_center_reads", "b028_center_recipients", "b028_center_events", "b017_occurrences", "b017_old_source_transactions", "b028_read_markers", "b028_recipient_claims", "b010_payment_commands", "b010_source_events", "b010_tenant_due_preferences"]) {
+  for (const name of ["b028_delivery_attempt_events", "b028_delivery_attempts", "b026_vendor_link_events", "b026_vendor_job_accounts", "b026_vendor_accounts", "b026_vendor_account_invites", "b026_vendor_estimates", "b022_report_replies", "b022_receipt_title_revisions", "b014_report_delivery_events", "b014_statement_versions", "b010_payment_confirmations", "b010_lease_collectors", "b008_monthly_rent_commands", "b008_monthly_rent_occurrences", "b013_policy_commands", "b013_override_revisions", "b013_default_revisions", "b013_default_roots", "b015_edit_commands", "b017_center_resolutions", "b028_center_mark_contexts", "b028_center_cursors", "b028_center_reads", "b028_center_recipients", "b028_center_events", "b017_occurrences", "b017_old_source_transactions", "b028_read_markers", "b028_recipient_claims", "b010_payment_commands", "b010_source_events", "b010_tenant_due_preferences"]) {
     const exists = await client.query<{ present: boolean }>(`SELECT to_regclass($1) IS NOT NULL AS present`, [`app.${name}`]);
     if (exists.rows[0].present) await client.query(`DELETE FROM app.${quoteIdent(name)}`);
   }

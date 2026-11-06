@@ -1,3 +1,4 @@
+import { validPartnerTerm, validPartnerUnits, type PartnerOverride } from "./partner-controls-rules";
 /** Whole NT$ prices. Subscription invoices, estimates, and the pricing calculator all call quoteMonthly. */
 
 export const LIST_STANDARD = 30;
@@ -52,16 +53,21 @@ export function resolveCommercialPrice(input: {
   now: Date;
   override?: PriceOverride | null;
   snapshot?: PriceSnapshot | null;
+  unitOverride?: PartnerOverride | null;
 }): { rate: number; freeUnits: number; source: PriceSource } {
   const overrideOn = Boolean(input.override && inForce(input.override.lockedUntil, input.now));
   const codeOn = Boolean(input.snapshot && inForce(input.snapshot.lockedUntil, input.now));
-  const freeUnits = codeOn ? input.snapshot!.freeUnits : FREE_UNITS;
+  const unit = input.unitOverride;
+  const unitOn = unit?.kind === "unit_override" && unit.revoked === false && validPartnerUnits(unit.unitLimit)
+    && validPartnerTerm(unit.startsAt, unit.expiresAt)
+    && Date.parse(unit.startsAt) <= input.now.getTime() && input.now.getTime() < Date.parse(unit.expiresAt);
+  const freeUnits = unitOn ? unit.unitLimit! : codeOn ? input.snapshot!.freeUnits : FREE_UNITS;
   if (overrideOn) return { rate: input.override!.rate, freeUnits, source: "override" };
   if (codeOn) {
     const rate = input.tier === "pro" ? input.snapshot!.proPrice : input.snapshot!.standardPrice;
     return { rate, freeUnits, source: "code" };
   }
-  return { rate: input.tier === "pro" ? LIST_PRO : LIST_STANDARD, freeUnits: FREE_UNITS, source: "list" };
+  return { rate: input.tier === "pro" ? LIST_PRO : LIST_STANDARD, freeUnits, source: "list" };
 }
 
 export function quoteMonthly(input: {
@@ -71,6 +77,7 @@ export function quoteMonthly(input: {
   now: Date;
   override?: PriceOverride | null;
   snapshot?: PriceSnapshot | null;
+  unitOverride?: PartnerOverride | null;
 }) {
   const price = resolveCommercialPrice(input);
   const monthly = monthlyAmount({ units: input.units, rate: price.rate, freeUnits: price.freeUnits });
