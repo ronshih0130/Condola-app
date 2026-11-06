@@ -171,6 +171,15 @@ flags:
     org_override: "organizations.feature_flags.owner_receipt_title must be boolean true"
     activation: "local synthetic validation only; no hosted activation"
 
+  owner_contact_linking:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.owner_contact_linking requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.owner_contact_linking must be boolean true"
+    activation: "local synthetic validation only; no hosted activation (PROP-13 trusted owner login linking)"
+
   owner_report_replies:
     owner: Ron
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
