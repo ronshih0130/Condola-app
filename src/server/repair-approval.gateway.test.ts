@@ -47,6 +47,7 @@ test("B-021 service uses contracted gateways and the registered rendering contro
     "b013_decide_estimate",
     "b013_authorize_emergency",
     "b013_record_appointment",
+    "b013_record_vendor_appointment",
     "b013_emit_reminder",
     "b013_dispatch_allowed",
   ];

@@ -340,14 +340,14 @@ test("reader_off_empty", async () => {
 test("appointment_job_guard", async () => {
   const version = await submit(), good = await job(ticket), wrong = await job(otherTicket);
   const insert = "INSERT INTO app.b013_repair_appointments(org_id,ticket_id,version_id,repair_vendor_job_id,event_kind,actor_id)"
-    + " VALUES($1,$2,$3,$4,'vendor_rejected',$5)";
+    + " VALUES($1,$2,$3,$4,'vendor_proposed',$5)";
   await db.query("SAVEPOINT wrong_job");
   await assert.rejects(db.query(insert, [ORG_ID, ticket, version, wrong, USERS.manager]), { code: "23503" });
   await db.query("ROLLBACK TO SAVEPOINT wrong_job");
   await db.query("RELEASE SAVEPOINT wrong_job");
   await db.query(insert, [ORG_ID, ticket, version, good, USERS.manager]);
   // Read visibility does not depend on vendor_dispatch.
-  assert.equal((await read("b013_manager_view", sessions.manager))[0].appointment_event_kind, "vendor_rejected");
+  assert.equal((await read("b013_manager_view", sessions.manager))[0].appointment_event_kind, "vendor_proposed");
 });
 test("reader_role_definer_only and no_direct_table_grants", async () => {
   const rows = (await db.query("SELECT p.oid,p.proname,p.prosecdef,p.proconfig FROM pg_proc p"

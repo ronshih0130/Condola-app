@@ -21,6 +21,7 @@ const tables = [
 const gateways = [
   "b013_submit_estimate", "b013_decide_estimate", "b013_authorize_emergency",
   "b013_record_appointment", "b013_emit_reminder", "b013_dispatch_allowed",
+  "b013_record_vendor_appointment",
 ];
 type Result = {
   status: string;
@@ -224,13 +225,15 @@ test("role_definer_only", async () => {
     has_function_privilege('authenticated',p.oid,'EXECUTE') authenticated
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='app' AND p.proname=ANY($1::text[])`, [gateways])).rows;
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 7);
   for (const row of rows) {
     assert.equal(row.prosecdef, true);
     assert.equal(row.service, true);
     assert.equal(row.anon, false);
     assert.equal(row.authenticated, false);
-    assert.ok(row.proconfig.some((value: string) => value.replaceAll(" ", "") === "search_path=pg_catalog,public,app,pg_temp"));
+    assert.ok(row.proconfig.some((value: string) => value.replaceAll(" ", "") ===
+      (["b013_record_appointment", "b013_record_vendor_appointment"].includes(row.proname)
+        ? "search_path=pg_catalog,app" : "search_path=pg_catalog,public,app,pg_temp")));
   }
 });
 test("off_fail_closed", async () => {
@@ -385,7 +388,7 @@ test("vendor_rejected_appointment_keeps_ticket_status_and_checks_job_ticket", as
   const good = await job(ticket), wrong = await job(otherTicket);
   async function appointment(jobId: string): Promise<Result> {
     return (await asRole(`SELECT app.b013_record_appointment(
-      $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'vendor_rejected',NULL,NULL,NULL,NULL,$6::bytea) result`,
+      $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'vendor_rejected',NULL,NULL,NULL,NULL,$6::bytea,'Unavailable') result`,
     [ORG_ID, sessions.manager, randomUUID(), version, jobId, hash([version, jobId, "vendor_rejected"])]))
       .rows[0].result;
   }
@@ -397,4 +400,109 @@ test("vendor_rejected_appointment_keeps_ticket_status_and_checks_job_ticket", as
   assert.equal(result.status, "recorded");
   assert.equal((await db.query("SELECT event_kind FROM app.b013_repair_appointments WHERE id=$1", [result.appointment_id])).rows[0].event_kind, "vendor_rejected");
   assert.equal((await db.query("SELECT status::text FROM public.maintenance_tickets WHERE id=$1", [ticket])).rows[0].status, before);
+});
+
+async function vendorAppointmentFixture(createdBy: string | null = USERS.admin) {
+  const version = await pending(), jobId = randomUUID(), tokenHash = randomBytes(32).toString("hex");
+  const scope = (await db.query(`SELECT pg_get_expr(d.adbin,d.adrelid) expression
+    FROM pg_attribute a JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+    WHERE a.attrelid='public.repair_vendor_jobs'::regclass AND a.attname='scope'`)).rows[0]?.expression;
+  await db.query(`INSERT INTO public.repair_vendor_jobs
+    (id,org_id,ticket_id,vendor_name,vendor_phone,contact_window,token_hash,expires_at,active,created_by,scope)
+    VALUES($1,$2,$3,'Fixture vendor','+886900000000','Weekdays',$4,
+      clock_timestamp()+interval '1 day',true,$5,${scope ?? "'repair'"})`,
+  [jobId, ORG_ID, ticket, tokenHash, createdBy]);
+  return { version, jobId, tokenHash };
+}
+type VendorFixture = Awaited<ReturnType<typeof vendorAppointmentFixture>>;
+async function vendorAppointment(f: VendorFixture, options: {
+  org?: string; request?: string; event?: string; reason?: string | null; digest?: Buffer;
+} = {}): Promise<Result> {
+  const event = options.event ?? "vendor_rejected";
+  const reason = options.reason === undefined ? "Cannot attend" : options.reason;
+  return (await asRole(`SELECT app.b013_record_vendor_appointment(
+    $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::text,
+    NULL,NULL,'2026-11-06T10:00:00Z','2026-11-06T11:00:00Z',$7::text,$8::bytea) result`,
+  [options.org ?? ORG_ID, f.jobId, f.tokenHash, options.request ?? randomUUID(), f.version,
+    event, reason, options.digest ?? hash([f.version, f.jobId, event, reason])])).rows[0].result;
+}
+
+test("vendor token rejection and completion replay without a session and never close the ticket", async () => {
+  const f = await vendorAppointmentFixture();
+  await controls("vendor_dispatch", true);
+  const before = (await db.query("SELECT status::text FROM public.maintenance_tickets WHERE id=$1", [ticket])).rows[0];
+  const request = randomUUID(), digest = hash("fixed hash tests independent argument binding");
+  const first = await vendorAppointment(f, { request, digest });
+  assert.equal(first.status, "recorded");
+  assert.deepEqual(await vendorAppointment(f, { request, digest }), first);
+  assert.equal((await vendorAppointment(f, { request, digest, reason: "Changed" })).status, "rejected_conflict");
+  assert.equal((await vendorAppointment(f, { request, digest: hash("changed hash") })).status, "rejected_conflict");
+  const row = (await db.query(`SELECT response_reason,actor_id::text FROM app.b013_repair_appointments
+    WHERE id=$1`, [first.appointment_id])).rows[0];
+  assert.deepEqual(row, { response_reason: "Cannot attend", actor_id: USERS.admin });
+  assert.equal((await vendorAppointment(f, { event: "vendor_completion_submitted" })).status, "rejected_conflict");
+  await decide(f.version);
+  const complete = await vendorAppointment(f, { event: "vendor_completion_submitted", reason: null });
+  assert.equal(complete.status, "recorded");
+  assert.deepEqual((await db.query("SELECT status::text FROM public.maintenance_tickets WHERE id=$1", [ticket])).rows[0], before);
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b013_repair_appointments")).rows[0].n, 2);
+  await rejected("UPDATE app.b013_repair_appointments SET response_reason='changed' WHERE id=$1", [first.appointment_id], "23514");
+  await rejected("DELETE FROM app.b013_repair_appointments WHERE id=$1", [complete.appointment_id], "23514");
+});
+
+test("vendor token pins org, ticket and active capability even on replay", async () => {
+  const f = await vendorAppointmentFixture(), request = randomUUID();
+  await controls("vendor_dispatch", true);
+  assert.equal((await vendorAppointment(f, { request })).status, "recorded");
+  await assert.rejects(vendorAppointment({ ...f, tokenHash: randomBytes(32).toString("hex") }), { code: "42501" });
+  await assert.rejects(vendorAppointment(f, { org: ORG2_ID }), { code: "42501" });
+  const other = await submit({ ticketId: otherTicket });
+  assert.ok(other.version_id);
+  await assert.rejects(vendorAppointment({ ...f, version: other.version_id }), { code: "42501" });
+  for (const change of ["active=false", "revoked_at=clock_timestamp()", "expires_at=clock_timestamp()-interval '1 second'"]) {
+    await db.query("SAVEPOINT capability");
+    await db.query(`UPDATE public.repair_vendor_jobs SET ${change} WHERE id=$1`, [f.jobId]);
+    await assert.rejects(vendorAppointment(f, { request }), { code: "42501" });
+    await db.query("ROLLBACK TO SAVEPOINT capability");
+    await db.query("RELEASE SAVEPOINT capability");
+  }
+});
+
+test("vendor OFF commands persist and replay; null dispatcher uses stable job actor", async () => {
+  const f = await vendorAppointmentFixture(null);
+  for (const flag of ["vendor_dispatch", "repair_approvals"] as const) {
+    await controls("vendor_dispatch", true);
+    await controls("repair_approvals", true);
+    await controls(flag, false);
+    const request = randomUUID();
+    assert.deepEqual(await vendorAppointment(f, { request }), { status: "rejected_disabled" });
+    await controls(flag, true);
+    assert.deepEqual(await vendorAppointment(f, { request }), { status: "rejected_disabled" });
+    assert.equal((await db.query("SELECT actor_id::text FROM app.b013_repair_commands WHERE request_id=$1", [request])).rows[0].actor_id, f.jobId);
+  }
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b013_repair_appointments")).rows[0].n, 0);
+  assert.equal((await vendorAppointment(f)).status, "recorded");
+});
+
+test("company confirmation stays staff-only and rejection reasons are checked by gateway and table", async () => {
+  const f = await vendorAppointmentFixture();
+  await controls("vendor_dispatch", true);
+  assert.equal((await vendorAppointment(f, { event: "company_confirmed" })).status, "rejected_invalid");
+  for (const reason of [null, "", "   ", "x".repeat(4001)]) {
+    assert.equal((await vendorAppointment(f, { reason })).status, "rejected_invalid");
+    await rejected(`INSERT INTO app.b013_repair_appointments
+      (org_id,ticket_id,version_id,repair_vendor_job_id,event_kind,actor_id,response_reason)
+      VALUES($1,$2,$3,$4,'vendor_rejected',$5,$6)`,
+    [ORG_ID, ticket, f.version, f.jobId, USERS.admin, reason], "23514");
+  }
+  for (const reason of ["x", "x".repeat(4000)]) {
+    assert.equal((await vendorAppointment(f, { reason })).status, "recorded");
+  }
+  const sql = `SELECT app.b013_record_appointment($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,
+    'company_confirmed',NULL,NULL,'2026-11-06T10:00:00Z','2026-11-06T11:00:00Z',$6::bytea) result`;
+  const args = [ORG_ID, sessions.manager, randomUUID(), f.version, f.jobId, hash("confirmation")];
+  assert.equal((await asRole(sql, args)).rows[0].result.status, "recorded");
+  for (const session of [sessions.owner, null]) {
+    await assert.rejects(asRole(sql, [ORG_ID, session, randomUUID(), f.version, f.jobId, hash("denied")]), { code: "42501" });
+  }
 });

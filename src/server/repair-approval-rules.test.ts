@@ -212,3 +212,15 @@ test("assertAppointment checks event names, timestamps and confirmation bounds",
     assert.throws(() => assertAppointment({ ...input, ...changes }), FlowError);
   }
 });
+
+
+test("appointment rejection requires a bounded reason; completion permits photo-backed omission", () => {
+  for (const reason of [undefined, null, "", "   ", "x".repeat(4001)]) {
+    assert.throws(() => assertAppointment({ eventKind: "vendor_rejected", reason }), FlowError);
+  }
+  for (const reason of ["x", " x ", "x".repeat(4000), "😀".repeat(4000)]) {
+    assert.doesNotThrow(() => assertAppointment({ eventKind: "vendor_rejected", reason }));
+  }
+  assert.doesNotThrow(() => assertAppointment({ eventKind: "vendor_completion_submitted" }));
+  assert.throws(() => assertAppointment({ eventKind: "vendor_completion_submitted", reason: " " }), FlowError);
+});

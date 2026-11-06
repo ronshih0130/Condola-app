@@ -104,3 +104,38 @@ test("migration is atomic, bounded, additive and does not enable rollout flags",
   assert.match(reminder, /ON CONFLICT \(org_id, version_id, kind\) DO NOTHING/);
   assert.doesNotMatch(reminder, /(?:INSERT INTO|UPDATE)\s+app\.b013_estimate_(?:decisions|heads)/);
 });
+
+
+test("B-024 reason migration and vendor capability gateway remain service-only", () => {
+  const migration = readFileSync(new URL(
+    "../../supabase/migrations/20261105190000_b024_vendor_completion_reason.sql", import.meta.url,
+  ), "utf8").replace(/--[^\n]*/g, "");
+  assert.match(migration, /^BEGIN;/);
+  assert.match(migration, /SET LOCAL lock_timeout = '5s';/);
+  assert.match(migration, /SET LOCAL statement_timeout = '60s';/);
+  assert.match(migration, /COMMIT;\s*$/);
+  assert.match(migration, /ADD COLUMN response_reason text/);
+  assert.match(migration, /response_reason IS NULL OR length\(btrim\(response_reason\)\) BETWEEN 1 AND 4000/);
+  assert.match(migration, /event_kind <> 'vendor_rejected' OR response_reason IS NOT NULL/);
+  assert.equal((migration.match(/SECURITY DEFINER SET search_path=pg_catalog,app AS/g) ?? []).length, 2);
+  assert.equal((migration.match(/GRANT EXECUTE ON FUNCTION/g) ?? []).length, 2);
+  assert.doesNotMatch(migration, /GRANT\s+(?!EXECUTE\b)|TO\s+(?:PUBLIC|anon|authenticated)\b/i);
+  assert.doesNotMatch(migration, /(?:INSERT INTO|UPDATE|DELETE FROM)\s+public\./i);
+  for (const name of ["b013_record_appointment", "b013_record_vendor_appointment"]) {
+    assert.match(migration, new RegExp("REVOKE ALL ON FUNCTION app\\." + name
+      + "\\([^;]+\\)\\s+FROM PUBLIC,\\s*anon,\\s*authenticated,\\s*service_role;"));
+  }
+  const vendor = migration.split("CREATE FUNCTION app.b013_record_vendor_appointment(")[1];
+  assert.ok(vendor);
+  assert.match(vendor, /id=p_job AND org_id=p_org AND token_hash=p_token_hash/);
+  assert.match(vendor, /active AND revoked_at IS NULL AND expires_at>clock_timestamp\(\) FOR SHARE/);
+  assert.match(vendor, /v.ticket_id IS DISTINCT FROM j.ticket_id/);
+  assert.match(vendor, /coalesce\(j.created_by,j.id\)/);
+  assert.match(vendor, /app.b013_replay\(p_org,actor,p_request,'appointment'/);
+  assert.match(vendor, /app.b013_store_result\(p_org,actor,p_request,v.ticket_id,'appointment'/);
+  assert.match(vendor, /app.b013_lock_version\(p_org,p_version\)/);
+  assert.match(vendor, /'vendor_proposed','vendor_rejected','vendor_completion_submitted'/);
+  assert.doesNotMatch(vendor, /'company_confirmed'|app.b013_actor/);
+  assert.match(vendor, /NOT app.b013_approvals_enabled\(p_org\).*app.vendor_dispatch_enabled\(p_org\)/);
+  assert.match(vendor, /p_confirmed_end\),p_response_reason/);
+});
