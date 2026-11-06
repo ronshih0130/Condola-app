@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107020000_b017_custom_role_governance.sql": {
+    addOnly: false,
+    reason: "B017 private role authority, immutable revisions, receipts, gated governance/member triggers and restrictive photo/audit RLS. Hosted compatibility remains unproved.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",

@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { createHash } from "node:crypto";
 import { tx } from "./db";
 import { can } from "./perms";
@@ -7,7 +8,7 @@ import { parseRenewalInput,renewalDiff,type RenewalInput,type RenewalTerms } fro
 
 type Row={id:string;start_date:string;end_date:string|null;rent_amount_minor:string;rent_frequency:string;due_day:number;deposit_amount_minor:string;currency:string;minor_unit:number;unit_id:string;target_unit_id:string|null;target_room_id:string|null;updated_at:string};
 export type RenewalView={terms:RenewalTerms;fingerprint:string};
-function permitted(s:Session,id:string) {return s.kind==="staff" && !s.needsSandbox && can(s.role,"leases.edit") && [s.userId,s.orgId,s.liveOrgId,s.sessionId,id].every(isUuid) && ["live","sandbox"].includes(s.environment);}
+function permitted(s:Session,id:string) {return s.kind==="staff" && !s.needsSandbox && can(s,"leases.edit") && [s.userId,s.orgId,s.liveOrgId,s.sessionId,id].every(isUuid) && ["live","sandbox"].includes(s.environment);}
 async function authorized(client:import("pg").Client,s:Session) {
   const result=await client.query(`SELECT 1 FROM public.organizations o JOIN public.org_members m ON m.org_id=$2 AND m.user_id=$3 AND m.status='active' AND m.role::text=$4 JOIN public.auth_sessions a ON a.id=$5 AND a.user_id=$3 JOIN public.platform_settings f ON f.key='lease_renewal'
     WHERE o.id=$1 AND o.environment::text=$6 AND ((o.environment='live' AND o.id=$2 AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=$2)) AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()
@@ -24,17 +25,19 @@ async function source(client:import("pg").Client,s:Session,id:string) {
   return {row,terms,fingerprint:createHash("sha256").update(JSON.stringify(row)).digest("hex")};
 }
 export async function renewalComparisonView(s:Session,id:string):Promise<RenewalView|null> {
+  s = await guardEffectiveSession(s, "leases.edit");
  if(!permitted(s,id))return null;
- try{return await tx(s.userId,async c=>{const src=await source(c,s,id);if(!src||!await authorized(c,s))return null;return {terms:src.terms,fingerprint:src.fingerprint};},{orgId:s.orgId,environment:s.environment},{readOnly:true});}catch{return null;}
+ try{return await tx(s.userId,async c=>withEffectiveAuthority(c, s, "leases.edit", async () => {const src=await source(c,s,id);if(!src||!await authorized(c,s))return null;return {terms:src.terms,fingerprint:src.fingerprint};}),{orgId:s.orgId,environment:s.environment},{readOnly:true});}catch{return null;}
 }
 export async function compareRenewal(s:Session,id:string,expected:string,input:RenewalInput) {
+  s = await guardEffectiveSession(s, "leases.edit");
  if(!permitted(s,id)||typeof expected!=="string"||!/^[a-f0-9]{64}$/.test(expected))return {state:"unavailable" as const};
- try{return await tx(s.userId,async c=>{
+ try{return await tx(s.userId,async c=>withEffectiveAuthority(c, s, "leases.edit", async () => {
    const src=await source(c,s,id);if(!src)return {state:"unavailable" as const};if(src.fingerprint!==expected)return {state:"stale" as const};
    const proposed=parseRenewalInput(input,src.terms);if(!proposed)return {state:"invalid" as const};
    const conflict=await c.query(`SELECT EXISTS(SELECT 1 FROM public.leases l WHERE l.org_id=$1 AND l.unit_id=$2 AND l.status IN ('pending_signature','active') AND l.term && daterange($3::date,$4::date,'[]') AND (l.target_unit_id IS NOT NULL OR $5::uuid IS NOT NULL OR l.target_room_id=$6::uuid)) AS present`,[s.orgId,src.row.unit_id,proposed.startDate,proposed.endDate,src.row.target_unit_id,src.row.target_room_id]);
    if(!await authorized(c,s))return {state:"unavailable" as const};
    const fresh=await source(c,s,id);if(!fresh || fresh.fingerprint!==expected)return {state:"stale" as const};
    return {state:"ready" as const,current:src.terms,proposed,diff:renewalDiff(src.terms,proposed),overlap:conflict.rows[0].present as boolean};
- },{orgId:s.orgId,environment:s.environment},{readOnly:true});}catch{return {state:"unavailable" as const};}
+ }),{orgId:s.orgId,environment:s.environment},{readOnly:true});}catch{return {state:"unavailable" as const};}
 }

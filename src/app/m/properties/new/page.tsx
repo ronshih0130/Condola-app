@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { PropertyWizard } from "@/components/property-wizard";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NewPropertyPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   await requireCurrentConsent(undefined, "page");
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "props.edit");
   const t = makeT(session.locale);
   const params = await searchParams;
   if (session.role !== "admin" && session.role !== "manager") {

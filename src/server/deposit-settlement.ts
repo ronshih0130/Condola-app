@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import type { Client } from "pg";
 import { FlowError } from "./errors";
 import { requireOrgScope } from "./org-guard";
@@ -16,6 +17,7 @@ export async function isDepositSettlementEnabled(
   session: Session,
   client?: Pick<Client, "query">,
 ): Promise<boolean> {
+  session = await guardEffectiveSession(session, "leases.edit");
   requireOrgScope(session);
   if (!client) return false;
   try {
@@ -45,6 +47,7 @@ export async function openSettlement(session: Session, _input: {
   currency: string;
   sourceHandoverRecordId?: string;
 }): Promise<DepositSettlementWriteResult> {
+  session = await guardEffectiveSession(session, "leases.edit");
   requireOrgScope(session);
   const enabled = await isDepositSettlementEnabled(session);
   if (!enabled) return { ok: false, reason: "disabled" };
@@ -58,6 +61,7 @@ export async function addOrUpdateLine(session: Session, _input: RevisionTarget &
   reason: string;
   sourceLeaseChargeId?: string;
 }): Promise<DepositSettlementWriteResult> {
+  session = await guardEffectiveSession(session, "leases.edit");
   requireOrgScope(session);
   const enabled = await isDepositSettlementEnabled(session);
   if (!enabled) return { ok: false, reason: "disabled" };
@@ -71,6 +75,7 @@ export async function attachEvidence(session: Session, _input: RevisionTarget & 
     | { kind: "handover_attachment"; attachmentId: string }
     | { kind: "settlement_upload"; completedUploadId: string };
 }): Promise<DepositSettlementWriteResult> {
+  session = await guardEffectiveSession(session, "leases.edit");
   requireOrgScope(session);
   const enabled = await isDepositSettlementEnabled(session);
   if (!enabled) return { ok: false, reason: "disabled" };
@@ -80,6 +85,7 @@ export async function attachEvidence(session: Session, _input: RevisionTarget & 
 export async function finalizeSettlement(session: Session, _input: RevisionTarget & {
   expectedTotalDeductionMinor: string;
 }): Promise<DepositSettlementWriteResult> {
+  session = await guardEffectiveSession(session, "leases.edit");
   requireOrgScope(session);
   const enabled = await isDepositSettlementEnabled(session);
   if (!enabled) return { ok: false, reason: "disabled" };
@@ -97,6 +103,7 @@ export async function recordPayment(session: Session, _input: SettlementTarget &
   externalRef?: string;
   recordNote?: string;
 }): Promise<DepositSettlementWriteResult> {
+  session = await guardEffectiveSession(session, "leases.edit");
   requireOrgScope(session);
   const enabled = await isDepositSettlementEnabled(session);
   if (!enabled) return { ok: false, reason: "disabled" };

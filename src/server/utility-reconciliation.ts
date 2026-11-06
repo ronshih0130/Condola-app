@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { tx } from "./db";
 import { billingPreviewsEnabled } from "./billing-preview-rules";
 import { monthBounds } from "./money";
@@ -17,12 +18,13 @@ export function reconcileUtility(bill: number | null, tenant: number, owner: num
 
 /** Reads saved runs and bill amounts; it never creates or alters a draft. */
 export async function utilityReconciliation(session: Session, month: string) {
+  session = await guardEffectiveSession(session, "stmt.view");
   assertPerm(session,"stmt.view");
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return null;
   const bounds = monthBounds(month);
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "stmt.view", async () => {
     if (!(await billingPreviewsEnabled(client,session.orgId))) return null;
     const rows = await client.query<{ id:string; property:string; unit:string; currency:string; start:string; end:string; status:string; bill:string | null; tenant:string; owner:string; inputs:unknown }>(`SELECT r.id::text,p.name AS property,u.label AS unit,r.currency,r.period_start::text AS start,r.period_end::text AS end,r.status::text,b.total_amount_minor::text AS bill,coalesce(sum(l.amount_minor) FILTER (WHERE l.bearer='tenant'),0)::text AS tenant,coalesce(sum(l.amount_minor) FILTER (WHERE l.bearer='owner'),0)::text AS owner,r.inputs FROM utility_allocation_runs r JOIN units u ON u.id=r.unit_id JOIN properties p ON p.id=u.property_id LEFT JOIN utility_bills b ON b.id=r.utility_bill_id LEFT JOIN utility_allocation_lines l ON l.run_id=r.id WHERE r.org_id=$1 AND r.status <> 'void' AND r.period_end >= $2::date AND r.period_start <= $3::date GROUP BY r.id,p.name,u.label,b.total_amount_minor ORDER BY p.name,u.label,r.period_start,r.id`,[session.orgId,bounds.start,bounds.end]);
     return rows.rows.map((r) => ({ ...r, reconciliation:reconcileUtility(r.bill === null ? null : Number(r.bill),Number(r.tenant),Number(r.owner),r.inputs) }));
-  },{orgId:session.orgId,environment:session.environment},{isolation:"repeatable read",readOnly:true});
+  }),{orgId:session.orgId,environment:session.environment},{isolation:"repeatable read",readOnly:true});
 }

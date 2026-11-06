@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { paymentRequestStatus } from "@/server/payment-request-status";
 import { getSession } from "@/server/session";
@@ -6,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "pay.record");
     const denied = await requireCurrentConsent(session, "api");
     if (denied) return denied;
     const body: unknown = await request.json();

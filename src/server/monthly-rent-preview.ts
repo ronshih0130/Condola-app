@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { tx } from './db';
 import { requireOrgScope } from './org-guard';
 import { billingPreviewAuthorityOn } from './billing-preview-authority';
@@ -9,10 +10,11 @@ import { isUuid } from './repair-rules';
 const CAP=2000;
 /** Server-loaded session only. Snapshot estimate; no issuance or reservation. */
 export async function monthlyRentPreview(session:Session,leaseId:string,month:string) {
+  session = await guardEffectiveSession(session, "stmt.view");
   if (!isUuid(leaseId)) return null;
   let period:ReturnType<typeof monthlyBounds>;
   try { period=monthlyBounds(month); } catch (error) { if (error instanceof TypeError) return null; throw error; }
-  return tx(session.userId,async client=>{
+  return tx(session.userId,async client=>withEffectiveAuthority(client, session, "stmt.view", async () => {
     if (!(await billingPreviewAuthorityOn(client,session))) return null;
     const lease=(await client.query<LeaseSource & {status:string;property_currency:string}>(`SELECT x.id::text,x.status::text,x.property_id::text,p.name AS property_name,p.currency::text AS property_currency,u.label AS unit_label,
       x.start_date::text,x.end_date::text,x.terminated_on::text,x.moved_out_on::text,x.currency::text,
@@ -38,6 +40,6 @@ export async function monthlyRentPreview(session:Session,leaseId:string,month:st
     const result=planMonthlyRentOperation({orgId:session.orgId,environment:session.environment,month,lease,parties,rent,capped:parties.length>CAP||rent.length>CAP});
     if (!(await billingPreviewAuthorityOn(client,session))) return null;
     return {...result,month,asOf};
-  },requireOrgScope(session),{isolation:'repeatable read',readOnly:true});
+  }),requireOrgScope(session),{isolation:'repeatable read',readOnly:true});
 }
 export type MonthlyRentPreview=NonNullable<Awaited<ReturnType<typeof monthlyRentPreview>>>;

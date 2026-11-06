@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { withClient } from "./db";
 import { mapDbError } from "./errors";
 import { isUuid } from "./repair-rules";
@@ -44,6 +45,7 @@ async function centerCall<T>(userId:string|null, query:(client:Client)=>Promise<
   throw new Error("Notification unavailable");
 }
 export async function centerSessionAdmission(session:Session):Promise<CenterAdmission> {
+  session = await guardEffectiveSession(session, null);
   let parameters:unknown[];
   try {parameters=args(session);} catch(error) {if(error instanceof CenterDeniedError) return "denied"; throw error;}
   const result=await centerCall(session.userId,async c=>{
@@ -61,6 +63,7 @@ function page(rows:CenterRow[]):CenterPage {
   return {items:rows.filter((r):r is CenterRow & CenterItem=>Boolean(r.recipient_id && r.kind && r.occurred_at)),continuation:rows.find(r=>r.continuation)?.continuation ?? null};
 }
 export async function centerSessionItems(session:Session, mark:string|null=null,cursor?:string) {
+  session = await guardEffectiveSession(session, null);
   if ((mark !== null && !isUuid(mark)) || (cursor && !isUuid(cursor))) throw new CenterDeniedError();
   const parameters=args(session);
   const result=await centerCall(session.userId,async c=>page((await c.query<CenterRow>(`SELECT recipient_id::text,kind,occurred_at::text,read_at::text,continuation::text FROM app.b028_center_session($1,$2,$3,$4,$5,$6,$7,$8)`,[...parameters,mark,cursor ?? null])).rows));

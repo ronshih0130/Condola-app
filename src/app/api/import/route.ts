@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { FlowError, safeDbCode, safeDbIdentifier, safeErrorReason } from "@/server/errors";
@@ -8,7 +9,7 @@ import type { Session } from "@/server/types";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const session = await readSession();
+  const session = await guardEffectiveSession(await readSession(), "props.edit");
   if (!session || session.kind !== "staff") return NextResponse.json({ error: "errors.forbidden" }, { status: 401 });
   const blocked = await requireCurrentConsent(session, "api");
   if (blocked) return blocked;

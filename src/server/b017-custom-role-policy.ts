@@ -1,7 +1,8 @@
 /**
- * Disconnected B-017 policy model. No cookie, DB, flag reader or runtime caller.
+ * Pure B-017 policy model. No cookie, DB or flag reader.
  * Inputs model trusted, freshly resolved authority; they are NOT credentials.
- * Persistence, revision locking and authoritative API enforcement remain pending.
+ * The trusted governance adapter reuses gate/key validation; the modeled
+ * permission evaluator intersects grants with the target native ceiling.
  */
 import { can, PERMS, ROLE_KEYS, type PermKey } from "./perms";
 import type { OrgRole } from "./types";
@@ -71,7 +72,7 @@ export function resolveB017Policy(subject: B017Subject): EffectivePolicy {
     return { status: "unavailable" };
   }
   const validated = validateB017Keys(role.keys);
-  return validated.ok ? { status: "available", keys: validated.keys } : { status: "unavailable" };
+  return validated.ok ? { status: "available", keys: validated.keys.filter(key => can(nativeRole, key)) } : { status: "unavailable" };
 }
 
 export function evaluateB017Permission(subject: B017Subject, key: string): B017Decision {

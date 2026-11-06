@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { makeT } from "@/i18n";
 import { writePdfDownload } from "@/server/audit";
 import { maybe, svc } from "@/server/db";
@@ -79,6 +80,7 @@ function leaseSource(row: NonNullable<Awaited<ReturnType<typeof leasePdfSource>>
 }
 
 export async function leasePdfForSession(session: Session, id: string) {
+  session = await guardEffectiveSession(session, "props.view");
   if (!canDownloadLeasePdf(session)) return null;
   const row = await leasePdfSource(session, id);
   if (!row) return null;
@@ -93,6 +95,7 @@ export async function leasePdfForSession(session: Session, id: string) {
 }
 
 export async function statementPdfForSession(session: Session, id: string) {
+  session = await guardEffectiveSession(session, "stmt.view");
   if (!canDownloadStatementPdf(session)) return null;
   const found = await statementPdfSource(session, id);
   if (!found) return null;

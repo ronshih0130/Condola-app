@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
 import { CenterBusyError, CenterDeniedError, centerSessionItems } from "@/server/notification-center";
@@ -8,7 +9,7 @@ const headers={"Cache-Control":"private, no-store"};
 export async function POST(request:Request) {
   const denial=await requireCurrentConsent(undefined,"api");
   if(denial) return denial;
-  const session=await getSession();
+  const session=await guardEffectiveSession(await getSession(), null);
   if(!["staff","tenant","owner"].includes(session.kind)) return new Response(null,{status:404,headers});
   const parsed=await readMarkRequest(request,false);
   if(!parsed.ok) return new Response(null,{status:parsed.status,headers});

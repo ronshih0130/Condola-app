@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 /**
  * B-013 shared state; B-021 flag-gated production readers and owner decisions.
  */
@@ -40,12 +41,13 @@ function payloadHash(session: Session, operation: string, payload: unknown): Buf
 }
 
 /** Flags and current authorization are checked atomically inside each gateway. */
-function run<T>(
+async function run<T>(
   session: Session,
   sql: string,
   params: unknown[],
   parse: (value: unknown) => T,
 ): Promise<T> {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertIdentifiers(session.userId, session.orgId, session.sessionId);
   return svc(session.userId, async (client) => {
     const row = await maybe<{ r: unknown }>(client, sql, params);

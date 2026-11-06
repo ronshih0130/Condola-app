@@ -16,7 +16,7 @@ test("deposit policy action uses validated org and environment pins", () => {
   const transaction = action.indexOf("tx(");
   assert.ok(transaction > pin);
   const beforePin = action.slice(0, pin);
-  assert.match(beforePin, /if \(session\.kind !== "staff" \|\| !can\(session\.role, "leases\.edit"\) \|\| session\.needsSandbox\) return null;/);
+  assert.match(beforePin, /if \(session\.kind !== "staff" \|\| !can\(session, "leases\.edit"\) \|\| session\.needsSandbox\) return null;/);
   assert.ok(beforePin.includes("if (!uuid.test(id)) return null;"));
   assert.match(beforePin, /if \(!input\.leaseId && .*\.test\(input\.startDate \?\? ""\)\) return null;/);
   const afterPin = action.slice(pin);

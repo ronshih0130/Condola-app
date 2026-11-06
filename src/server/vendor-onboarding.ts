@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, one, svc } from "./db";
@@ -19,6 +20,7 @@ export interface OnboardingInvite {
 
 /** Recheck live membership before any service-role staff operation. */
 export async function authorizeVendorStaff(client: Client, session: Session) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertPerm(session, "tickets.update");
   const member = await maybe<{ role: Session["role"] }>(
     client,
@@ -79,7 +81,8 @@ export async function createVendorOnboardingInvite(
   session: Session,
   contactId: string,
 ) {
-  return svc(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await authorizeVendorStaff(client, session);
     await lockContact(client, session.orgId, contactId);
     await client.query(
@@ -109,7 +112,7 @@ export async function createVendorOnboardingInvite(
       expiresAt: invite.expires_at,
       url: `/v/onboarding/${token}`,
     };
-  });
+  }));
 }
 
 export async function openVendorOnboarding(token: string) {
@@ -277,7 +280,8 @@ export async function revokeVendorOnboarding(
   session: Session,
   inviteId: string,
 ) {
-  return svc(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await authorizeVendorStaff(client, session);
     const candidate = await maybe<{ contact_id: string }>(
       client,
@@ -303,5 +307,5 @@ export async function revokeVendorOnboarding(
       { inviteId },
       client,
     );
-  });
+  }));
 }

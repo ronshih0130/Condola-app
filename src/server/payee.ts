@@ -1,3 +1,5 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+import { requireEffectivePerm } from "./b017-custom-role-governance";
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "./auth";
@@ -36,6 +38,7 @@ async function gateway<T>(session: PayeeContext | null, op: "settings" | "tenant
           `SELECT app.payee_gateway($1::uuid,$2::uuid,$3::uuid,$4::text,$5::uuid,$6::text,$7::uuid,$8::jsonb) AS result`,
           [session?.sessionId ?? null, session?.userId ?? null, session?.orgId ?? null, session?.environment ?? null, randomUUID(), op, target, JSON.stringify(input)],
         );
+        if (op !== "ingress" && session && "kind" in session) await requireEffectivePerm(client, session as Session, op === "tenant" ? "stmt.view" : "settings.edit");
         await client.query("COMMIT");
         return row.rows[0].result;
       } catch {
@@ -50,6 +53,7 @@ async function gateway<T>(session: PayeeContext | null, op: "settings" | "tenant
 }
 
 export async function payeeSettings(session: Session): Promise<Settings | null> {
+  session = await guardEffectiveSession(session, "settings.edit");
   const result = await gateway<Settings>(session, "settings");
   const data = result.data;
   if (!result.ok || !data) return null;
@@ -69,12 +73,14 @@ export async function payeeSettings(session: Session): Promise<Settings | null> 
 }
 
 export async function tenantPayee(session: Session, leaseId: string, unavailableOnDenied = false): Promise<TenantPayeeView> {
+  session = await guardEffectiveSession(session, null);
   const valid = validUuid(leaseId);
   const result = await gateway<TenantPayeeView>(session, "tenant", valid ? leaseId : null, { invalid: !valid });
   return tenantPayeeDecision(result, unavailableOnDenied);
 }
 
 export async function savePayee(session: Session | null, input: PayeeInput) {
+  session = await guardEffectiveSession(session, "settings.edit");
   const valid = !input.id || validUuid(input.id);
   const target = valid ? input.id || null : null;
   const result = await gateway<{ accountId: string }>(session, "save", target, { ...input, invalid: !valid });
@@ -83,6 +89,7 @@ export async function savePayee(session: Session | null, input: PayeeInput) {
 }
 
 export async function setLeasePayee(session: Session | null, leaseId: string | null, accountId: string | null) {
+  session = await guardEffectiveSession(session, "settings.edit");
   const valid = !!leaseId && validUuid(leaseId) && (accountId === null || validUuid(accountId));
   const result = await gateway<{ leaseId: string; accountId: string | null }>(session, "assign", valid ? leaseId : null, { accountId, invalid: !valid });
   if (!result.ok || !result.data) throw new Error("Payee access unavailable");

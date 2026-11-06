@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { requireCurrentConsent } from "./consent-gate";
 
 import { redirect } from "next/navigation";
@@ -19,7 +21,7 @@ function fail(error: unknown, to: string): never {
 
 export async function actionLoadSample() {
   await requireCurrentConsent();
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), null);
   try {
     await loadSampleData(session);
   } catch (error) {
@@ -30,7 +32,7 @@ export async function actionLoadSample() {
 
 export async function actionBlankSandbox() {
   await requireCurrentConsent();
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), null);
   try {
     await dismissSamplePrompt(session);
   } catch (error) {

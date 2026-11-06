@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { writeStaffSignedPdfDownload } from "@/server/audit";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { logServerError } from "@/server/errors";
@@ -12,7 +13,7 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string; pdfId: string }> },
 ) {
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "props.view");
   const blocked = await requireCurrentConsent(session, "api");
   if (blocked) return blocked;
   const { id, pdfId } = await context.params;

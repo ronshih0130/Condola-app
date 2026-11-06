@@ -8,7 +8,7 @@ import type { Session } from "./types";
  * RR fixes the database snapshot: subsequent revocations are visible on the next request.
  * The authenticated role stays in place while the live-parent scope is checked sequentially. */
 export async function billingPreviewAuthorityOn(client: Client, session: Session): Promise<boolean> {
-  if (session.kind !== "staff" || !can(session.role, "props.view") || session.needsSandbox ||
+  if (session.kind !== "staff" || !can(session, "props.view") || session.needsSandbox ||
       !consentCoversCurrent(session.consent ?? null) || session.partnerConsent?.required) return false;
   const selected = await client.query<{ consent: StoredConsent | null; pin: string; env: string; live_id: string }>(`SELECT
       current_setting('app.active_org_id',true) AS pin, current_setting('app.env',true) AS env,

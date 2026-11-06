@@ -156,7 +156,7 @@ function guarded(body: ts.Node, route: boolean, label: string, typeChecker = che
     assert.equal(priorCalls.length, 0, label + ": side effect before guard");
   }
   else {
-    const safe = new Set(["readSession", "getSession", "demoModeEnabled", "can",
+    const safe = new Set(["readSession", "getSession", "guardEffectiveSession", "demoModeEnabled", "can",
       "NextResponse.json", "redirect", "UUID.test", "teamInviteAllowlistConfigured", "teamInvitesAllowedForOrg"]);
     for (const call of priorCalls) {
       assert.ok(safe.has(call.expression.getText()), label + ": call before guard: " + call.expression.getText());
@@ -164,7 +164,7 @@ function guarded(body: ts.Node, route: boolean, label: string, typeChecker = che
     for (const node of all) {
       if (ts.isAwaitExpression(node) && node.getStart() < guard.parent.getStart()) {
         assert.ok(ts.isCallExpression(node.expression)
-          ? ["readSession", "getSession"].includes(node.expression.expression.getText())
+          ? ["readSession", "getSession", "guardEffectiveSession"].includes(node.expression.expression.getText())
           : node.expression.getText() === "context.params", label + ": await before guard");
       }
     }

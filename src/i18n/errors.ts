@@ -2,6 +2,7 @@ import type { T } from "./index";
 
 export const ERRORS: Record<string, string> = {
   "errors.forbidden": "i_forbidden",
+  "errors.customRoleNativeCeiling": "i_custom_role_native_ceiling",
   "errors.required": "i_required",
   "errors.generic": "i_generic",
   "errors.leaseFailed": "i_lease_failed",

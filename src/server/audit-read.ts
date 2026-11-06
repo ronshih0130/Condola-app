@@ -739,7 +739,7 @@ export async function loadAuditScreen(
   input: { user?: string; action?: string; record?: string; from?: string; to?: string; cursor?: string },
 ): Promise<AuditPage> {
   const filters = parseAuditFilters(input);
-  if (session.role !== "admin") return { entries: [], hasMore: false, actors: [], filters };
+  if (session.role !== "admin" || (session.customRole && !session.customRole.audit)) return { entries: [], hasMore: false, actors: [], filters };
   return tx(
     session.userId,
     async (client) => {
@@ -768,7 +768,7 @@ export async function loadAuditScreen(
 
 export async function loadAuditHistory(session: Session, table: string, rowId: string, cursor?: string) {
   const tableName = AUDIT_TABLES.find((item) => item === table) ?? null;
-  if (session.role !== "admin" || !tableName || !UUID.test(rowId)) return { entries: [] as AuditView[], hasMore: false };
+  if (session.role !== "admin" || (session.customRole && !session.customRole.audit) || !tableName || !UUID.test(rowId)) return { entries: [] as AuditView[], hasMore: false };
   const filters = parseAuditFilters({ cursor });
   filters.tableName = tableName;
   return tx(

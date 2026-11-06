@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { FlowError } from "./errors";
 import { attachRepairPhoto, findRepairPhoto, newPhotoFileId, readRepairPhoto, repairPhotoTarget } from "./repairs";
@@ -78,6 +79,7 @@ export async function prepareTicketPhotoUpload(
   session: Session,
   input: { ticketId: string; fileName: string; mime: string; size: number },
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   const meta = assertPhotoMeta(input);
   const ticket = await repairPhotoTarget(session, input.ticketId);
   if (!ticket) throw new FlowError("errors.notFound");
@@ -224,6 +226,7 @@ export async function confirmTicketPhoto(
   },
   deps?: ConfirmDeps,
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   const target = await (deps?.target ?? repairPhotoTarget)(session, input.ticketId);
   if (!target) throw new FlowError("errors.notFound");
   if (!isTicketPhotoPath(input.path, target.org_id, input.ticketId)) throw new FlowError("errors.forbidden");
@@ -289,6 +292,7 @@ export async function ticketPhotoResponse(open: () => Promise<{ url: string } | 
  * The browser loads the object from the bucket. This does not read ticket_attachments.content.
  */
 export async function openTicketPhoto(session: Session, attachmentId: string) {
+  session = await guardEffectiveSession(session, "tickets.update");
   const row = await readRepairPhoto(session, attachmentId);
   const cfg = storageConfig();
   if (!row || !cfg || !isTicketPhotoPath(row.path, session.orgId, row.ticket_id)) return null;

@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import type { Client } from "pg";
 import { tx } from "./db";
 import { can } from "./perms";
@@ -25,7 +26,7 @@ export type DeliveryView = { id: string; version_id: string | null; channel: "em
 export type RecordStatementVersionInput = { statementId: string; requestId: string; reason: string };
 const unavailable = { state: "unavailable" as const };
 function validSession(s: Session) { return !s.needsSandbox && [s.userId,s.orgId].every(isUuid) && ["live","sandbox"].includes(s.environment); }
-function writer(s: Session) { return validSession(s) && s.kind === "staff" && can(s.role,"stmt.generate"); }
+function writer(s: Session) { return validSession(s) && s.kind === "staff" && can(s,"stmt.generate"); }
 async function statementFor(client: Client, s: Session, id: string) {
   return (await client.query<Statement>(`SELECT st.id::text,st.owner_contact_id::text,st.currency::text,st.period_start::text,st.period_end::text,st.status::text,
     cu.minor_unit,st.issued_at::text,st.issued_by::text,
@@ -39,9 +40,10 @@ async function versionsFor(client: Client, id: string) {
 }
 
 export async function ownerNetLedgerView(session: Session, statementId: string) {
+  session = await guardEffectiveSession(session, "stmt.view");
   if (!validSession(session) || !isUuid(statementId)) return null;
   try {
-    return await tx(session.userId,async client => {
+    return await tx(session.userId,async client => withEffectiveAuthority(client, session, "stmt.view", async () => {
       if (!await ownerNetLedgerEnabled(client,session.orgId)) return null;
       const statement = await statementFor(client,session,statementId);
       if (!statement) return null;
@@ -52,7 +54,7 @@ export async function ownerNetLedgerView(session: Session, statementId: string) 
         ? (await client.query<DeliveryView>(`SELECT id::text,version_id::text,channel,result,adapter,actor_user_id::text,created_at::text FROM app.b014_delivery_events_for($1)`,[statement.id])).rows : null;
       return { latest: versions[0] ?? null, versions, canRecord, deliveries, currency: statement.currency, minorUnit: statement.minor_unit,
         original: { issuedAt: statement.issued_at, issuedBy: statement.issued_by_name }, staff };
-    },{orgId:session.orgId,environment:session.environment},{isolation:"repeatable read",readOnly:true});
+    }),{orgId:session.orgId,environment:session.environment},{isolation:"repeatable read",readOnly:true});
   } catch { return null; }
 }
 
@@ -100,12 +102,13 @@ async function calculateSnapshot(client: Client, session: Session, statement: St
 }
 
 export async function recordStatementVersion(session: Session, input: RecordStatementVersionInput) {
+  session = await guardEffectiveSession(session, "stmt.generate");
   if (!writer(session) || !input || !isUuid(input.statementId) || !isUuid(input.requestId)) return unavailable;
   // An advisory-lock wait does not refresh a repeatable-read snapshot. Retry
   // the whole calculation after a competing version commits, never just INSERT.
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await tx(session.userId,async client => {
+      return await tx(session.userId,async client => withEffectiveAuthority(client, session, "stmt.generate", async () => {
         if (!await ownerNetLedgerEnabled(client,session.orgId) || !await currentOwnerTransferStaff(client,session)) return unavailable;
         if (typeof input.reason !== "string" || input.reason !== input.reason.trim() || input.reason.length < 1 || input.reason.length > 500) return {state:"invalid" as const};
         const statement = await statementFor(client,session,input.statementId);
@@ -122,7 +125,7 @@ export async function recordStatementVersion(session: Session, input: RecordStat
         const result = await client.query<{id:string}>(`SELECT app.b014_record_statement_version($1,$2,$3,$4::jsonb)::text AS id`,
           [statement.id,input.requestId,input.reason,JSON.stringify(snapshot)]);
         return {state:"recorded" as const,versionId:result.rows[0].id};
-      },{orgId:session.orgId,environment:session.environment},{isolation:"repeatable read"});
+      }),{orgId:session.orgId,environment:session.environment},{isolation:"repeatable read"});
     } catch (error) {
       const cause = error instanceof Error ? error.cause as {code?:string;constraint?:string} | undefined : undefined;
       const concurrentVersion = cause?.code === "23505" && [
@@ -136,9 +139,10 @@ export async function recordStatementVersion(session: Session, input: RecordStat
 }
 
 export async function recordReportDelivery(session: Session, input: ReportDeliveryInput) {
+  session = await guardEffectiveSession(session, "stmt.generate");
   if (!writer(session) || !input || !isUuid(input.statementId) || !isUuid(input.requestId) || (input.versionId !== null && !isUuid(input.versionId))) return unavailable;
   try {
-    return await tx(session.userId,async client => {
+    return await tx(session.userId,async client => withEffectiveAuthority(client, session, "stmt.generate", async () => {
       if (!await ownerNetLedgerEnabled(client,session.orgId) || !await ownerNetLedgerEnabled(client,session.orgId,"monthly_report_delivery") ||
           !await currentOwnerTransferStaff(client,session)) return unavailable;
       const statement = await statementFor(client,session,input.statementId);
@@ -149,6 +153,6 @@ export async function recordReportDelivery(session: Session, input: ReportDelive
       const event = await client.query<{id:string}>(`SELECT app.b014_record_delivery_event($1,$2,$3,$4)::text AS id`,
         [statement.id,input.versionId,input.requestId,result]);
       return {state:"recorded" as const,result,eventId:event.rows[0].id};
-    },{orgId:session.orgId,environment:session.environment});
+    }),{orgId:session.orgId,environment:session.environment});
   } catch { return unavailable; }
 }
