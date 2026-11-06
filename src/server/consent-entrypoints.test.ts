@@ -45,10 +45,12 @@ const openActions: Record<string, Record<string, string>> = {
   },
 };
 const openPages: Record<string, Record<string, string>> = {
+  "app/v/[token]/estimate/page.tsx": { default: "B-026 scoped vendor token and flag gateway, no user session" },
   "app/v/[token]/page.tsx": { default: "Vendor link token authentication, no user session" },
   "app/v/[token]/notifications/page.tsx": { default: "Exact vendor job token gateway, no human user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
+  "api/vendor-estimate/route.ts": { POST: "B-026 scoped vendor token and flag gateway, no user session" },
   "api/auth/enter/route.ts": { GET: "Authentication continuation checks consent" },
   "api/auth/sign-out/route.ts": { POST: "Always permit leaving" },
   "api/cron/reminders/route.ts": { POST: "Cron secret, no human identity" },
