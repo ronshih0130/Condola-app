@@ -6,13 +6,16 @@ type Photo = { id: string; name: string; internal: boolean };
 export function RepairPhotos({
   photos,
   canView,
+  hiddenCount = 0,
   t,
 }: {
   photos: Photo[];
   canView: boolean;
+  /** Photos withheld server-side (no metadata sent); only drives the no-permission notice. */
+  hiddenCount?: number;
   t: T;
 }) {
-  if (photos.length === 0) {
+  if (photos.length === 0 && hiddenCount === 0) {
     return <p className="small muted">{t("i_repair_none")}</p>;
   }
 

@@ -14,6 +14,26 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106070000_prop05_platform_settings_audit.sql": {
+    addOnly: true,
+    reason: "Adds an AFTER INSERT/UPDATE/DELETE audit trigger on platform_settings writing key/value/description changes to audit_log (PROP-05 override audit); no value, grant or behaviour change.",
+  },
+  "supabase/migrations/20261106232500_b027_ticket_photo_write_narrowing.sql": {
+    addOnly: false,
+    reason: "Narrows existing INSERT policies: photo-bucket file rows only for tickets.update roles; portal file/attachment inserts only for non-members; shared-photo id reads only for tickets.update roles. An old Accountant or staff-reporter insert of a ticket photo now fails.",
+  },
+  "supabase/migrations/20261106232000_b027_ticket_photo_member_read.sql": {
+    addOnly: false,
+    reason: "Narrows existing member SELECT policies: ticket-photo bucket files and ticket_attachments rows become readable only by tickets.update roles (admin/manager/maintenance); the tenant portal attachment policy keeps only its tenant half. Adds one authenticated definer count function. An old Accountant query reading photo rows now returns no rows.",
+  },
+  "supabase/migrations/20261106200000_b027_partner_consent_gate.sql": {
+    addOnly: false,
+    reason: "Adds an OFF consent gate and empty per-company approval setting, a private evidence validator and a guarded replacement of the existing partner-control writer; reuses append-only consents, no legal text/version or allowlist changes.",
+  },
+  "supabase/migrations/20261106180000_b027_partner_controls.sql": {
+    addOnly: true,
+    reason: "Adds private partner overrides and immutable events, scoped SECURITY DEFINER read/admin gateways, and two default-OFF settings; no existing grants or production allowlists change.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",
