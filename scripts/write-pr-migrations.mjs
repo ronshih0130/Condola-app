@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106100000_prop07_usage_source_ids.sql": {
+    addOnly: true,
+    reason: "Adds private append-only app.usage_events (source table/id, dedupe key, sandbox marker), an idempotent service-role SECURITY DEFINER recorder and an admin-only formal summary excluding sandbox; no hooks or callers, no flag (PROP-07 foundation for B-029).",
+  },
   "supabase/migrations/20261106040000_b022_owner_title_report_replies.sql": {
     addOnly: true,
     reason: "Adds private append-only owner receipt-title revisions and report replies, authenticated SECURITY DEFINER gateways and two default-OFF settings; no existing-table schema changes or backfill. Title RPC updates only the caller owner contact receipt_title.",
