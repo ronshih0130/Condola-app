@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106030000_b014_owner_net_ledger.sql": {
+    addOnly: true,
+    reason: "Adds private append-only statement versions and mock report delivery events, authenticated SECURITY DEFINER gateways and two default-OFF platform settings; no existing-table schema or function changes.",
+  },
   "supabase/migrations/20261106020000_b010_payment_result_events.sql": {
     addOnly: true,
     reason: "Adds private lease collector reserve and append-only one-per-payment confirmation audit (CAP-M-35 proxy-owner confirm), nullable source-event dedupe/source metadata, and context-checked SECURITY DEFINER collector/record/audit functions; no table grants, backfill or flag seed; payment_results_v2 stays OFF.",
