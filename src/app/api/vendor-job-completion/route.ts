@@ -1,5 +1,5 @@
 import { submitVendorCompletion } from "@/server/vendor-job";
-import { assertCompletion } from "@/server/vendor-job-rules";
+import { assertIdentifiers } from "@/server/repair-approval-rules";
 import { vendorTokenAcceptable } from "@/server/vendor-repair-rules";
 import { FlowError } from "@/server/errors";
 import { parseRequestId } from "../vendor-job/_request-id";
@@ -22,22 +22,23 @@ export async function POST(request: Request) {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new FlowError("errors.required");
     const fields = value as Record<string, unknown>;
     if (typeof fields.token !== "string" || !vendorTokenAcceptable(fields.token)
-      || typeof fields.hasAfterPhoto !== "boolean"
+      || typeof fields.versionId !== "string"
+      || (fields.hasAfterPhoto !== undefined && typeof fields.hasAfterPhoto !== "boolean")
       || (fields.reason != null && typeof fields.reason !== "string")) throw new FlowError("errors.required");
+    assertIdentifiers(fields.versionId);
     const requestId = parseRequestId(fields.requestId);
     if (requestId === null) throw new FlowError("errors.required");
     token = fields.token;
     input = {
-      requestId, hasAfterPhoto: fields.hasAfterPhoto,
+      requestId, versionId: fields.versionId,
       reason: fields.reason as string | null ?? null,
     };
-    assertCompletion(input);
   } catch {
     return Response.json({ status: "rejected_invalid" }, { status: 400, headers });
   }
   try {
     const result = await submitVendorCompletion(token, input);
-    return Response.json(result, { headers });
+    return Response.json(result, { status: result.status === "rejected_conflict" ? 409 : 200, headers });
   } catch (error) {
     const code = (error as { code?: string }).code
       ?? (error as { cause?: { code?: string } }).cause?.code;

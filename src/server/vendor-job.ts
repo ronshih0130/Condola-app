@@ -54,12 +54,13 @@ async function dispatchOk(client: Client, orgId: string, versionId: string) {
   return row?.r === true;
 }
 
-async function latestEvent(client: Client, orgId: string, ticketId: string, jobId: string) {
+async function latestEvent(client: Client, orgId: string, ticketId: string, jobId: string, versionId: string) {
   const row = await maybe<{ event_kind: Exclude<CurrentEvent, "none"> }>(client,
     "SELECT event_kind::text FROM app.b013_repair_appointments"
     + " WHERE org_id=$1::uuid AND ticket_id=$2::uuid AND repair_vendor_job_id=$3::uuid"
+    + " AND version_id=$4::uuid"
     + " ORDER BY occurred_at DESC, id DESC LIMIT 1",
-    [orgId, ticketId, jobId],
+    [orgId, ticketId, jobId, versionId],
   );
   return row?.event_kind ?? "none";
 }
@@ -72,7 +73,7 @@ export async function resolveVendorJobState(token: string): Promise<VendorJobSta
     const versionId = await currentVersionId(client, job.org_id, job.ticket_id);
     if (!versionId) return null;
     const dispatchAllowed = await dispatchOk(client, job.org_id, versionId);
-    const currentEvent = await latestEvent(client, job.org_id, job.ticket_id, job.job_id);
+    const currentEvent = await latestEvent(client, job.org_id, job.ticket_id, job.job_id, versionId);
     return {
       orgId: job.org_id, ticketId: job.ticket_id, vendorJobId: job.job_id,
       versionId, dispatchAllowed, locked: !dispatchAllowed, currentEvent,
@@ -81,28 +82,38 @@ export async function resolveVendorJobState(token: string): Promise<VendorJobSta
   });
 }
 
-async function mutationScope(token: string) {
+async function mutationScope(token: string, pinnedVersionId: string, completion = false) {
   const job = await openJob(token);
   if (!job) throw new FlowError("errors.forbidden");
   if (!(await flagsOn(job.org_id))) return null;
   return svc(null, async (client) => {
     const versionId = await currentVersionId(client, job.org_id, job.ticket_id);
-    if (!versionId) throw new FlowError("errors.forbidden");
-    return { ...job, versionId, dispatchAllowed: await dispatchOk(client, job.org_id, versionId) };
+    let hasAfterPhoto = false;
+    if (completion && versionId === pinnedVersionId) {
+      const photos = await maybe<{ n: number }>(client,
+        "SELECT count(*)::int AS n FROM ticket_attachments a"
+        + " WHERE a.org_id=$1 AND a.ticket_id=$2 AND a.vendor_job_id=$3"
+        + " AND NOT a.is_internal",
+        [job.org_id, job.ticket_id, job.job_id],
+      );
+      hasAfterPhoto = (photos?.n ?? 0) > 0;
+    }
+    return { ...job, versionId, hasAfterPhoto };
   });
 }
 
 export async function respondVendorJob(token: string, input: {
   requestId: string;
+  versionId: string;
   action: "propose" | "reject" | "accept_confirm";
   times?: VendorResponseTimes;
   reason?: string | null;
 }): Promise<ApprovalResult> {
   assertVendorResponse(input);
-  assertIdentifiers(input.requestId);
-  const scope = await mutationScope(token);
+  assertIdentifiers(input.requestId, input.versionId);
+  const scope = await mutationScope(token, input.versionId);
   if (!scope) return { status: "rejected_disabled" };
-  if (!scope.dispatchAllowed) return { status: "rejected_locked" };
+  if (scope.versionId !== input.versionId) return { status: "rejected_conflict" };
   const proposed = input.action === "propose" ? {
     proposedStart: input.times?.proposedStart,
     proposedEnd: input.times?.proposedEnd,
@@ -113,7 +124,7 @@ export async function respondVendorJob(token: string, input: {
   return recordVendorAppointment({ token }, {
     orgId: scope.org_id,
     requestId: input.requestId,
-    versionId: scope.versionId,
+    versionId: input.versionId,
     vendorJobId: scope.job_id,
     eventKind: input.action === "reject" ? "vendor_rejected" : "vendor_proposed",
     ...proposed,
@@ -123,18 +134,18 @@ export async function respondVendorJob(token: string, input: {
 
 export async function submitVendorCompletion(token: string, input: {
   requestId: string;
-  hasAfterPhoto: boolean;
+  versionId: string;
   reason?: string | null;
 }): Promise<ApprovalResult> {
-  assertCompletion(input);
-  assertIdentifiers(input.requestId);
-  const scope = await mutationScope(token);
+  assertIdentifiers(input.requestId, input.versionId);
+  const scope = await mutationScope(token, input.versionId, true);
   if (!scope) return { status: "rejected_disabled" };
-  if (!scope.dispatchAllowed) return { status: "rejected_locked" };
+  if (scope.versionId !== input.versionId) return { status: "rejected_conflict" };
+  assertCompletion({ hasAfterPhoto: scope.hasAfterPhoto, reason: input.reason });
   return recordVendorAppointment({ token }, {
     orgId: scope.org_id,
     requestId: input.requestId,
-    versionId: scope.versionId,
+    versionId: input.versionId,
     vendorJobId: scope.job_id,
     eventKind: "vendor_completion_submitted",
     reason: input.reason,

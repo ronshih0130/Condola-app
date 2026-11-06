@@ -13,11 +13,13 @@ export async function exerciseHttpRetry(
   path: string,
   initial: Record<string, unknown>,
   mutations: Record<string, unknown>[],
+  afterPhotoCount = 0,
 ) {
   const token = "v".repeat(43);
   const orgId = randomUUID(), jobId = randomUUID(), ticketId = randomUUID(), versionId = randomUUID();
+  let headVersionId = versionId;
   const requestId = randomUUID();
-  const payload = { ...initial, token, requestId };
+  const payload = { ...initial, token, requestId, versionId };
   const committed = new Map<string, Command>();
   const events: Result[] = [];
   const pending = new Map<Client, { key: string; command: Command } | null>();
@@ -43,7 +45,14 @@ export async function exerciseHttpRetry(
     if (sql.includes("app.b013_estimate_heads")) {
       restrictedReads++;
       assert.deepEqual(values, [orgId, ticketId]);
-      return { rows: [{ version_id: versionId }] };
+      return { rows: [{ version_id: headVersionId }] };
+    }
+    if (sql.includes("FROM ticket_attachments a")) {
+      restrictedReads++;
+      assert.ok(pending.has(this), "photo lookup must run inside a transaction");
+      assert.deepEqual(values, [orgId, ticketId, jobId]);
+      assert.match(sql, /a\.vendor_job_id=\$3 AND NOT a\.is_internal/);
+      return { rows: [{ n: afterPhotoCount }] };
     }
     if (sql.includes("app.b013_dispatch_allowed(")) {
       restrictedReads++;
@@ -53,7 +62,7 @@ export async function exerciseHttpRetry(
     if (sql.includes("app.b013_record_vendor_appointment(")) {
       assert.ok(pending.has(this), "gateway must run inside a transaction");
       assert.deepEqual(values.slice(0, 3), [orgId, jobId, hashVendorToken(token)]);
-      assert.equal(values[4], versionId);
+      assert.equal(values[4], headVersionId);
       assert.notEqual(values[5], "company_confirmed");
       assert.ok(Buffer.isBuffer(values[11]));
       calls.push(values);
@@ -67,9 +76,10 @@ export async function exerciseHttpRetry(
         }
         return { rows: [{ r: previous.result }] };
       }
+      if (!allowed) return { rows: [{ r: { status: "rejected_locked" } }] };
       const command = {
         signature,
-        result: { status: "recorded", version_id: versionId, appointment_id: randomUUID() },
+        result: { status: "recorded", version_id: String(values[4]), appointment_id: randomUUID() },
       };
       pending.set(this, { key, command });
       return { rows: [{ r: command.result }] };
@@ -119,6 +129,27 @@ export async function exerciseHttpRetry(
   assert.notDeepEqual(await fresh.json(), recorded);
   assert.equal(committed.size, 2);
   assert.equal(events.length, 2);
+  const beforeHeadChange = calls.length;
+  headVersionId = randomUUID();
+  for (const id of [requestId, randomUUID()]) {
+    const stale = await post(request({ ...payload, requestId: id }));
+    assert.equal(stale.status, 409);
+    assert.deepEqual(await stale.json(), { status: "rejected_conflict" });
+  }
+  assert.equal(calls.length, beforeHeadChange, "stale versions must not be retargeted");
+  const changedVersion = await post(request({ ...payload, versionId: headVersionId }));
+  assert.equal(changedVersion.status, 409);
+  assert.deepEqual(await changedVersion.json(), { status: "rejected_conflict" });
+  assert.equal(calls.length, beforeHeadChange + 1, "changed signatures must reach gateway conflict detection");
+  headVersionId = versionId;
+  if (path === "/api/vendor-job-completion" && afterPhotoCount === 0) {
+    const beforeMissingPhoto = calls.length;
+    for (const hasAfterPhoto of [false, true]) {
+      const missingPhoto = await post(request({ ...payload, requestId: randomUUID(), hasAfterPhoto, reason: null }));
+      assert.equal(missingPhoto.status, 403);
+    }
+    assert.equal(calls.length, beforeMissingPhoto, "client photo claims must not authorize completion");
+  }
   const writes = calls.length;
   for (const disabled of ["vendor", "approvals"]) {
     vendorEnabled = disabled !== "vendor";
@@ -130,14 +161,24 @@ export async function exerciseHttpRetry(
   }
   vendorEnabled = approvalsEnabled = true;
   allowed = false;
+  const lockedReplay = await post(request());
+  assert.equal(lockedReplay.status, 200);
+  assert.deepEqual(await lockedReplay.json(), recorded);
+  assert.deepEqual(calls[writes], calls[0]);
+  const lockedConflict = await post(request({ ...payload, ...mutations[0] }));
+  assert.equal(lockedConflict.status, 409);
+  assert.deepEqual(await lockedConflict.json(), { status: "rejected_conflict" });
   const locked = await post(request({ ...payload, requestId: randomUUID() }));
   assert.deepEqual(await locked.json(), { status: "rejected_locked" });
-  assert.equal(calls.length, writes);
+  assert.equal(calls.length, writes + 3, "replay, conflict and fresh lock decisions must reach the gateway");
   allowed = true;
   permissionError = true;
   assert.equal((await post(request({ ...payload, requestId: randomUUID() }))).status, 403);
   permissionError = false;
-  const invalidCases = [{ requestId: null }, { requestId: "bad" }, { token: 42 }, { reason: 42 }];
+  const invalidCases = [
+    { requestId: null }, { requestId: "bad" }, { token: 42 }, { reason: 42 },
+    { versionId: undefined }, { versionId: null }, { versionId: "bad" }, { versionId: 42 },
+  ];
   for (const invalid of invalidCases) {
     const response = await post(request({ ...payload, ...invalid }));
     assert.equal(response.status, 400);

@@ -9,9 +9,8 @@ type Copy = {
 };
 
 export function VendorJobControls({
-  hasAfterPhoto, copy, children,
+  copy, children,
 }: {
-  hasAfterPhoto: boolean;
   copy: Copy;
   children: ReactNode;
 }) {
@@ -27,6 +26,7 @@ export function VendorJobControls({
     if (inFlight.current || submitted) return;
     const data = new FormData(form);
     const requestId = data.get("requestId");
+    const versionId = data.get("versionId");
     const token = data.get("token");
     const action = data.get("action");
     const note = data.get("reason");
@@ -43,8 +43,8 @@ export function VendorJobControls({
         return date.toISOString();
       };
       const payload = action === "complete"
-        ? { requestId, token, hasAfterPhoto, reason }
-        : { requestId, token, action, reason,
+        ? { requestId, versionId, token, reason }
+        : { requestId, versionId, token, action, reason,
           ...(action === "propose" ? {
             times: { proposedStart: instant("proposedStart"), proposedEnd: instant("proposedEnd") },
           } : {}) };
