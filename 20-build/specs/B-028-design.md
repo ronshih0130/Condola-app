@@ -81,3 +81,84 @@ rewired in this package (their OFF paths stay byte-identical); LINE (B-033) cons
 token rejected; failure → retry; completed recipients never repeated); status rendering distinct with no
 delivered/sent claim; OFF matrix (absent/false/malformed global, missing allowlist, org false) ⇒ zero rows; cross-org
 denial; privilege catalog.
+
+## Package 2 — Event producers and template captures (Session 2, Claude L2, local only)
+
+Branch `feat/b-028-event-producers`, stacked on package 1. Flag `notification_events_v2` (platform setting
+`{"enabled":false,"allowed_org_ids":[]}` + `ops/flags.yaml`, default OFF; strict `enabled === true`, allowlist array
+containing the org, and org `feature_flags.notification_events_v2 === true`; missing/malformed is OFF).
+
+**Model (additive migration `20261107080000_b028_notification_event_producers.sql`).** Private, RLS-enabled, REVOKE ALL,
+statement-level immutable `app.b028_notification_events` (family, kind, `source_table/source_id` = versioned aggregate,
+`source_version`, `offset_key`, `source_row_table/source_row_id` = exact committed row, `template_version`, template
+`vars`) unique on `(org, source, version, offset)`, and `app.b028_notification_event_recipients` (persona
+staff/tenant/owner, `recipient_key`, composite `(org_id, contact_id|member_id)` FKs) unique on
+`(org, source, version, recipient, offset)`. Service-only SECURITY DEFINER gateways (search_path
+`pg_catalog,public,app,pg_temp`, EXECUTE only to `service_role`): `app.b028_produce_event(org, source_kind, source_row)`
+derives family/kind/version/offset/recipients from rows of that org only (returns NULL — no effect — when OFF, for a
+pinned different org, or for an ineligible/foreign source; a replay returns the existing event with no new rows), and
+writes one package-1 attempt per recipient through `app.b028_attempt_insert` (named outside the `b028_delivery_*` prefix so the package-1 privilege
+catalog test, which counts that prefix, passes unchanged) — the single internal, ungranted row
+write that `app.b028_delivery_enqueue` now also calls (redefined by CREATE OR REPLACE with its package-1 body unchanged
+apart from that call, NOWAIT admission first) — only when `notification_delivery_v2` is also ON and the family is not
+bill. **Producer admission is weaker than enqueue's and the fence moves to claim time (review r2 MAJOR):** the
+producer reads the delivery flag without locks, so a transaction that read ON may commit its attempt after OFF
+committed. Such an attempt stays inert while OFF (`b028_delivery_claim`/`b028_delivery_status` admission return
+nothing). Re-ON cannot dispatch it: triggers on `platform_settings` (key `notification_delivery_v2`) and
+`organizations.feature_flags` (the org trigger reads the settings row `FOR SHARE`, so a concurrent global/allowlist
+change cannot hide the transition; it fires only when the org's delivery key changes) append the org to private `app.b028_delivery_on_transitions` only when its *effective*
+control turns OFF→ON (nothing is written while it stays OFF), and `b028_delivery_claim` (redefined; identical apart
+from one sweep) first retires every queued or lease-expired `b028_event` attempt whose producer transaction started
+(event `admitted_at` = `now()`, never later than the snapshot that read the control — covers REPEATABLE READ callers)
+before the org's latest ON transition as terminal `failed`/`stale_admission`. Conservative by design: producer attempts still queued across any
+OFF period are retired, never sent late; package-1 attempts of other source kinds are untouched. The remaining
+predicate copies are the TS probe (a role-agnostic prefilter; the gateway re-checks authoritatively) and the
+lock-free `app.b028_events_flag`; `app.b028_event_message` returns
+template inputs (empty while OFF). Locking (review r1 MAJOR): flags are a plain snapshot read
+(`app.b028_events_flag`), no LOCK TABLE / row lock / NOWAIT and no function `lock_timeout`, so a concurrent settings
+write or org `FOR UPDATE` can never fail the business action with 55P03; FK key-share waits follow the business
+transaction's own policy. **Bills (review r1 BLOCKER):** recipient rows link 1:1 to the reminder's existing
+`b028_recipient_claims` (`claim_id`, unique, CHECKed for bill only) and get **no** package-1 attempt — the claim path
+keeps sole Email ownership, so each reminder recipient is one Email across both paths.
+
+**Producers (`src/server/notification-event-producers.ts`), each on the business transaction's own client, committing
+atomically with it:**
+
+| Family | Real operation | Source / version / offset | Intended recipients |
+|---|---|---|---|
+| invite | `issuePortalInvite` (new invitation) | invitation / `issued` / owner\|tenant | the invited contact (persona = invite kind) |
+| bill | `runLocalRentReminders` (`b010_schedule_rent`), `queueManualReminder` | `b010_source_events` / occurrence_key / `day:N` or `manual` | existing `b028_recipient_claims` (tenant contacts, staff members) |
+| payment | `confirmPayment`, `rejectPayment`, `reversePayment`, `recordPayment`, legacy `approveMatch`, B-009 `decideBankMatch` (`producePaymentResultEvent`) | payment / committed status / `result` | the payer tenant only (co-tenants excluded) |
+| handover | `publishHandover` | handover record / revision / phase | current tenant parties of the lease |
+| report | `recordStatementVersion` | owner statement / version_no / `version` | the statement's owner contact |
+| repair | `submitEstimate` (owner decision required), `authorizeEmergency` (outbox `emergency_owner_notice`), `decideEstimate` | ticket / `estimate:N`\|`emergency:N`\|`decision:N` / approval\|outbox kind\|decision | designated owner contact+principal; decision → submitting admin/manager |
+
+Not wired: handover attachment versions/replies,
+`b013_emit_reminder` (no TS caller), center source/recipient readers (center kinds unchanged). **Renewal is deferred**:
+the only renewal code here is the read-only comparison preview; no event is emitted from it. It needs the durable
+renewal operation on its own branch; the event `family`/`kind` CHECKs deliberately exclude renewal.
+
+**OFF contract.** Each hook issues exactly one read-only statement (tagged `/* b028:notification_events_v2 probe */`) and
+returns; no role switch, no write. The one existing exact-SQL mock (`owner-repair-decision/request-id.test.ts`) now
+answers that probe with OFF.
+
+**Templates.** EN/zh-TW rendering reuses existing copy (rent reminder body, center kind labels, invite strings,
+handover/report titles; repair labels are verbatim copies asserted equal to the repair decision copy so the guarded
+repair-approval import list is unchanged; invite subjects are new strings). Repair decision recipients use the
+admin/manager set of `app.b013_submit_estimate`'s submitter check — no SQL helper resolves another user's role
+(`app.has_role` reads `auth.uid()`). ON with an unexpected connection role throws (OFF unchanged). New bodies live in `src/i18n/lanes/notification-events.ts` and pass
+`copy:check` (屋主 never 房東; 繳款 wording; no 統一編號). Captures: `e2e-evidence/B-028/templates/<family>.<locale>.txt`
+(synthetic seed data; written by the integration test; nothing sent).
+
+**Tests.** `notification-event-families.integration.test.ts` (clone + `resetAndSeed`), per family: (1) baseline trace
+with hooks uninstalled (`__setNotificationProducersInstalledForTests(false)`, test-only), (2) OFF trace with
+`notification_delivery_v2` ON — statements equal the baseline after removing the probes, zero event/recipient/attempt
+rows, (3) ON: the real operation, then exactly one event per committed source with exact source/version/offset/row
+references, recipient keys equal to the intended set, producer calls inside the still-open business transaction that
+then commits, probe count = producer calls, replay → same event and no new rows, wrong org (ORG2 fully enabled) → NULL,
+six disabled controls → NULL and no new rows, one package-1 capture per recipient via `createCaptureAdapter`, second
+run captures nothing, zero `fetch` calls; bill: every claim captured exactly once and zero package-1 captures. Plus
+privilege/config catalog (incl. no NOWAIT/LOCK in the producer), renewal-deferred, a lock test (held settings write;
+held org `FOR UPDATE` for 2.5 s → no error, action succeeds after release) and a rollback test (failure injected after
+the producer → zero event/recipient/attempt rows and no handover version).
+`notification-event-templates.test.ts` (unit) renders every kind in both locales.

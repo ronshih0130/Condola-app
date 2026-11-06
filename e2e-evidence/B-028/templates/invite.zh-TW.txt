@@ -1,0 +1,6 @@
+# B-028 package 2 template capture: invite (zh-TW)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[invite_issued -> tenant]
+Subject: 邀請您使用租客頁
+李愛玲，「松信住宅管理」邀請您查看租約與回報繳租。2026-11-14 到期。請使用管理方提供的連結開啟。

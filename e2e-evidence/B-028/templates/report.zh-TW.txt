@@ -1,0 +1,6 @@
+# B-028 package 2 template capture: report (zh-TW)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[report_version_recorded -> owner]
+Subject: 淨額帳與報表版本
+B028 owner，松信住宅管理：2095-01-01 至 2095-01-31 的月結報表已產生第 2 版，請至屋主頁查看。

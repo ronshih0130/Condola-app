@@ -1,4 +1,5 @@
 import { many, svc, tx } from "./db";
+import { produceNotificationEvent } from "./notification-event-producers";
 import type { Session } from "./types";
 
 export async function manualRemindersEnabled(session: Session): Promise<boolean> {
@@ -30,9 +31,13 @@ export async function manualReminderInvoices(session: Session, leaseId: string) 
 
 export async function queueManualReminder(session: Session, leaseId: string, invoiceId: string, requestId: string) {
   if (session.kind !== "staff" || !["admin","manager"].includes(session.role ?? "") || session.needsSandbox) throw new Error("Reminder unavailable");
-  return svc(session.userId,async (c) => (await c.query<{id:string}>(
-    `SELECT app.b010_manual_reminder($1,$2,$3,$4,$5,$6,$7)::text AS id`,
-    [session.orgId,session.liveOrgId,session.environment,session.sessionId,leaseId,invoiceId,requestId])).rows[0].id);
+  return svc(session.userId,async (c) => {
+    const id=(await c.query<{id:string}>(
+      `SELECT app.b010_manual_reminder($1,$2,$3,$4,$5,$6,$7)::text AS id`,
+      [session.orgId,session.liveOrgId,session.environment,session.sessionId,leaseId,invoiceId,requestId])).rows[0].id;
+    await produceNotificationEvent(c,session.orgId,"b010_source_event",id);
+    return id;
+  });
 }
 
 export async function manualReminderStatus(session: Session, leaseId: string, eventId: string) {

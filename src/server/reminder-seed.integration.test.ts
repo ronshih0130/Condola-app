@@ -73,6 +73,7 @@ test("a synthetic schema-absence probe without event tables still resets",async(
     // Capability-absence compatibility, not a historical-upgrade claim. This
     // is the uniquely owned clone, never its shared source. New center children
     // must be absent before removing their referenced B010 event table.
+    await c.query(`DROP TABLE IF EXISTS app.b028_notification_event_recipients`);
     await c.query(`DROP TABLE IF EXISTS app.b017_center_resolutions`);
     await c.query(`DROP TABLE IF EXISTS app.b028_center_mark_contexts,app.b028_center_cursors,app.b028_center_reads,app.b028_center_recipients,app.b028_center_events`);
     await c.query(`DROP TABLE IF EXISTS app.b017_old_source_transactions,app.b017_occurrences`);

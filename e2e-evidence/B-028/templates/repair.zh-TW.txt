@@ -1,0 +1,14 @@
+# B-028 package 2 template capture: repair (zh-TW)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[repair_approval_requested -> owner]
+Subject: 修繕決定
+陳建宏，松信住宅管理：有一筆修繕估價（NT$6,000）需要您決定，請至屋主頁查看。
+
+[repair_emergency_notice -> owner]
+Subject: 緊急例外
+陳建宏，松信住宅管理：管理方已就水務問題使用緊急例外並先行安排修繕，請至屋主頁查看。
+
+[repair_decision_recorded -> staff]
+Subject: 修繕決定
+林雅婷，松信住宅管理：屋主已對第 2 版估價做出決定（已核准），請至維修案件查看。

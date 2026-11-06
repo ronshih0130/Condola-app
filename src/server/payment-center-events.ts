@@ -1,4 +1,5 @@
 import type { Client } from "pg";
+import { produceNotificationEvent } from "./notification-event-producers";
 import type { Session } from "./types";
 
 export type PaymentCenterAction = "confirm" | "reject" | "reverse" | "record" | "legacy_match" | "bank_match";
@@ -88,4 +89,11 @@ export async function finalizePaymentCenter(client:Client,ticket:Ticket|null,sou
   const event=(await client.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,neutral_source_id,occurred_at) VALUES($1,$2,$3,$4) RETURNING id::text`,[session.orgId,kind,neutral.id,neutral.at])).rows[0];
   if (payment.eligible) await client.query(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,contact_id) SELECT $1,$2,'tenant',c.user_id,c.id FROM public.contacts c JOIN public.lease_parties lp ON lp.org_id=c.org_id AND lp.contact_id=c.id WHERE c.org_id=$1 AND c.id=$3 AND c.user_id=$4 AND c.is_tenant AND c.archived_at IS NULL AND lp.lease_id=$5 AND lp.role IN ('primary','co_tenant') LIMIT 1`,[session.orgId,event.id,payment.payer,payment.principal,leaseId]);
   await leave(client,state);
+}
+
+/** B-028 package 2: the committed payment result (confirmed/rejected/reversed) as a
+ * durable notification event for the payer, on the same financial transaction.
+ * Independent of the center ticket; OFF issues one read-only probe and writes nothing. */
+export async function producePaymentResultEvent(client:Client,session:Session,paymentId:string) {
+  return produceNotificationEvent(client,session.orgId,"payment",paymentId);
 }

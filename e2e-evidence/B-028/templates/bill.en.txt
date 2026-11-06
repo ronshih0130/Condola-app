@@ -1,0 +1,14 @@
+# B-028 package 2 template capture: bill (en)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[rent_overdue -> staff]
+Subject: Overdue bill reminder
+林雅婷, 松信住宅管理: bill due 2026-11-03; outstanding $1,800.00. View the rent overview.
+
+[rent_overdue -> tenant]
+Subject: Overdue bill reminder
+Alex Kim, 松信住宅管理: bill due 2026-11-03; outstanding $1,800.00. View your bill in the tenant portal.
+
+[rent_manual -> tenant]
+Subject: Bill reminder
+王小美, 松信住宅管理: bill due 2026-11-03; outstanding NT$12,000. View your bill in the tenant portal.
