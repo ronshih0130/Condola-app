@@ -270,17 +270,9 @@ export async function assertEnhancedVendorMutation(
 }
 
 /** Same-transaction ticket lock fences closure through notification marking. */
-export async function vendorNotificationReadOnly(client: Client, tokenHash: string) {
-  if (!vendorLinkKillSwitch) return false;
-  const job = await maybe<{ ticket_id: string; org_id: string; feature_flags: unknown }>(client,
-    `SELECT j.ticket_id::text, j.org_id::text, o.feature_flags
-       FROM repair_vendor_jobs j JOIN organizations o ON o.id=j.org_id WHERE j.token_hash=$1`, [tokenHash]);
-  if (!job || !vendorLinkOn(vendorLinkKillSwitch, job.feature_flags)) return false;
-  // NOWAIT keeps the notification center's bounded busy/retry contract.
-  const ticket = await maybe<{ status: string }>(client,
-    `SELECT status::text FROM maintenance_tickets WHERE id=$1 AND org_id=$2 FOR SHARE NOWAIT`,
-    [job.ticket_id, job.org_id]);
-  return !ticket || !reportableTicket(ticket.status);
+/** Read-only view of the in-process kill switch (notification gateway choice). */
+export function vendorLinkKillSwitchOn() {
+  return vendorLinkKillSwitch === true;
 }
 
 async function assertDispatchFlag(client: Client, orgId: string) {

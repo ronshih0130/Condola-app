@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106231000_b026_closed_job_notification_read.sql": {
+    addOnly: true,
+    reason: "Adds a service-only sibling vendor notification gateway used only when the in-process vendor-link kill switch is ON; it delegates to app.b028_center_vendor unless the org is enhanced and the ticket closed, where reads are write-free and marks rejected. No table, column, existing function or flag change.",
+  },
   "supabase/migrations/20261106040000_b022_owner_title_report_replies.sql": {
     addOnly: true,
     reason: "Adds private append-only owner receipt-title revisions and report replies, authenticated SECURITY DEFINER gateways and two default-OFF settings; no existing-table schema changes or backfill. Title RPC updates only the caller owner contact receipt_title.",
