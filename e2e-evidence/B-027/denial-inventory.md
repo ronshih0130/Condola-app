@@ -56,6 +56,9 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 
 | Route source | Coverage |
 |---|---|
+| src/app/(line)/o/liff/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/(line)/t/liff/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/(line)/v/liff/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/auth/enter/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/auth/sign-out/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/bank/matching/route.ts:1 | Enumerated only; outside representative selection |
@@ -76,6 +79,16 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/id-documents/finalize/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/id-documents/photo/route.ts:1 | HTTP handler executed above |
 | src/app/api/import/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/bind/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/flows/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/identity/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/invites/accept/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/links/[id]/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/links/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/login/callback/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/login/start/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/reauth/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/session/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/webhook/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/monthly-rent-issue/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/notification-center/mark/route.ts:1 | Enumerated only; outside representative selection |
