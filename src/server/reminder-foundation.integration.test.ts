@@ -240,13 +240,66 @@ test("local capture owns each recipient once, records failure and retries withou
   } finally { await c.end(); }
 });
 
+// Codex QA r1 (BLK-MAC-11 fix): the legacy invoice lock must never wait, so a
+// multi-claim legacy transaction cannot form a deadlock cycle with a payment
+// that locks invoices in id order. Legacy holds B, payment holds A and waits
+// for B, legacy then claims A: bounded busy 55P03 (fenced, no send), not 40P01.
+test("legacy claim invoice lock never waits: multi-claim vs payment yields bounded busy, not deadlock", async () => {
+  const fixture = await cloneTestDatabase();
+  const legacy = new Client({ connectionString: fixture.url });
+  const payment = new Client({ connectionString: fixture.url });
+  await legacy.connect(); await payment.connect();
+  let waiting: Promise<unknown> | undefined;
+  try {
+    const [a, b] = (await legacy.query<{ id: string }>(`SELECT id::text FROM invoices WHERE org_id=$1 ORDER BY id LIMIT 2`, [ORG_ID])).rows.map(r => r.id);
+    assert.ok(a && b && a < b);
+    // Rollout OFF: the case that previously took no lock at all.
+    await legacy.query(`UPDATE platform_settings SET value='{"enabled":false,"allowed_org_ids":[]}' WHERE key='rent_reminders_v2'`);
+    const claim = (target: string) => legacy.query(`INSERT INTO email_log(org_id,kind,target_id,threshold)
+      VALUES($1,'rent_overdue_admin',$2,1)`, [ORG_ID, target]);
+    // Bound both sessions so a regression fails instead of hanging the suite.
+    await legacy.query("SET statement_timeout = '20s'");
+    await payment.query("SET statement_timeout = '20s'");
+    const legacyPid = Number((await legacy.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+    const paymentPid = Number((await payment.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+    await legacy.query("BEGIN");
+    await claim(b);
+    await payment.query("BEGIN");
+    await payment.query(`SELECT 1 FROM invoices WHERE id=$1 FOR UPDATE`, [a]);
+    waiting = payment.query(`SELECT 1 FROM invoices WHERE id=$1 FOR UPDATE`, [b]);
+    let blockers: number[] = [];
+    for (let i = 0; i < 100 && !blockers.includes(legacyPid); i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      blockers = (await legacy.query<{ b: number[] }>(`SELECT pg_blocking_pids($1) AS b`, [paymentPid])).rows[0].b.map(Number);
+    }
+    assert.deepEqual(blockers, [legacyPid], "payment is blocked by the legacy claim on B before legacy claims A");
+    const started = Date.now();
+    await assert.rejects(claim(a), (error: unknown) => {
+      const e = error as { code?: string; message?: string };
+      return e.code === "55P03" && e.message === "Legacy reminder claim busy";
+    });
+    assert.ok(Date.now() - started < 15000, "bounded polling, not an unbounded wait");
+    await legacy.query("ROLLBACK");
+    await waiting;
+    await payment.query("COMMIT");
+    assert.equal((await payment.query(`SELECT 1 FROM email_log WHERE org_id=$1 AND target_id=ANY($2::uuid[])`, [ORG_ID, [a, b]])).rowCount, 0);
+  } finally {
+    await legacy.query("ROLLBACK").catch(() => {});
+    await payment.query("ROLLBACK").catch(() => {});
+    await waiting?.catch(() => {});
+    await legacy.end(); await payment.end();
+    await fixture.cleanup();
+  }
+});
+
 // Each ordering gets a private clone: no flag or occurrence state escapes it.
 test("legacy_and_new_same_occurrence_single_owner", async t => {
-  // The uncommitted OFF->ON ordering reproduces a known duplicate (hub BLK-MAC-11; fence fix needs a
-  // reviewed migration). It runs only with B028_RUN_KNOWN_DEFECT=1 (npm run test:b028-known-defect) so
-  // the shared gate stays green while the defect remains reproducible.
+  // The uncommitted OFF->ON ordering is the BLK-MAC-11 regression: before
+  // 20261106160000_b028_legacy_claim_invoice_fence.sql it produced 1 legacy send
+  // + 1 new capture. The legacy claim now holds the invoice FOR KEY SHARE, so the
+  // new path (invoice FOR UPDATE) must wait for it and then see the claim.
   const orderings = ["legacy-first", "new-first", "paused-committed-legacy-OFF-to-ON", "paused-uncommitted-legacy-OFF-to-ON"] as const;
-  for (const ordering of orderings.filter((o) => process.env.B028_RUN_KNOWN_DEFECT === "1" || o !== "paused-uncommitted-legacy-OFF-to-ON")) {
+  for (const ordering of orderings) {
     await t.test(ordering, async st => {
       const fixture = await cloneTestDatabase();
       const legacy = new Client({ connectionString: fixture.url });
@@ -254,9 +307,11 @@ test("legacy_and_new_same_occurrence_single_owner", async t => {
       await legacy.connect(); await newer.connect();
       let resume = () => {};
       let pending: Promise<number> | undefined;
+      let runningNew: Promise<void> | undefined;
       try {
-        assert.notEqual((await legacy.query("SELECT pg_backend_pid() AS pid")).rows[0].pid,
-          (await newer.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+        const newerPid = Number((await newer.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+        const legacyPid = Number((await legacy.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+        assert.notEqual(legacyPid, newerPid);
         await newer.query(`UPDATE platform_settings SET value='{"enabled":false,"allowed_org_ids":[]}' WHERE key='rent_reminders_v2'`);
         await newer.query(`UPDATE organizations SET feature_flags=feature_flags || '{"rent_reminders_v2":true}',
           settings=settings || '{"email_tenant_rent_overdue":false}' WHERE id=$1`, [ORG_ID]);
@@ -319,8 +374,27 @@ test("legacy_and_new_same_occurrence_single_owner", async t => {
           await Promise.race([claimReached,pending.then(() => assert.fail("claim did not pause"))]);
           assert.equal(sends,0);
           assert.equal((await newer.query(`SELECT 1 FROM email_log WHERE org_id=$1 AND target_id=$2`,[ORG_ID,invoice.id])).rowCount,uncommitted ? 0 : 1);
-          await enable(); await runNew();
-          if (uncommitted) await legacy.query("COMMIT");
+          await enable();
+          if (uncommitted) {
+            // The new path must block on the in-flight claim instead of missing it.
+            // Bound the blocked scheduler so a regression cannot hang the suite.
+            await newer.query("SET statement_timeout = '20s'");
+            const running = runNew();
+            runningNew = running;
+            const raced = await Promise.race([running.then(() => "finished"),
+              new Promise<string>(resolve => setTimeout(() => resolve("waiting"), 750))]);
+            assert.equal(raced, "waiting", "new scheduler waits for the uncommitted legacy claim");
+            // Row-lock waits surface as a wait on the holder's transaction: the
+            // legacy claim's backend must be the (only) blocker of the scheduler.
+            const blocked = (await legacy.query<{blockers:number[]; waiting:string|null}>(`SELECT
+              pg_blocking_pids($1) AS blockers,
+              (SELECT wait_event_type FROM pg_stat_activity WHERE pid=$1) AS waiting`, [newerPid])).rows[0];
+            assert.deepEqual(blocked.blockers.map(Number), [legacyPid], "the scheduler is blocked by the in-flight legacy claim");
+            assert.equal(blocked.waiting, "Lock");
+            await legacy.query("COMMIT");
+            await running;
+            assert.equal(event, null, "after the legacy commit the new path sees the claim and schedules nothing");
+          } else await runNew();
           resume();
           assert.equal(await pending,1);
         }
@@ -372,6 +446,7 @@ test("legacy_and_new_same_occurrence_single_owner", async t => {
       } finally {
         await legacy.query("ROLLBACK"); resume();
         await pending?.catch(() => {});
+        await runningNew?.catch(() => {});
         await legacy.end(); await newer.end(); await fixture.cleanup();
       }
     });

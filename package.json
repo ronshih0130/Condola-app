@@ -30,8 +30,7 @@
     "licenses:vendor": "node scripts/third-party-licenses.mjs --vendor",
     "licenses:verify-bundle": "node scripts/third-party-licenses.mjs --verify-bundle",
     "licenses:extract-upstream": "node scripts/extract-upstream-notices.mjs",
-    "dev:e2e": "node scripts/third-party-licenses.mjs --check && node scripts/third-party-licenses.mjs --vendor && next dev -p 43123 -H 127.0.0.1",
-    "test:b028-known-defect": "B028_RUN_KNOWN_DEFECT=1 tsx --test --test-concurrency=1 --test-name-pattern=legacy_and_new_same_occurrence_single_owner src/server/reminder-foundation.integration.test.ts"
+    "dev:e2e": "node scripts/third-party-licenses.mjs --check && node scripts/third-party-licenses.mjs --vendor && next dev -p 43123 -H 127.0.0.1"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
