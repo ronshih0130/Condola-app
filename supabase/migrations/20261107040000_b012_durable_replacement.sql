@@ -97,8 +97,7 @@ REVOKE ALL ON FUNCTION app.b012_freeze_lease() FROM PUBLIC,anon,authenticated,se
 CREATE TRIGGER b012_freeze_lease BEFORE UPDATE OR DELETE ON public.leases
 FOR EACH ROW EXECUTE FUNCTION app.b012_freeze_lease();
 
--- Serialize party edits with submission, so the predecessor's tenant binding
--- cannot change between copying its parties and installing the immutable link.
+-- Reject party edits on a replaced predecessor (serialization: see submission locks).
 CREATE FUNCTION app.b012_freeze_parties() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 DECLARE v_id uuid;
@@ -106,7 +105,10 @@ BEGIN
   FOR v_id IN SELECT DISTINCT id FROM unnest(ARRAY[
     CASE WHEN TG_OP<>'INSERT' THEN OLD.lease_id END,
     CASE WHEN TG_OP<>'DELETE' THEN NEW.lease_id END]) id WHERE id IS NOT NULL ORDER BY id LOOP
-    PERFORM 1 FROM public.leases WHERE id=v_id FOR UPDATE;
+    -- No lock here: existing party writers keep their exact lock footprint (flag OFF
+    -- byte-for-byte). Serialization with submission comes from the submission
+    -- locking the predecessor lease and its party rows FOR UPDATE; new-party INSERTs
+    -- wait on the lease through the FK key-share lock, then see the replacement.
     IF EXISTS(SELECT 1 FROM app.b012_replacements WHERE predecessor_id=v_id) THEN
       RAISE EXCEPTION 'Replaced predecessor parties are immutable' USING ERRCODE='55000';
     END IF;
@@ -210,6 +212,9 @@ BEGIN
     PERFORM pg_advisory_xact_lock_shared(hashtextextended('condola:record-archive:'||p_org::text||':room:'||v_discovered.target_room_id::text,0));
   END IF;
   SELECT * INTO v_old FROM public.leases WHERE org_id=p_org AND id=p_lease FOR UPDATE;
+  -- Lock the predecessor's party rows (after the lease, before unit/room) so no party
+  -- edit can slip between copying them and installing the immutable link.
+  PERFORM 1 FROM public.lease_parties WHERE org_id=p_org AND lease_id=p_lease ORDER BY id FOR UPDATE;
   IF NOT FOUND OR v_old.property_id IS DISTINCT FROM v_discovered.property_id
     OR v_old.unit_id IS DISTINCT FROM v_discovered.unit_id
     OR v_old.target_unit_id IS DISTINCT FROM v_discovered.target_unit_id
