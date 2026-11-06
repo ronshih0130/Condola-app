@@ -5,7 +5,7 @@ import { Client } from "pg";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
-import { confirmPayment, rejectPayment, reversePayment } from "./domain";
+import { confirmPayment, recordPayment, rejectPayment, reversePayment } from "./domain";
 import { ownerCollectedPaymentIds } from "./payment-request-status";
 import type { Session } from "./types";
 
@@ -609,6 +609,30 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
       assert.equal((await events(id)).length, 0);
       assert.equal(await ledgerCount(), beforeLedger);
       assert.deepEqual(await collectors(), beforeCollectors);
+    });
+
+    await t.test("staff manual entry on an owner-collected lease is rejected; management entry still records", async () => {
+      await flag(true);
+      await ownerCollector();
+      const count = async () => (await c.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM payments WHERE lease_id=$1`, [lease.id],
+      )).rows[0].n;
+      const beforePayments = await count();
+      const beforeLedger = await ledgerCount();
+      const input = {
+        leaseId: lease.id, amountMajor: 10, paidOn: "2026-10-30",
+        last5: lease.currency === "TWD" ? "12345" : "", reference: "",
+      };
+      await assert.rejects(
+        recordPayment(manager, { ...input, requestId: randomUUID() }),
+        (error: unknown) => isFlowError(error) && (error as { key?: string }).key === "errors.proxyOwnerConfirmRequired",
+      );
+      assert.equal(await count(), beforePayments);
+      assert.equal(await ledgerCount(), beforeLedger);
+      await clearCollector();
+      const recorded = await recordPayment(manager, { ...input, requestId: randomUUID() });
+      assert.equal(recorded.status, "confirmed");
+      assert.equal(await count(), beforePayments + 1);
     });
   } finally {
     await c.end();

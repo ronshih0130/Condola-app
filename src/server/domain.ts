@@ -2017,6 +2017,12 @@ export async function recordPayment(
         newPaymentId,
       ],
     );
+    if (enabled) {
+      // B-010 CAP-M-35: staff entry of an owner-collected payment would be an
+      // unacknowledged proxy confirmation; use the confirmation flow instead.
+      const collector = await maybe<{collector:string}>(client,`SELECT collector FROM app.b010_payment_collector($1)`,[payment.id]);
+      if (!collector || collector.collector !== "management") throw new FlowError("errors.proxyOwnerConfirmRequired");
+    }
     await allocateAndLedger(client, payment, session.userId, invoices);
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);
@@ -2323,6 +2329,12 @@ export async function approveMatch(session: Session, suggestionId: string) {
       if (Number(lockedPayment.amount_minor) > invoices.reduce((sum, invoice) => sum + Number(invoice.balance_minor),0)) throw new FlowError("errors.amountTooHigh");
     }
     if (enabled && !await lockPaymentResultContext(client,session,initialPayment.lease_id)) throw new FlowError("errors.generic");
+    if (enabled) {
+      // B-010 CAP-M-35: legacy suggestion approval follows the same rule as
+      // bank matching: owner-collected payments need the proxy confirmation flow.
+      const collector = await maybe<{collector:string}>(client,`SELECT collector FROM app.b010_payment_collector($1)`,[suggestion.payment_id]);
+      if (!collector || collector.collector !== "management") throw new FlowError("errors.proxyOwnerConfirmRequired");
+    }
     await client.query(
       `UPDATE bank_match_suggestions SET status = 'approved', decided_by = $2, decided_at = now() WHERE id = $1`,
       [suggestion.id, session.userId],
@@ -2355,6 +2367,7 @@ export async function approveMatch(session: Session, suggestionId: string) {
         [payment.id, session.userId, suggestion.bank_transaction_id],
       );
       await allocateAndLedger(client, payment, session.userId, invoices);
+      if (enabled) await client.query(`SELECT app.b010_record_confirmation($1,false,'legacy_match')`,[payment.id]);
       const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
       await finalizePaymentCenter(client,center,source);
     } else if (payment.status === "confirmed") {

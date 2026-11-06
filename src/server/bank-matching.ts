@@ -142,12 +142,20 @@ export async function decideBankMatch(session: Session, input: {bankId:string;pa
     if (!paymentId || (suggestion && input.paymentId && input.paymentId !== paymentId)) throw fail();
     const payment = (await client.query<{id:string;org_id:string;property_id:string;lease_id:string;currency:string;amount_minor:string;payer_contact_id:string|null;status:string;bank_transaction_id:string|null}>(`SELECT id::text,org_id::text,property_id::text,lease_id::text,currency,amount_minor::text,payer_contact_id::text,status::text,bank_transaction_id::text FROM payments WHERE org_id=$1 AND id=$2 FOR UPDATE`,[session.orgId,paymentId])).rows[0];
     if (!payment || !initialPayment || payment.id !== initialPayment.id || payment.lease_id !== initialPayment.lease_id || payment.bank_transaction_id || !["submitted","confirmed"].includes(payment.status) || (bank.property_id !== null && bank.property_id !== payment.property_id) || bank.currency !== payment.currency || bank.amount !== payment.amount_minor || BigInt(bank.amount) <= BigInt(0) || BigInt(bank.amount) > BigInt(Number.MAX_SAFE_INTEGER)) throw fail();
+    // B-010 CAP-M-35: with payment results ON, bank matching (confirming or
+    // linking an already-confirmed payment) is limited to management-collected
+    // payments; owner-collected ones use the explicit proxy confirmation flow.
+    if (resultEnabled) {
+      const collector = (await client.query<{collector:string}>(`SELECT collector FROM app.b010_payment_collector($1)`,[payment.id])).rows[0];
+      if (!collector || collector.collector !== "management") throw fail();
+    }
     if (payment.status === "submitted") {
       const invoices = await lockAllocationInvoices(client,session.orgId,payment.lease_id);
       if (Number(payment.amount_minor) > invoices.reduce((sum, invoice) => sum + Number(invoice.balance_minor),0)) throw fail();
       if (resultEnabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw fail();
       await client.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now(),bank_transaction_id=$3 WHERE org_id=$4 AND id=$1`,[payment.id,session.userId,input.bankId,session.orgId]);
       await allocateAndLedger(client,payment,session.userId,invoices);
+      if (resultEnabled) await client.query(`SELECT app.b010_record_confirmation($1,false,'bank_match')`,[payment.id]);
       const source=resultEnabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
       await finalizePaymentCenter(client,center,source);
     } else await client.query(`UPDATE payments SET bank_transaction_id=$2 WHERE id=$1 AND org_id=$3`,[payment.id,input.bankId,session.orgId]);
