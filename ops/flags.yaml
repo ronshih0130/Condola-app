@@ -198,6 +198,15 @@ flags:
     org_override: "organizations.feature_flags.monthly_report_delivery must be boolean true"
     activation: "local synthetic validation only; no hosted activation or network delivery"
 
+  deposit_settlement:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.deposit_settlement requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.deposit_settlement must be boolean true"
+    activation: "B-011 / PROP-09 build-only (merged SEG2); registry entry added by PROP-05 consistency check; OFF; activation Ron decides"
+
   owner_transfers:
     owner: Ron
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
