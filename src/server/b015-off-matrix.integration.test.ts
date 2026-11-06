@@ -259,11 +259,18 @@ for (const global of globals) for (const optIn of optIns) {
 
 // Asymmetric controls: each feature must read its OWN gate. With one feature
 // fully ON and the other's organization opt-in false, only the ON feature writes.
-for (const [onKey, offKey] of [['record_archive', 'tenant_directory_edit'], ['tenant_directory_edit', 'record_archive']] as const) {
-  test(`asymmetric controls: ${onKey} ON while ${offKey} OFF`, async () => {
+for (const [onKey, offKey, offLayer] of [
+  ['record_archive', 'tenant_directory_edit', 'organization'], ['tenant_directory_edit', 'record_archive', 'organization'],
+  ['record_archive', 'tenant_directory_edit', 'global'], ['tenant_directory_edit', 'record_archive', 'global'],
+] as const) {
+  test(`asymmetric controls: ${onKey} ON while ${offKey} ${offLayer} OFF`, async () => {
     await withRestoredControls(async () => {
       await setControl(onKey, enabled, 'true');
-      await setControl(offKey, enabled, 'false');
+      // Organization layer: same global row, other opt-in false. Global layer:
+      // both opt-ins true, other global row disabled — proves each feature
+      // reads its OWN global key too.
+      if (offLayer === 'organization') await setControl(offKey, enabled, 'false');
+      else await setControl(offKey, { ...enabled, enabled: false }, 'true');
       const configured = await controlsSnapshot();
       const target = targets.find(t => t.ref.kind === 'property' && t.desired === 'archived');
       assert.ok(target, 'an active property target exists');
