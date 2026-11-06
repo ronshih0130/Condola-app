@@ -235,6 +235,7 @@ test("tenant signed-PDF route serves the selected own lease", async () => {
   assert.equal(response.headers.get("content-type"), "application/pdf");
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.match(response.headers.get("content-disposition") ?? "", /^attachment; filename="/);
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), own.bytes);
 });
 
@@ -252,4 +253,39 @@ test("tenant signed-PDF route writes one audit row whose reason is the code", as
   assert.equal(rows.rows[0].actor_role, "tenant");
   assert.deepEqual(rows.rows[0].new_row, { event: "signed_pdf_downloaded", lease_id: own.lease });
   assert.equal(JSON.stringify(rows.rows[0]).includes("signed.pdf"), false);
+});
+
+test("B-004: with the organization flag OFF the tenant route exposes nothing and records no download", async () => {
+  const holder = await person(true);
+  const own = await version(ORG_ID, holder.contact);
+  token = holder.token;
+  leaseCookie = own.lease;
+  await query(`UPDATE organizations SET feature_flags = coalesce(feature_flags,'{}'::jsonb) || '{"tenant_signed_pdf":false}'::jsonb WHERE id = $1`, [ORG_ID]);
+  try {
+    const response = await call(own.pdf);
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("content-type")?.includes("application/pdf"), false);
+    assert.equal(await response.text(), "Not found");
+    assert.equal((await downloads(own.pdf)).rows.length, 0);
+  } finally {
+    await query(`UPDATE organizations SET feature_flags = coalesce(feature_flags,'{}'::jsonb) || '{"tenant_signed_pdf":true}'::jsonb WHERE id = $1`, [ORG_ID]);
+  }
+});
+
+test("B-004: with the global setting OFF the tenant route exposes nothing and records no download", async () => {
+  const holder = await person(true);
+  const own = await version(ORG_ID, holder.contact);
+  token = holder.token;
+  leaseCookie = own.lease;
+  const saved = (await query<{ value: string }>(`SELECT value::text AS value FROM platform_settings WHERE key='tenant_signed_pdf'`)).rows[0]?.value;
+  await query(`UPDATE platform_settings SET value='false'::jsonb WHERE key='tenant_signed_pdf'`);
+  try {
+    const response = await call(own.pdf);
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("content-type")?.includes("application/pdf"), false);
+    assert.equal(await response.text(), "Not found");
+    assert.equal((await downloads(own.pdf)).rows.length, 0);
+  } finally {
+    if (saved !== undefined) await query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='tenant_signed_pdf'`, [saved]);
+  }
 });
