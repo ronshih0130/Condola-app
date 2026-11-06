@@ -1,13 +1,13 @@
-"use client";
-
+import "server-only";
+import * as crypto from "node:crypto";
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { repairApprovalCopy } from "@/i18n/repair-approval";
 import {
   approvalAmount, decisionLabel, intentStatusLabel, reapprovalHint,
 } from "@/server/repair-approval-rules";
 import type { ManagerApprovalRow, OwnerHistoryRow, OwnerPendingRow } from "@/server/repair-approval";
+
+import { DecisionForm } from "./decision-form";
 
 export type ApprovalCardRow = OwnerPendingRow & { emergency: OwnerHistoryRow | null };
 type Copy = ReturnType<typeof repairApprovalCopy>;
@@ -29,52 +29,6 @@ function Emergency({ row, copy }: { row: OwnerHistoryRow; copy: Copy }) {
   </section>;
 }
 
-function DecisionForm({ versionId, copy }: { versionId: string; copy: Copy }) {
-  const router = useRouter();
-  const [decision, setDecision] = useState("approved");
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await fetch("/api/owner-repair-decision", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ versionId, decision, reason: reason.trim() || null }),
-      });
-      const result: { status?: string } = await response.json();
-      const status = result.status;
-      setMessage(status === "recorded" ? copy.recorded
-        : status === "rejected_conflict" ? copy.rejected_conflict
-        : status === "rejected_disabled" ? copy.rejected_disabled
-        : status === "rejected_invalid" ? copy.rejected_invalid : copy.unavailable);
-      if (status === "recorded" || status === "rejected_conflict") router.refresh();
-    } catch {
-      setMessage(copy.unavailable);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return <form onSubmit={submit}>
-    <label>{copy.decision}
-      <select className="inp" value={decision} onChange={e => setDecision(e.target.value)} disabled={busy}>
-        <option value="approved">{copy.approve}</option>
-        <option value="rejected">{copy.reject}</option>
-        <option value="more_information">{copy.requestInformation}</option>
-      </select>
-    </label>
-    <label>{copy.reason}
-      <textarea className="inp" value={reason} onChange={e => setReason(e.target.value)}
-        required={decision !== "approved"} maxLength={4000} disabled={busy} />
-    </label>
-    <button className="btn pri" type="submit" disabled={busy}>{copy.save}</button>
-    <p role="status">{message}</p>
-  </form>;
-}
-
 export function ApprovalCards({ rows, locale }: { rows: ApprovalCardRow[]; locale: string }) {
   const copy = repairApprovalCopy(locale);
   return <div className="grid2">{rows.map(row => <article className="card pad" key={row.version_id}>
@@ -88,7 +42,9 @@ export function ApprovalCards({ rows, locale }: { rows: ApprovalCardRow[]; local
     <p>{copy.submittedAt}: <time dateTime={row.submitted_at}>{row.submitted_at}</time></p>
     <Intent label={copy.reminder} at={row.reminder_intent_at} copy={copy} />
     {row.emergency ? <Emergency row={row.emergency} copy={copy} /> : null}
-    <DecisionForm versionId={row.version_id} copy={copy} />
+    <DecisionForm key={row.version_id} versionId={row.version_id} copy={copy}>
+      <input type="hidden" name="requestId" value={crypto.randomUUID()} />
+    </DecisionForm>
     <Link href={"/o/approvals/" + row.ticket_id}>{copy.history}</Link>
   </article>)}</div>;
 }

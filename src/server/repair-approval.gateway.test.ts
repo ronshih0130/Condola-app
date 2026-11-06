@@ -33,6 +33,7 @@ test("B-021 production callers are confined to the owner decision and scoped vie
     "app/m/tickets/[id]/approval-panel.tsx",
     "app/o/approvals/[ticketId]/page.tsx",
     "app/o/approvals/approval-cards.tsx",
+    "app/o/approvals/decision-form.tsx",
     "app/o/approvals/page.tsx",
   ].sort());
 });
@@ -69,11 +70,15 @@ test("B-021 service uses contracted gateways and the registered rendering contro
   assert.match(resolver, /f.value->'enabled'='true'::jsonb/);
 });
 
-test("decision route mints its request and delegates authorization to the gateway", () => {
+test("decision route parses the client request ID and delegates authorization to the gateway", () => {
   const route = readFileSync(join(src, "app/api/owner-repair-decision/route.ts"), "utf8");
   assert.match(route, /await requireCurrentConsent\(undefined, "api"\)/);
   assert.match(route, /session.kind !== "owner"/);
-  assert.match(route, /await decideEstimate\(session, \{ \.\.\.input, requestId: crypto.randomUUID\(\) \}\)/);
-  assert.doesNotMatch(route, /app\.|public\.|requestId:\s*(?:fields|value)\./);
+  assert.match(route, /import \{ parseRequestId \} from "\.\/request-id"/);
+  assert.match(route, /const requestId = parseRequestId\(fields\.requestId\)/);
+  assert.match(route, /if \(requestId === null\) throw new FlowError\("errors\.required"\)/);
+  assert.match(route, /input = \{ requestId, versionId: fields\.versionId/);
+  assert.match(route, /await decideEstimate\(session, \{ \.\.\.input, requestId: input\.requestId \}\)/);
+  assert.doesNotMatch(route, /randomUUID|app\.|public\.|requestId:\s*(?:fields|value)\./);
   assert.match(route, /code === "40001"/);
 });

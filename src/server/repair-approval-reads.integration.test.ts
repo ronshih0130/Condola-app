@@ -76,7 +76,8 @@ async function submit(ticketId = ticket, expected: string | null = null, amount 
   assert.ok(result.version_id);
   return result.version_id as string;
 }
-async function decide(version: string, session = sessions.owner, request = randomUUID(), reason: string | null = null) {
+// Call the SQL decision gateway on the fixture transaction connection.
+async function decideEstimate(version: string, session = sessions.owner, request = randomUUID(), reason: string | null = null) {
   return (await asRole("SELECT app.b013_decide_estimate($1::uuid,$2::uuid,$3::uuid,$4::uuid,'approved',$5::text,$6::bytea) r",
     [ORG_ID, session, request, version, reason, hash([version, "approved", reason])])).rows[0].r;
 }
@@ -211,16 +212,16 @@ test("threshold_equality_not_pending / above_pending", async () => {
 });
 test("stale_decision_rejected after resubmit", async () => {
   const first = await submit();
-  assert.equal((await decide(first)).status, "recorded");
+  assert.equal((await decideEstimate(first)).status, "recorded");
   const next = await submit(ticket, first);
-  await assert.rejects(decide(first), { code: "40001" });
+  await assert.rejects(decideEstimate(first), { code: "40001" });
   assert.deepEqual((await read("b013_owner_pending")).map(row => row.version_id), [next]);
   assert.equal((await read("b013_manager_view", sessions.manager)).find(row => row.version_id === next).decision, null);
 });
 test("decision_visible_to_manager_with_decided_at", async () => {
   const version = await submit();
-  await assert.rejects(decide(version, sessions.coastAdmin), { code: "42501" });
-  assert.equal((await decide(version)).status, "recorded");
+  await assert.rejects(decideEstimate(version, sessions.coastAdmin), { code: "42501" });
+  assert.equal((await decideEstimate(version)).status, "recorded");
   const rows = await read("b013_manager_view", sessions.manager);
   assert.equal(rows[0].version_id, version);
   assert.equal(rows[0].decision, "approved");
@@ -230,9 +231,24 @@ test("decision_visible_to_manager_with_decided_at", async () => {
 });
 test("decide replay and payload conflict", async () => {
   const version = await submit(), request = randomUUID();
-  const first = await decide(version, sessions.owner, request);
-  assert.deepEqual(await decide(version, sessions.owner, request), first);
-  assert.equal((await decide(version, sessions.owner, request, "changed")).status, "rejected_conflict");
+  const first = await decideEstimate(version, sessions.owner, request);
+  assert.deepEqual(await decideEstimate(version, sessions.owner, request), first);
+  assert.equal((await decideEstimate(version, sessions.owner, request, "changed")).status, "rejected_conflict");
+});
+test("lost_response_retry_replays", async () => {
+  const version = await submit(), requestId = randomUUID();
+  const decisionCount = async () => (await db.query(
+    "SELECT count(*)::int n FROM app.b013_estimate_decisions WHERE org_id=$1 AND version_id=$2",
+    [ORG_ID, version],
+  )).rows[0].n;
+  assert.equal(await decisionCount(), 0);
+  const first = await decideEstimate(version, sessions.owner, requestId);
+  assert.equal(first.status, "recorded");
+  assert.equal(await decisionCount(), 1);
+  // The caller loses the first response and retries the same request and payload.
+  const retry = await decideEstimate(version, sessions.owner, requestId);
+  assert.deepEqual(retry, first);
+  assert.equal(await decisionCount(), 1);
 });
 test("emergency_visibility", async () => {
   const version = await submit();
@@ -254,12 +270,34 @@ test("emergency_visibility", async () => {
 });
 test("reader_off_empty", async () => {
   const version = await submit();
-  await controls("repair_approvals", false);
-  const before = (await db.query("SELECT count(*) FROM app.b013_repair_commands")).rows;
-  for (const name of readers) assert.deepEqual(await read(name, name === "b013_manager_view" ? sessions.manager : sessions.owner), []);
-  assert.deepEqual((await db.query("SELECT count(*) FROM app.b013_repair_commands")).rows, before);
-  assert.equal((await decide(version)).status, "rejected_disabled");
-  assert.equal((await db.query("SELECT count(*)::int n FROM app.b013_estimate_decisions")).rows[0].n, 0);
+  async function stateCounts() {
+    const counts: Record<string, bigint> = {};
+    for (const table of tables) {
+      counts[table] = BigInt((await db.query("SELECT count(*) n FROM app." + table)).rows[0].n);
+    }
+    return counts;
+  }
+  for (const control of ["platform_enabled", "allowed_org_ids", "org_flag"] as const) {
+    await controls("repair_approvals", true);
+    if (control === "org_flag") {
+      await db.query("UPDATE public.organizations SET feature_flags=feature_flags"
+        + "||jsonb_build_object('repair_approvals',false) WHERE id=$1", [ORG_ID]);
+    } else {
+      await db.query("UPDATE public.platform_settings SET value=value||$1::jsonb WHERE key='repair_approvals'",
+        [JSON.stringify(control === "platform_enabled" ? { enabled: false } : { allowed_org_ids: [] })]);
+    }
+    const before = await stateCounts();
+    for (const name of readers) {
+      assert.deepEqual(await read(name, name === "b013_manager_view" ? sessions.manager : sessions.owner), [], control);
+    }
+    assert.deepEqual(await stateCounts(), before, control + ": readers must not write");
+    assert.equal((await decideEstimate(version)).status, "rejected_disabled", control);
+    // B-013 records exactly one rejected_disabled command even when the feature is OFF.
+    assert.deepEqual(await stateCounts(), {
+      ...before,
+      b013_repair_commands: before.b013_repair_commands + BigInt(1),
+    }, control + ": only the disabled command ledger row may be added");
+  }
 });
 test("appointment_job_guard", async () => {
   const version = await submit(), good = await job(ticket), wrong = await job(otherTicket);

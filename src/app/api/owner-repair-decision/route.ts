@@ -1,9 +1,9 @@
-import * as crypto from "node:crypto";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
 import { decideEstimate } from "@/server/repair-approval";
 import { assertDecision, assertIdentifiers } from "@/server/repair-approval-rules";
 import { FlowError } from "@/server/errors";
+import { parseRequestId } from "./request-id";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") {
     return new Response(null, { status: 415, headers });
   }
-  let input: { versionId: string; decision: string; reason: string | null };
+  let input: { requestId: string; versionId: string; decision: string; reason: string | null };
   try {
     const body = await request.text();
     if (body.length > 20000) return new Response(null, { status: 413, headers });
@@ -27,14 +27,16 @@ export async function POST(request: Request) {
     const fields = value as Record<string, unknown>;
     if (typeof fields.versionId !== "string" || typeof fields.decision !== "string"
       || (fields.reason != null && typeof fields.reason !== "string")) throw new FlowError("errors.required");
-    input = { versionId: fields.versionId, decision: fields.decision, reason: fields.reason as string | null ?? null };
+    const requestId = parseRequestId(fields.requestId);
+    if (requestId === null) throw new FlowError("errors.required");
+    input = { requestId, versionId: fields.versionId, decision: fields.decision, reason: fields.reason as string | null ?? null };
     assertIdentifiers(input.versionId);
     assertDecision(input);
   } catch {
     return Response.json({ status: "rejected_invalid" }, { status: 400, headers });
   }
   try {
-    const result = await decideEstimate(session, { ...input, requestId: crypto.randomUUID() });
+    const result = await decideEstimate(session, { ...input, requestId: input.requestId });
     return Response.json(result, { headers });
   } catch (error) {
     const code = (error as { code?: string }).code;
