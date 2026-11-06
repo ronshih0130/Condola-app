@@ -63,8 +63,9 @@ export async function importBankFile(session: Session, accountId: string, bytes:
   try { rows = parseBankCsv(new TextDecoder(encoding,{fatal:true}).decode(bytes),dateFormat); } catch { throw fail(); }
   const hash = createHash("sha256").update(bytes).digest("hex");
   return operation(session,true,async (client) => {
-    const account = (await client.query<{currency:string;property_id:string|null}>(`SELECT currency,property_id::text FROM bank_accounts WHERE id=$1 AND org_id=$2 AND archived_at IS NULL FOR SHARE`,[accountId,session.orgId])).rows[0];
+    const account = (await client.query<{id:string;currency:string;property_id:string|null}>(`SELECT id::text,currency,property_id::text FROM bank_accounts WHERE id=$1 AND org_id=$2 AND archived_at IS NULL FOR SHARE`,[accountId,session.orgId])).rows[0];
     if (!account) throw fail();
+    accountId = account.id;
     await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,[`${session.orgId}:${accountId}`]);
     const prior = (await client.query<{import_id:string;encoding:string;date_format:string}>(`SELECT import_id::text,encoding,date_format FROM app.b009_file_imports WHERE org_id=$1 AND bank_account_id=$2 AND file_hash=$3`,[session.orgId,accountId,hash])).rows[0];
     if (prior) { if (prior.encoding !== encoding || prior.date_format !== dateFormat) throw fail(); return { importId:prior.import_id, duplicate:true, duplicateRows:rows.length }; }
@@ -93,8 +94,13 @@ export async function importBankFile(session: Session, accountId: string, bytes:
 export async function decideBankMatch(session: Session, input: {bankId:string;paymentId?:string;suggestionId?:string;decision:"match"|"reject";reason:unknown;requestId?:string}) {
   const reason = bankMatchReasonCode(input.reason);
   if (!reason || !["match","reject"].includes(input.decision)) throw fail();
-  const requestId = input.requestId;
-  if (requestId !== undefined && !isUuid(requestId)) throw fail();
+  let requestId = input.requestId;
+  if (requestId !== undefined) {
+    if (!isUuid(requestId)) throw fail();
+    requestId = requestId.toLowerCase();
+  }
+  if (isUuid(input.bankId)) input = {...input,bankId:input.bankId.toLowerCase()};
+  if (isUuid(input.paymentId)) input = {...input,paymentId:input.paymentId.toLowerCase()};
   const digest = bankDecisionDigest({...input,reason});
   return operation(session,true,async (client) => {
     if (requestId) {
