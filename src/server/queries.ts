@@ -1,3 +1,4 @@
+import { ownerPropertyScope, ownerStatementScope } from "./owner-scope";
 import type { TenantOption } from "@/tenant-pick";
 import type { QueryResultRow } from "pg";
 import { query, maybe, many, tx } from "./db";
@@ -865,6 +866,7 @@ export async function listStatements(session: Session) {
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.org_id = $1 AND s.status <> 'void'
+          ${session.kind === "owner" ? `AND ${ownerStatementScope}` : ""}
         ORDER BY s.period_start DESC, c.display_name`,
       [session.orgId],
     ), requireOrgScope(session),
@@ -1043,8 +1045,9 @@ export async function statementDetail(session: Session, id: string) {
               s.closing_balance_minor::text AS closing, s.status::text
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
-        WHERE s.id = $1`,
-      [id],
+        WHERE s.id = $1 AND s.org_id = $2
+          ${session.kind === "owner" ? `AND ${ownerStatementScope}` : ""}`,
+      [id, session.orgId],
     );
     if (!statement) return null;
     const lines = await many<{ line_type: string; description: string | null; amount: string }>(
@@ -1437,8 +1440,9 @@ export async function ownerPropertyNames(session: Session) {
       client,
       `SELECT id::text, name
          FROM properties
-        WHERE archived_at IS NULL
+        WHERE org_id=$1 AND archived_at IS NULL AND ${ownerPropertyScope("properties.id")}
         ORDER BY name`,
+      [session.orgId],
     ), requireOrgScope(session),
   );
 }
@@ -1463,7 +1467,10 @@ export async function ownerHome(session: Session) {
               phone_visible, currency, rent_amount_minor::text AS rent, open_balance_minor::text AS open_balance,
               lease_status::text AS status
          FROM owner_lease_tenants
+        WHERE EXISTS (SELECT 1 FROM leases scope_lease WHERE scope_lease.id=lease_id
+          AND scope_lease.org_id=$1 AND ${ownerPropertyScope("scope_lease.property_id")})
         ORDER BY property_name, unit_label, room_label`,
+      [session.orgId],
     ), requireOrgScope(session),
   );
 }
@@ -1824,8 +1831,9 @@ export async function statementPdfSource(session: Session, id: string) {
               s.closing_balance_minor::text AS closing
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
-        WHERE s.id = $1`,
-      [id],
+        WHERE s.id = $1 AND s.org_id = $2
+          ${session.kind === "owner" ? `AND ${ownerStatementScope}` : ""}`,
+      [id, session.orgId],
     );
     if (!statement) return null;
     const lines = await many<{ lineType: string; description: string | null; amount: string }>(

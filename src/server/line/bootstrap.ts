@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { SESSION_COOKIE } from "../auth";
+import { linePortalChoices } from "./portal";
 import { makeT } from "@/i18n";
 import { readLineConfig } from "./config";
 import { type LinePersona, LineError, liffPath } from "./login-token";
@@ -33,13 +35,15 @@ export function createLiffBootstrap(persona: LinePersona) {
      }
     }
    } catch (error) {
-    // OFF always leaves the existing Email entry available with no cookies or DB writes.
+    // Strict OFF: retain the Email link, but return 404 without cookies or writes.
     if (!(error instanceof LineError) || error.status !== 404) throw error;
    }
   }
+  const choices = config ? await linePortalChoices(cookie(request, SESSION_COOKIE)) : [];
+  const picker = choices.map(choice => `<button type="button" data-line-portal="${choice.persona}" data-line-org="${choice.orgId}">${escape(choice.name)} · ${escape(t(choice.persona === "owner" ? "i_mode_own" : choice.persona === "tenant" ? "i_mode_ten" : "i_expense_vendor"))}</button>`).join("");
   const data = config ? `<script type="application/json" id="line-bootstrap">${JSON.stringify(config).replace(/</g, "\\u003c")}</script><script src="/line-bootstrap.js" defer></script>` : "";
-  const res = new NextResponse(`<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(t("i_login_title"))}</title></head><body><main data-line-entry="${liffPath(persona)}"><h1>${escape(t("i_login_title"))}</h1><a id="email-login" href="/login">${escape(t("i_login_title"))}</a>${data}</main></body></html>`,
-   { headers: { ...privateHeaders, "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'" } });
+  const res = new NextResponse(`<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(t("i_login_title"))}</title></head><body><main data-line-entry="${liffPath(persona)}"><h1>${escape(t("i_login_title"))}</h1><a id="email-login" href="/login">${escape(t("i_login_title"))}</a>${picker}${data}</main></body></html>`,
+   { status: config ? 200 : 404, headers: { ...privateHeaders, "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'" } });
   if (config && proof) { lineCookie(res, LINE_BROWSER_COOKIE, proof.browser); lineCookie(res, LINE_CSRF_COOKIE, proof.csrf, false); }
   return res;
  });

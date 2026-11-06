@@ -195,7 +195,7 @@ export async function stepUpLine(input: AuthInput & { orgId: string; persona: Li
   return { status: "reauthenticated" };
  });
 }
-async function consentNextOn(c: Client, userId: string, f: LineFlow) {
+export async function consentNextOn(c: Client, userId: string, f: Pick<LineFlow, "persona" | "return_path">) {
  const record = (await c.query<StoredConsent>(`SELECT accepted_at::text,terms_version,privacy_version,source
   FROM public.consents WHERE user_id=$1 ORDER BY recorded_at DESC,id DESC LIMIT 1`, [userId])).rows[0] ?? null;
  if (consentCoversCurrent(record)) return f.return_path;
@@ -227,7 +227,7 @@ export async function sessionFromFlowOn(c: Client, f: LineFlow, meta: RequestMet
  await credentialsOn(c, ident.user_id, auth, false); // Required second factor also applies to LINE sign-in.
  const token = await lineSessionOn(c, f, ident.user_id, ident.id, meta, auth.sessionToken);
  await c.query("UPDATE app.b033_line_flows SET consumed_at=now() WHERE id=$1", [f.id]);
- return { next: await consentNextOn(c, ident.user_id, f), token };
+ return { next: await consentNextOn(c, ident.user_id, f), token, orgId: f.org_id, persona: f.persona };
 }
 export async function exchangeLineSession(handle: string, proof: BrowserProof, idToken: string, resolve: SecretResolver, meta: RequestMeta, auth: AuthInput) {
  await admitFlow(handle, proof);
@@ -294,7 +294,7 @@ export async function acceptLineLink(input: AuthInput & { flow: string; idToken?
   const identity = (await c.query("SELECT login_identity_id FROM line_account_links WHERE id=$1", [linkId])).rows[0].login_identity_id;
   const token = purpose === "invite" ? await lineSessionOn(c, f, userId, identity, meta, input.sessionToken) : undefined;
   await c.query("UPDATE app.b033_line_flows SET consumed_at=now() WHERE id=$1", [f.id]);
-  return { next: purpose === "invite" ? await consentNextOn(c, userId, f) : f.return_path, linkId, status: "linked", token };
+  return { next: purpose === "invite" ? await consentNextOn(c, userId, f) : f.return_path, linkId, status: "linked", token, orgId: f.org_id, persona: f.persona };
  });
 }
 

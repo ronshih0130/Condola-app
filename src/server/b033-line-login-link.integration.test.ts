@@ -232,10 +232,10 @@ test("bind requires recent Condola credentials and rejects a LINE-issued session
  await parsed(await flows(req("/api/line/flows", { purpose: "bind", orgId: ORG_ID, contactId: contact, persona: "tenant" }, { session: sessionCookie(res) })), 401);
 });
 for (const persona of ["tenant", "owner", "vendor"] as const) {
- test(`${persona} public bootstrap is outside protected layouts, OFF has Email fallback and no writes/cookies`, async () => {
+ test(`${persona} public bootstrap is outside protected layouts, OFF is 404 with Email fallback and no writes/cookies`, async () => {
   await enabled(persona, false); const before = await snapshot();
   const result = await entries[persona](req(`/${persona[0]}/liff?org=${ORG_ID}`));
-  assert.equal(result.status, 200); assert.match(await result.text(), /href="\/login"/); assert.equal(result.headers.get("set-cookie"), null);
+  assert.equal(result.status, 404); assert.match(await result.text(), /href="\/login"/); assert.equal(result.headers.get("set-cookie"), null);
   assert.deepEqual(await snapshot(), before);
  });
  test(`${persona} portal OFF flow/session/start/callback/bind/accept routes write zero rows`, async () => {
