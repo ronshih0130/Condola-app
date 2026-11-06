@@ -3,7 +3,22 @@ import { Cell, RfTable } from '@/components/rf';
 import Link from 'next/link';
 import { formatConfiguredMinor } from '@/server/monthly-rent-operation-plan';
 import type { MonthlyBillingPlan } from '@/server/monthly-billing-plan';
-export function MonthlyBillingPreview({plan,locale}:{plan:MonthlyBillingPlan|null;locale:string}) {
+import type { MonthlyBillPreviewDTO } from '@/server/monthly-bill-types';
+
+export function MonthlyBillingPreview({plan,locale,fullBill}:{plan:MonthlyBillingPlan|null;locale:string;fullBill?:MonthlyBillPreviewDTO|null}) {
+ return <>
+  <RentBillingPreview plan={plan} locale={locale} />
+  {fullBill != null ? (
+   <section data-testid="monthly-full-bill">
+    <p>components: {fullBill.components.length}</p>
+    <p>netMinor: {fullBill.netMinor}</p>
+    <p>carryMinor: {fullBill.carryMinor}</p>
+   </section>
+  ) : null}
+ </>;
+}
+
+function RentBillingPreview({plan,locale}:{plan:MonthlyBillingPlan|null;locale:string}) {
  const t=monthlyBillingCopy(locale);
  if (!plan) return <p>{t.unavailable}</p>;
  if (plan.kind==='incomplete') return <p role="status" data-testid="monthly-incomplete">{t.incomplete}</p>;
