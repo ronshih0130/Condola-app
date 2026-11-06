@@ -33,6 +33,7 @@ import { depositCapSaveAllowed, depositReasonOk, depositWarnFlag, isSignedPdf, l
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
 import { leaseIdentityReady } from "./id-docs";
+import { identityRequiredForSigning } from "./id-sign-gate";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus, isUuid } from "./repair-rules";
@@ -1550,7 +1551,7 @@ async function signLeaseOn(client: Client, session: Session, input: SignLeaseInp
     const asManager = Boolean(member) && (member?.role === "admin" || member?.role === "manager") && !asTenant;
     if (!asTenant && !asManager) throw new FlowError("errors.forbidden");
     validateFirstPeriodSource(lease, true);
-    if (!simulation && !(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
+    if (!simulation && await identityRequiredForSigning(client, session.orgId) && !(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
     const role = asTenant ? "tenant" : "manager";
     const signature = await maybe<{ id: string }>(
       client,
@@ -1654,7 +1655,7 @@ export async function uploadSignedLeasePdf(
     const versions = await import("./paper-lease-versions");
     const paperVersion = await versions.preparePaperLeaseVersion(client, session, leaseId, file.replaceReason);
     const imported = lease.esign === "imported";
-    if (!imported && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
+    if (!imported && await identityRequiredForSigning(client, session.orgId) && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
     const stored = await one<{ id: string }>(
       client,

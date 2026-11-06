@@ -6,6 +6,7 @@ import { FirstPeriodSummary } from "@/components/first-period-summary";
 import { selectedLease } from "@/lib/tenant-lease";
 import { formatDate, moneyLabel } from "@/server/format";
 import { loadLeaseIdCheck } from "@/server/id-docs";
+import { identityRequiredForSigningFor } from "@/server/id-sign-gate";
 import { tenantLeaseMoney, tenantSignedLeasePdfs } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { tenantSignedPdfStrings } from "@/i18n/tenant-signed-pdf";
@@ -24,13 +25,14 @@ export default async function TenantLeasePage() {
     loadLeaseIdCheck(session, lease.lease_id),
     tenantSignedLeasePdfs(session, lease.lease_id),
   ]);
+  const idRequired = await identityRequiredForSigningFor(session);
   if (!money) return <p>{t("i_empty")}</p>;
   const signedCopy = tenantSignedPdfStrings(session.locale);
   return (
     <div>
       <h2>{t("i_rich_lease")}</h2>
       <FirstPeriodSummary basis={money.lease.first_period_basis} locale={session.locale} />
-      {idCheck && !idCheck.ready ? (
+      {idCheck && !idCheck.ready && idRequired ? (
         <div className="card pad" id="idvGate" data-testid="idv-gate">
           <h3>{t("idv_gate_h")}</h3>
           <p>{t("idv_gate")}</p>

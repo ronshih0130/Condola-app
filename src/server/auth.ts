@@ -1,9 +1,14 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
-import { writeConsent } from "./consent";
+import { consentRepository, writeConsent, writeConsentSql } from "./consent";
 import { teamInviteBlocked } from "./consent-gate";
 import { query, withClient } from "./db";
+import {
+  beginCredentialChange, finishCredentialChange, captureCredentialEpoch, captureEmailCredentialEpoch, credentialsChanged,
+  credentialTransaction, lockCredentialEpoch, sessionHardeningEnabled, withCredentialFence,
+  type CredentialEpoch, type CredentialChange, type CredentialChangeState,
+} from "./session-hardening";
 import { recordFunnel } from "./funnel";
 import { SERVICE_EMAIL, sendMail } from "./mail";
 import { passwordResetMail } from "./mail-copy";
@@ -129,7 +134,8 @@ export async function verifyPassword(email: string, password: string): Promise<s
   return localPasswordCheck(email, password);
 }
 
-export async function setUserPassword(userId: string, password: string, email?: string): Promise<"ok" | "emailTaken"> {
+export async function setUserPassword(userId: string, password: string, email?: string, client?: Client): Promise<"ok" | "emailTaken"> {
+  const run = client ? client.query.bind(client) : query;
   const url = supabaseUrl();
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   const nextEmail = email?.trim() ? email.trim().toLowerCase() : "";
@@ -157,12 +163,14 @@ export async function setUserPassword(userId: string, password: string, email?: 
         }
       }
     } catch {
-      // Sign-in reads auth.users. A missing admin API still has to set that row.
+      if (client) throw new Error("Password provider update failed");
+      // Legacy flag-OFF fallback.
     }
+    if (client) throw new Error("Password provider update failed");
   }
   try {
     if (nextEmail) {
-      await query(
+      await run(
         `UPDATE auth.users
             SET email = $2,
                 encrypted_password = crypt($3, gen_salt('bf')),
@@ -172,7 +180,7 @@ export async function setUserPassword(userId: string, password: string, email?: 
         [userId, nextEmail, password],
       );
     } else {
-      await query(
+      await run(
         `UPDATE auth.users SET encrypted_password = crypt($2, gen_salt('bf')), updated_at = now() WHERE id = $1`,
         [userId, password],
       );
@@ -184,13 +192,117 @@ export async function setUserPassword(userId: string, password: string, email?: 
   return "ok";
 }
 
-async function primaryOrg(userId: string) {
-  const member = await query<{ org_id: string }>(
+/** Hardened writes must never fall back from a configured hosted provider to SQL. */
+function assertPasswordProviderConfigured() {
+  if (supabaseUrl() && !process.env.SUPABASE_SERVICE_ROLE_KEY) throw new FlowError("errors.generic");
+}
+
+/** Absolute phase-1 deadline includes connection waits, pauses, headers and body. */
+export async function writeHardenedPassword(change: CredentialChange, password: string, email?: string): Promise<CredentialChangeState> {
+  assertPasswordProviderConfigured();
+  const userId = change.userId;
+  const deadline = change.startedAt + 90_000;
+  const remaining = () => Math.max(0, deadline - Date.now());
+  if (!remaining()) return "failed"; // No provider call has started.
+  const url = supabaseUrl();
+  if (!url) {
+    try {
+      return await withClient(async (client) => {
+        const budget = remaining(); // Recheck after connection/pool waits.
+        if (!budget) return "failed";
+        await client.query("BEGIN");
+        try {
+          await client.query(`SELECT set_config('statement_timeout', $1, true),
+            set_config('idle_in_transaction_session_timeout', $1, true)`, [`${budget}ms`]);
+          if (!remaining()) throw new Error("credential provider deadline");
+          const result = await setUserPassword(userId, password, email, client);
+          // Server-side deadline check and COMMIT in one dispatch: an application
+          // pause after UPDATE must not allow a late local commit. Only an internally
+          // derived finite epoch number is interpolated, never input or a credential.
+          if (!remaining()) throw new Error("credential provider deadline");
+          await client.query(`DO $b031$ BEGIN
+            IF clock_timestamp() >= to_timestamp(${deadline / 1000}) THEN
+              RAISE EXCEPTION 'credential provider deadline';
+            END IF;
+          END $b031$; COMMIT`);
+          return result === "ok" ? "done" : "failed";
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        }
+      });
+    } catch { return "unknown"; }
+  }
+  try {
+    const budget = remaining();
+    if (!budget) return "failed";
+    const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/admin/users/${userId}`, {
+      method: "PUT",
+      headers: { apikey: service, Authorization: `Bearer ${service}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ password, ...(email ? { email, email_confirm: true } : {}) }),
+      signal: AbortSignal.timeout(budget),
+    });
+    await response.text();
+    if (response.ok) return "done";
+    // A 5xx may occur after the provider has committed. Only a definite rejection is failed.
+    return response.status >= 400 && response.status < 500 && response.status !== 408 ? "failed" : "unknown";
+  } catch { return "unknown"; }
+}
+
+/** New identities have no password until they enter the same durable change protocol. */
+async function provisionPasswordlessInvite(email: string, name: string, phone: string | null) {
+  const url = supabaseUrl();
+  if (!url) {
+    return (await query<{ id: string }>(`SELECT app.provision_portal_user($1, $2, $3)::text AS id`, [email, name, phone])).rows[0].id;
+  }
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  try {
+    const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: { apikey: service, Authorization: `Bearer ${service}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, email_confirm: false, user_metadata: { name } }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const user = parseGotrueUserId(await response.json());
+    if (response.ok && user) return user.id;
+  } catch { /* An ambiguous create leaves only a passwordless identity; retry discovers it. */ }
+  throw new FlowError("errors.generic");
+}
+
+/** Passwordless invitation phase 1; validate authority after taking the epoch exclusively. */
+async function prepareInvitedPassword(userId: string | null, password: string, epoch: string, email: string,
+  validate: (client: Client) => Promise<void>, identity: { name: string; phone: string | null }): Promise<CredentialChange & { epoch: string }> {
+  assertPasswordProviderConfigured();
+  if (!userId) {
+    // Validate before creating an identity; release every lock before hosted provisioning.
+    await credentialTransaction(validate);
+    userId = await provisionPasswordlessInvite(email, identity.name, identity.phone);
+    epoch = (await captureCredentialEpoch(userId, undefined, true))!;
+  }
+  const id = userId;
+  const change = await credentialTransaction(async (client) => {
+    const pending = await beginCredentialChange(client, id, epoch);
+    const account = await client.query(`SELECT id FROM auth.users WHERE id = $1
+      AND (encrypted_password IS NULL OR btrim(encrypted_password) = '')`, [id]);
+    if (!account.rows[0]) throw Object.assign(new Error("credentials changed"), { code: "P0B31" });
+    await validate(client);
+    return pending;
+  });
+  const state = await writeHardenedPassword(change, password, email);
+  const epochAfter = await credentialTransaction((client) => finishCredentialChange(client, change, state));
+  if (state !== "done") throw new FlowError("errors.generic");
+  return { ...change, epoch: epochAfter };
+}
+
+async function primaryOrg(userId: string, client?: Client) {
+  const run = client ? client.query.bind(client) : query;
+  const member = await run<{ org_id: string }>(
     `SELECT org_id::text FROM org_members WHERE user_id = $1 AND status = 'active' ORDER BY created_at LIMIT 1`,
     [userId],
   );
   if (member.rows[0]) return member.rows[0].org_id;
-  const contact = await query<{ org_id: string }>(
+  const contact = await run<{ org_id: string }>(
     `SELECT org_id::text FROM contacts WHERE user_id = $1 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
     [userId],
   );
@@ -256,24 +368,34 @@ async function mfaRow(userId: string) {
   return row.rows[0] ?? null;
 }
 
-export async function createSession(userId: string, remember: boolean, meta: RequestMeta) {
+export async function createSession(userId: string, remember: boolean, meta: RequestMeta, client?: Client) {
+  const run = client ? client.query.bind(client) : query;
   const token = newToken();
   const hours = remember ? 24 * 30 : 12;
-  await query(
+  await run(
     `INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip, expires_at)
      VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))`,
     [userId, sha256(token), meta.ua?.slice(0, 300) ?? null, meta.ip, hours],
   );
-  await writeAudit(await primaryOrg(userId), userId, "sign_in", { remember });
+  await writeAudit(await primaryOrg(userId, client), userId, "sign_in", { remember }, client);
   return token;
 }
 
-async function openChallenge(userId: string, purpose: "2fa" | "enroll", remember: boolean, secret?: string) {
-  const inserted = await query<{ id: string }>(
+async function openChallenge(userId: string, purpose: "2fa" | "enroll", remember: boolean, secret?: string, client?: Client, epoch: CredentialEpoch = null, exempt = false, provenance = "password") {
+  const run = client ? client.query.bind(client) : query;
+  const inserted = await run<{ id: string }>(
     `INSERT INTO auth_challenges (user_id, purpose, remember, totp_secret, expires_at)
      VALUES ($1, $2, $3, $4, now() + interval '10 minutes') RETURNING id::text`,
     [userId, purpose, remember, secret ?? null],
   );
+  if (client && epoch !== null) {
+    await client.query(`INSERT INTO app.b031_challenge_epochs (challenge_id, user_id, epoch, provenance) VALUES ($1, $2, $3, $4)`,
+      [inserted.rows[0].id, userId, epoch, provenance]);
+  }
+  if (client && exempt) {
+    await client.query(`INSERT INTO app.b031_challenge_exempt (challenge_id, reason) VALUES ($1, 'line_demo')`,
+      [inserted.rows[0].id]);
+  }
   return inserted.rows[0].id;
 }
 
@@ -289,6 +411,7 @@ export async function signIn(emailRaw: string, password: string, remember: boole
   if (existing.rows[0] && lockActive(existing.rows[0].locked_until, new Date())) {
     return { ok: false, error: "locked" };
   }
+  const captured = await captureEmailCredentialEpoch(email);
   const userId = await verifyPassword(email, password);
   if (userId === "unconfirmed") return { ok: false, error: "unconfirmed" };
   if (userId === "unavailable") return { ok: false, error: "unavailable" };
@@ -297,10 +420,19 @@ export async function signIn(emailRaw: string, password: string, remember: boole
     return { ok: false, error: failed.locked || failed.failedCount >= LOCKOUT_LIMIT ? "locked" : "invalid" };
   }
   await clearFailures(email);
-  return continueSignIn(userId, email, remember, meta);
+  if (captured.epoch !== null && captured.userId !== userId) return { ok: false, error: "invalid" };
+  try {
+    return await continueSignIn(userId, email, remember, meta, captured.epoch);
+  } catch (error) {
+    if (credentialsChanged(error)) return { ok: false, error: "invalid" };
+    throw error;
+  }
 }
 
-async function continueSignIn(userId: string, email: string, remember: boolean, meta: RequestMeta): Promise<SignInResult> {
+async function continueSignIn(userId: string, email: string, remember: boolean, meta: RequestMeta, epoch: CredentialEpoch = null, exempt = false): Promise<SignInResult> {
+  const challenge = (purpose: "2fa" | "enroll", secret?: string) => exempt
+    ? credentialTransaction((client) => openChallenge(userId, purpose, remember, secret, client, null, true))
+    : withCredentialFence(userId, epoch, (client) => openChallenge(userId, purpose, remember, secret, client, epoch));
   const access = await accessState(userId);
   if (access === "disabled") return { ok: false, error: "disabled" };
   if (access === "none") {
@@ -316,18 +448,18 @@ async function continueSignIn(userId: string, email: string, remember: boolean, 
       );
       await recordFunnel("email_confirmed", { userId, email: account?.email || email });
     }
-    const token = await createSession(userId, remember, meta);
+    const token = await withCredentialFence(userId, epoch, (client) => createSession(userId, remember, meta, client));
     return { ok: true, token, remember, destination: "firm" };
   }
   const factor = await mfaRow(userId);
   if (factor?.enabled && factor.totp_secret) {
-    const challengeId = await openChallenge(userId, "2fa", remember);
+    const challengeId = await challenge("2fa");
     return { ok: false, step: "2fa", challengeId };
   }
   if (await firmRequiresMfa(userId)) {
     const secret = randomBase32();
     const profile = await query<{ email: string }>(`SELECT email FROM auth.users WHERE id = $1`, [userId]);
-    const challengeId = await openChallenge(userId, "enroll", remember, secret);
+    const challengeId = await challenge("enroll", secret);
     return {
       ok: false,
       step: "enroll",
@@ -336,7 +468,7 @@ async function continueSignIn(userId: string, email: string, remember: boolean, 
       otpauth: otpauthUrl(secret, profile.rows[0]?.email ?? email),
     };
   }
-  const token = await createSession(userId, remember, meta);
+  const token = await withCredentialFence(userId, epoch, (client) => createSession(userId, remember, meta, client));
   return { ok: true, token, remember };
 }
 
@@ -355,7 +487,7 @@ export async function signInWithLine(meta: RequestMeta): Promise<SignInResult> {
   const person = linked.rows[0];
   if (!person) return { ok: false, error: "invalid" };
   await writeAudit(await primaryOrg(person.id), person.id, "line_sign_in", {});
-  return continueSignIn(person.id, person.email, true, meta);
+  return continueSignIn(person.id, person.email, true, meta, null, await sessionHardeningEnabled());
 }
 
 export async function peekChallenge(id: string) {
@@ -397,6 +529,10 @@ async function consumeBackup(userId: string, code: string) {
 }
 
 export async function completeSecondFactor(challengeId: string, code: string, meta: RequestMeta): Promise<SignInResult & { backupCodes?: string[] }> {
+  if (await sessionHardeningEnabled()) {
+    const exempt = await query(`SELECT 1 FROM app.b031_challenge_exempt WHERE challenge_id = $1 AND reason = 'line_demo'`, [challengeId]);
+    if (!exempt.rowCount) return completeFencedSecondFactor(challengeId, code, meta);
+  }
   const challenge = await loadChallenge(challengeId);
   if (!challenge) return { ok: false, error: "invalid" };
   if (challenge.purpose === "2fa") {
@@ -423,6 +559,62 @@ export async function completeSecondFactor(challengeId: string, code: string, me
   }
   const token = await createSession(challenge.user_id, challenge.remember, meta);
   return { ok: true, token, remember: challenge.remember, backupCodes: codes };
+}
+
+/** Epoch first, then challenge/MFA locks: password changes use the same lock order. */
+async function completeFencedSecondFactor(challengeId: string, code: string, meta: RequestMeta): Promise<SignInResult & { backupCodes?: string[] }> {
+  return credentialTransaction(async (client) => {
+    const captured = await client.query<{ user_id: string; epoch: string | null }>(
+      `SELECT c.user_id::text, e.epoch::text FROM auth_challenges c
+         LEFT JOIN app.b031_challenge_epochs e ON e.challenge_id = c.id AND e.user_id = c.user_id
+        WHERE c.id = $1`, [challengeId],
+    );
+    const fence = captured.rows[0];
+    if (!fence) return { ok: false, error: "invalid" };
+    await client.query("SAVEPOINT credential_check");
+    try {
+      // Challenges issued before activation have no epoch and fail closed.
+      await lockCredentialEpoch(client, fence.user_id, fence.epoch ?? "-1");
+    } catch (error) {
+      if (!credentialsChanged(error)) throw error;
+      await client.query("ROLLBACK TO SAVEPOINT credential_check");
+      await client.query(`DELETE FROM auth_challenges WHERE id = $1`, [challengeId]);
+      return { ok: false, error: "invalid" };
+    }
+    const result = await client.query<{
+      user_id: string; purpose: string; remember: boolean; totp_secret: string | null;
+    }>(`SELECT user_id::text, purpose, remember, totp_secret FROM auth_challenges
+        WHERE id = $1 AND expires_at > now() FOR UPDATE`, [challengeId]);
+    const challenge = result.rows[0];
+    if (!challenge) return { ok: false, error: "invalid" };
+    let codes: string[] | undefined;
+    if (challenge.purpose === "2fa") {
+      const factors = await client.query<{ totp_secret: string | null; backup_code_hashes: string[] }>(
+        `SELECT totp_secret, backup_code_hashes FROM user_mfa WHERE user_id = $1 FOR UPDATE`, [challenge.user_id],
+      );
+      const factor = factors.rows[0];
+      if (!acceptSecondFactor(factor?.totp_secret, code)) {
+        const hash = sha256(code.trim().toUpperCase());
+        if (!factor?.backup_code_hashes.includes(hash)) return { ok: false, error: "invalid" };
+        await client.query(`UPDATE user_mfa SET backup_code_hashes = array_remove(backup_code_hashes, $2), updated_at = now() WHERE user_id = $1`,
+          [challenge.user_id, hash]);
+      }
+    } else {
+      if (!challenge.totp_secret || !acceptSecondFactor(challenge.totp_secret, code)) return { ok: false, error: "invalid" };
+      codes = backupCodes();
+      await client.query(
+        `INSERT INTO user_mfa (user_id, totp_secret, enabled, backup_code_hashes, confirmed_at)
+         VALUES ($1, $2, true, $3, now()) ON CONFLICT (user_id) DO UPDATE
+         SET totp_secret = EXCLUDED.totp_secret, enabled = true, backup_code_hashes = EXCLUDED.backup_code_hashes,
+             confirmed_at = now(), updated_at = now()`,
+        [challenge.user_id, challenge.totp_secret, codes.map((item) => sha256(item))],
+      );
+      await writeAudit(await primaryOrg(challenge.user_id, client), challenge.user_id, "mfa_enabled", {}, client);
+    }
+    await client.query(`DELETE FROM auth_challenges WHERE id = $1`, [challengeId]);
+    const token = await createSession(challenge.user_id, challenge.remember, meta, client);
+    return { ok: true, token, remember: challenge.remember, backupCodes: codes };
+  });
 }
 
 async function sandboxOnlyAccount(email: string) {
@@ -598,9 +790,25 @@ export async function resetPassword(token: string, password: string, confirm: st
   if (!reset || reset.used_at || reset.expires_at.getTime() <= Date.now()) {
     return { ok: false as const, error: "expired" as const };
   }
-  await setUserPassword(reset.user_id, password);
-  await query(`UPDATE auth_password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, [reset.user_id]);
-  await query(`UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, [reset.user_id]);
+  if (await sessionHardeningEnabled()) {
+    assertPasswordProviderConfigured();
+    const change = await credentialTransaction(async (client) => {
+      const pending = await beginCredentialChange(client, reset.user_id, null);
+      const usable = await client.query(`SELECT id FROM auth_password_resets
+        WHERE id = $1 AND used_at IS NULL AND expires_at > now() FOR UPDATE`, [reset.id]);
+      if (!usable.rows[0]) throw Object.assign(new Error("credentials changed"), { code: "P0B31" });
+      await client.query(`UPDATE auth_password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, [reset.user_id]);
+      return pending;
+    }).catch((error: unknown) => { if (credentialsChanged(error)) return null; throw error; });
+    if (!change) return { ok: false as const, error: "expired" as const };
+    const state = await writeHardenedPassword(change, password);
+    await credentialTransaction((client) => finishCredentialChange(client, change, state));
+    if (state !== "done") throw new FlowError("errors.generic");
+  } else {
+    await setUserPassword(reset.user_id, password);
+    await query(`UPDATE auth_password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, [reset.user_id]);
+    await query(`UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, [reset.user_id]);
+  }
   const account = await query<{ email: string }>(`SELECT email FROM auth.users WHERE id = $1`, [reset.user_id]);
   if (account.rows[0]?.email) await clearFailures(account.rows[0].email);
   await writeAudit(await primaryOrg(reset.user_id), reset.user_id, "password_reset", {});
@@ -941,7 +1149,8 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
 }
 
 /** Hosted team logins must be provisioned by GoTrue, including identities and tokens. */
-export async function upsertInvitedUser(client: Client, email: string, name: string, password: string) {
+export async function upsertInvitedUser(client: Client, email: string, name: string, password: string,
+  captured?: { userId: string | null; epoch: CredentialEpoch }, epochLocked = false) {
   const existing = await client.query<{ id: string; has_password: boolean; matches: boolean }>(
     `SELECT id::text,
             (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password,
@@ -953,9 +1162,17 @@ export async function upsertInvitedUser(client: Client, email: string, name: str
   // Like portal acceptance, never replace an established password.
   if (account?.has_password && !account.matches) return null;
 
+  if (captured?.epoch != null && account) {
+    if (captured.userId && captured.userId !== account.id) throw Object.assign(new Error("credentials changed"), { code: "P0B31" });
+    if (account.has_password) {
+      if (!epochLocked) await lockCredentialEpoch(client, account.id, captured.epoch);
+    } else throw new FlowError("errors.generic"); // Must complete durable phase 1 before entering this transaction.
+  }
   let id = account?.id ?? "";
+  const passwordSet = captured?.epoch != null && account && !account.has_password;
+  if (captured?.epoch != null && !account) throw new FlowError("errors.generic");
   const url = supabaseUrl();
-  if (url && !account?.has_password) {
+  if (!passwordSet && url && !account?.has_password) {
     const service = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
     if (!service) throw new Error("Invite login provisioning unavailable");
     const response = await fetch(
@@ -975,7 +1192,7 @@ export async function upsertInvitedUser(client: Client, email: string, name: str
     const user = parseGotrueUserId(await response.json().catch(() => ({})));
     if (!user || (id && user.id !== id)) throw new Error("Invite login provisioning unavailable");
     id = user.id;
-  } else if (!url && !account?.has_password) {
+  } else if (!passwordSet && !url && !account?.has_password) {
     // The local Postgres stub has no GoTrue service.
     if (id) {
       await client.query(
@@ -1056,6 +1273,7 @@ async function acceptPortalInvite(
   kind: "owner" | "tenant",
   emailRaw: string,
   sessionEmail: string,
+  hardening: boolean,
 ) {
   const pending = await query<{
     id: string;
@@ -1094,6 +1312,11 @@ async function acceptPortalInvite(
     return { ok: false as const, error: "account" as const, kind };
   }
 
+  const captured = await captureEmailCredentialEpoch(target, undefined, hardening);
+  if (captured.epoch !== null && !captured.userId && row.user_id) {
+    captured.userId = row.user_id;
+    captured.epoch = (await captureCredentialEpoch(row.user_id, undefined, true))!;
+  }
   const account = await query<{ id: string; has_password: boolean; matches: boolean }>(
     `SELECT id::text AS id,
             (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password,
@@ -1103,18 +1326,30 @@ async function acceptPortalInvite(
     [target, password],
   );
   const existing = account.rows[0];
+  if (captured.epoch !== null && captured.userId && existing && captured.userId !== existing.id) {
+    return { ok: false as const, error: "invalid" as const, kind };
+  }
   if (existing?.has_password && !existing.matches) {
     await notePortalReject(token, meta.ip);
     return { ok: false as const, error: "auth" as const, kind };
   }
 
-  let saved: { userId: string } | { conflict: true } | null = null;
+  let saved: { userId: string; token?: string } | { conflict: true } | null = null;
   try {
+    const replacementId = existing?.id ?? row.user_id;
+    const change = captured.epoch !== null && !existing?.has_password
+      ? await prepareInvitedPassword(replacementId, password, captured.epoch, target, async (client) => {
+        const valid = await client.query(`SELECT id FROM invitations WHERE id = $1 AND status = 'pending' AND expires_at > now() FOR UPDATE`, [row.id]);
+        if (!valid.rows[0]) throw Object.assign(new Error("credentials changed"), { code: "P0B31" });
+      }, { name: row.display_name, phone: row.phone_e164 }) : null;
     saved = await withClient(async (client) => {
       try {
         await client.query("BEGIN");
         await client.query(`SET LOCAL statement_timeout = '8s'`);
         await client.query(`SET LOCAL lock_timeout = '3s'`);
+        let userId = change?.userId ?? existing?.id ?? row.user_id ?? "";
+        // Epoch -> invitation -> contact/session. Never invert for established passwords.
+        if (userId) await lockCredentialEpoch(client, userId, change?.epoch ?? captured.epoch);
         const invite = await client.query(
           `SELECT id FROM invitations WHERE id = $1 AND status = 'pending' AND expires_at > now() FOR UPDATE`,
           [row.id],
@@ -1123,7 +1358,6 @@ async function acceptPortalInvite(
           await client.query("ROLLBACK");
           return null;
         }
-        let userId = existing?.id ?? row.user_id ?? "";
         if (!userId) {
           const created = await provisionAcceptedLogin(client, {
             email: target,
@@ -1136,8 +1370,9 @@ async function acceptPortalInvite(
             return { conflict: true as const };
           }
           userId = created;
+          await lockCredentialEpoch(client, userId, captured.epoch);
         } else if (!existing?.has_password) {
-          await client.query(
+          if (captured.epoch === null) await client.query(
             `UPDATE auth.users
                 SET email = $2,
                     encrypted_password = crypt($3, gen_salt('bf')),
@@ -1146,6 +1381,9 @@ async function acceptPortalInvite(
               WHERE id = $1`,
             [userId, target, password],
           );
+          if (change && !replacementId) await client.query(
+            `INSERT INTO profiles (id, display_name, email, phone_e164, locale) VALUES ($1, $2, $3, $4, 'zh-TW')
+             ON CONFLICT (id) DO NOTHING`, [userId, row.display_name, target, row.phone_e164]);
           await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [userId, target]);
         }
         const bound = await client.query(
@@ -1170,14 +1408,16 @@ async function acceptPortalInvite(
           [row.id, target, userId],
         );
         await deletePortalInviteSecret(client, row.id);
+        const sessionToken = captured.epoch === null ? undefined : await createSession(userId, true, meta, client);
         await client.query("COMMIT");
-        return { userId };
+        return { userId, token: sessionToken };
       } catch (error) {
         await client.query("ROLLBACK");
         throw error;
       }
     });
   } catch (error) {
+    if (credentialsChanged(error)) return { ok: false as const, error: "invalid" as const, kind };
     const bind = portalBindError(error);
     if (bind === "timeout") return { ok: false as const, error: "timeout" as const, kind };
     if (bind === "auth") {
@@ -1185,7 +1425,7 @@ async function acceptPortalInvite(
       return { ok: false as const, error: bind, kind };
     }
     if (bind === "bound") return { ok: false as const, error: "bound" as const, kind };
-    console.error("portal accept failed", error);
+    console.error("portal accept failed", captured.epoch === null ? error : "failed");
     return { ok: false as const, error: "failed" as const, kind };
   }
   if (saved && "conflict" in saved) {
@@ -1198,7 +1438,7 @@ async function acceptPortalInvite(
     contactId: row.contact_id,
     invitationId: row.id,
   });
-  const sessionToken = await createSession(saved.userId, true, meta);
+  const sessionToken = saved.token ?? await createSession(saved.userId, true, meta);
   return {
     ok: true as const,
     token: sessionToken,
@@ -1219,7 +1459,9 @@ export async function acceptInvite(
   consent = false,
 ) {
   try {
-    return await withInviteLock(token, () => acceptInviteOnce(token, name, password, confirm, meta, emailRaw, sessionEmail, consent));
+    const hardening = await sessionHardeningEnabled();
+    if (hardening) return await acceptInviteOnce(token, name, password, confirm, meta, emailRaw, sessionEmail, consent, hardening);
+    return await withInviteLock(token, () => acceptInviteOnce(token, name, password, confirm, meta, emailRaw, sessionEmail, consent, hardening));
   } catch (error) {
     if (dbTimeout(error)) return { ok: false as const, error: "timeout" as const, kind: "unknown" as const };
     throw error;
@@ -1235,6 +1477,7 @@ async function acceptInviteOnce(
   emailRaw = "",
   sessionEmail = "",
   consent = false,
+  hardening = false,
 ) {
   const view = await describeInvite(token, meta);
   if (view.state !== "ready") return { ok: false as const, error: view.state, kind: view.kind };
@@ -1243,109 +1486,181 @@ async function acceptInviteOnce(
   }
   if (view.kind === "owner" || view.kind === "tenant") {
     if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const, kind: view.kind };
-    return acceptPortalInvite(token, password, meta, view.kind, emailRaw, sessionEmail);
+    return acceptPortalInvite(token, password, meta, view.kind, emailRaw, sessionEmail, hardening);
   }
   if (password !== confirm) return { ok: false as const, error: "mismatch" as const, kind: view.kind };
   if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const, kind: view.kind };
   if (!name.trim()) return { ok: false as const, error: "required" as const, kind: "team_member" as const };
-  return withClient((client) => acceptTeamInvite(client, token, name, password, meta, sessionEmail));
+  if (hardening) return acceptTeamInvite(null, token, name, password, meta, sessionEmail, true);
+  return withClient((client) => acceptTeamInvite(client, token, name, password, meta, sessionEmail, hardening));
 }
 
-/** Keep provisioning and invitation consumption in the same acceptance transaction. */
+/** Phase 1/provider/phase 2 finish before checking out the acceptance client. */
 export async function acceptTeamInvite(
-  client: Client,
+  client: Client | null,
   token: string,
   name: string,
   password: string,
   meta: RequestMeta,
   sessionEmail = "",
+  hardening?: boolean,
 ) {
   const unavailable = {
     ok: false as const, error: "errors.teamInviteUnavailable" as const, kind: "team_member" as const,
   };
   try {
-    await client.query("BEGIN");
-    // Discover the organization without taking an invitation lock. Every seat
-    // increase locks the organization first; the token is rechecked afterward.
-    const candidate = await client.query<{ org_id: string }>(
-      `SELECT org_id::text FROM invitations WHERE code_hash = $1 AND kind = 'team_member'`,
-      [sha256(token)],
-    );
-    if (!candidate.rows[0]) {
-      await client.query("ROLLBACK");
-      return unavailable;
+    let prepared: { userId: string | null; epoch: CredentialEpoch; email: string } | null = null;
+    hardening ??= await sessionHardeningEnabled(client ?? undefined);
+    if (hardening) {
+      const candidate = await query<{ id: string; org_id: string; email: string }>(
+        `SELECT id::text, org_id::text, email::text FROM invitations WHERE code_hash = $1 AND kind = 'team_member'`, [sha256(token)]);
+      const row = candidate.rows[0];
+      if (!row) return unavailable;
+      if (row) {
+        const captured = await captureEmailCredentialEpoch(row.email, undefined, true);
+        prepared = { ...captured, email: row.email };
+        const account = await query<{ has_password: boolean; matches: boolean }>(
+          `SELECT (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password,
+            encrypted_password = crypt($2, encrypted_password) AS matches FROM auth.users WHERE id = $1`, [captured.userId, password]);
+        if (account.rows[0]?.has_password && !account.rows[0].matches) {
+          return { ok: false as const, error: "auth" as const, kind: "team_member" as const };
+        }
+        if (!account.rows[0]?.has_password) {
+          const change = await prepareInvitedPassword(captured.userId, password, captured.epoch!, row.email, async (phase1) => {
+            const organization = await lockSeatOrganization(phase1, row.org_id);
+            const valid = await phase1.query(`SELECT id FROM invitations WHERE id = $1 AND status = 'pending' AND expires_at > clock_timestamp()
+              AND email = $2 AND role IN ('admin', 'manager', 'accountant', 'maintenance') FOR UPDATE`, [row.id, row.email]);
+            if (!valid.rows[0] || organization.environment !== "live" || !teamInvitesAllowedForOrg(row.org_id) ||
+              (sessionEmail && normalizeEmail(sessionEmail) !== normalizeEmail(row.email))) throw new FlowError("errors.generic");
+            await assertSeatAvailableOn(phase1, row.org_id, organization, false);
+          }, { name: name.trim(), phone: null });
+          prepared = { userId: change.userId, epoch: change.epoch, email: row.email };
+        }
+      }
     }
-    const organization = await lockSeatOrganization(client, candidate.rows[0].org_id);
-    const invite = await client.query<{
-      id: string; org_id: string; role: OrgRole; email: string;
-      code_hash: string; status: string; unexpired: boolean;
-    }>(
-      `SELECT id::text, org_id::text, role::text, email::text, code_hash,
+    const accept = async (client: Client) => {
+      try {
+        await client.query("BEGIN");
+        if (hardening) {
+          await client.query("SET LOCAL lock_timeout = '3s'");
+          await client.query("SET LOCAL statement_timeout = '8s'");
+        }
+        // Epoch -> organization -> invitation -> account/member/session on EVERY path.
+        if (prepared?.userId) await lockCredentialEpoch(client, prepared.userId, prepared.epoch);
+        // Discover the organization without taking an invitation lock. Every seat
+        // increase locks the organization first; the token is rechecked afterward.
+        const candidate = await client.query<{ org_id: string }>(
+          `SELECT org_id::text FROM invitations WHERE code_hash = $1 AND kind = 'team_member'`,
+          [sha256(token)],
+        );
+        if (!candidate.rows[0]) {
+          await client.query("ROLLBACK");
+          return unavailable;
+        }
+        const organization = await lockSeatOrganization(client, candidate.rows[0].org_id);
+        const invite = await client.query<{
+          id: string; org_id: string; role: OrgRole; email: string;
+          code_hash: string; status: string; unexpired: boolean;
+        }>(
+          `SELECT id::text, org_id::text, role::text, email::text, code_hash,
               status::text, expires_at > clock_timestamp() AS unexpired
          FROM invitations WHERE code_hash = $1 AND kind = 'team_member' FOR UPDATE`,
-      [sha256(token)],
-    );
-    const row = invite.rows[0];
-    if (!row || row.org_id !== candidate.rows[0].org_id || row.code_hash !== sha256(token) ||
-        row.status !== "pending" || !row.unexpired || !TEAM_ROLES.has(row.role) ||
-        !normalizeEmail(row.email) || organization.environment !== "live" ||
-        !teamInvitesAllowedForOrg(row.org_id)) {
-      await client.query("ROLLBACK");
-      return unavailable;
-    }
-    if (sessionEmail && normalizeEmail(sessionEmail) !== normalizeEmail(row.email)) {
-      await client.query("ROLLBACK");
-      return { ok: false as const, error: "account" as const, kind: "team_member" as const };
-    }
-    await assertSeatAvailableOn(client, row.org_id, organization, false);
-    let userId: string | null;
-    try {
-      // GoTrue commits independently. On a later rollback, retry requires the
-      // created account's password and leaves the invitation available.
-      userId = await upsertInvitedUser(client, row.email, name.trim(), password);
-    } catch {
-      await client.query("ROLLBACK");
-      return { ok: false as const, error: "failed" as const, kind: "team_member" as const };
-    }
-    if (!userId) {
-      await client.query("ROLLBACK");
-      return { ok: false as const, error: "auth" as const, kind: "team_member" as const };
-    }
-    const member = await client.query(
-      `SELECT status::text FROM org_members WHERE org_id = $1 AND user_id = $2`,
-      [row.org_id, userId],
-    );
-    if (member.rows[0]?.status === "active") {
-      await client.query("ROLLBACK");
-      return unavailable;
-    }
-    if (member.rows[0]) {
-      await client.query(
-        `UPDATE org_members SET role = $3::org_role, status = 'active' WHERE org_id = $1 AND user_id = $2`,
-        [row.org_id, userId, row.role],
-      );
-    } else {
-      await client.query(
-        `INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, $3::org_role, 'active')`,
-        [row.org_id, userId, row.role],
-      );
-    }
-    await client.query(
-      `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
-      [row.id, userId],
-    );
-    await client.query("COMMIT");
-    try {
-      await writeConsent(userId, "invite");
-    } catch (error) {
-      console.error("invite consent", error instanceof Error ? error.message : "failed");
-      return { ok: false as const, error: "consent" as const, kind: "team_member" as const };
-    }
-    await writeAudit(row.org_id, userId, "invite_accept", { role: row.role });
-    const sessionToken = await createSession(userId, true, meta);
-    return { ok: true as const, token: sessionToken, role: row.role, kind: "team_member" as const };
+          [sha256(token)],
+        );
+        const row = invite.rows[0];
+        if (!row || row.org_id !== candidate.rows[0].org_id || row.code_hash !== sha256(token) ||
+            row.status !== "pending" || !row.unexpired || !TEAM_ROLES.has(row.role) ||
+            !normalizeEmail(row.email) || organization.environment !== "live" ||
+            !teamInvitesAllowedForOrg(row.org_id)) {
+          await client.query("ROLLBACK");
+          return unavailable;
+        }
+        if (sessionEmail && normalizeEmail(sessionEmail) !== normalizeEmail(row.email)) {
+          await client.query("ROLLBACK");
+          return { ok: false as const, error: "account" as const, kind: "team_member" as const };
+        }
+        await assertSeatAvailableOn(client, row.org_id, organization, false);
+        if (prepared && normalizeEmail(row.email) !== normalizeEmail(prepared.email)) {
+          await client.query("ROLLBACK");
+          return unavailable;
+        }
+        const captured = prepared ?? await captureEmailCredentialEpoch(row.email, client, hardening);
+        let userId: string | null;
+        try {
+          // GoTrue commits independently. On a later rollback, retry requires the
+          // created account's password and leaves the invitation available.
+          userId = await upsertInvitedUser(client, row.email, name.trim(), password, captured, Boolean(prepared?.userId));
+        } catch (error) {
+          if (credentialsChanged(error)) throw error;
+          await client.query("ROLLBACK");
+          return { ok: false as const, error: "failed" as const, kind: "team_member" as const };
+        }
+        if (!userId) {
+          await client.query("ROLLBACK");
+          return { ok: false as const, error: "auth" as const, kind: "team_member" as const };
+        }
+        if (captured.epoch !== null && captured.userId && captured.userId !== userId) {
+          await client.query("ROLLBACK");
+          return { ok: false as const, error: "invalid" as const, kind: "team_member" as const };
+        }
+        if (!captured.userId) await lockCredentialEpoch(client, userId, captured.epoch);
+        const member = await client.query(
+          `SELECT status::text FROM org_members WHERE org_id = $1 AND user_id = $2`,
+          [row.org_id, userId],
+        );
+        if (member.rows[0]?.status === "active") {
+          await client.query("ROLLBACK");
+          return unavailable;
+        }
+        if (member.rows[0]) {
+          await client.query(
+            `UPDATE org_members SET role = $3::org_role, status = 'active' WHERE org_id = $1 AND user_id = $2`,
+            [row.org_id, userId, row.role],
+          );
+        } else {
+          await client.query(
+            `INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, $3::org_role, 'active')`,
+            [row.org_id, userId, row.role],
+          );
+        }
+        await client.query(
+          `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
+          [row.id, userId],
+        );
+        let fencedToken: string | undefined;
+        if (captured.epoch !== null) {
+          await writeConsent(userId, "invite", new Date(), {
+            ...consentRepository, write: async (id, record) => {
+              await client.query(
+                `INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (user_id, accepted_at, terms_version, privacy_version, source) DO NOTHING`,
+                [id, record.accepted_at, record.terms_version, record.privacy_version, record.source],
+              );
+              await writeConsentSql(id, record, client);
+            },
+          });
+          fencedToken = await createSession(userId, true, meta, client);
+        }
+        await client.query("COMMIT");
+        try {
+          if (captured.epoch === null) await writeConsent(userId, "invite");
+        } catch (error) {
+          console.error("invite consent", error instanceof Error ? error.message : "failed");
+          return { ok: false as const, error: "consent" as const, kind: "team_member" as const };
+        }
+        await writeAudit(row.org_id, userId, "invite_accept", { role: row.role });
+        const sessionToken = fencedToken ?? await createSession(userId, true, meta);
+        return { ok: true as const, token: sessionToken, role: row.role, kind: "team_member" as const };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    };
+    return await (client ? accept(client) : withClient(accept));
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (credentialsChanged(error)) return { ok: false as const, error: "invalid" as const, kind: "team_member" as const };
+    if (error instanceof FlowError && error.key === "errors.generic") return { ok: false as const, error: "failed" as const, kind: "team_member" as const };
     if (error instanceof FlowError && error.key === "errors.seatLimit") {
       return { ok: false as const, error: "errors.seatLimit" as const, kind: "team_member" as const };
     }
@@ -1415,27 +1730,76 @@ export async function revokeOtherSessions(userId: string, currentSessionId: stri
 export async function changePassword(session: Session, current: string, password: string, confirm: string) {
   if (password !== confirm) throw new FlowError("errors.mismatch");
   if (!passwordAcceptable(password)) throw new FlowError("errors.weakPassword");
+  const epoch = await captureCredentialEpoch(session.userId);
+  if (epoch !== null) assertPasswordProviderConfigured();
   const email = session.email;
   const userId = await verifyPassword(email, current);
   if (userId !== session.userId) throw new FlowError("errors.authInvalid");
-  await setUserPassword(session.userId, password);
-  await query(
-    `UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL`,
-    [session.userId, session.sessionId],
-  );
+  if (epoch !== null) {
+    try {
+      const change = await credentialTransaction((client) => beginCredentialChange(client, session.userId, epoch, session.sessionId));
+      const state = await writeHardenedPassword(change, password);
+      await credentialTransaction((client) => finishCredentialChange(client, change, state));
+      if (state !== "done") throw new FlowError("errors.generic");
+    } catch (error) {
+      if (credentialsChanged(error)) throw new FlowError("errors.authInvalid");
+      throw error;
+    }
+  } else {
+    await setUserPassword(session.userId, password);
+    await query(
+      `UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL`,
+      [session.userId, session.sessionId],
+    );
+  }
   await writeAudit(session.orgId, session.userId, "password_change", {});
 }
 
 export async function beginMfa(session: Session) {
+  const epoch = await captureCredentialEpoch(session.userId);
   const required = await firmRequiresMfa(session.userId);
   const factor = await mfaRow(session.userId);
   if (factor?.enabled && required) throw new FlowError("errors.mfaRequired");
   const secret = randomBase32();
-  const challengeId = await openChallenge(session.userId, "enroll", true, secret);
+  const challengeId = await withCredentialFence(session.userId, epoch, (client) => openChallenge(session.userId, "enroll", true, secret, client, epoch, false, "settings"));
   return { challengeId, secret, otpauth: otpauthUrl(secret, session.email) };
 }
 
 export async function confirmMfa(session: Session, challengeId: string, code: string) {
+  if (await sessionHardeningEnabled()) {
+    try {
+      return await credentialTransaction(async (client) => {
+        const captured = await client.query<{ epoch: string }>(
+          `SELECT epoch::text FROM app.b031_challenge_epochs WHERE challenge_id = $1 AND user_id = $2`,
+          [challengeId, session.userId],
+        );
+        if (!captured.rows[0]) throw new FlowError("errors.authInvalid");
+        await lockCredentialEpoch(client, session.userId, captured.rows[0].epoch);
+        // Re-read only after the epoch lock: a reset may have deleted the challenge.
+        const result = await client.query<{ totp_secret: string }>(
+          `SELECT totp_secret FROM auth_challenges
+           WHERE id = $1 AND user_id = $2 AND purpose = 'enroll' AND expires_at > now() FOR UPDATE`,
+          [challengeId, session.userId],
+        );
+        const challenge = result.rows[0];
+        if (!challenge?.totp_secret || !acceptSecondFactor(challenge.totp_secret, code)) throw new FlowError("errors.authInvalid");
+        const codes = backupCodes();
+        await client.query(
+          `INSERT INTO user_mfa (user_id, totp_secret, enabled, backup_code_hashes, confirmed_at)
+           VALUES ($1, $2, true, $3, now()) ON CONFLICT (user_id) DO UPDATE
+           SET totp_secret = EXCLUDED.totp_secret, enabled = true, backup_code_hashes = EXCLUDED.backup_code_hashes,
+               confirmed_at = now(), updated_at = now()`,
+          [session.userId, challenge.totp_secret, codes.map((item) => sha256(item))],
+        );
+        await client.query(`DELETE FROM auth_challenges WHERE id = $1`, [challengeId]);
+        await writeAudit(session.orgId, session.userId, "mfa_enabled", {}, client);
+        return codes;
+      });
+    } catch (error) {
+      if (credentialsChanged(error)) throw new FlowError("errors.authInvalid");
+      throw error;
+    }
+  }
   const challenge = await loadChallenge(challengeId);
   if (!challenge || challenge.user_id !== session.userId || challenge.purpose !== "enroll" || !challenge.totp_secret) {
     throw new FlowError("errors.authInvalid");

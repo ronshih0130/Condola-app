@@ -7,6 +7,7 @@ import { actionPickLease } from "@/server/actions";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { moneyLabel } from "@/server/format";
 import { loadLeaseIdCheck } from "@/server/id-docs";
+import { identityRequiredForSigningFor } from "@/server/id-sign-gate";
 import { tenantLeaseMoney, tenantLeases } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -50,6 +51,7 @@ export default async function TenantHome() {
     loadLeaseIdCheck(session, lease.lease_id),
     tenantDuePreference(session,lease.lease_id),
   ]);
+  const idRequired = await identityRequiredForSigningFor(session);
   const money = history.state === "off" ? await tenantLeaseMoney(session, lease.lease_id) : null;
   const rentMinor = money?.lease.rent ?? "0";
   const depositMinor = money?.lease.deposit ?? "0";
@@ -62,7 +64,7 @@ export default async function TenantHome() {
       <p>
         {lease.firm_name} · {displaySampleName(`${lease.property_name} ${lease.room_label ?? ""}`)}
       </p>
-      {idCheck && !idCheck.ready ? (
+      {idCheck && !idCheck.ready && idRequired ? (
         <p>
           <Link className="btn block" href="/t/id" data-testid="idv-home-link">
             {t("idv_start")}
