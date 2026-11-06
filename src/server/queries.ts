@@ -1241,8 +1241,10 @@ export async function ticketDetail(session: Session, ticketId: string) {
         [ticket.id],
       )
       : [];
+    // BLK-MAC-12: member RLS hides photo rows from roles without tickets.update;
+    // the count comes from a narrow definer function (no ids, names or bytes).
     const hiddenPhotoCount = photoAccess ? 0 : Number((await maybe<{ n: string }>(client,
-      `SELECT count(*)::text AS n FROM ticket_attachments a WHERE a.ticket_id = $1`, [ticket.id]))?.n ?? 0);
+      `SELECT app.b027_ticket_attachment_count($1)::text AS n`, [ticket.id]))?.n ?? 0);
     return { ticket, comments, photos, hiddenPhotoCount };
   }, requireOrgScope(session));
 }

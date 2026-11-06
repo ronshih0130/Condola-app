@@ -248,20 +248,96 @@ inventory({ surface: "direct photo file metadata and legacy attachment bytes", f
   }
 });
 
-inventory({ surface: "direct files metadata via authenticated RLS", file: "src/server/b027-denial-inventory.integration.test.ts", anchor: "// GAP-01:", role: "Accountant; own Admin positive control", expected: "zero filename/path rows (KNOWN GAP; opt-in fails)", name: "B027 GAP-01 Accountant must not read ticket photo file metadata" }, async () => {
+inventory({ surface: "direct files metadata via authenticated RLS", file: "src/server/b027-denial-inventory.integration.test.ts", anchor: "// GAP-01:", role: "Accountant; own Admin positive control", expected: "zero filename/path rows (GAP-01 fixed by 20261106232000)", name: "B027 GAP-01 Accountant must not read ticket photo file metadata" }, async () => {
   // GAP-01: exercise the actual direct-table privilege, not a mocked application guard.
   const read = (session: Session) => tx(session.userId, (client) => client.query(`SELECT file_name,storage_path FROM files WHERE id=$1`, [fixture.file]), requireOrgScope(session));
   assert.equal((await read(admin)).rows.length, 1);
   assert.deepEqual((await read(accountant)).rows, [], "Accountant can read a ticket photo filename/storage path through files.team_read");
-}, true);
+  // Maintenance holds tickets.update: positive control for the narrowed policy.
+  const maintenance = nonAdmins.find((session) => session.role === "maintenance")!;
+  assert.equal((await read(maintenance)).rows.length, 1);
+  // Accountant keeps non-photo files (other buckets) and its own uploads.
+  const other = randomUUID(), own = randomUUID();
+  await query(`INSERT INTO files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes) VALUES($1,$2,'documents-private',$3,'b027-other.pdf','application/pdf',1)`, [other, ORG_ID, `org/${ORG_ID}/b027/${other}.pdf`]);
+  await query(`INSERT INTO files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,uploaded_by) VALUES($1,$2,'ticket-photos-private',$3,'b027-own.jpg','image/jpeg',1,$4)`, [own, ORG_ID, `org/${ORG_ID}/tickets/${fixture.ticket}/${own}.jpg`, USERS.accountant]);
+  const visible = (session: Session, id: string) => tx(session.userId, (client) => client.query(`SELECT id FROM files WHERE id=$1`, [id]), requireOrgScope(session));
+  assert.equal((await visible(accountant, other)).rows.length, 1, "non-photo files stay readable");
+  assert.deepEqual((await visible(accountant, own)).rows, [], "a member's photo access follows the role, not upload history");
+  assert.deepEqual((await visible(foreign, other)).rows, [], "foreign org stays denied");
+  await query(`DELETE FROM files WHERE id = ANY($1::uuid[])`, [[other, own]]);
+  // Write-then-read bypass: an Accountant UPDATE without WHERE/RETURNING must not
+  // claim photo rows for the own-upload read (rolled back; probe only).
+  let probe: unknown[] = ["not run"];
+  await assert.rejects(tx(accountant.userId, async (client) => {
+    await client.query(`UPDATE files SET uploaded_by = auth.uid()`);
+    probe = (await client.query(`SELECT file_name,storage_path FROM files WHERE id=$1`, [fixture.file])).rows;
+    throw new Error("probe rollback");
+  }, requireOrgScope(accountant)));
+  assert.deepEqual(probe, [], "UPDATE then own-read must not expose the photo row");
+  assert.notEqual((await query<{ uploaded_by: string | null }>(`SELECT uploaded_by FROM files WHERE id=$1`, [fixture.file])).rows[0].uploaded_by, USERS.accountant);
+  // Staff-reporter bypass: a member who reported the ticket (e.g. downgraded to
+  // Accountant) gets no portal-path access to photo metadata or attachment rows.
+  const reporter = (await query<{ reported_by_user: string | null }>(`SELECT reported_by_user FROM maintenance_tickets WHERE id=$1`, [fixture.ticket])).rows[0].reported_by_user;
+  await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, USERS.accountant]);
+  try {
+    assert.deepEqual((await read(accountant)).rows, [], "staff reporter identity is not tenant access");
+    const rows = await tx(accountant.userId, (client) => client.query(`SELECT id FROM ticket_attachments WHERE ticket_id=$1`, [fixture.ticket]), requireOrgScope(accountant));
+    assert.deepEqual(rows.rows, []);
+    // Forged/mismatched session pins must not turn staff into a "non-member".
+    for (const pins of [{ env: "sandbox", org: ORG_ID }, { env: "live", org: randomUUID() }, { env: "", org: "" }]) {
+      const probe = await tx(accountant.userId, async (client) => {
+        await client.query(`SELECT set_config('app.env',$1,true), set_config('app.active_org_id',$2,true)`, [pins.env, pins.org]);
+        return {
+          attachments: (await client.query(`SELECT id,content FROM ticket_attachments WHERE ticket_id=$1`, [fixture.ticket])).rows,
+          files: (await client.query(`SELECT file_name,storage_path FROM files WHERE id=$1`, [fixture.file])).rows,
+        };
+      }, requireOrgScope(accountant));
+      assert.deepEqual(probe, { attachments: [], files: [] }, `pins ${JSON.stringify(pins)}`);
+    }
+  } finally {
+    await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, reporter]);
+  }
+  // Genuine tenant (no org_members row) reporting the ticket keeps portal access.
+  const tenantUser = (await query<{ id: string }>(`SELECT u.id::text FROM auth.users u WHERE NOT EXISTS (SELECT 1 FROM org_members m WHERE m.user_id=u.id) AND EXISTS (SELECT 1 FROM contacts c WHERE c.user_id=u.id AND c.org_id=$1 AND c.is_tenant) LIMIT 1`, [ORG_ID])).rows[0]?.id;
+  assert.ok(tenantUser, "a genuine tenant user exists in the seed");
+  await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, tenantUser]);
+  try {
+    const internal = (await query<{ is_internal: boolean }>(`SELECT is_internal FROM ticket_attachments WHERE id=$1`, [fixture.attachment])).rows[0].is_internal;
+    const seen = await tx(tenantUser!, async (client) => ({
+      attachments: (await client.query(`SELECT id FROM ticket_attachments WHERE id=$1`, [fixture.attachment])).rows.length,
+      files: (await client.query(`SELECT id FROM files WHERE id=$1`, [fixture.file])).rows.length,
+    }));
+    assert.deepEqual(seen, internal ? { attachments: 0, files: 0 } : { attachments: 1, files: 1 }, "tenant portal photo access unchanged");
+  } finally {
+    await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, reporter]);
+  }
+});
 
-inventory({ surface: "direct ticket attachment bytes via authenticated RLS", file: "src/server/b027-denial-inventory.integration.test.ts", anchor: "// GAP-02:", role: "Accountant; foreign staff and own Admin controls", expected: "zero bytes rows (KNOWN GAP; opt-in fails)", name: "B027 GAP-02 Accountant must not read legacy ticket attachment bytes" }, async () => {
+inventory({ surface: "direct ticket attachment bytes via authenticated RLS", file: "src/server/b027-denial-inventory.integration.test.ts", anchor: "// GAP-02:", role: "Accountant; foreign staff and own Admin controls", expected: "zero bytes rows (GAP-02 fixed by 20261106232000)", name: "B027 GAP-02 Accountant must not read legacy ticket attachment bytes" }, async () => {
   // GAP-02: legacy inline content remains selectable despite the application photo guard.
   const read = (session: Session) => tx(session.userId, (client) => client.query(`SELECT content FROM ticket_attachments WHERE id=$1`, [fixture.attachment]), requireOrgScope(session));
   assert.deepEqual((await read(foreign)).rows, []);
   assert.deepEqual((await read(admin)).rows[0].content, photoBytes);
   assert.deepEqual((await read(accountant)).rows, [], "Accountant can read ticket_attachments.content");
-}, true);
+  const maintenance = nonAdmins.find((session) => session.role === "maintenance")!;
+  assert.deepEqual((await read(maintenance)).rows[0].content, photoBytes);
+  // The no-permission count definer: same-org members only; no row data.
+  const count = async (session: Session, ticket: string) => Number((await tx(session.userId, (client) =>
+    client.query<{ n: number }>(`SELECT app.b027_ticket_attachment_count($1) AS n`, [ticket]), requireOrgScope(session))).rows[0].n);
+  const expected = Number((await query<{ n: number }>(`SELECT count(*)::int AS n FROM ticket_attachments WHERE ticket_id=$1`, [fixture.ticket])).rows[0].n);
+  assert.ok(expected > 0);
+  assert.equal(await count(accountant, fixture.ticket), expected);
+  assert.equal(await count(admin, fixture.ticket), expected);
+  assert.equal(await count(foreign, fixture.ticket), 0, "foreign org gets no count");
+  assert.equal(await count(accountant, randomUUID()), 0, "missing ticket");
+  const fn = (await query<{ definer: boolean; config: string[] | null; anon: boolean; authenticated: boolean; public: boolean }>(`
+    SELECT p.prosecdef AS definer, p.proconfig AS config,
+      has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+      has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+      EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE a.grantee = 0) AS public
+      FROM pg_proc p WHERE p.oid = 'app.b027_ticket_attachment_count(uuid)'::regprocedure`)).rows[0];
+  assert.deepEqual(fn, { definer: true, config: ["search_path=pg_catalog, public, app"], anon: false, authenticated: true, public: false });
+});
 inventory({ surface: "/m/tickets/[id] photo metadata loader", file: "src/server/queries.ts", anchor: "export async function ticketDetail(", role: "Accountant; own Admin positive control", expected: "empty photos (no filenames/paths/ids), count only (GAP-03 fixed)", name: "B027 GAP-03 Accountant ticket loader must not return photo metadata" }, async () => {
   const own = await ticketDetail(admin, fixture.ticket);
   assert.equal(own?.photos[0].name, `${marker}.jpg`);
@@ -284,7 +360,7 @@ const grants = [
   { table: "audit_log", privileges: ["SELECT"], forced: false, hash: "a70678f6ca0de54cb79fdfee017ebeef", why: "company activity and sensitive row snapshots", policy: "Admin SELECT only" },
   { table: "consents", privileges: ["SELECT"], forced: false, hash: "e432e0ae23c6888ebaf23eab8f96c078", why: "user legal consent evidence", policy: "own-user SELECT; no client mutation" },
   { table: "platform_settings", privileges: ["SELECT"], forced: false, hash: "5b90ddfd20a8d3d42e3f934a87a84a10", why: "global control plane and rollout settings", policy: "authenticated SELECT intentionally global; no client mutation" },
-  { table: "files", privileges: ["SELECT", "INSERT", "UPDATE", "DELETE"], forced: false, hash: "81bfdd8e1a7ee68a1eaaa053a1b44c41", why: "private object paths and filenames", policy: "member CRUD + portal own/attached-photo policies; GAP-01 remains" },
+  { table: "files", privileges: ["SELECT", "INSERT", "UPDATE", "DELETE"], forced: false, hash: "4978b8afb738b4008ea6cd37121ab08f", why: "private object paths and filenames", policy: "member CRUD (ticket-photo bucket SELECT only for tickets.update roles) + portal own/attached-photo policies; GAP-01 fixed" },
 ] as const;
 const supplementary = { table: "vendor_document_pdf_bytes", privileges: [], forced: true, hash: "d751713988987e9331980363e24189ce", why: "persisted vendor PDF bytes", policy: "service-only, forced RLS" } as const;
 const operations = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"];
@@ -341,10 +417,10 @@ function inventoryMarkdown() {
   lines.push("", "## Seven-table grants contract", "", "All seven tables are in `public`. Each checks effective table and every column privilege (including inherited/PUBLIC access and grant options), client BYPASSRLS/superuser bits, RLS state, and a pinned hash of policy names, commands, roles, permissiveness and expressions. This is a reviewed baseline, not proof that every baseline policy is ideal. Policy helper-function implementation drift is outside the hash; behavioral tests cover the selected paths.", "",
     "| Table | Sensitivity | Authenticated privilege contract | Intended policy / known limit | FORCE RLS |", "|---|---|---|---|---|");
   for (const s of grants) lines.push(`| public.${s.table} | ${s.why} | ${s.privileges.join(", ") || "none"}; anon none | ${s.policy} | ${s.forced} |`);
-  lines.push("", "These seven existing migrations enable RLS but do not FORCE it. The test pins that fact rather than claiming owner isolation. Supplemental `vendor_document_pdf_bytes` asserts ENABLE + FORCE and no client grants, exercising the forced expectation where the migration requires it. Service roles and table owners remain trusted. `platform_settings` reads are intentionally global; they are not an org-denial surface. Files' Accountant metadata exposure is separately retained as GAP-01, not blessed by the privilege baseline.", "", "## Route enumeration and scope", "",
+  lines.push("", "These seven existing migrations enable RLS but do not FORCE it. The test pins that fact rather than claiming owner isolation. Supplemental `vendor_document_pdf_bytes` asserts ENABLE + FORCE and no client grants, exercising the forced expectation where the migration requires it. Service roles and table owners remain trusted. `platform_settings` reads are intentionally global; they are not an org-denial surface. Files' Accountant ticket-photo metadata exposure (GAP-01) is closed by 20261106232000.", "", "## Route enumeration and scope", "",
     "Every current `src/app/**/route.ts` is listed below. Selected read routes execute above; other routes are explicitly not covered by this representative slice. This is not an exhaustive route, browser, mutation, bearer-token, staging or production security audit.", "", "| Route source | Coverage |", "|---|---|");
   for (const file of routeFiles("src/app")) lines.push(`| ${file}:1 | ${entries.some((e) => e.file === file) ? "HTTP handler executed above" : "Enumerated only; outside representative selection"} |`);
-  lines.push("", "## Reader boundaries", "", "Ticket/repair metadata, signed URLs, redirect delivery and local object bytes are covered together. Raw `downloadRepairObject`, `signTicketPhotoUrls` and `readCiphertext` accept already-authorized paths/DB clients and are not session entrypoints; their caller guards are the tested boundary. Vendor persisted documents execute the service-role reader with real membership rechecks. Vendor bearer-link photo routes and feature-gated handover/esign/versioned PDF routes are enumerated but not claimed as exercised here. The legacy signed-PDF route supplies an active positive control without changing flags.", "", "## Known gap execution", "", "`B027_RUN_KNOWN_GAP=1 npx tsx --test --test-concurrency=1 src/server/b027-denial-inventory.integration.test.ts` enables GAP-01/02 (RLS policy gaps). They must fail until the policies are fixed in separately approved scope (hub BLK-MAC-12). GAP-03 (ticket loader photo metadata) is fixed and runs as an ordinary case. The normal gate skips GAP-01/02 explicitly; a passing gate does not mean acceptance #1 is fully satisfied.", "");
+  lines.push("", "## Reader boundaries", "", "Ticket/repair metadata, signed URLs, redirect delivery and local object bytes are covered together. Raw `downloadRepairObject`, `signTicketPhotoUrls` and `readCiphertext` accept already-authorized paths/DB clients and are not session entrypoints; their caller guards are the tested boundary. Vendor persisted documents execute the service-role reader with real membership rechecks. Vendor bearer-link photo routes and feature-gated handover/esign/versioned PDF routes are enumerated but not claimed as exercised here. The legacy signed-PDF route supplies an active positive control without changing flags.", "", "## Known gap execution", "", "GAP-01/02 (RLS policy gaps, hub BLK-MAC-12) are fixed by migration 20261106232000 and run as ordinary cases in the normal gate, as does GAP-03 (ticket loader photo metadata). `B027_RUN_KNOWN_GAP=1` is no longer needed; with it set the run is identical.", "");
   return lines.join("\n");
 }
 test("B027 generated denial inventory matches executable cases and source lines", () => {

@@ -8,7 +8,7 @@ Real loaders, HTTP handlers, session cookies, authorization and PostgreSQL RLS a
 |---|---|---|---|---|
 | /m/properties/[id] loader | src/server/queries.ts:290 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/properties/[id] loader |
 | /m/leases/[id] loader | src/server/queries.ts:646 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/leases/[id] loader |
-| /m/tenants/[id] loader | src/server/queries.ts:1855 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tenants/[id] loader |
+| /m/tenants/[id] loader | src/server/queries.ts:1857 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tenants/[id] loader |
 | /m/statements/[id] loader | src/server/queries.ts:1021 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/statements/[id] loader |
 | /m/tickets/[id] loader | src/server/queries.ts:1173 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tickets/[id] loader |
 | signed PDF bytes reader | src/server/queries.ts:759 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: signed PDF bytes reader |
@@ -22,17 +22,17 @@ Real loaders, HTTP handlers, session cookies, authorization and PostgreSQL RLS a
 | ID document photo API | src/app/api/id-documents/photo/route.ts:45 | foreign staff / Accountant; own Admin/Manager | 404 empty; own 200 image bytes | B027 HTTP ID photo reauthorizes known document and signed token |
 | vendor persisted document bytes | src/server/vendor-receipt.ts:790 | foreign staff / Accountant; own Admin/Manager | notFound/forbidden; own exact PDF bytes and hash | B027 vendor document reader denies foreign org and Accountant |
 | direct photo file metadata and legacy attachment bytes | src/server/b027-denial-inventory.integration.test.ts:238 | foreign staff; own Admin/Manager | zero rows; same fixture exact filename/path/bytes | B027 direct photo data remains isolated across organizations |
-| direct files metadata via authenticated RLS | src/server/b027-denial-inventory.integration.test.ts:251 | Accountant; own Admin positive control | zero filename/path rows (KNOWN GAP; opt-in fails) | B027 GAP-01 Accountant must not read ticket photo file metadata |
-| direct ticket attachment bytes via authenticated RLS | src/server/b027-denial-inventory.integration.test.ts:258 | Accountant; foreign staff and own Admin controls | zero bytes rows (KNOWN GAP; opt-in fails) | B027 GAP-02 Accountant must not read legacy ticket attachment bytes |
+| direct files metadata via authenticated RLS | src/server/b027-denial-inventory.integration.test.ts:251 | Accountant; own Admin positive control | zero filename/path rows (GAP-01 fixed by 20261106232000) | B027 GAP-01 Accountant must not read ticket photo file metadata |
+| direct ticket attachment bytes via authenticated RLS | src/server/b027-denial-inventory.integration.test.ts:316 | Accountant; foreign staff and own Admin controls | zero bytes rows (GAP-02 fixed by 20261106232000) | B027 GAP-02 Accountant must not read legacy ticket attachment bytes |
 | /m/tickets/[id] photo metadata loader | src/server/queries.ts:1173 | Accountant; own Admin positive control | empty photos (no filenames/paths/ids), count only (GAP-03 fixed) | B027 GAP-03 Accountant ticket loader must not return photo metadata |
-| public.id_document_objects catalog | src/server/b027-denial-inventory.integration.test.ts:281 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE false | B027 grants: public.id_document_objects |
-| public.lease_signed_pdfs catalog | src/server/b027-denial-inventory.integration.test.ts:282 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT/INSERT/DELETE; RLS ON; FORCE false | B027 grants: public.lease_signed_pdfs |
-| public.payee_account_numbers catalog | src/server/b027-denial-inventory.integration.test.ts:283 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE false | B027 grants: public.payee_account_numbers |
-| public.audit_log catalog | src/server/b027-denial-inventory.integration.test.ts:284 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT; RLS ON; FORCE false | B027 grants: public.audit_log |
-| public.consents catalog | src/server/b027-denial-inventory.integration.test.ts:285 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT; RLS ON; FORCE false | B027 grants: public.consents |
-| public.platform_settings catalog | src/server/b027-denial-inventory.integration.test.ts:286 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT; RLS ON; FORCE false | B027 grants: public.platform_settings |
-| public.files catalog | src/server/b027-denial-inventory.integration.test.ts:287 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT/INSERT/UPDATE/DELETE; RLS ON; FORCE false | B027 grants: public.files |
-| public.vendor_document_pdf_bytes catalog | src/server/b027-denial-inventory.integration.test.ts:289 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE true | B027 grants: public.vendor_document_pdf_bytes |
+| public.id_document_objects catalog | src/server/b027-denial-inventory.integration.test.ts:357 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE false | B027 grants: public.id_document_objects |
+| public.lease_signed_pdfs catalog | src/server/b027-denial-inventory.integration.test.ts:358 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT/INSERT/DELETE; RLS ON; FORCE false | B027 grants: public.lease_signed_pdfs |
+| public.payee_account_numbers catalog | src/server/b027-denial-inventory.integration.test.ts:359 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE false | B027 grants: public.payee_account_numbers |
+| public.audit_log catalog | src/server/b027-denial-inventory.integration.test.ts:360 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT; RLS ON; FORCE false | B027 grants: public.audit_log |
+| public.consents catalog | src/server/b027-denial-inventory.integration.test.ts:361 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT; RLS ON; FORCE false | B027 grants: public.consents |
+| public.platform_settings catalog | src/server/b027-denial-inventory.integration.test.ts:362 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT; RLS ON; FORCE false | B027 grants: public.platform_settings |
+| public.files catalog | src/server/b027-denial-inventory.integration.test.ts:363 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT/INSERT/UPDATE/DELETE; RLS ON; FORCE false | B027 grants: public.files |
+| public.vendor_document_pdf_bytes catalog | src/server/b027-denial-inventory.integration.test.ts:365 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE true | B027 grants: public.vendor_document_pdf_bytes |
 
 ## Seven-table grants contract
 
@@ -46,9 +46,9 @@ All seven tables are in `public`. Each checks effective table and every column p
 | public.audit_log | company activity and sensitive row snapshots | SELECT; anon none | Admin SELECT only | false |
 | public.consents | user legal consent evidence | SELECT; anon none | own-user SELECT; no client mutation | false |
 | public.platform_settings | global control plane and rollout settings | SELECT; anon none | authenticated SELECT intentionally global; no client mutation | false |
-| public.files | private object paths and filenames | SELECT, INSERT, UPDATE, DELETE; anon none | member CRUD + portal own/attached-photo policies; GAP-01 remains | false |
+| public.files | private object paths and filenames | SELECT, INSERT, UPDATE, DELETE; anon none | member CRUD (ticket-photo bucket SELECT only for tickets.update roles) + portal own/attached-photo policies; GAP-01 fixed | false |
 
-These seven existing migrations enable RLS but do not FORCE it. The test pins that fact rather than claiming owner isolation. Supplemental `vendor_document_pdf_bytes` asserts ENABLE + FORCE and no client grants, exercising the forced expectation where the migration requires it. Service roles and table owners remain trusted. `platform_settings` reads are intentionally global; they are not an org-denial surface. Files' Accountant metadata exposure is separately retained as GAP-01, not blessed by the privilege baseline.
+These seven existing migrations enable RLS but do not FORCE it. The test pins that fact rather than claiming owner isolation. Supplemental `vendor_document_pdf_bytes` asserts ENABLE + FORCE and no client grants, exercising the forced expectation where the migration requires it. Service roles and table owners remain trusted. `platform_settings` reads are intentionally global; they are not an org-denial surface. Files' Accountant ticket-photo metadata exposure (GAP-01) is closed by 20261106232000.
 
 ## Route enumeration and scope
 
@@ -109,4 +109,4 @@ Ticket/repair metadata, signed URLs, redirect delivery and local object bytes ar
 
 ## Known gap execution
 
-`B027_RUN_KNOWN_GAP=1 npx tsx --test --test-concurrency=1 src/server/b027-denial-inventory.integration.test.ts` enables GAP-01/02 (RLS policy gaps). They must fail until the policies are fixed in separately approved scope (hub BLK-MAC-12). GAP-03 (ticket loader photo metadata) is fixed and runs as an ordinary case. The normal gate skips GAP-01/02 explicitly; a passing gate does not mean acceptance #1 is fully satisfied.
+GAP-01/02 (RLS policy gaps, hub BLK-MAC-12) are fixed by migration 20261106232000 and run as ordinary cases in the normal gate, as does GAP-03 (ticket loader photo metadata). `B027_RUN_KNOWN_GAP=1` is no longer needed; with it set the run is identical.
