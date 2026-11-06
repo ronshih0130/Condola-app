@@ -33,7 +33,8 @@ export default async function VendorJobPage({
       </div>
     );
   }
-  const vendorState = await resolveVendorJobState(token);
+  const vendorState = job.vendorLink && (!job.vendorLink.sharingApproved || job.vendorLink.capability !== "write")
+    ? null : await resolveVendorJobState(token);
   const photoMessages = {
     size: t("i_photo_size"),
     type: t("i_photo_type"),
@@ -90,10 +91,10 @@ export default async function VendorJobPage({
   }
   function renderVendorJobControls() {
     if (vendorState === null) return null;
+    if (job!.vendorLink && (!job!.vendorLink.sharingApproved || job!.vendorLink.capability !== "write")) return null;
     if (vendorState.locked) {
       return <p data-testid="vendor-pending-approval">{t("i_vendor_pending_owner_approval")}</p>;
     }
-    if (job!.vendorLink && (!job!.vendorLink.sharingApproved || job!.vendorLink.capability !== "write")) return null;
     return (
       <VendorJobControls key={vendorState.requestId}
         copy={{ reported: t("i_vendor_reported_awaiting_company"), unavailable: t("i_generic") }}>

@@ -146,7 +146,7 @@ export function vendorJobUrl(origin: string, token: string) {
   return `${portalInviteOrigin(origin)}${vendorJobPath(token)}`;
 }
 
-export async function orgVendorDispatchEnabled(orgId: string) {
+export async function orgVendorDispatchPolicy(orgId: string) {
   const row = await svc(null, (client) =>
     maybe<{ environment: string; plan_tier: string; feature_flags: unknown }>(
       client,
@@ -155,12 +155,16 @@ export async function orgVendorDispatchEnabled(orgId: string) {
       [orgId],
     ),
   );
-  if (!row) return false;
-  return vendorDispatchEnabled({
-    environment: row.environment,
-    planTier: row.plan_tier,
-    featureFlags: row.feature_flags,
-  });
+  return {
+    dispatch: Boolean(row && vendorDispatchEnabled({
+      environment: row.environment, planTier: row.plan_tier, featureFlags: row.feature_flags,
+    })),
+    enhanced: vendorLinkOn(vendorLinkKillSwitch, row?.feature_flags),
+  };
+}
+
+export async function orgVendorDispatchEnabled(orgId: string) {
+  return (await orgVendorDispatchPolicy(orgId)).dispatch;
 }
 
 export async function currentRepairVersionId(client: Client, orgId: string, ticketId: string) {
@@ -212,7 +216,7 @@ export async function lockTicketThenJobs(client: Client, orgId: string, ticketId
   );
 }
 
-async function lockedVendorLink(client: Client, job: OpenJob, hash: string) {
+async function lockedVendorLink(client: Client, job: Pick<OpenJob, "job_id" | "org_id" | "ticket_id">, hash: string) {
   await lockTicketThenJobs(client, job.org_id, job.ticket_id);
   const ticket = await loadTicket(client, job.ticket_id, job.org_id);
   const state = await maybe<LinkState & {
@@ -245,6 +249,38 @@ async function lockedVendorLink(client: Client, job: OpenJob, hash: string) {
   });
   if (capability !== "write" || !state.sharing_approved_at) throw new FlowError("errors.notFound");
   return ticket;
+}
+
+/** Caller reuses its existing dispatch-policy read; OFF never adds a query. */
+export async function assertEnhancedVendorMutation(
+  client: Client, orgId: string, jobId: string, tokenHash: string,
+  enhanced: boolean, requestId?: string,
+) {
+  if (!enhanced) return;
+  const job = await maybe<Pick<OpenJob, "job_id" | "org_id" | "ticket_id"> & { actor_id: string }>(client,
+    `SELECT id::text AS job_id, org_id::text, ticket_id::text, coalesce(created_by,id)::text AS actor_id
+       FROM repair_vendor_jobs WHERE id = $1 AND org_id = $2 AND token_hash = $3`, [jobId, orgId, tokenHash]);
+  if (!job) throw new FlowError("errors.notFound");
+  // Match b013_replay exactly, before acquiring any ticket/job row lock.
+  if (requestId !== undefined) await client.query(
+    "SELECT pg_advisory_xact_lock(hashtextextended('b013/approval/request/' || $1::text || '/' || $2::text, 0))",
+    [job.actor_id, requestId],
+  );
+  await lockedVendorLink(client, job, tokenHash);
+}
+
+/** Same-transaction ticket lock fences closure through notification marking. */
+export async function vendorNotificationReadOnly(client: Client, tokenHash: string) {
+  if (!vendorLinkKillSwitch) return false;
+  const job = await maybe<{ ticket_id: string; org_id: string; feature_flags: unknown }>(client,
+    `SELECT j.ticket_id::text, j.org_id::text, o.feature_flags
+       FROM repair_vendor_jobs j JOIN organizations o ON o.id=j.org_id WHERE j.token_hash=$1`, [tokenHash]);
+  if (!job || !vendorLinkOn(vendorLinkKillSwitch, job.feature_flags)) return false;
+  // NOWAIT keeps the notification center's bounded busy/retry contract.
+  const ticket = await maybe<{ status: string }>(client,
+    `SELECT status::text FROM maintenance_tickets WHERE id=$1 AND org_id=$2 FOR SHARE NOWAIT`,
+    [job.ticket_id, job.org_id]);
+  return !ticket || !reportableTicket(ticket.status);
 }
 
 async function assertDispatchFlag(client: Client, orgId: string) {
@@ -731,7 +767,20 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
       [job.ticket_id, job.org_id],
     );
     if (!ticket) return null;
+    // Keep the OFF query literal intact; closed enhanced jobs require explicit sharing even for their own uploads.
     const photos = await client.query<{ id: string; name: string; vendor_job_id: string | null }>(
+      enhanced ?
+      `SELECT a.id::text, f.file_name AS name, a.vendor_job_id::text
+         FROM ticket_attachments a
+         JOIN files f ON f.id = a.file_id AND f.org_id = a.org_id
+        WHERE a.ticket_id = $1 AND a.org_id = $2 AND NOT a.is_internal
+          AND (a.vendor_job_id IS NULL OR a.vendor_job_id = $3)
+          AND (NOT $4::boolean OR (a.vendor_job_id = $3 AND EXISTS (
+            SELECT 1 FROM maintenance_tickets t WHERE t.id = a.ticket_id AND t.org_id = a.org_id
+              AND t.status IN ('open', 'triaged', 'assigned', 'in_progress', 'on_hold', 'resolved'))) OR EXISTS (
+            SELECT 1 FROM repair_vendor_job_shared_photos s
+             WHERE s.org_id = a.org_id AND s.job_id = $3 AND s.attachment_id = a.id))
+        ORDER BY a.created_at` :
       `SELECT a.id::text, f.file_name AS name, a.vendor_job_id::text
          FROM ticket_attachments a
          JOIN files f ON f.id = a.file_id AND f.org_id = a.org_id
@@ -1145,7 +1194,8 @@ export async function streamVendorPhoto(token: string, attachmentId: string) {
             AND j.vendor_contact_id = t.assigned_vendor_contact_id
             AND a.id = $5 AND NOT a.is_internal
             AND j.scope = 'case_collaboration' AND j.sharing_approved_at IS NOT NULL
-            AND (a.vendor_job_id = j.id OR EXISTS (
+            AND ((a.vendor_job_id = j.id
+              AND t.status IN ('open', 'triaged', 'assigned', 'in_progress', 'on_hold', 'resolved')) OR EXISTS (
               SELECT 1 FROM repair_vendor_job_shared_photos s
                WHERE s.org_id = a.org_id AND s.job_id = j.id AND s.attachment_id = a.id))
             AND (a.vendor_job_id IS NULL OR a.vendor_job_id = j.id)

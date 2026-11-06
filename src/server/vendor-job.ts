@@ -3,7 +3,7 @@ import type { Client } from "pg";
 import { recordVendorAppointment, repairApprovalsEnabled, type ApprovalResult } from "./repair-approval";
 import { assertVendorResponse, assertCompletion, type VendorResponseTimes } from "./vendor-job-rules";
 import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
-import { currentRepairVersionId, orgVendorDispatchEnabled, repairDispatchAllowed } from "./vendor-repair";
+import { assertEnhancedVendorMutation, currentRepairVersionId, orgVendorDispatchPolicy, repairDispatchAllowed } from "./vendor-repair";
 import { maybe, svc } from "./db";
 import { FlowError } from "./errors";
 import { assertIdentifiers } from "./repair-approval-rules";
@@ -32,7 +32,8 @@ async function openJob(token: string) {
 }
 
 async function flagsOn(orgId: string) {
-  return (await orgVendorDispatchEnabled(orgId)) && (await repairApprovalsEnabled(orgId));
+  const policy = await orgVendorDispatchPolicy(orgId);
+  return { ...policy, enabled: policy.dispatch && await repairApprovalsEnabled(orgId) };
 }
 
 async function latestEvent(client: Client, orgId: string, ticketId: string, jobId: string, versionId: string) {
@@ -49,7 +50,7 @@ async function latestEvent(client: Client, orgId: string, ticketId: string, jobI
 export async function resolveVendorJobState(token: string): Promise<VendorJobState | null> {
   if (!vendorTokenAcceptable(token)) return null;
   const job = await openJob(token);
-  if (!job || !(await flagsOn(job.org_id))) return null;
+  if (!job || !(await flagsOn(job.org_id)).enabled) return null;
   return svc(null, async (client) => {
     const versionId = await currentRepairVersionId(client, job.org_id, job.ticket_id);
     if (!versionId) return null;
@@ -66,8 +67,10 @@ export async function resolveVendorJobState(token: string): Promise<VendorJobSta
 async function mutationScope(token: string, pinnedVersionId: string, completionRequestId?: string) {
   const job = await openJob(token);
   if (!job) throw new FlowError("errors.forbidden");
-  if (!(await flagsOn(job.org_id))) return null;
+  const policy = await flagsOn(job.org_id);
+  if (!policy.enabled) return null;
   return svc(null, async (client) => {
+    await assertEnhancedVendorMutation(client, job.org_id, job.job_id, hashVendorToken(token), policy.enhanced);
     // A ledger hit must reach the gateway, which checks the full pinned payload.
     const prior = completionRequestId === undefined ? null : await maybe<{ found: number }>(client,
       "SELECT 1 AS found FROM app.b013_repair_commands c"
@@ -88,7 +91,7 @@ async function mutationScope(token: string, pinnedVersionId: string, completionR
       );
       hasAfterPhoto = (photos?.n ?? 0) > 0;
     }
-    return { ...job, hasAfterPhoto, validateCompletion };
+    return { ...job, enhanced: policy.enhanced, hasAfterPhoto, validateCompletion };
   });
 }
 
@@ -110,7 +113,7 @@ export async function respondVendorJob(token: string, input: {
     proposedStart: input.times?.confirmedStart,
     proposedEnd: input.times?.confirmedEnd,
   } : {};
-  return recordVendorAppointment({ token }, {
+  return recordVendorAppointment({ token, enhanced: scope.enhanced }, {
     orgId: scope.org_id,
     requestId: input.requestId,
     versionId: input.versionId,
@@ -132,7 +135,7 @@ export async function submitVendorCompletion(token: string, input: {
   if (scope.validateCompletion) {
     assertCompletion({ hasAfterPhoto: scope.hasAfterPhoto, reason: input.reason });
   }
-  return recordVendorAppointment({ token }, {
+  return recordVendorAppointment({ token, enhanced: scope.enhanced }, {
     orgId: scope.org_id,
     requestId: input.requestId,
     versionId: input.versionId,
