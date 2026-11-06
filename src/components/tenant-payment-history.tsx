@@ -7,7 +7,7 @@ import type { tenantPaymentHistory } from '@/server/tenant-payment-history';
 
 type Ready = Extract<Awaited<ReturnType<typeof tenantPaymentHistory>>, { state: 'ready' }>;
 
-function amount(value: number, currency: string, locale: Locale) {
+function amount(value: number | string, currency: string, locale: Locale) {
   // Format integer minor units directly, avoiding floating-point rounding for large values.
   const raw = BigInt(value), absolute = raw < BigInt(0) ? -raw : raw;
   const major = absolute / BigInt(100), minor = absolute % BigInt(100);
@@ -26,6 +26,12 @@ export function TenantBillSummary({ data, locale, showLines = false }: { data: R
     {bill.state === 'credit' && <p data-testid="tenant-payment-credit">{t.creditBalance}: {amount(Math.abs(bill.balanceMinor), bill.currency, locale)}</p>}
     {showLines && bill.lines.length > 0 && <><h3>{t.billLines}</h3><ul>{bill.lines.map((line, index) => <li key={`${line.chargeType}-${index}`}>{line.chargeType === 'utility' ? electricityMonthLabel(line.periodStart, line.description && line.description !== 'utility' ? line.description : makeT(locale)('i_charge_utility')) : line.description || makeT(locale)(chargeKey(line.chargeType))}: {amount(line.amountMinor, bill.currency, locale)}</li>)}</ul></>}
     {bill.state === 'partial' && <p>{t.paidAmount}: {amount(bill.paidMinor, bill.currency, locale)}</p>}
+    {data.monthlyDue.length > 0 && <div data-testid="tenant-monthly-due"><h3>{t.monthlyDue}</h3>{data.monthlyDue.map((p) => <div key={p.periodYm}>
+      <p><strong>{p.periodYm} {t.dueTotal}: {amount(p.dueMinor, p.currency, locale)}</strong></p>
+      {showLines && <ul>{p.components.map((c) => <li key={`${c.source.invoiceNumber}-${c.source.lineNo}`}>{c.description || t.dueKeys[c.key]}: {amount(c.amountMinor, p.currency, locale)} <span className="small muted">({t.dueSource(c.source.invoiceNumber, c.source.lineNo)})</span></li>)}
+        <li>{t.dueGross}: {amount(p.grossMinor, p.currency, locale)}</li>{p.offsetMinor !== '0' && <li>{t.dueOffset}: {amount(`-${p.offsetMinor}`, p.currency, locale)}</li>}{p.payments.map((x) => <li key={`paid-${x.invoiceNumber}`}>{t.duePaidSource(x.invoiceNumber)}: {amount(`-${x.paidMinor}`, p.currency, locale)}</li>)}{p.payments.length > 1 && <li>{t.duePaid}: {amount(`-${p.paidMinor}`, p.currency, locale)}</li>}</ul>}
+      {p.carryMinor !== '0' && <p className="small">{t.dueCarry}: {amount(p.carryMinor, p.currency, locale)}</p>}
+    </div>)}<p className="small muted">{t.dueNetNote}</p><p className="small muted">{t.monthlyDueNote}</p></div>}
     {bill.pending && <p className="small">{t.pendingNote}</p>}
   </section>;
 }
