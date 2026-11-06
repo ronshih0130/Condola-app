@@ -42,7 +42,7 @@ test("clawbacks reduce credits, carry is ignored and offset is clamped at zero",
       ],
     });
     assert.equal(preview.creditOffsetMinor, expectedOffset);
-    assert.equal(preview.netMinor, (10000n - BigInt(expectedOffset)).toString());
+    assert.equal(preview.netMinor, (BigInt(10000) - BigInt(expectedOffset)).toString());
   }
 });
 

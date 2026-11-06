@@ -32,15 +32,15 @@ export function composeMonthlyBillPreview(input: {
       sourceRefId: line.sourceRefId,
     })),
   ];
-  const gross = components.reduce((sum, line) => sum + parseAmountMinor(line.amountMinor), 0n);
+  const gross = components.reduce((sum, line) => sum + parseAmountMinor(line.amountMinor), BigInt(0));
   const advanceCredits = (input.advanceCredits ?? []).map((credit) => ({ ...credit }));
-  let offset = 0n;
+  let offset = BigInt(0);
   for (const credit of advanceCredits) {
     const amount = parseAmountMinor(credit.amountMinor);
     if (credit.status === "approved") offset += amount;
     else if (credit.status === "clawback") offset -= amount;
   }
-  if (offset < 0n) offset = 0n;
+  if (offset < BigInt(0)) offset = BigInt(0);
   const grossMinor = gross.toString();
   const creditOffsetMinor = offset.toString();
   const { netMinor, carryMinor } = assertNoNegativeClaim({ grossMinor, creditOffsetMinor });

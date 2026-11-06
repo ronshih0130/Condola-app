@@ -322,6 +322,10 @@ const added = {
     addOnly: false,
     reason: "Adds immutable appointment response_reason checks, replaces the staff signature with a trailing default, and adds a service-only token-scoped vendor gateway with replay and flag-OFF rejection; no table grants, flag seeds or ticket status changes.",
   },
+  "supabase/migrations/20261106000000_b008_monthly_rent_operation.sql": {
+    addOnly: false,
+    reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
+  },
 };
 
 const functions = [

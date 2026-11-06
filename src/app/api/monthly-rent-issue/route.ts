@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { getSession } from "@/server/session";
 import { writeMonthlyRent } from "@/server/monthly-rent-writer";
@@ -15,6 +16,8 @@ export async function POST(request: Request) {
   }
   if (!session) return new Response(null, { status: 401, headers });
   if (session.kind !== "staff") return new Response(null, { status: 403, headers });
+  const denied = await requireCurrentConsent(session, "api");
+  if (denied) return denied;
 
   let input: Parameters<typeof writeMonthlyRent>[1];
   try {
