@@ -1,4 +1,4 @@
-# B-027 — JIT L2 設計稿：平台隔離、合作同意與 rollout 控制（slice 1–3：flag policy / denial inventory / partner controls）
+# B-027 — JIT L2 設計稿：平台隔離、合作同意與 rollout 控制（slice 1–4：flag policy / denial inventory / partner controls / consent plumbing）
 
 > Author: Claude (Mac overnight, 2026-11-06 PT). Layer-2 design for hub `20-build/specs/B-027.md`; foundation PROP-05 (PR #41: platform_settings override audit + registry guard). Branch cut from #41 (`67e756b`).
 
@@ -9,7 +9,7 @@
 | **1 (this PR)** | Acceptance "Given registry expiry, when CI runs, then canonical warning/failure policy applies": extract the `scripts/gate.sh` flag-expiry logic into `scripts/flag-expiry-policy.cjs` (shared, unit-tested) and add the **seven-day reminder** warning. | built |
 | 2 | Executable cross-org / role denial and seven-table grants inventories; local only, staging/production remain PE/release-side. | inventory built; acceptance #1 incomplete: three Accountant findings retained as opt-in failures; independent Claude QA pending |
 | 3 | Partner test configuration: plan-section hiding and upgrade/pricing redirect (`partner_pricing_hide`), unit allowance override (`partner_unit_override`), term expiry/global kill revert and audited 30-day renewals. | built locally; verification below; independent Claude QA pending |
-| 4 | Partner consent gate plumbing on approved agreement paths (`PARTNER_CONSENT_GATE`; records append-only actor/version/full-text hash/time — `partner_agreement_consents` exists). | todo |
+| 4 | Partner consent gate plumbing on approved agreement paths (`PARTNER_CONSENT_GATE`; records append-only actor/version/full-text hash/time — `partner_agreement_consents` exists). | built locally; verification and limits below; independent Claude QA pending |
 
 ## Policy (slice 1)
 
@@ -157,3 +157,49 @@ Slice 4 remains **TODO**: partner-consent gate plumbing on approved agreement pa
 STOP POINT: B027_SLICE3_QA_R1_FIXES_LOCAL_VERIFIED; next: Claude reviews the local diff and verification logs, then commits under the existing ownership session; owner: Claude@ron-mac.
 
 Slice 3 QA (orchestrator, 2026-11-06): Codex QA r1 **FAIL** (pricing hide redirected the whole settings page; controls evaluated on the selected sandbox org while prices/usage use the live org) → fixes (only the plan section hidden; controls on the live org; OFF path one query; explicit legacy assertions) → **r2 PASS**. Residual LOW: with both flags OFF the pricing/settings pages still run one extra control SELECT on a separate connection per request (fold into a request-scoped connection later).
+
+
+## Slice 4 done-means — 2026-11-06 PT
+
+Delegated baseline `3306480355ca50e8865887a1d43343f1c6708776`; Claude (`Claude@ron-mac`) owns ops-lock and is sole committer. The hub B-027 acceptance spec was read; its referenced design file is absent, so this existing checkout design is updated. The preceding slice-3 TODO is historical and is superseded by this bounded implementation report.
+
+- Inspected `20261030151300_partner_agreement_consents.sql`, `20261030151301_partner_consent_attestation.sql`, their server readers/writers, and the slice-3 RPC. Existing consent storage already supplies company, actor, version, locale, full-text SHA-256 and timestamps, with authority/actor snapshots and append-only triggers. Those migrations, document text, versions, labels, notices, consent UI and existing consent submission code are unchanged.
+- The real gaps were the absence of a per-company current-approved agreement pointer and no consent check at the slice-3 write boundary. `20261106200000_b027_partner_consent_gate.sql` reuses `platform_settings` and `partner_agreement_consents`; no table or seed wipe changes are needed. Migration manifest and lease migration inventory are registered. Manifest `addOnly: false` honestly records replacement of the existing RPC body; schema additions and configuration seeds are non-destructive, with no backfill or table alteration.
+- `PARTNER_CONSENT_GATE` maps to `partner_consent_gate`, registered default false/internal/Ron, with the unchanged November 10 expiry policy. The seed is exactly `{"enabled":false,"allowed_org_ids":[]}` using `ON CONFLICT DO NOTHING`. SQL uses the strict JSON boolean equivalent of `=== true` for both platform enabled and org opt-in, plus the existing validated allowlist helper. Missing, malformed, string-valued, unallowlisted and opted-out configurations remain OFF. No existing configuration or production allowlist is overwritten.
+- A second existing-table setting, `partner_consent_approved_agreements`, is seeded as `{}` with `ON CONFLICT DO NOTHING`. Its machine-only shape is `{ "<live-company-uuid>": { "version": "<existing-approved-version>", "locale": "<existing-approved-locale>", "sha256": "<approved-full-text-sha256>" } }`. This is the trusted current approval pointer, never an RPC argument or client-provided signing assertion. **No company approval is seeded.** Any future configuration must be separately authorized and match the approved served document; this slice grants no approval or activation.
+- `app.b027_change_override` preserves its signature, canonical Admin authorization, pin/environment checks, service-only grant, revision/term logic and same-transaction application audit. When a control is enabled and the consent gate is ON, create/renew/revoke require an existing `partner_agreement` row for the canonical live company matching all three approval fields. Evidence must retain a non-null actor, attested owner/Admin role, nonempty consenter snapshot and finite nonfuture consent/recorded times. Missing/malformed approval, missing evidence, wrong company/type/version/locale/hash or invalid time denies with `42501` before any domain/event/audit write. Agreement acceptance by one authorized company actor covers other current Admins; the acting Admin need not be the historical signer.
+- Sandbox control mutations use their live company's gate, approval and consent. A sandbox flag cannot opt out of a live-company gate. The writer locks settings before company/member rows. A settings relation SHARE lock also covers missing-row insertion, keeping activation and approval edits serialized through transaction completion. This can briefly block concurrent platform-setting writes, including unrelated keys; it adds no persistent writes.
+- Gate OFF adds no consent records, acknowledgement/audit side effects or UI changes; slice-3 enabled controls retain their legacy writes. If the underlying control is OFF, the RPC still returns null and makes zero domain writes even when consent is required. Existing page output/redirect/OFF tests remain unchanged and pass. No extra application query or new client-facing error text was introduced.
+- Existing direct UPDATE/DELETE/TRUNCATE protections are exercised for the table owner and service/authenticated/anon roles. The pre-existing narrowly permitted parent-company deletion cascade is retained; this is direct-mutation append-only enforcement, not a new permanent retention policy. Privileged owners can disable triggers and service-role consent inserts remain an existing trusted server boundary.
+
+## Slice 4 verification and honest limits
+
+Target: owned localhost PostgreSQL 16 database `127.0.0.1:55432/condola_b027s4`, Node 20.20.2/npm 10.8.2. Created fresh, applied stub and every migration in filename order with `ON_ERROR_STOP=1`, then `npm run db:reset`; repeated fresh bootstrap after the final SQL lock change. Integration fixtures use owned disposable clones and drop them. No hosted database operation occurred.
+
+| Check | Local result |
+|---|---|
+| Final stub + all migrations + `npm run db:reset` | PASS |
+| `npm run typecheck` | PASS after fixing a test helper's literal-inferred user parameter |
+| `npm run lint` | PASS; 0 errors / 15 existing warnings; final changed-test lint clean |
+| `npm run copy:check` | PASS; 6/6 |
+| `npm run test:unit` | PASS on full recheck: 993/993, zero failures/skips; initial 992/993 with one staging-bundle broken-pipe failure retained; isolated recheck 1/1 passed |
+| `bash scripts/check-function-privileges.sh` | PASS on final SQL; zero anon public execute, unchanged seven-function public allowlist |
+| Requested three-file integration command | PASS; 29/29, zero failures/skips; includes ten new consent-gate cases |
+| Flag registry / OFF readback / `git diff --check` | PASS; 31 flag records, existing seven-day warnings; three control/gate settings OFF, empty approval map, zero consent-gate org opt-ins |
+| Independent native source review | No blocking findings; source-only, not Claude sign-off |
+| Full `npm run test:rls`, pinned release gate, browser/staging/production, independent Claude sign-off | NOT RUN in this delegated slice |
+
+New cases cover seed replay without overwrite; strict OFF matrix; legacy control writes without consent side effects; zero-write control OFF; missing/malformed approval and consent; mismatch and cross-company evidence; valid create/renew/revoke; changed approval denying subsequent writes atomically; forged/non-Admin/cross-org/pin/client-RPC denial; immutable evidence; sandbox scoping; and actual blocked writers observing committed approval changes or activation of a previously absent gate. Existing consent and slice-3 suites supply regression coverage. This does not claim full B-027 completion, resolve the slice-2 Accountant gaps, or validate browser acceptance.
+
+```sh
+# Source the authorized local environment without printing it.
+export DATABASE_URL=postgres://condola:condola@127.0.0.1:55432/condola_b027s4
+export CONDOLA_RLS_DISPOSABLE=YES
+npx tsx --test --test-concurrency=1 src/server/b027-partner-consent-gate.integration.test.ts src/server/b027-partner-controls.integration.test.ts src/server/consents.integration.test.ts
+```
+
+Logs: `/private/tmp/b027s4-migrations-final.log`, `b027s4-db-reset-final.log`, `b027s4-typecheck-final.log`, `b027s4-lint.log`, `b027s4-lint-final.log`, `b027s4-copy.log`, `b027s4-unit.log`, `b027s4-staging-bundle-recheck.log`, `b027s4-unit-recheck.log`, `b027s4-privileges-final.log`, `b027s4-integration-final.log`, `b027s4-flags.log`, `b027s4-off-readback.log`. The initial typecheck and unit failures remain in their original logs; assertions were not skipped or relaxed and the unrelated packaging script was not edited.
+
+STOP POINT: B027_SLICE4_LOCAL_VERIFIED; next: Claude reviews the local diff and verification logs and supplies independent QA before committing under the existing ownership session; owner: Claude@ron-mac.
+
+Slice 4 QA (orchestrator, 2026-11-06): Claude re-ran typecheck/lint/copy/`test:unit` 993/fn-privs/integration 29/29/cf:build; Codex QA r1 **PASS** (no findings). No legal/consent wording changed; approval mapping ships empty, so ON with no approved version denies.
