@@ -16,6 +16,7 @@ const program = ts.createProgram(paths, {
   baseUrl: resolve("."), paths: { "@/*": ["src/*"] },
 });
 const checker = program.getTypeChecker();
+// actionResendPortalInvite in server/portal-resend-actions.ts uses the default guarded classification.
 // Staff exports in server/vendor-link-actions.ts use the default guarded classification.
 // vendor-onboarding.ts and vendor-receipt.ts are services, not entrypoints.
 const openActions: Record<string, Record<string, string>> = {

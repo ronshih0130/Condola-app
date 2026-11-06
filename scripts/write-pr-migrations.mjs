@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106090000_b005_resend_results.sql": {
+    addOnly: false,
+    reason: "Private durable resend reservations, immutable terminal results, constrained SECURITY DEFINER gateways and revoked direct access; default-OFF simulation only. No existing invitation state is changed.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",

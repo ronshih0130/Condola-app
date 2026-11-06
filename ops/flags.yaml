@@ -158,9 +158,9 @@ flags:
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
-    global_kill: "Reserved and unprovisioned; future platform_settings.INVITE_RESEND_RESULTS requires strict boolean enabled and an explicit allowed_org_ids array containing the selected organization; missing or malformed is OFF"
-    org_override: "Future organizations.feature_flags.INVITE_RESEND_RESULTS must be strict boolean true; no lower-case alias or second environment switch"
-    activation: "OFF; current partition is pure simulation contract and presentation only, without production adapter, route, sender, DB setting or organization opt-in; durable gateway, staging and independent Claude acceptance remain pending"
+    global_kill: "platform_settings.INVITE_RESEND_RESULTS requires strict boolean enabled and an explicit allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.INVITE_RESEND_RESULTS must be strict boolean true; no lower-case alias or second environment switch"
+    activation: "OFF; durable DB claim/settle gateway and consent-guarded staff action use trusted invitation rows, terminal deadlines and a local capture mock only; no network sender. Staging and independent Claude acceptance remain pending"
 
   owner_receipt_title:
     owner: Ron
