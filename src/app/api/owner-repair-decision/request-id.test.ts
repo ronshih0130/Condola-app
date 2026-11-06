@@ -93,14 +93,15 @@ test("HTTP lost-response retry replays one committed decision", async (t) => {
     }
     if (sql.includes("app.b013_decide_estimate(")) {
       assert.ok(pending.has(this), "gateway must run inside a transaction");
-      assert.deepEqual(values.slice(0, 6), [
-        ORG_ID, sessionId, payload.requestId, versionId, "approved", null,
+      // B-028 package 4: org, live org and environment precede the session.
+      assert.deepEqual(values.slice(0, 8), [
+        ORG_ID, ORG_ID, "live", sessionId, payload.requestId, versionId, "approved", null,
       ]);
       calls.push(values);
       // Model B-013 request-key replay at the database boundary. Different
       // request keys can insert independently; row count is not hardcoded.
-      const key = JSON.stringify([values[0], USERS.owner, values[2]]);
-      const signature = JSON.stringify([values[3], values[4], values[5], values[6]]);
+      const key = JSON.stringify([values[0], USERS.owner, values[4]]);
+      const signature = JSON.stringify([values[5], values[6], values[7], values[8]]);
       const previous = committed.get(key);
       if (previous) {
         assert.equal(signature, previous.signature);

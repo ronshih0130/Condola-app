@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107120000_b028_repair_context_integrity.sql": {
+    addOnly: false,
+    reason: "Drops and recreates the four B-013 session mutators (submit/decide/emergency/appointment) with (p_live, p_env) after p_org; bodies unchanged apart from a private actor helper binding the selected environment/live-org tuple and request principal, and a private photo helper requiring real owner-visible same-org/same-ticket photos. Adds a validated composite appointment->vendor-job (org_id, ticket_id, id) foreign key. Old callers of the dropped signatures fail. Same service_role grants; rollout defaults OFF.",
+  },
   "supabase/migrations/20261107080000_b028_notification_event_producers.sql": {
     addOnly: false,
     reason: "New private notification event and recipient tables with NOT NULL, CHECK and composite org foreign keys, immutable triggers, service-only producer/message gateways, an internal shared delivery row write, an OFF->ON transition ledger with AFTER triggers on platform_settings/organizations (write only on delivery-flag ON transitions), CREATE OR REPLACE of b028_delivery_enqueue (same body, shared row write) and b028_delivery_claim (same body plus a stale producer-attempt sweep), and privilege revokes. Rollout defaults OFF.",

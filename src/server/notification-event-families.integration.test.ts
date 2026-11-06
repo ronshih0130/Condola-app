@@ -271,7 +271,7 @@ const report: Family<{ admin: Session; statement: string; contact: string; reque
   },
 };
 
-const repair: Family<{ admin: Session; owner: Session; ticket: string; currency: string; minorUnit: number; ownerContact: string; adminMember: string }> = {
+const repair: Family<{ admin: Session; owner: Session; ticket: string; photo: string; currency: string; minorUnit: number; ownerContact: string; adminMember: string }> = {
   name: "repair",
   async prepare() {
     await control("repair_approvals", true, [ORG_ID]);
@@ -288,7 +288,12 @@ const repair: Family<{ admin: Session; owner: Session; ticket: string; currency:
     const money = (await db.query<{ currency: string; minor_unit: number }>(`SELECT p.currency::text currency,r.minor_unit FROM properties p JOIN organizations o ON o.id=p.org_id
       JOIN app.b013_regional_defaults r ON r.country_code=o.country_code::text AND r.currency=p.currency WHERE p.id=$1`, [seed.property])).rows[0];
     const adminMember = (await db.query<{ id: string }>(`SELECT id::text FROM org_members WHERE org_id=$1 AND user_id=$2`, [ORG_ID, USERS.admin])).rows[0].id;
-    return { admin: await staff(USERS.admin, "admin"), owner: await staff(seed.owner_user, null, "owner"), ticket, currency: money.currency.trim(),
+    // B-028 package 4: emergency photo refs must name a real owner-visible photo of this ticket.
+    const file = randomUUID(), photo = randomUUID();
+    await db.query(`INSERT INTO files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,uploaded_by)
+      VALUES($1::uuid,$2::uuid,'ticket-photos-private','org/'||$2::uuid::text||'/tickets/'||$3::uuid::text||'/'||$1::uuid::text||'.jpg','fixture.jpg','image/jpeg',1024,$4)`, [file, ORG_ID, ticket, USERS.admin]);
+    await db.query(`INSERT INTO ticket_attachments(id,org_id,ticket_id,file_id) VALUES($1,$2,$3,$4)`, [photo, ORG_ID, ticket, file]);
+    return { admin: await staff(USERS.admin, "admin"), owner: await staff(seed.owner_user, null, "owner"), ticket, photo, currency: money.currency.trim(),
       minorUnit: money.minor_unit, ownerContact: seed.owner_contact, adminMember };
   },
   async run(ctx) {
@@ -297,7 +302,7 @@ const repair: Family<{ admin: Session; owner: Session; ticket: string; currency:
     const first = await estimate(null);
     assert.equal(first.status, "recorded");
     const emergency = await authorizeEmergency(ctx.admin, { requestId: randomUUID(), versionId: String(first.version_id), category: "water",
-      reason: "Active leak", photos: [{ id: "synthetic-photo" }] });
+      reason: "Active leak", photos: [{ id: ctx.photo }] });
     assert.equal(emergency.status, "recorded");
     const second = await estimate(String(first.version_id));
     assert.equal(second.status, "recorded");
