@@ -1,11 +1,11 @@
-> 1103交接：**partial / STOPPED**。最後綜合應用候選 `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`；局部驗證SHA保留如下。下一步由Grok Bot（CEO）依 [完整交接](../../20-build/codex-handoff-1103.md) 安排。未驗證或待PE事項不視為done。
-
 # B-028 current status
 
-Updated 2026-11-02T11:32:32.249854-08:00, code `3c46882327ea85d3cc3be34758fca39226f2b507` onmode-b-repair-override-prep. **PENDING / actualpayerpaymentcenter locallyverified / wholeitemINCOMPLETE.**
+CANDIDATE_SHA: the commit that adds this file on feat/b-028-off-matrix-evidence (a file cannot embed its own SHA; see the PR head). Base: 8a388de (package 2).
 
-[Currentcheckpoint](../B-010/payment-center-checkpoint-3c46882.md): all6actualconfirmed/rejected/reversed sources toeligiblepayerexistingcenter in samecommit, centerindependentofEmail/paymentResults;financialRLS/math/roles restored. Gate618unit/390RLS+solepriorhistoricalSKIP, builds/originalpreflight/Worker1, center2+affectedbank2browser/6screens/readbackactual0. Namedlocalcontrols restoredOFF/0optins; currentstage/prodstate not reprobed.
+Updated 2026-11-06 PT, branch `feat/b-028-off-matrix-evidence` (package 5, stacked on package 2 `8a388de`). **PENDING / local evidence only / whole item INCOMPLETE.**
 
-Exactstaging/catalog/owner/runtime/Claudeacceptance andothernotificationfamilies/Emailpref/claimcapture/providerdelivery remainUNVERIFIED/incomplete. Separate Downloads paymentEmailproposal source-reviewedonly, UNAPPLIED/NOTRUN; currentcenter notDBblocked. B008UNKNOWNunwaived. Developmentfailures retained, source-specificunverifiedcausemappingnotfabricated.
+- Packages 1–3 (delivery claims, six event producers, legacy/new fence) and package 5 (browser OFF matrix, local parent-lock measurement, this manifest) have local PASS evidence: [acceptance.md](acceptance.md).
+- Open: add or verify a caller timeout on B-013 repair mutators (T0/PE; the production `submitEstimate` path sets none and waits unbounded behind a held parent row locally); renewal producer (deferred, needs a durable renewal operation); package 4 inherited B-013 actor/environment/photo/appointment enforcement; T0 rehearsal parent-lock reserve (only a local measurement exists); hosted/staging runs; independent QA, Class B and CEO acceptance.
+- All committed and operational flags remain OFF; no migration in package 5; nothing sent; no hosted DB touched.
 
-STOP POINT: WORKING; next: publish/mirrortheninspectB011actualsource/recovery; ownerRon/Codex3099AC86.
+STOP POINT: package 5 implemented locally, uncommitted; next: Claude reviews, fills CANDIDATE_SHA and commits; owner: Claude (parent session).

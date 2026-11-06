@@ -162,3 +162,52 @@ privilege/config catalog (incl. no NOWAIT/LOCK in the producer), renewal-deferre
 held org `FOR UPDATE` for 2.5 s → no error, action succeeds after release) and a rollback test (failure injected after
 the producer → zero event/recipient/attempt rows and no handover version).
 `notification-event-templates.test.ts` (unit) renders every kind in both locales.
+
+## Package 5 — OFF matrix, local parent-lock measurement, candidate-bound evidence (Claude L2, FALLBACK-SUBAGENT, no migration)
+
+Branch `feat/b-028-off-matrix-evidence`, stacked on package 2 (`8a388de`). No migration, no flag/config change, no hosted run.
+
+**Browser OFF matrix (`e2e/b028-center-local.spec.ts`, new test next to the existing ON test).** Private config
+`e2e/b028-off-private-playwright.config.ts` (Next dev on `localhost:43153`, the origin Next reports, so the strict
+same-origin mark check runs unmodified; Supabase/provider/token env stripped); `scripts/run-e2e.ts` now maps this spec
+to that config instead of the shared b017 config. Synthetic fixture: one rent-due event (staff + tenant recipients) and
+one vendor-job event (owner + vendor-job recipients) on the demo org. One browser context per portal (`/m`, `/t` with
+the fixture lease selected, `/o`, `/v/<job token>`). ON positive control first (entry visible, route 200, one unread
+item per portal). Then 6 controls × 4 portals = 24 cases: absent global row, `enabled:false`, `enabled:"true"`
+(malformed), non-array allowlist (malformed), org missing from allowlist, org `feature_flags.notification_center_v2=false`.
+Each case: home 200 with no `notification-center-entry`; notifications route HTTP 404; a well-formed same-origin mark
+POST (`/api/notification-center/mark`, vendor: `/vendor-mark` with token) answers 404; zero `b028_center_reads` rows;
+every `public`/`app` row across all orgs unchanged (snapshot before/after; only `auth_sessions.last_active_at/expires_at`,
+which every authenticated request refreshes, are excluded). Final ON: each recipient is still unread and the identical
+mark request now returns 200, proving the OFF 404s came from the control. No non-local request, console error (other
+than the expected route 404) or 5xx. If Chromium is not installed the file skips cleanly (`test.skip`; test-level, so the config's local
+webServer still boots first); the same matrix
+runs at server-render level in `src/server/notification-off.integration.test.ts` (unchanged, 24 cases). Repair commands
+are not invoked, so the documented B-013 disabled-command record exception is untouched.
+
+**Local parent-lock measurement (`src/server/b028-parent-lock-measurement.integration.test.ts`, registered in
+`test:rls`).** LOCAL MEASUREMENT ONLY on a disposable clone with synthetic data — not the T0 rehearsal. A holder
+backend runs the first statement and keeps its transaction open 400 ms; a waiter runs the second with a
+**test-imposed** `lock_timeout=3s`; an observer samples `pg_stat_activity`, `pg_blocking_pids` and `pg_locks` every
+20 ms. Both transactions roll back. Pairs (both orders where meaningful): `maintenance_tickets` non-key UPDATE ↔ real
+`app.b013_submit_estimate` (ticket `FOR UPDATE`); `properties` and designated owner `contacts` non-key UPDATE → the same
+gateway (`properties FOR SHARE`, `FOR SHARE OF po, c`); `property_owners` non-key UPDATE ↔ the gateway;
+`repair_vendor_jobs` non-key UPDATE ↔ `b013_repair_appointments` INSERT (job guard `FOR SHARE` + FK); control:
+`maintenance_tickets` non-key UPDATE vs bare `b013_estimate_heads` FK insert (key-share; asserts only that it is never
+observed blocked, elapsed recorded as data); test-imposed bound: ticket held 1.5 s vs gateway with `lock_timeout=250ms`
+→ `55P03`. Blocked cases assert waiting on `Lock/transactionid` with `pg_blocking_pids` = holder only, elapsed ≥
+0.75×hold and < the test lock_timeout. **Production path (review r1 MAJOR):** the real call path
+`repair-approval.ts submitEstimate → run → svc → svcOn` sets no `lock_timeout`/`statement_timeout`, the gateway's
+`proconfig` has only `search_path`, and the local role/database settings carry no timeout override (defaults `0`). The
+`production-call-path-unbounded-wait` scenario calls that TS wrapper behind a held ticket row with no test-set timeout:
+after a 1.5 s test-side deadline it is still waiting on the holder, and is then cancelled by the test via
+`pg_cancel_backend`. So the bounds above exist only in the test; a blocked production repair mutator currently waits
+as long as the parent holder's transaction. JSON (`B028_PARENT_LOCK_JSON=<path>` →
+`e2e-evidence/B-028/parent-lock-measurement.local.json`) records `callerTimeouts` and a blocker count (no raw pids).
+Finding: B-013 parent contention comes from the explicit gateway/guard row locks, not from the FK checks. **Open T0/PE
+item: add or verify a caller timeout on B-013 repair mutators.** Hosted roles, settings, data volume and concurrency are
+not represented; the T0 reserve stays pending.
+
+**Evidence manifest.** `e2e-evidence/B-028/{acceptance,status,verdict}.md` rewritten as one candidate-bound manifest
+(`CANDIDATE_SHA` filled by Claude at commit), linking the six-family template captures with SHA-256, the OFF-matrix JSON
+and the parent-lock JSON. Renewal deferred; T0 reserve pending; hosted/staging not run; independent QA pending.
