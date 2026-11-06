@@ -235,7 +235,7 @@ test("decide replay and payload conflict", async () => {
   assert.deepEqual(await decideEstimate(version, sessions.owner, request), first);
   assert.equal((await decideEstimate(version, sessions.owner, request, "changed")).status, "rejected_conflict");
 });
-test("lost_response_retry_replays", async () => {
+test("SQL decision replay preserves one decision row", async () => {
   const version = await submit(), requestId = randomUUID();
   const decisionCount = async () => (await db.query(
     "SELECT count(*)::int n FROM app.b013_estimate_decisions WHERE org_id=$1 AND version_id=$2",
@@ -245,7 +245,7 @@ test("lost_response_retry_replays", async () => {
   const first = await decideEstimate(version, sessions.owner, requestId);
   assert.equal(first.status, "recorded");
   assert.equal(await decisionCount(), 1);
-  // The caller loses the first response and retries the same request and payload.
+  // Complements the real POST regression in owner-repair-decision/request-id.test.ts.
   const retry = await decideEstimate(version, sessions.owner, requestId);
   assert.deepEqual(retry, first);
   assert.equal(await decisionCount(), 1);
@@ -270,12 +270,17 @@ test("emergency_visibility", async () => {
 });
 test("reader_off_empty", async () => {
   const version = await submit();
-  async function stateCounts() {
-    const counts: Record<string, bigint> = {};
+  type SnapshotRow = Record<string, unknown>;
+  async function stateRows() {
+    const rows: Record<string, SnapshotRow[]> = {};
     for (const table of tables) {
-      counts[table] = BigInt((await db.query("SELECT count(*) n FROM app." + table)).rows[0].n);
+      // Preserve every column, including timestamps and bytea hashes. Ordering
+      // by the canonical JSON text is deterministic for every table's key shape.
+      rows[table] = (await db.query("SELECT coalesce(jsonb_agg(to_jsonb(t)"
+        + " ORDER BY to_jsonb(t)::text COLLATE \"C\"),'[]'::jsonb) AS snapshot"
+        + " FROM app." + table + " t")).rows[0].snapshot;
     }
-    return counts;
+    return rows;
   }
   for (const control of ["platform_enabled", "allowed_org_ids", "org_flag"] as const) {
     await controls("repair_approvals", true);
@@ -286,17 +291,50 @@ test("reader_off_empty", async () => {
       await db.query("UPDATE public.platform_settings SET value=value||$1::jsonb WHERE key='repair_approvals'",
         [JSON.stringify(control === "platform_enabled" ? { enabled: false } : { allowed_org_ids: [] })]);
     }
-    const before = await stateCounts();
+    const before = await stateRows();
     for (const name of readers) {
       assert.deepEqual(await read(name, name === "b013_manager_view" ? sessions.manager : sessions.owner), [], control);
+      assert.deepEqual(await stateRows(), before, control + ": " + name + " must not write");
     }
-    assert.deepEqual(await stateCounts(), before, control + ": readers must not write");
-    assert.equal((await decideEstimate(version)).status, "rejected_disabled", control);
-    // B-013 records exactly one rejected_disabled command even when the feature is OFF.
-    assert.deepEqual(await stateCounts(), {
-      ...before,
-      b013_repair_commands: before.b013_repair_commands + BigInt(1),
-    }, control + ": only the disabled command ledger row may be added");
+    const requestId = randomUUID();
+    assert.deepEqual(await decideEstimate(version, sessions.owner, requestId),
+      { status: "rejected_disabled" }, control);
+    const after = await stateRows();
+    const ledger = "b013_repair_commands";
+    const added = after[ledger].filter(row => row.request_id === requestId);
+    assert.equal(added.length, 1, control + ": exactly one disabled command");
+    const row = added[0];
+    const inputHash = (await db.query(
+      "SELECT encode(sha256(convert_to(jsonb_build_array($1::uuid,'approved'::text,NULL::text)::text,"
+        + " 'UTF8')),'hex') AS hash", [version],
+    )).rows[0].hash;
+    // Contract: b013_decide_estimate's OFF branch calls b013_store_result,
+    // persisting the rejected result and its request/payload binding.
+    assert.equal(typeof row.recorded_at, "string", control);
+    assert.ok(Number.isFinite(Date.parse(row.recorded_at as string)), control);
+    assert.deepEqual(row, {
+      actor_id: USERS.owner,
+      request_id: requestId,
+      org_id: ORG_ID,
+      ticket_id: ticket,
+      operation_kind: "decision",
+      outcome: "rejected_disabled",
+      expected_head_id: null,
+      requested_version_id: version,
+      payload_sha256: "\\x" + hash([version, "approved", null]).toString("hex"),
+      input_sha256: "\\x" + inputHash,
+      result_version_id: null,
+      result_decision_id: null,
+      result_emergency_id: null,
+      result_appointment_id: null,
+      result_event_id: null,
+      result_json: { status: "rejected_disabled" },
+      recorded_at: row.recorded_at,
+    }, control + ": exact disabled command fields");
+    assert.deepEqual({
+      ...after,
+      [ledger]: after[ledger].filter(candidate => candidate.request_id !== requestId),
+    }, before, control + ": all preexisting rows in all seven tables must remain unchanged");
   }
 });
 test("appointment_job_guard", async () => {
