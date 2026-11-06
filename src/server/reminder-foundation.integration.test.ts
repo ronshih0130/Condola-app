@@ -5,8 +5,10 @@ import { Client } from "pg";
 import { disposableDbUrl } from "./test-disposable-db";
 import { cloneTestDatabase } from "./test-database-clone";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
-import { captureManualReminders, type LocalReminder } from "./local-reminder-capture";
+import { captureManualReminders, captureScheduledReminders, type LocalReminder } from "./local-reminder-capture";
 import type { Session } from "./types";
+import { deliverReminders, legacyReminderStore, type ReminderPlan } from "./reminders";
+import type { query } from "./db";
 
 disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>>;
@@ -236,4 +238,142 @@ test("local capture owns each recipient once, records failure and retries withou
     assert.equal(deliveries.length,Number(expected));
     assert.equal(new Set(deliveries.map((item)=>item.to)).size,deliveries.length);
   } finally { await c.end(); }
+});
+
+// Each ordering gets a private clone: no flag or occurrence state escapes it.
+test("legacy_and_new_same_occurrence_single_owner", async t => {
+  // The uncommitted OFF->ON ordering reproduces a known duplicate (hub BLK-MAC-11; fence fix needs a
+  // reviewed migration). It runs only with B028_RUN_KNOWN_DEFECT=1 (npm run test:b028-known-defect) so
+  // the shared gate stays green while the defect remains reproducible.
+  const orderings = ["legacy-first", "new-first", "paused-committed-legacy-OFF-to-ON", "paused-uncommitted-legacy-OFF-to-ON"] as const;
+  for (const ordering of orderings.filter((o) => process.env.B028_RUN_KNOWN_DEFECT === "1" || o !== "paused-uncommitted-legacy-OFF-to-ON")) {
+    await t.test(ordering, async st => {
+      const fixture = await cloneTestDatabase();
+      const legacy = new Client({ connectionString: fixture.url });
+      const newer = new Client({ connectionString: fixture.url });
+      await legacy.connect(); await newer.connect();
+      let resume = () => {};
+      let pending: Promise<number> | undefined;
+      try {
+        assert.notEqual((await legacy.query("SELECT pg_backend_pid() AS pid")).rows[0].pid,
+          (await newer.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+        await newer.query(`UPDATE platform_settings SET value='{"enabled":false,"allowed_org_ids":[]}' WHERE key='rent_reminders_v2'`);
+        await newer.query(`UPDATE organizations SET feature_flags=feature_flags || '{"rent_reminders_v2":true}',
+          settings=settings || '{"email_tenant_rent_overdue":false}' WHERE id=$1`, [ORG_ID]);
+        // Exactly one recipient on both paths makes the combined attempt count
+        // meaningful (several legitimate recipients must not look like duplicates).
+        await newer.query(`UPDATE org_members SET email_prefs=coalesce(email_prefs,'{}') ||
+          jsonb_build_object('rent_overdue',user_id=$2::uuid) WHERE org_id=$1`, [ORG_ID, USERS.admin]);
+        await newer.query(`INSERT INTO reminder_rules(org_id,event_type,offsets_days,channels,is_enabled)
+          VALUES($1,'rent_overdue',ARRAY[1]::smallint[],ARRAY['email']::channel_type[],true)
+          ON CONFLICT(org_id,event_type) DO UPDATE SET offsets_days=EXCLUDED.offsets_days,channels=EXCLUDED.channels,is_enabled=true`, [ORG_ID]);
+        const invoice = (await newer.query<{id:string; instant:string; email:string}>(`SELECT i.id::text,
+          (((i.due_date+1)::timestamp+interval '12 hours') AT TIME ZONE o.timezone)::text AS instant,u.email::text
+          FROM invoices i JOIN leases l ON l.id=i.lease_id JOIN organizations o ON o.id=i.org_id
+          CROSS JOIN auth.users u WHERE i.org_id=$1 AND u.id=$2 AND l.status='active' AND l.terminated_on IS NULL
+          AND i.status IN ('open','partially_paid') AND i.balance_minor>0
+          AND EXISTS(SELECT 1 FROM invoice_lines il WHERE il.invoice_id=i.id AND il.charge_type='rent' AND il.amount_minor>0)
+          AND NOT EXISTS(SELECT 1 FROM email_log e WHERE e.org_id=i.org_id AND e.target_id=i.id)
+          AND NOT EXISTS(SELECT 1 FROM app.b010_source_events e WHERE e.invoice_id=i.id AND e.kind='rent_overdue')
+          ORDER BY i.id LIMIT 1`, [ORG_ID, USERS.admin])).rows[0];
+        assert.ok(invoice);
+        const plan: ReminderPlan = {orgId:ORG_ID,kind:"rent_overdue_admin",targetId:invoice.id,threshold:1,
+          messages:[{to:invoice.email,subject:"Synthetic overlap",text:"Synthetic overlap",html:"<p>Synthetic overlap</p>"}]};
+        let sends = 0;
+        const captures: LocalReminder[] = [];
+        const store = legacyReminderStore(((sql, params) => legacy.query(sql, params)) as typeof query, async message => {
+          assert.equal(message.to, invoice.email);
+          sends++;
+          return {ok:true,messageId:"synthetic-overlap-accepted",provider:"cloudflare"};
+        });
+        const enable = () => newer.query(`UPDATE platform_settings SET value=jsonb_build_object(
+          'enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='rent_reminders_v2'`, [ORG_ID]);
+        let event: string | null = null;
+        const runNew = async () => {
+          event = (await newer.query<{id:string|null}>(`SELECT app.b010_schedule_rent($1,$2,$3)::text AS id`,
+            [ORG_ID,invoice.id,invoice.instant])).rows[0].id;
+          if (event) {
+            assert.equal((await newer.query(`SELECT 1 FROM app.b028_recipient_claims WHERE event_id=$1 AND channel='email'`,[event])).rowCount,1);
+            await captureScheduledReminders(ORG_ID,event,new Date(invoice.instant),message => captures.push(message));
+          }
+        };
+        if (ordering === "legacy-first") {
+          assert.equal(await deliverReminders([plan],store),1);
+          await enable(); await runNew();
+          assert.equal(event,null);
+        } else if (ordering === "new-first") {
+          await enable(); await runNew();
+          assert.ok(event); assert.equal(captures.length,1);
+          assert.equal(await deliverReminders([plan],store),0);
+        } else {
+          const uncommitted = ordering === "paused-uncommitted-legacy-OFF-to-ON";
+          if (uncommitted) await legacy.query("BEGIN");
+          let claimed!: () => void;
+          const claimReached = new Promise<void>(resolve => { claimed = resolve; });
+          const releaseClaim = new Promise<void>(resolve => { resume = resolve; });
+          pending = deliverReminders([plan], {...store, claim: async candidate => {
+            const id = await store.claim(candidate);
+            assert.ok(id); claimed(); await releaseClaim; return id;
+          }});
+          // Race failure also rejects the barrier instead of leaving a hung test.
+          await Promise.race([claimReached,pending.then(() => assert.fail("claim did not pause"))]);
+          assert.equal(sends,0);
+          assert.equal((await newer.query(`SELECT 1 FROM email_log WHERE org_id=$1 AND target_id=$2`,[ORG_ID,invoice.id])).rowCount,uncommitted ? 0 : 1);
+          await enable(); await runNew();
+          if (uncommitted) await legacy.query("COMMIT");
+          resume();
+          assert.equal(await pending,1);
+        }
+        const completion = async () => ({
+          legacy:(await newer.query(`SELECT * FROM email_log WHERE org_id=$1 AND target_id=$2 ORDER BY id`,[ORG_ID,invoice.id])).rows,
+          capture:(await newer.query(`SELECT * FROM app.b028_recipient_claims WHERE event_id=$1 ORDER BY id`,[event])).rows,
+        });
+        const evidence = await completion();
+        if (sends) {
+          assert.equal(evidence.legacy.length,1);
+          assert.equal(evidence.legacy[0].message_id,"synthetic-overlap-accepted");
+          assert.ok(evidence.legacy[0].sent_at);
+        }
+        if (captures.length) {
+          assert.equal(captures[0].to,invoice.email);
+          assert.equal(evidence.capture[0].state,"captured");
+          assert.match(evidence.capture[0].capture_digest,/^[a-f0-9]{64}$/);
+          assert.equal(evidence.capture[0].attempt,1);
+          assert.ok(evidence.capture[0].completed_at);
+          if (!sends) assert.equal(await captureScheduledReminders(ORG_ID,event!,new Date(invoice.instant),m => captures.push(m)),0);
+          // After a late legacy commit the gateway rejects even a completed
+          // occurrence. Check the exact DB denial without hiding the duplicate
+          // attempt assertion below behind a mapped application error.
+          else await assert.rejects(newer.query(`SELECT * FROM app.b028_claim_scheduled($1,$2,'{}'::uuid[],$3)`,
+            [ORG_ID,event,invoice.instant]),(error:unknown) => (error as {code?:string}).code === "42501");
+        }
+        assert.equal(await deliverReminders([plan],store),0);
+        assert.deepEqual(await completion(),evidence,"replay preserves full completion rows");
+        // Both unrelated-org overdue and this org's lease-expiry path still
+        // complete and deduplicate while only ORG_ID's rent rollout is ON.
+        let unrelatedSends = 0;
+        const unrelated = legacyReminderStore(((sql, params) => legacy.query(sql, params)) as typeof query, async () => {
+          unrelatedSends++; return {ok:true,messageId:"synthetic-unrelated",provider:"cloudflare"};
+        });
+        const controls: ReminderPlan[] = [
+          {...plan,orgId:ORG2_ID,targetId:randomUUID()},
+          {...plan,kind:"lease_expiry_admin",targetId:randomUUID(),threshold:7},
+        ];
+        assert.equal(await deliverReminders(controls,unrelated),2);
+        const controlRows = (await newer.query(`SELECT * FROM email_log WHERE target_id=ANY($1::uuid[]) ORDER BY id`,[controls.map(p=>p.targetId)])).rows;
+        assert.equal(controlRows.length,2);
+        assert.ok(controlRows.every(row=>row.message_id==="synthetic-unrelated" && row.sent_at));
+        assert.equal(await deliverReminders(controls,unrelated),0);
+        assert.equal(unrelatedSends,2);
+        assert.deepEqual((await newer.query(`SELECT * FROM email_log WHERE target_id=ANY($1::uuid[]) ORDER BY id`,[controls.map(p=>p.targetId)])).rows,controlRows);
+        st.diagnostic(JSON.stringify({ordering,legacySends:sends,newCaptures:captures.length,completionPreserved:true,unrelatedSends}));
+        assert.ok(sends + captures.length <= 1,`${ordering}: legacy sends ${sends} + new captures ${captures.length} exceeds one`);
+        assert.equal(sends + captures.length,1,"a no-op on both paths cannot pass ownership coverage");
+      } finally {
+        await legacy.query("ROLLBACK"); resume();
+        await pending?.catch(() => {});
+        await legacy.end(); await newer.end(); await fixture.cleanup();
+      }
+    });
+  }
 });
