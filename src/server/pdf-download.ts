@@ -116,6 +116,8 @@ export async function statementPdfForSession(session: Session, id: string) {
       id: statement.id,
       orgId: statement.orgId,
       ownerName: statement.ownerName,
+      companyProfile: statement.companyProfile?.data,
+      companyProfileEnabled: statement.companyProfile != null,
       periodStart: statement.periodStart,
       periodEnd: statement.periodEnd,
       currency: statement.currency.trim(),

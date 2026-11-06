@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107030000_b016_company_profiles.sql": {
+    addOnly: false,
+    reason: "Adds private immutable company versions, email pending state, constrained report references, RLS and service-only gateways; no backfill or flag activation.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",

@@ -1793,6 +1793,7 @@ export async function statementPdfSource(session: Session, id: string) {
       id: string;
       orgId: string;
       ownerName: string;
+      companyProfile: { data: import("./company-profiles").CompanyData } | null;
       periodStart: string;
       periodEnd: string;
       currency: string;
@@ -1810,7 +1811,18 @@ export async function statementPdfSource(session: Session, id: string) {
               s.opening_balance_minor::text AS opening, s.rent_received_minor::text AS rent,
               s.other_income_minor::text AS other, s.management_fee_minor::text AS fee,
               s.expenses_minor::text AS expenses, s.payouts_minor::text AS payouts,
-              s.closing_balance_minor::text AS closing
+              s.closing_balance_minor::text AS closing,
+              CASE WHEN EXISTS (
+                SELECT 1 FROM organizations o JOIN platform_settings f ON f.key='company_profile_edit'
+                 WHERE o.id=s.org_id AND o.environment='live' AND o.live_org_id IS NULL
+                   AND o.feature_flags->'company_profile_edit'='true'::jsonb
+                   AND jsonb_typeof(f.value)='object' AND f.value->'enabled'='true'::jsonb
+                   AND CASE WHEN jsonb_typeof(f.value->'allowed_org_ids')='array' THEN
+                     NOT EXISTS (SELECT 1 FROM jsonb_array_elements(f.value->'allowed_org_ids') e(value)
+                       WHERE jsonb_typeof(value)<>'string' OR value #>> '{}' !~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
+                     AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)
+                   ELSE false END
+              ) THEN s.company_profile_snapshot END AS "companyProfile"
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.id = $1`,

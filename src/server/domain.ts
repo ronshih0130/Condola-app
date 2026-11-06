@@ -24,6 +24,7 @@ import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { calculateStatement } from "./statement-calculation";
 import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "./move-in-invoice";
 import { billingPreviewsEnabled } from "./billing-preview-rules";
+import { companyProfileOn } from "./company-profile-rules";
 import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
 import { decideConfirmation } from "./b010-proxy-confirm-rules";
 import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
@@ -2375,7 +2376,11 @@ export async function generateStatement(session: Session, input: { ownerContactI
   if (!/^\d{4}-\d{2}$/.test(input.month)) throw new FlowError("errors.required");
   const bounds = monthBounds(input.month);
   const statementId = await tx(session.userId, async (client) => {
-    const previewEnabled = await billingPreviewsEnabled(client, session.orgId);
+    // Reuse the legacy org read: OFF generation/replay adds no SQL statements.
+    let companyProfileEnabled = false;
+    const previewEnabled = await billingPreviewsEnabled(client, session.orgId, (global, flags) => {
+      companyProfileEnabled = companyProfileOn(global, flags, session.orgId);
+    });
     if (previewEnabled && !input.previewFingerprint) throw new FlowError("errors.statementPreviewChanged");
     const properties = await many<{ property_id: string; currency: string; name: string }>(
       client,
@@ -2416,6 +2421,12 @@ export async function generateStatement(session: Session, input: { ownerContactI
       percent_bp: calculation.rule.percent_bp, fixed_amount_minor: calculation.rule.fixed_amount_minor,
       minimum_minor: calculation.rule.minimum_minor, name: calculation.rule.name,
     } : null;
+    if (companyProfileEnabled) {
+      // Only issuance needs the session. The trigger independently fences the
+      // global allowlist, live org, session and membership before snapshotting.
+      await client.query("SELECT set_config('app.b016_session_id',$1,true)",
+        [/^[0-9a-f-]{36}$/i.test(session.sessionId) ? session.sessionId : '']);
+    }
     const statement = await one<{ id: string }>(
       client,
       `INSERT INTO owner_statements (

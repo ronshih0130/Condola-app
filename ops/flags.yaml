@@ -222,8 +222,8 @@ flags:
     default: false
     ring: internal
     global_kill: "platform_settings.company_profile_edit enabled must be boolean true and allowed_org_ids must include this organization"
-    org_override: "organizations.feature_flags.company_profile_edit must be boolean true; current live staff self profile only"
-    activation: "Reconciles B016 COMPANY_PROFILE_EDIT proposal. Local synthetic name-edit checks only; no hosted flag activation, Email replacement or fee/company edit authority"
+    org_override: "organizations.feature_flags.company_profile_edit must be boolean true; staff self profile plus Admin-only management-firm company profile saves (versioned, report snapshots) and durable email-change pending state"
+    activation: "Reconciles B016 COMPANY_PROFILE_EDIT proposal. Local synthetic checks only; no hosted flag activation, no real email provider; fee policy (A3/Q1) and MF-03 remain out of scope pending Ron/CEO decisions"
 
   tenant_payment_history:
     owner: Ron

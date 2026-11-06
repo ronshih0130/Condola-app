@@ -228,3 +228,27 @@ test("payouts stay in the same net on the chip and the formula", () => {
   const englishRows = english.blocks.flatMap((block) => (block.kind === "rows" ? block.rows : []));
   assert.equal(englishRows.find((row) => row.label === "Payouts")?.value, "NT$5,000");
 });
+
+test('populated company snapshots require render-time opt-in and OFF restores legacy PDF bytes', async t => {
+  const { readFileSync } = await import('node:fs');
+  const { renderPdf } = await import('@/lib/pdf-render');
+  const source: StatementPdfSource = {
+    id: '10000000-0000-4000-8000-000000000088', orgId: '10000000-0000-4000-8000-000000000001',
+    ownerName: 'Synthetic owner', periodStart: '2199-01-01', periodEnd: '2199-01-31', currency: 'TWD',
+    opening: 0, rent: 10000, other: 0, fee: 1000, expenses: 0, payouts: 0, closing: 9000,
+    lines: [], addresses: [], audience: 'staff',
+  };
+  const companyProfile = { legal_name: 'Synthetic company', tax_id: 'Private identifier', address: { city: 'City', district: 'District', street: 'Private street' } };
+  const snapshot = structuredClone(companyProfile);
+  const font = readFileSync(new URL('../../public/fonts/DroidSansFallback-subset.ttf', import.meta.url));
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  const build = (input: StatementPdfSource) => buildStatementPdf(input, 'en', 'gregorian', makeT('en'));
+  const legacy = build(source), bytes = await renderPdf(legacy, font);
+  assert.notDeepEqual(await renderPdf(build({ ...source, companyProfile, companyProfileEnabled: true }), font), bytes);
+  for (const companyProfileEnabled of [undefined, false, 'true', null] as unknown as (boolean | undefined)[]) {
+    const off = build({ ...source, companyProfile, companyProfileEnabled });
+    assert.deepEqual(off, legacy);
+    assert.deepEqual(await renderPdf(off, font), bytes);
+    assert.deepEqual(companyProfile, snapshot);
+  }
+});

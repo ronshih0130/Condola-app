@@ -1,0 +1,36 @@
+{
+  "base": "09f4b59cad85bcf439c4aa1d74aa463676b3c456",
+  "generation": [
+    "BEGIN",
+    "SELECT set_config('request.jwt.claim.sub', $1, true)",
+    "SELECT set_config('request.jwt.claim.role', 'authenticated', true)",
+    "SELECT set_config('app.active_org_id', $1, true)",
+    "SELECT set_config('app.env', $1, true)",
+    "SET LOCAL ROLE authenticated",
+    "SELECT (SELECT value FROM platform_settings WHERE key='billing_previews') AS value, feature_flags FROM organizations WHERE id=$1",
+    "SELECT po.property_id::text, p.currency, p.name\n         FROM property_owners po JOIN properties p ON p.id = po.property_id\n        WHERE po.org_id = $1 AND po.owner_contact_id = $2\n          AND (po.effective_to IS NULL OR po.effective_to >= $3::date)",
+    "SELECT id FROM owner_statements\n        WHERE owner_contact_id = $1 AND currency = $2 AND period_start = $3 AND status <> 'void'",
+    "SELECT po.property_id::text,po.id::text AS ownership_id,po.effective_from::text,po.effective_to::text,p.currency,p.name,po.xmin::text AS owner_version,p.xmin::text AS property_version FROM property_owners po JOIN properties p ON p.id=po.property_id WHERE po.org_id=$1 AND po.owner_contact_id=$2 AND (po.effective_to IS NULL OR po.effective_to >= $3::date) ORDER BY po.property_id,po.effective_from,po.id",
+    "SELECT p.id::text,l.property_id::text,pr.name AS property_name,p.xmin::text AS version,p.status::text,p.paid_on::text,p.amount_minor::text FROM payments p JOIN leases l ON l.id=p.lease_id JOIN properties pr ON pr.id=l.property_id WHERE p.org_id=$1 AND p.status='confirmed' AND p.currency=$2 AND p.paid_on BETWEEN $3 AND $4 AND l.property_id=ANY($5::uuid[]) ORDER BY p.id",
+    "SELECT id::text,xmin::text AS version,amount_minor::text,description,category,property_id::text,status::text,incurred_on::text,ticket_id::text FROM expenses WHERE org_id=$1 AND property_id=ANY($2::uuid[]) AND status IN ('approved','posted') AND bill_to = 'owner' AND incurred_on BETWEEN $3 AND $4 AND currency=$5 ORDER BY id",
+    "SELECT fr.id::text,ma.id::text AS agreement_id,ma.xmin::text AS agreement_version,fr.xmin::text AS version,fr.kind::text,fr.hybrid_mode::text,fr.percent_bp,fr.fixed_amount_minor::text,fr.minimum_minor::text,fr.name FROM management_agreements ma JOIN fee_rules fr ON fr.id=ma.fee_rule_id WHERE ma.org_id=$1 AND ma.owner_contact_id=$2 AND (ma.property_id IS NULL OR ma.property_id=ANY($3::uuid[])) AND ma.effective_from <= $4 AND (ma.effective_to IS NULL OR ma.effective_to > $4) ORDER BY ma.property_id NULLS LAST LIMIT 1",
+    "SELECT id::text,xmin::text AS version,closing_balance_minor::text FROM owner_statements WHERE owner_contact_id=$1 AND currency=$2 AND status='issued' AND period_end < $3::date ORDER BY period_end DESC LIMIT 1",
+    "INSERT INTO owner_statements (\n         org_id, owner_contact_id, currency, period_start, period_end, status,\n         opening_balance_minor, rent_received_minor, other_income_minor, management_fee_minor,\n         expenses_minor, payouts_minor, closing_balance_minor, fee_rule_snapshot, locale,\n         einvoice_status, issued_at, issued_by\n       ) VALUES (\n         $1,$2,$3,$4,$5,'issued',$6,$7,$8,$9,$10,0,$11,$12::jsonb,$13,'not_applicable',now(),$14\n       ) RETURNING id",
+    "UPDATE invoices i\n        SET owner_statement_id = picked.statement_id\n       FROM (\n         SELECT DISTINCT ON (inv.id) inv.id AS invoice_id, s.id AS statement_id\n           FROM invoices inv\n           JOIN payment_allocations a ON a.invoice_id = inv.id\n           JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'\n           JOIN leases l ON l.id = inv.lease_id\n           JOIN property_owners po ON po.property_id = l.property_id\n           JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id\n            AND s.org_id = inv.org_id\n            AND s.status = 'issued'\n            AND pay.paid_on >= s.period_start\n            AND pay.paid_on <= s.period_end\n          WHERE inv.org_id = $1\n            AND inv.property_id = ANY($2::uuid[])\n          ORDER BY inv.id, s.period_end DESC, s.id DESC\n       ) picked\n      WHERE i.id = picked.invoice_id\n        AND i.owner_statement_id IS DISTINCT FROM picked.statement_id",
+    "COMMIT"
+  ],
+  "replay": [
+    "BEGIN",
+    "SELECT set_config('request.jwt.claim.sub', $1, true)",
+    "SELECT set_config('request.jwt.claim.role', 'authenticated', true)",
+    "SELECT set_config('app.active_org_id', $1, true)",
+    "SELECT set_config('app.env', $1, true)",
+    "SET LOCAL ROLE authenticated",
+    "SELECT (SELECT value FROM platform_settings WHERE key='billing_previews') AS value, feature_flags FROM organizations WHERE id=$1",
+    "SELECT po.property_id::text, p.currency, p.name\n         FROM property_owners po JOIN properties p ON p.id = po.property_id\n        WHERE po.org_id = $1 AND po.owner_contact_id = $2\n          AND (po.effective_to IS NULL OR po.effective_to >= $3::date)",
+    "SELECT id FROM owner_statements\n        WHERE owner_contact_id = $1 AND currency = $2 AND period_start = $3 AND status <> 'void'",
+    "UPDATE invoices i\n        SET owner_statement_id = picked.statement_id\n       FROM (\n         SELECT DISTINCT ON (inv.id) inv.id AS invoice_id, s.id AS statement_id\n           FROM invoices inv\n           JOIN payment_allocations a ON a.invoice_id = inv.id\n           JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'\n           JOIN leases l ON l.id = inv.lease_id\n           JOIN property_owners po ON po.property_id = l.property_id\n           JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id\n            AND s.org_id = inv.org_id\n            AND s.status = 'issued'\n            AND pay.paid_on >= s.period_start\n            AND pay.paid_on <= s.period_end\n          WHERE inv.org_id = $1\n            AND inv.property_id = ANY($2::uuid[])\n          ORDER BY inv.id, s.period_end DESC, s.id DESC\n       ) picked\n      WHERE i.id = picked.invoice_id\n        AND i.owner_statement_id IS DISTINCT FROM picked.statement_id",
+    "SELECT rent_received_minor::text AS rent, other_income_minor::text AS other FROM owner_statements WHERE id = $1",
+    "COMMIT"
+  ]
+}
