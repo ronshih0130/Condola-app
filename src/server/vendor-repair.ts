@@ -848,19 +848,24 @@ export async function submitVendorReport(token: string, input: { done: boolean; 
   if (!opened) throw new FlowError("errors.notFound");
   const enhanced = await vendorLinkEnabledForOrg(opened.org_id);
   if (opened.reported_at && !enhanced) return;
+  await svc(null, client => submitVendorReportOn(client, opened, hashVendorToken(token), input, enhanced));
+}
+
+/** Transaction-aware writer; callers must first authorize the original job capability. */
+export async function submitVendorReportOn(client: Client, opened: OpenJob, tokenHash: string,
+ input: { done: boolean; cost: string }, enhanced = false) {
   if (!input.done) throw new FlowError("errors.required");
   const cost = vendorCostMinor(input.cost);
   const today = taipeiToday();
-  await svc(null, async (client) => {
     const lockedTicket = enhanced || await vendorLinkEnabledOn(client, opened.org_id)
-      ? await lockedVendorLink(client, opened, hashVendorToken(token))
+      ? await lockedVendorLink(client, opened, tokenHash)
       : null;
     const job = await maybe<OpenJob>(
       client,
       `SELECT job_id::text, org_id::text, ticket_id::text, vendor_name, contact_window,
               expires_at::text, reported_at::text, reported_cost_minor::text
          FROM app.open_vendor_job($1)`,
-      [hashVendorToken(token)],
+      [tokenHash],
     );
     if (!job || job.job_id !== opened.job_id) throw new FlowError("errors.notFound");
     if (job.reported_at) return;
@@ -901,7 +906,6 @@ export async function submitVendorReport(token: string, input: { done: boolean; 
       { ticketId: ticket.id, jobId: job.job_id, costMinor: cost },
       client,
     );
-  });
 }
 
 export async function confirmVendorCost(session: Session, ticketId: string, jobId: string) {

@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107085000_b035_line_vendor_claim.sql": {
+    addOnly: false,
+    reason: "Additive private job-flow extension with constraints, RLS, pinned definer guard and service-only grants; no existing identity/account data rewrite or activation.",
+  },
   "supabase/migrations/20261107050000_b033_line_login_link.sql": {
     addOnly: false,
     reason: "Additive one-time flows, session provenance, private limits, portal gates and service-only LIFF/link gateways. Trusted links no longer require raw provider ids; configuration and privilege changes require Class B review.",

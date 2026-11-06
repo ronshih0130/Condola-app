@@ -1,3 +1,4 @@
+import { LINE_JOB_COOKIE } from "./vendor-scope";
 import { NextResponse } from "next/server";
 import { sessionCookie, SESSION_COOKIE } from "../auth";
 import { readLineConfig } from "./config";
@@ -35,9 +36,9 @@ export async function lineResponse(work: () => Promise<Response>) {
  try { return await work(); }
  catch (error) { return error instanceof LineError ? response({ error: error.code }, error.status) : response({ error: "line_unavailable" }, 503); }
 }
-function envGate() { if (!readLineConfig().platformEnabled) rejectLine(404, "not_found"); }
+export function envGate() { if (!readLineConfig().platformEnabled) rejectLine(404, "not_found"); }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-async function body(request: Request) {
+export async function body(request: Request) {
  if (!request.headers.get("content-type")?.startsWith("application/json")) rejectLine(400, "invalid_request");
  const raw = await request.text();
  if (raw.length > 16000) rejectLine(400, "invalid_request");
@@ -50,7 +51,7 @@ async function body(request: Request) {
  }
  return value as Record<string, string>;
 }
-function csrfCheck(request: Request, proof: BrowserProof, csrf: string | undefined) {
+export function csrfCheck(request: Request, proof: BrowserProof, csrf: string | undefined) {
  if (request.headers.get("origin") !== new URL(request.url).origin || !csrf || csrf !== proof.csrf
   || (request.headers.get("sec-fetch-site") && !["same-origin", "none"].includes(request.headers.get("sec-fetch-site")!))) rejectLine(403, "csrf");
 }
@@ -90,6 +91,7 @@ export function createLineHandlers(deps: { resolveSecret?: SecretResolver; excha
     error: url.searchParams.get("error") ?? undefined, origin: url.origin }, proof, resolve, exchange, meta(request), auth(request));
    const res = new NextResponse(null, { status: 303, headers: { ...privateHeaders, Location: new URL(result.next, url.origin).toString() } });
    if ("token" in result && result.token) { const co = sessionCookie(result.token, false); res.cookies.set(co.name, co.value, { ...co.options, secure: true }); }
+   if ("jobClaim" in result) lineCookie(res, LINE_JOB_COOKIE, result.jobClaim);
    res.cookies.set(LINE_PKCE_COOKIE, "", { path: "/", maxAge: 0 }); return res;
   }),
   session: (request: Request) => lineResponse(async () => {
@@ -97,6 +99,7 @@ export function createLineHandlers(deps: { resolveSecret?: SecretResolver; excha
    await lineTransaction(c => flowOn(c, b.flow ?? "", proof)); // portal OFF precedes CSRF and all writes
    csrfCheck(request, proof, b.csrf);
    const result = await exchangeLineSession(b.flow ?? "", proof, b.idToken ?? "", resolve, meta(request), auth(request, b));
+   if ("jobClaim" in result) { const res = response({ next: result.next }); lineCookie(res, LINE_JOB_COOKIE, result.jobClaim); return res; }
    return "token" in result ? response({ next: result.next }, 200, result.token) : response(result);
   }),
   bind: (request: Request) => link(request, "bind"),

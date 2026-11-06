@@ -1,3 +1,5 @@
+import { finishVendorFlowOn, vendorScopeOn } from "./vendor-scope";
+import { hashVendorToken, vendorTokenAcceptable } from "../vendor-repair-rules";
 import { randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "../db";
@@ -101,10 +103,21 @@ export async function admit(c: Client, scope: string, limit = 30) {
  if (!r.rows[0]) rejectLine(429, "rate_limited");
 }
 export async function createLineFlow(input: { purpose: LineFlow["kind"]; inviteToken?: string; orgId?: string; contactId?: string;
- persona?: LinePersona; returnPath?: string; sessionToken?: string }, proof: BrowserProof) {
+ persona?: LinePersona; returnPath?: string; sessionToken?: string; jobToken?: string }, proof: BrowserProof) {
  return lineTransaction(async c => {
   if (!readLineConfig().platformEnabled) rejectLine(404, "not_found");
   let org = input.orgId, contact = input.contactId ?? null, persona = input.persona, invitation: Invite | undefined;
+  let job: Awaited<ReturnType<typeof vendorScopeOn>> | undefined;
+  if (input.jobToken !== undefined) {
+   if (input.purpose !== "login" || input.persona !== "vendor" || !vendorTokenAcceptable(input.jobToken)
+    || input.contactId || input.inviteToken || input.returnPath) rejectLine(404, "not_found");
+   // Resolve only the org before gating; invalid/foreign hints never reveal channel health.
+   const pinned = (await c.query("SELECT org_id FROM repair_vendor_jobs WHERE token_hash=$1", [hashVendorToken(input.jobToken)])).rows[0];
+   if (!pinned || org && org !== pinned.org_id) rejectLine(404, "not_found");
+   org = pinned.org_id;
+   await channelOn(c, org!, "vendor");
+   job = await vendorScopeOn(c, hashVendorToken(input.jobToken), org);
+  }
   if (input.purpose === "invite") {
    const hash = hashInviteToken(input.inviteToken ?? "");
    invitation = (await c.query<Invite>("SELECT * FROM invitations WHERE code_hash=$1", [hash])).rows[0];
@@ -127,11 +140,13 @@ export async function createLineFlow(input: { purpose: LineFlow["kind"]; inviteT
   await admit(c, `create-org:${org}`, 100);
   await admit(c, `create:${org}:${proof.browser}`, 20);
   const flow = randomProof();
-  const result = await c.query<{ expires_at: Date }>(`INSERT INTO app.b033_line_flows(flow_hash,kind,line_channel_id,persona,
+  const result = await c.query<{ id: string; expires_at: Date }>(`INSERT INTO app.b033_line_flows(flow_hash,kind,line_channel_id,persona,
    state_hash,nonce_hash,expires_at,org_id,contact_id,invitation_id,invitation_hash,user_id,browser_hash,csrf_hash,return_path)
-   VALUES($1,$2,$3,$4,$5,$6,now()+interval '5 minutes',$7,$8,$9,$10,$11,$12,$13,$14) RETURNING expires_at`,
+   VALUES($1,$2,$3,$4,$5,$6,now()+interval '5 minutes',$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id,expires_at`,
    [lineHash(flow), input.purpose, ch.id, persona, lineHash(randomProof()), lineHash(randomProof()), org, contact,
     invitation?.id ?? null, invitation?.code_hash ?? null, user, lineHash(proof.browser), lineHash(proof.csrf), next]);
+  if (job) await c.query("INSERT INTO app.b035_vendor_flows(flow_id,job_id,token_hash) VALUES($1,$2,$3)",
+   [result.rows[0].id, job.job_id, hashVendorToken(input.jobToken!)]);
   return { flow, expiresAt: result.rows[0].expires_at.toISOString(), persona, liffId: ch.liff_id };
  });
 }
@@ -218,6 +233,8 @@ async function lineSessionOn(c: Client, f: LineFlow, userId: string, identityId:
  return token;
 }
 export async function sessionFromFlowOn(c: Client, f: LineFlow, meta: RequestMeta, auth: AuthInput) {
+ const job = await finishVendorFlowOn(c, f);
+ if (job) return job;
  const ident = (await c.query(`SELECT * FROM app.b033_line_identities WHERE line_channel_id=$1 AND provider_user_hash=$2 FOR UPDATE`,
   [f.line_channel_id, f.verified_hash])).rows[0];
  const link = ident && (await c.query(`SELECT l.id FROM line_account_links l WHERE l.login_identity_id=$1
