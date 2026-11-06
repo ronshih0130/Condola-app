@@ -1,0 +1,55 @@
+TAP version 13
+# Subtest: lifecycle items: current authority only; multi-property, co-owner and cross-org isolation; owner-safe projection
+ok 1 - lifecycle items: current authority only; multi-property, co-owner and cross-org isolation; owner-safe projection
+  ---
+  duration_ms: 338.041084
+  ...
+# Subtest: owner reply is a separate record: tenant and company B-012 responses are never overwritten, merged or presented as the owner's
+ok 2 - owner reply is a separate record: tenant and company B-012 responses are never overwritten, merged or presented as the owner's
+  ---
+  duration_ms: 62.348583
+  ...
+# Subtest: lifecycle reply is idempotent by request id; conflicting reuse and stale notice versions write nothing
+ok 3 - lifecycle reply is idempotent by request id; conflicting reuse and stale notice versions write nothing
+  ---
+  duration_ms: 73.658333
+  ...
+# Subtest: authority ended or session revoked at submit ⇒ denied with zero writes
+ok 4 - authority ended or session revoked at submit ⇒ denied with zero writes
+  ---
+  duration_ms: 55.817792
+  ...
+# Subtest: foreign, cross-org, draft and staff ids are denied with zero writes
+ok 5 - foreign, cross-org, draft and staff ids are denied with zero writes
+  ---
+  duration_ms: 118.941083
+  ...
+# Subtest: messaging: one thread per property/owner on the existing model, thread isolation, company replies via existing staff path, no tenant data
+ok 6 - messaging: one thread per property/owner on the existing model, thread isolation, company replies via existing staff path, no tenant data
+  ---
+  duration_ms: 232.885417
+  ...
+# Subtest: staff surfaces: existing admin/manager roles see owner threads and owner replies; other roles, orgs, owners and tenants are denied
+ok 7 - staff surfaces: existing admin/manager roles see owner threads and owner replies; other roles, orgs, owners and tenants are denied
+  ---
+  duration_ms: 60.717167
+  ...
+# Subtest: replay of a deleted message is 'gone'; edited messages are flagged; 30 per rolling 24h volume cap
+ok 8 - replay of a deleted message is 'gone'; edited messages are flagged; 30 per rolling 24h volume cap
+  ---
+  duration_ms: 64.487875
+  ...
+# Subtest: OFF matrix: absent/false/malformed global, org not allowed, org flag false ⇒ null/unavailable, no gateway call, zero writes
+ok 9 - OFF matrix: absent/false/malformed global, org not allowed, org flag false ⇒ null/unavailable, no gateway call, zero writes
+  ---
+  duration_ms: 338.925542
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1762.299459
