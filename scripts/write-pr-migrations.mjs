@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106235000_b028_notification_delivery_claims.sql": {
+    addOnly: false,
+    reason: "New private durable delivery tables with NOT NULL and CHECK constraints, append-only events, service-only gateways and privilege revokes. Existing producers unchanged; rollout defaults OFF.",
+  },
   "supabase/migrations/20261106220000_b026_vendor_accounts.sql": {
     addOnly: true,
     reason: "Adds private vendor account invitations, links and immutable correction events, service-only gateways and default-OFF vendor_account setting. No backfill, public table/schema changes or existing function replacement.",

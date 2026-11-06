@@ -53,3 +53,31 @@ Migration `20261106160000_b028_legacy_claim_invoice_fence.sql` replaces only `ap
 - **Negative control.** With the old function restored on a clone, the uncommitted ordering fails ("new scheduler waits for the uncommitted legacy claim").
 - **Residual (QA LOW).** A new-path call blocked behind a legacy claim keeps its `platform_settings` SHARE lock while waiting, delaying a concurrent rollout change for as long as the legacy transaction holds its invoice lock — milliseconds for the production cron (`legacyReminderStore(query)` is one autocommit statement per claim), but an explicit caller transaction keeps it until that transaction ends; the six-second bound covers only acquisition. A caller-level `lock_timeout`/`statement_timeout` on the new path aborts scheduling for that run (no capture; retried on the next run). The bound also covers the implicit table lock (`LOCK TABLE invoices IN ROW SHARE MODE NOWAIT` inside the retry block) so DDL cannot make the legacy claim wait. Not proven on hosted roles; staging remains PE.
 - **QA.** Codex QA r1 FAIL (blocking-lock deadlock) → NOWAIT fix → **r2 PASS**; its three LOWs (DDL table-lock wait, unproven payment block/hang bound in the regression, lock-lifetime wording) fixed after r2.
+
+## Package 1 — Common durable delivery attempts and truthful statuses (Session 2, Claude L2)
+
+Branch `feat/b-028-delivery-claims` stacked on #58. Flag `notification_delivery_v2` (global `enabled` + org
+allowlist + org `feature_flags.notification_delivery_v2 === true`, default OFF; OFF ⇒ zero writes, existing reminder /
+report / center paths unchanged).
+
+**Model (additive migration `20261106235000_b028_notification_delivery_claims.sql`).** Private
+`app.b028_delivery_attempts(id, org_id, source_kind, source_id, recipient_key, channel, status, attempt, claim_token_hash,
+claim_expires_at, provider_ref, failure_code, created_at, updated_at)`, unique `(org_id, source_kind, source_id,
+recipient_key, channel)`; `channel ∈ {email, line}`; `status ∈ {queued, claimed, captured, accepted, failed}` — there is
+**no `sent`/`delivered` state**: `captured` = prepared locally (no transport), `accepted` = transport accepted the
+request (never displayed as delivered). Append-only `app.b028_delivery_attempt_events` keeps each transition.
+Service-only SECURITY DEFINER gateways (`search_path` pinned): `b028_delivery_enqueue` (idempotent),
+`b028_delivery_claim` (`FOR UPDATE SKIP LOCKED`, fresh token, expiry, attempt+1), `b028_delivery_complete` (matching
+unexpired token only; result `captured|accepted|failed`), `b028_delivery_status` (per-source counts by status). Lock order:
+`platform_settings` SHARE → organization → attempt rows.
+
+**TS.** `src/server/notification-delivery.ts`: `DeliveryAdapter` interface `{channel; deliver(req) → {result:
+"accepted"|"failed"|"captured"; providerRef?; failureCode?}}`; `createCaptureAdapter(channel)` (local, zero network);
+`runDeliveryAttempt` = claim → adapter → complete. Status labels via `src/i18n/lanes/notification-center.ts` keys
+(`queued/claimed/captured/accepted/failed`) with copy that never claims delivery. Reminder/report adapters are not
+rewired in this package (their OFF paths stay byte-identical); LINE (B-033) consumes this contract.
+
+**Tests.** `two_workers_one_attempt_and_truthful_results` (two clients, one owner, one capture; expiry → reclaim; stale
+token rejected; failure → retry; completed recipients never repeated); status rendering distinct with no
+delivered/sent claim; OFF matrix (absent/false/malformed global, missing allowlist, org false) ⇒ zero rows; cross-org
+denial; privilege catalog.
