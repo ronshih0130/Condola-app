@@ -297,6 +297,36 @@ inventory({ surface: "direct files metadata via authenticated RLS", file: "src/s
   } finally {
     await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, reporter]);
   }
+  // Write paths: an Accountant (staff reporter) cannot create photo-bucket files or portal attachments.
+  await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, USERS.accountant]);
+  try {
+    const attempt = (sql: string, values: unknown[]) => tx(accountant.userId, async (client) => {
+      await client.query("SAVEPOINT b027_write"); try { await client.query(sql, values); return "ok"; }
+      catch (error) { await client.query("ROLLBACK TO SAVEPOINT b027_write"); return (error as { code?: string }).code; }
+    }, requireOrgScope(accountant));
+    const photo = randomUUID();
+    assert.equal(await attempt(`INSERT INTO files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,uploaded_by) VALUES($1,$2,'ticket-photos-private',$3,'b027-new.jpg','image/jpeg',1,auth.uid())`,
+      [photo, ORG_ID, `org/${ORG_ID}/tickets/${fixture.ticket}/${photo}.jpg`]), "42501");
+    assert.equal(await attempt(`INSERT INTO ticket_attachments(org_id,ticket_id,file_id,is_internal) VALUES($1,$2,$3,false)`, [ORG_ID, fixture.ticket, fixture.file]), "42501");
+    assert.equal(await attempt(`SELECT 1 FROM repair_vendor_job_shared_photos LIMIT 1`, []), "ok");
+    const shared = await tx(accountant.userId, (client) => client.query(`SELECT attachment_id FROM repair_vendor_job_shared_photos WHERE org_id=$1`, [ORG_ID]), requireOrgScope(accountant));
+    assert.deepEqual(shared.rows, [], "shared-photo attachment ids hidden from Accountant");
+  } finally {
+    await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, reporter]);
+  }
+  // Removed (inactive) staff membership still counts as staff, never as a portal user.
+  const removed = await query<{ status: string }>(`UPDATE org_members SET status='removed' WHERE user_id=$1 AND org_id=$2 RETURNING status::text`, [USERS.accountant, ORG_ID]);
+  assert.equal(removed.rows.length, 1);
+  {
+    try {
+      await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, USERS.accountant]);
+      const rows = await tx(accountant.userId, (client) => client.query(`SELECT id FROM ticket_attachments WHERE ticket_id=$1`, [fixture.ticket]));
+      assert.deepEqual(rows.rows, [], "inactive staff reporter gets no portal access");
+    } finally {
+      await query(`UPDATE org_members SET status='active' WHERE user_id=$1 AND org_id=$2`, [USERS.accountant, ORG_ID]);
+      await query(`UPDATE maintenance_tickets SET reported_by_user=$2 WHERE id=$1`, [fixture.ticket, reporter]);
+    }
+  }
   // Genuine tenant (no org_members row) reporting the ticket keeps portal access.
   const tenantUser = (await query<{ id: string }>(`SELECT u.id::text FROM auth.users u WHERE NOT EXISTS (SELECT 1 FROM org_members m WHERE m.user_id=u.id) AND EXISTS (SELECT 1 FROM contacts c WHERE c.user_id=u.id AND c.org_id=$1 AND c.is_tenant) LIMIT 1`, [ORG_ID])).rows[0]?.id;
   assert.ok(tenantUser, "a genuine tenant user exists in the seed");
@@ -360,7 +390,7 @@ const grants = [
   { table: "audit_log", privileges: ["SELECT"], forced: false, hash: "a70678f6ca0de54cb79fdfee017ebeef", why: "company activity and sensitive row snapshots", policy: "Admin SELECT only" },
   { table: "consents", privileges: ["SELECT"], forced: false, hash: "e432e0ae23c6888ebaf23eab8f96c078", why: "user legal consent evidence", policy: "own-user SELECT; no client mutation" },
   { table: "platform_settings", privileges: ["SELECT"], forced: false, hash: "5b90ddfd20a8d3d42e3f934a87a84a10", why: "global control plane and rollout settings", policy: "authenticated SELECT intentionally global; no client mutation" },
-  { table: "files", privileges: ["SELECT", "INSERT", "UPDATE", "DELETE"], forced: false, hash: "4978b8afb738b4008ea6cd37121ab08f", why: "private object paths and filenames", policy: "member CRUD (ticket-photo bucket SELECT only for tickets.update roles) + portal own/attached-photo policies; GAP-01 fixed" },
+  { table: "files", privileges: ["SELECT", "INSERT", "UPDATE", "DELETE"], forced: false, hash: "b73f850f4ca982ac7a2ad8f62369df45", why: "private object paths and filenames", policy: "member CRUD (ticket-photo bucket SELECT only for tickets.update roles) + portal own/attached-photo policies; GAP-01 fixed" },
 ] as const;
 const supplementary = { table: "vendor_document_pdf_bytes", privileges: [], forced: true, hash: "d751713988987e9331980363e24189ce", why: "persisted vendor PDF bytes", policy: "service-only, forced RLS" } as const;
 const operations = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"];

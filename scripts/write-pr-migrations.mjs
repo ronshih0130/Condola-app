@@ -346,6 +346,10 @@ const added = {
     addOnly: true,
     reason: "Adds private lease collector reserve and append-only one-per-payment confirmation audit (CAP-M-35 proxy-owner confirm), nullable source-event dedupe/source metadata, and context-checked SECURITY DEFINER collector/record/audit functions; no table grants, backfill or flag seed; payment_results_v2 stays OFF.",
   },
+  "supabase/migrations/20261106232500_b027_ticket_photo_write_narrowing.sql": {
+    addOnly: false,
+    reason: "Narrows existing INSERT policies: photo-bucket file rows only for tickets.update roles; portal file/attachment inserts only for non-members; shared-photo id reads only for tickets.update roles. An old Accountant or staff-reporter insert of a ticket photo now fails.",
+  },
   "supabase/migrations/20261106232000_b027_ticket_photo_member_read.sql": {
     addOnly: false,
     reason: "Narrows existing member SELECT policies: ticket-photo bucket files and ticket_attachments rows become readable only by tickets.update roles (admin/manager/maintenance); the tenant portal attachment policy keeps only its tenant half. Adds one authenticated definer count function. An old Accountant query reading photo rows now returns no rows.",
