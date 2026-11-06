@@ -39,9 +39,11 @@ export async function POST(request: Request) {
     const result = await submitVendorCompletion(token, input);
     return Response.json(result, { headers });
   } catch (error) {
-    const code = (error as { code?: string }).code;
+    const code = (error as { code?: string }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
     if (code === "40001") return Response.json({ status: "rejected_conflict" }, { status: 409, headers });
-    if (code === "42501" || error instanceof FlowError) return new Response(null, { status: 403, headers });
+    if (code === "42501") return new Response(null, { status: 403, headers });
+    if (error instanceof FlowError) return new Response(null, { status: 403, headers });
     throw error;
   }
 }
