@@ -12,6 +12,7 @@ export function tenantPaymentHistoryCopy(locale: string) {
     rejectionReasonUnavailable: '未通過原因無法顯示。', reversalReasonUnavailable: '撤銷原因目前無法顯示。',
     reportAgain: '重新回報付款', reportAgainNote: '重新回報會建立一筆新紀錄，原回報仍會保留。',
     reportDetails: '查看此回報', next: '下一頁', first: '返回第一頁', billLines: '目前帳單項目', paidAmount: '已確認金額',
+    monthlyDue: '每月應繳總額', monthlyDueNote: '依已開立帳單列出：租金、水電與其他費用，扣除帳單上的抵扣（含帳單已列出的代墊）與已確認的繳款。Condola 只顯示紀錄，不經手任何款項。', dueTotal: '應繳總額', dueGross: '費用合計', dueOffset: '抵扣（含代墊）', duePaid: '已確認繳款', dueCarry: '本月抵扣與繳款超出本月費用的部分（不計入本月應繳，也不會自動套用到其他月份）', dueNetNote: '各月份分別計算；實際未結金額以上方「目前未結帳單餘額」為準。', duePaidSource: (no: string) => `帳單 ${no} 已確認繳款`, dueSource: (no: string, line: number) => `來源：帳單 ${no} 第 ${line} 項`, dueKeys: { rent: '租金', utility: '水電', deposit: '押金', other: '其他費用', offset: '抵扣' } as Record<string, string>,
   } : {
     title: 'My payment reports', currentBill: 'Current outstanding balance', currentBillNote: 'This is the current bill balance, not the balance when a report was submitted.',
     unavailable: 'Payment reports and bill details are currently unavailable. Please try again later.', empty: 'There are no payment reports to show.',
@@ -24,5 +25,6 @@ export function tenantPaymentHistoryCopy(locale: string) {
     rejectionReasonUnavailable: 'The reason is unavailable.', reversalReasonUnavailable: 'The reason for reversal is unavailable.',
     reportAgain: 'Report payment again', reportAgainNote: 'A new report will be created and the earlier report will remain.',
     reportDetails: 'View this report', next: 'Next page', first: 'Back to first page', billLines: 'Current bill items', paidAmount: 'Confirmed amount',
+    monthlyDue: 'Monthly total due', monthlyDueNote: 'From issued bills: rent, utilities and other charges, less credits on the bill (including tenant advances already on the bill) and confirmed payments. Condola only shows records and does not handle money.', dueTotal: 'Total due', dueGross: 'Charges', dueOffset: 'Credits (incl. advances)', duePaid: 'Confirmed payments', dueCarry: 'Credits and payments above this month\'s charges (not part of this month\'s total and not applied to other months automatically)', dueNetNote: 'Each month is calculated separately; the current outstanding balance above is the amount actually open.', duePaidSource: (no: string) => `Confirmed payment, bill ${no}`, dueSource: (no: string, line: number) => `Source: bill ${no}, item ${line}`, dueKeys: { rent: 'Rent', utility: 'Utilities', deposit: 'Deposit', other: 'Other charges', offset: 'Credit' } as Record<string, string>,
   };
 }
