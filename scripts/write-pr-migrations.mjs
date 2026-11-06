@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107100000_b038_line_repair_pushes.sql": {
+    addOnly: false,
+    reason: "Additive private repair-push intent/cursor tables with CHECK constraints, RLS and full privilege revokes, service-only definer gateways and a default-OFF line_repair_push setting. Reads committed repair/approval rows only; no trigger, backfill or change to existing repair functions. Privilege revokes require Class B review.",
+  },
   "supabase/migrations/20261107050000_b033_line_login_link.sql": {
     addOnly: false,
     reason: "Additive one-time flows, session provenance, private limits, portal gates and service-only LIFF/link gateways. Trusted links no longer require raw provider ids; configuration and privilege changes require Class B review.",

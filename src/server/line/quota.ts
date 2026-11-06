@@ -67,8 +67,12 @@ async function boundedPush(transport: Pick<LineTransport, "push">, req: LinePush
   finally { if (timer) clearTimeout(timer); }
 }
 /** Business caller authorizes notification scope. There are no legacy producer callers in slice 1. */
+/** Optional business re-authorization, run inside the decision transaction after the claim lock and
+ * before any reservation, start or provider call. "deny" records the deduplicated Email fallback with
+ * `deniedReason`; "skip" defers without writes. Existing callers omit it and are unchanged. */
+export type LinePushAuthorize = { check: (c: Client) => Promise<"allow" | "deny" | "skip">; deniedReason: string };
 export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransport, "push">, env: LineEnv = process.env,
-  options: { timeoutMs?: number } = {}) {
+  options: { timeoutMs?: number; authorize?: LinePushAuthorize } = {}) {
   const config = readLineConfig(env), owner = randomUUID();
   let ctx: Context | undefined;
   let reservation: Reservation | undefined;
@@ -98,6 +102,11 @@ export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransp
       if (terminal || prior?.status === "released") { fallbackResult = await fallback(c, "line_failed"); return; }
       if (prior?.status === "settled") { state = "settled"; return; }
       if (prior?.status === "expired") { fallbackResult = await fallback(c, "line_unknown_possible_duplicate"); return; }
+      if (options.authorize) {
+        const decision = await options.authorize.check(c);
+        if (decision === "skip") { state = "deferred"; return; }
+        if (decision !== "allow") { fallbackResult = await fallback(c, options.authorize.deniedReason); return; }
+      }
       if (!config.guardReady || !ctx.eligible || !req.identityPepper ||
         !/^U[0-9a-f]{32}$/.test(req.to) || providerUserHash(ctx.line_provider_id, req.to, req.identityPepper) !== ctx.provider_user_hash) {
         fallbackResult = await fallback(c, "line_guard"); return;
@@ -135,6 +144,7 @@ export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransp
   if (state === "fallback_unavailable") return { status: "fallback_unavailable" };
   if (state === "settled") return { status: "accepted" };
   if (state === "busy") return { status: "busy" };
+  if (state === "deferred") return { status: "deferred" };
   if (state === "expired") {
     await expireLinePushes(req.orgId, env);
     return svc(null, c => fallback(c, "line_unknown_possible_duplicate"));

@@ -324,6 +324,15 @@ flags:
     org_override: "organizations.feature_flags.line_push must be strict boolean true"
     activation: "Local captured transport only. LINE_PUSH_QUOTA_GUARD default ON; missing, disabled or malformed guard blocks push and claims Email fallback. No hosted activation."
 
+  line_repair_push:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "LINE_PLATFORM_ENABLED must be exactly true; platform_settings.line_repair_push requires strict boolean enabled and allowed_org_ids array containing the organization; line_platform, line_push and notification_delivery_v2 must also be ON; missing/malformed is OFF"
+    org_override: "organizations.feature_flags.line_repair_push must be strict boolean true"
+    activation: "Local captured transport only. Repair status/approval pushes reuse the B-033 quota guard, reservation and B-028 Email fallback; OFF writes nothing and leaves repair flows unchanged. No hosted activation."
+
   line_tenant_portal:
     owner: Ron
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
