@@ -67,8 +67,13 @@ async function boundedPush(transport: Pick<LineTransport, "push">, req: LinePush
   finally { if (timer) clearTimeout(timer); }
 }
 /** Business caller authorizes notification scope. There are no legacy producer callers in slice 1. */
+// Fixed allow-list: B-037 rent pushes use their gateway so an existing B-010 Email claim stays the only Email.
+const FALLBACK_SQL = {
+  b033: "SELECT * FROM app.b033_push_fallback($1,$2,$3,$4,$5,$6)",
+  b037: "SELECT * FROM app.b037_push_fallback($1,$2,$3,$4,$5,$6)",
+} as const;
 export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransport, "push">, env: LineEnv = process.env,
-  options: { timeoutMs?: number } = {}) {
+  options: { timeoutMs?: number; fallbackGateway?: keyof typeof FALLBACK_SQL } = {}) {
   const config = readLineConfig(env), owner = randomUUID();
   let ctx: Context | undefined;
   let reservation: Reservation | undefined;
@@ -76,7 +81,7 @@ export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransp
   let fallbackResult: Awaited<ReturnType<typeof fallback>> | undefined;
   async function fallback(c: Client, why: string, dispatchOwner: string | null = null) {
     const row = (await c.query<{ state: string; email_claim: string | null; reason: string | null }>(
-      "SELECT * FROM app.b033_push_fallback($1,$2,$3,$4,$5,$6)",
+      FALLBACK_SQL[options.fallbackGateway === "b037" ? "b037" : "b033"],
       [req.channelId, req.claimId, req.orgId, req.notificationId, why, dispatchOwner])).rows[0];
     return { status: row.state, ...(row.reason ? { reason: row.reason } : {}), ...(row.email_claim ? { emailClaim: row.email_claim } : {}) };
   }
