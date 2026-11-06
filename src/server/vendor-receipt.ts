@@ -17,6 +17,7 @@ import {
   type BuyerSnapshot,
   type IssueVendorDocumentInput,
   type VendorDocument,
+  type VendorDocumentKind,
 } from "./vendor-receipt-rules";
 import {
   loadVendorPdfFont,
@@ -33,6 +34,7 @@ export type VendorBuyerSelection =
   | { kind: "owner"; contactId: string };
 
 export interface VendorDocumentContext {
+  kind?: VendorDocumentKind;
   actor: VendorDocumentActor;
   ticketId: string;
   vendorProfileId: string;
@@ -57,6 +59,7 @@ interface Grant {
 interface Ticket {
   id: string;
   ticket_number: string;
+  title: string;
   org_id: string;
   property_id: string;
   assigned_vendor_contact_id: string | null;
@@ -112,7 +115,7 @@ function validKey(key: string) {
 async function ticketOn(client: Client, orgId: string, ticketId: string) {
   const ticket = await maybe<Ticket>(
     client,
-    `SELECT t.id::text, t.ticket_number::text, t.org_id::text, t.property_id::text,
+    `SELECT t.id::text, t.ticket_number::text, t.title, t.org_id::text, t.property_id::text,
             t.assigned_vendor_contact_id::text, t.final_cost_minor::text,
             t.status::text, t.type_fields, p.address_display AS work_address
        FROM maintenance_tickets t
@@ -124,7 +127,7 @@ async function ticketOn(client: Client, orgId: string, ticketId: string) {
   return ticket;
 }
 
-async function grantOn(client: Client, token: string) {
+export async function vendorDocumentGrantOn(client: Client, token: string) {
   if (!/^[A-Za-z0-9_-]{32,256}$/.test(token)) notFound();
   const grant = await maybe<Grant>(
     client,
@@ -145,7 +148,7 @@ async function authorize(
   profileId: string,
   purpose: "issuance" | "issued_document" = "issuance",
 ): Promise<Access> {
-  const grant = typeof actor === "string" ? await grantOn(client, actor) : null;
+  const grant = typeof actor === "string" ? await vendorDocumentGrantOn(client, actor) : null;
   let orgId: string;
   let userId: string | null;
   if (typeof actor === "string") {
@@ -208,6 +211,12 @@ async function authorize(
     profile,
     buyerSelection: grant?.buyer_selection,
   };
+}
+
+/** Reuses document capability validation and lock order for token-only surfaces. */
+export async function resolveVendorDocumentToken(client: Client, token: string) {
+  const grant = await vendorDocumentGrantOn(client, token);
+  return authorize(client, token, grant.ticket_id, grant.vendor_profile_id, "issued_document");
 }
 
 async function buyerOn(
@@ -292,6 +301,7 @@ async function issueInput(
   if (!Number.isSafeInteger(actual)) throw new Error("invalid_ticket_cost");
   return {
     id,
+    kind: ctx.kind,
     vendor_profile_id: profile.id,
     ticket_id: access.ticket.id,
     vendor_code: profile.vendor_code,
@@ -357,7 +367,7 @@ async function renderOn(
       workAddress: access.ticket.work_address!,
       ticketNumber: access.ticket.ticket_number,
       preview,
-      seal: await sealOn(client, access),
+      seal: document.apply_receipt_seal ? await sealOn(client, access) : undefined,
     },
     await fontOn(ctx),
   );
@@ -550,21 +560,24 @@ export async function requestVendorDocumentCorrection(
 }
 
 export async function previewVendorDocument(ctx: VendorDocumentContext) {
-  return svc(typeof ctx.actor === "string" ? null : ctx.actor.userId, async (client) => {
-    const access = await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
-    const input = await issueInput(client, access, ctx, "preview", 1);
-    const checked = applyIssueRules(input);
-    const document = { ...checked, doc_no: "", seq: 0 };
-    const time = await one<{ issued_at: string }>(
-      client,
-      `SELECT clock_timestamp()::text AS issued_at`,
-    );
-    const pdf = await renderOn(client, access, ctx, document, time.issued_at, true);
-    return { document, bytes: pdf.bytes, sha256: pdf.sha256 };
-  });
+  return svc(typeof ctx.actor === "string" ? null : ctx.actor.userId,
+    (client) => previewVendorDocumentOn(client, ctx));
 }
 
-async function issueOn(
+export async function previewVendorDocumentOn(client: Client, ctx: VendorDocumentContext) {
+  const access = await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
+  const input = await issueInput(client, access, ctx, "preview", 1);
+  const checked = applyIssueRules(input);
+  const document = { ...checked, doc_no: "", seq: 0 };
+  const time = await one<{ issued_at: string }>(
+    client,
+    `SELECT clock_timestamp()::text AS issued_at`,
+  );
+  const pdf = await renderOn(client, access, ctx, document, time.issued_at, true);
+  return { document, bytes: pdf.bytes, sha256: pdf.sha256 };
+}
+
+export async function issueVendorDocumentOn(
   client: Client,
   ctx: VendorDocumentContext,
   key: string,
@@ -590,9 +603,10 @@ async function issueOn(
     ticket_id: string;
     vendor_profile_id: string;
     reissued_from: string | null;
+    kind: VendorDocumentKind;
   }>(
     client,
-    `SELECT id::text,ticket_id::text,vendor_profile_id::text,reissued_from::text
+    `SELECT id::text,ticket_id::text,vendor_profile_id::text,reissued_from::text,kind
        FROM vendor_documents WHERE org_id = $1 AND idempotency_key = $2`,
     [access.orgId, key],
   );
@@ -600,7 +614,8 @@ async function issueOn(
     if (
       existing.ticket_id !== ctx.ticketId ||
       existing.vendor_profile_id !== ctx.vendorProfileId ||
-      existing.reissued_from !== (sourceId ?? null)
+      existing.reissued_from !== (sourceId ?? null) ||
+      (ctx.kind !== undefined && existing.kind !== ctx.kind)
     ) {
       throw new Error("idempotency_key_conflict");
     }
@@ -611,8 +626,8 @@ async function issueOn(
     client,
     `SELECT id::text FROM vendor_documents
       WHERE org_id = $1 AND ticket_id = $2 AND vendor_profile_id = $3
-        AND status = 'issued'`,
-    [access.orgId, ctx.ticketId, ctx.vendorProfileId],
+        AND status = 'issued' AND ($4::text IS NULL OR kind=$4)`,
+    [access.orgId, ctx.ticketId, ctx.vendorProfileId, ctx.kind ?? null],
   );
   if (active) throw new Error("document_already_issued");
 
@@ -627,6 +642,7 @@ async function issueOn(
       notFound();
     }
     source = resultOf(prior).document;
+    if (ctx.kind !== undefined && source.kind !== ctx.kind) throw new Error("invalid_reissue_source");
     if (source.status !== "voided") throw new Error("invalid_reissue_source");
     const replacement = await maybe<{ id: string }>(
       client,
@@ -638,8 +654,9 @@ async function issueOn(
     const prior = await maybe<{ id: string }>(
       client,
       `SELECT id::text FROM vendor_documents
-        WHERE org_id = $1 AND ticket_id = $2 AND vendor_profile_id = $3`,
-      [access.orgId, ctx.ticketId, ctx.vendorProfileId],
+        WHERE org_id = $1 AND ticket_id = $2 AND vendor_profile_id = $3
+          AND ($4::text IS NULL OR kind=$4)`,
+      [access.orgId, ctx.ticketId, ctx.vendorProfileId, ctx.kind ?? null],
     );
     if (prior) throw new Error("reissue_required");
   }
@@ -738,44 +755,43 @@ export async function issueVendorDocument(
   options: { idempotencyKey: string },
 ) {
   requireVendorToken(ctx.actor);
-  return svc(null, (client) => issueOn(client, ctx, options.idempotencyKey));
+  return svc(null, (client) => issueVendorDocumentOn(client, ctx, options.idempotencyKey));
 }
 
-export async function voidVendorDocument(
-  actor: VendorDocumentActor,
-  id: string,
-  reason: string,
-) {
+export async function voidVendorDocument(actor: VendorDocumentActor, id: string, reason: string) {
   requireVendorToken(actor);
-  return svc(null, async (client) => {
-    const initial = await persistedOn(client, id);
-    const access = await authorizeDocument(client, actor, initial);
-    const current = resultOf(await persistedOn(client, id));
-    const clock = await one<{ now: string }>(
-      client,
-      `SELECT clock_timestamp()::text AS now`,
-    );
-    const document = applyVoidRules(current.document, reason, clock.now);
-    await client.query(
-      `UPDATE vendor_documents
-          SET status = 'voided',voided_at = $2,void_reason = $3
-        WHERE id = $1 AND org_id = $4 AND status = 'issued'`,
-      [id, document.voided_at, document.void_reason, access.orgId],
-    );
-    await writeAudit(
-      access.orgId,
-      access.userId,
-      "vendor_document_void",
-      {
-        documentId: id,
-        grantId: access.grantId,
-        actorKind: "document_token",
-        reason: document.void_reason,
-      },
-      client,
-    );
-    return { ...current, document };
-  });
+  return svc(null, (client) => voidVendorDocumentOn(client, actor, id, reason));
+}
+
+export async function voidVendorDocumentOn(client: Client, actor: VendorDocumentActor, id: string, reason: string) {
+  requireVendorToken(actor);
+  const initial = await persistedOn(client, id);
+  const access = await authorizeDocument(client, actor, initial);
+  const current = resultOf(await persistedOn(client, id));
+  const clock = await one<{ now: string }>(
+    client,
+    `SELECT clock_timestamp()::text AS now`,
+  );
+  const document = applyVoidRules(current.document, reason, clock.now);
+  await client.query(
+    `UPDATE vendor_documents
+        SET status = 'voided',voided_at = $2,void_reason = $3
+      WHERE id = $1 AND org_id = $4 AND status = 'issued'`,
+    [id, document.voided_at, document.void_reason, access.orgId],
+  );
+  await writeAudit(
+    access.orgId,
+    access.userId,
+    "vendor_document_void",
+    {
+      documentId: id,
+      grantId: access.grantId,
+      actorKind: "document_token",
+      reason: document.void_reason,
+    },
+    client,
+  );
+  return { ...current, document };
 }
 
 export async function reissueVendorDocument(
@@ -784,23 +800,26 @@ export async function reissueVendorDocument(
   options: { idempotencyKey: string },
 ) {
   requireVendorToken(ctx.actor);
-  return svc(null, (client) => issueOn(client, ctx, options.idempotencyKey, sourceId));
+  return svc(null, (client) => issueVendorDocumentOn(client, ctx, options.idempotencyKey, sourceId));
 }
 
 export async function readVendorDocumentPdf(actor: VendorDocumentActor, id: string) {
-  return svc(typeof actor === "string" ? null : actor.userId, async (client) => {
-    const initial = await persistedOn(client, id);
-    const access = await authorizeDocument(client, actor, initial);
-    const row = await one<{ bytes: Buffer }>(
-      client,
-      `SELECT bytes FROM vendor_document_pdf_bytes
-        WHERE document_id = $1 AND org_id = $2`,
-      [id, access.orgId],
-    );
-    const stored = resultOf(await persistedOn(client, id));
-    if ((await sha256(row.bytes)) !== stored.sha256) {
-      throw new Error("vendor_document_integrity_failure");
-    }
-    return { ...stored, bytes: new Uint8Array(row.bytes) };
-  });
+  return svc(typeof actor === "string" ? null : actor.userId,
+    (client) => readVendorDocumentPdfOn(client, actor, id));
+}
+
+export async function readVendorDocumentPdfOn(client: Client, actor: VendorDocumentActor, id: string) {
+  const initial = await persistedOn(client, id);
+  const access = await authorizeDocument(client, actor, initial);
+  const row = await one<{ bytes: Buffer }>(
+    client,
+    `SELECT bytes FROM vendor_document_pdf_bytes
+      WHERE document_id = $1 AND org_id = $2`,
+    [id, access.orgId],
+  );
+  const stored = resultOf(await persistedOn(client, id));
+  if ((await sha256(row.bytes)) !== stored.sha256) {
+    throw new Error("vendor_document_integrity_failure");
+  }
+  return { ...stored, bytes: new Uint8Array(row.bytes) };
 }

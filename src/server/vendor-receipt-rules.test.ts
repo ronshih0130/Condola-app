@@ -255,3 +255,13 @@ test("completion statements retain kind and notice after reissue", () => {
   assert.ok(replacement.notices.includes("本文件非稅務憑證"));
   assert.equal(replacement.apply_receipt_seal, false);
 });
+
+test("explicit completion statements do not grant receipt eligibility", () => {
+  const statement = issueVendorDocument(issueInput({ kind: "completion_statement" }));
+  assert.equal(statement.kind, "completion_statement");
+  assert.equal(statement.apply_receipt_seal, false);
+  assert.match(statement.doc_no, /-W-1$/);
+  expectError(() => issueVendorDocument(issueInput({ kind: "receipt",
+    vendor: { kind: "individual", qualification_attested: true, tax_id: "04595257" },
+  })), "invalidDocumentCode");
+});
