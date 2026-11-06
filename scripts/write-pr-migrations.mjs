@@ -334,6 +334,10 @@ const added = {
     addOnly: true,
     reason: "Adds private lease collector reserve and append-only one-per-payment confirmation audit (CAP-M-35 proxy-owner confirm), nullable source-event dedupe/source metadata, and context-checked SECURITY DEFINER collector/record/audit functions; no table grants, backfill or flag seed; payment_results_v2 stays OFF.",
   },
+  "supabase/migrations/20261106025000_b010_confirmation_guards.sql": {
+    addOnly: false,
+    reason: "Replaces two B-010 SECURITY DEFINER functions: record_confirmation now requires the same-transaction submitted->confirmed transition by the actor and collector-consistent provenance; confirmation_audit staff branch uses app.is_member (pinned org/env). No table, grant or flag change; payment_results_v2 stays OFF.",
+  },
 };
 
 const functions = [

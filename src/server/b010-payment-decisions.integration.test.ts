@@ -6,6 +6,9 @@ import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
 import { confirmPayment, rejectPayment, reversePayment } from "./domain";
+import { tx } from "./db";
+import { requireOrgScope } from "./org-guard";
+import { lockPaymentResultContext } from "./payment-result-events";
 import type { Session } from "./types";
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
@@ -295,6 +298,52 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
       assert.equal((await events(id)).length, 0);
       assert.equal(await ledgerCount(), beforeLedger);
       assert.deepEqual(await collectors(), beforeCollectors);
+    });
+
+    await t.test("record_confirmation rejects provenance without this actor's same-transaction confirm", async () => {
+      // Returns the SQLSTATE raised by the call itself (savepoint), "ok" when it succeeded.
+      const callCode = async (client: Client, sql: string, params: unknown[]) => {
+        await client.query("SAVEPOINT b010_probe");
+        try { await client.query(sql, params); return "ok"; }
+        catch (error) { return (error as { code?: string }).code ?? "unknown"; }
+        finally { await client.query("ROLLBACK TO SAVEPOINT b010_probe"); }
+      };
+      const probe = async (fn: (client: Client) => Promise<string>) => {
+        let code = "not_run";
+        try { await tx(manager.userId, async (client) => { code = await fn(client); throw new Error("probe rollback"); }, requireOrgScope(manager)); }
+        catch { /* the probe transaction always rolls back */ }
+        return code;
+      };
+      await flag(true);
+      await clearCollector();
+      // (a) payment still submitted: no transition, no provenance.
+      const submitted = await makeSubmitted();
+      assert.equal(await probe(async (client) => {
+        assert.equal(await lockPaymentResultContext(client, manager, lease.id), true);
+        return callCode(client, `SELECT app.b010_record_confirmation($1,'management',NULL,'forged','submitted','confirmed')`, [submitted]);
+      }), "42501");
+      // (b) owner_direct claimed by staff on an owner-collected lease after a real transition.
+      await ownerCollector();
+      assert.equal(await probe(async (client) => {
+        assert.equal(await lockPaymentResultContext(client, manager, lease.id), true);
+        await client.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now() WHERE id=$1`, [submitted, manager.userId]);
+        return callCode(client, `SELECT app.b010_record_confirmation($1,'owner_direct',NULL,'forged','submitted','confirmed')`, [submitted]);
+      }), "42501");
+      await clearCollector();
+      // (c) legacy confirmed payment: metadata-only edit is not a transition.
+      await flag(false);
+      const legacy = await makeSubmitted();
+      await confirmPayment(manager, legacy);
+      await flag(true);
+      assert.equal(await probe(async (client) => {
+        assert.equal(await lockPaymentResultContext(client, manager, lease.id), true);
+        await client.query(`UPDATE payments SET confirmed_by=$2,confirmed_at=now() WHERE id=$1`, [legacy, manager.userId]);
+        return callCode(client, `SELECT app.b010_record_confirmation($1,'management',NULL,'forged','submitted','confirmed')`, [legacy]);
+      }), "42501");
+      assert.equal((await payment(submitted)).status, "submitted");
+      assert.equal((await confirmations(submitted)).length, 0);
+      assert.equal((await confirmations(legacy)).length, 0);
+      assert.equal((await c.query(`SELECT count(*)::int AS n FROM app.b010_confirm_transitions`)).rows[0].n, 0);
     });
   } finally {
     await c.end();

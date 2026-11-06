@@ -2017,6 +2017,12 @@ export async function recordPayment(
         newPaymentId,
       ],
     );
+    if (enabled) {
+      // B-010 CAP-M-35: staff entry of an owner-collected payment would be an
+      // unacknowledged proxy confirmation; use the confirmation flow instead.
+      const collector = await maybe<{collector:string}>(client,`SELECT collector FROM app.b010_payment_collector($1)`,[payment.id]);
+      if (!collector || collector.collector !== "management") throw new FlowError("errors.proxyOwnerConfirmRequired");
+    }
     await allocateAndLedger(client, payment, session.userId, invoices);
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);

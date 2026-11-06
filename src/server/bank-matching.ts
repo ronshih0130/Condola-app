@@ -146,8 +146,15 @@ export async function decideBankMatch(session: Session, input: {bankId:string;pa
       const invoices = await lockAllocationInvoices(client,session.orgId,payment.lease_id);
       if (Number(payment.amount_minor) > invoices.reduce((sum, invoice) => sum + Number(invoice.balance_minor),0)) throw fail();
       if (resultEnabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw fail();
+      // B-010 CAP-M-35: an owner-collected payment needs the explicit proxy
+      // confirmation flow; bank matching may confirm only management-collected ones.
+      if (resultEnabled) {
+        const collector = (await client.query<{collector:string}>(`SELECT collector FROM app.b010_payment_collector($1)`,[payment.id])).rows[0];
+        if (!collector || collector.collector !== "management") throw fail();
+      }
       await client.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now(),bank_transaction_id=$3 WHERE org_id=$4 AND id=$1`,[payment.id,session.userId,input.bankId,session.orgId]);
       await allocateAndLedger(client,payment,session.userId,invoices);
+      if (resultEnabled) await client.query(`SELECT app.b010_record_confirmation($1,'management',NULL,'bank_match','submitted','confirmed')`,[payment.id]);
       const source=resultEnabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
       await finalizePaymentCenter(client,center,source);
     } else await client.query(`UPDATE payments SET bank_transaction_id=$2 WHERE id=$1 AND org_id=$3`,[payment.id,input.bankId,session.orgId]);

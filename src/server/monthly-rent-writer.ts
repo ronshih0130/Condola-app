@@ -92,6 +92,10 @@ export async function writeMonthlyRent(session: Session, input: Input): Promise<
       [session.orgId, `${session.userId}:${requestId}`]);
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
       [session.orgId, `monthly-rent:${leaseId}`]);
+    // Re-check both flags after waiting on the serialization locks: a flag
+    // turned OFF while this request waited must stop every later write.
+    if (!(await billingPreviewsEnabled(client, session.orgId)) ||
+        !(await monthlyRentPostingEnabled(client, session.orgId))) return { status: 'rejected_disabled' };
     if (!(await leaseVisible(client, session.orgId, leaseId))) return { status: 'unsupported' };
     const replay = await receipts(client, session, async service => (
       await service.query<Receipt & { intent_digest: string; result_kind: 'created' | 'already_issued' }>(
