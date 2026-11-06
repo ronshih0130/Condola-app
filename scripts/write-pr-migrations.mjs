@@ -310,6 +310,10 @@ const added = {
     addOnly: false,
     reason: "Adds six private repair cost and tenant due component tables with RLS, service_role SELECT/INSERT plus column-level UPDATE (no DELETE), and org-scoped FKs; statement-line reference is soft with consumer org checks required; no flag seed, existing-table changes or money movement.",
   },
+  "supabase/migrations/20261105170000_b013_repair_approval_state.sql": {
+    addOnly: false,
+    reason: "Adds seven private app.b013_* repair approval state tables (immutable history, RLS, REVOKE ALL incl. service_role) and service-only SECURITY DEFINER gateways that fail closed while repair_approvals/vendor_dispatch are OFF; no flag seed, existing-table changes or money movement.",
+  },
 };
 
 const functions = [
