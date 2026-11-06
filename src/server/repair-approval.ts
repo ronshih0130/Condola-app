@@ -19,6 +19,7 @@ import {
 } from "./repair-approval-rules";
 import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
 import type { Session } from "./types";
+import { assertEnhancedVendorMutation } from "./vendor-repair";
 
 export type ApprovalResult = { status: string; [key: string]: unknown };
 
@@ -165,7 +166,8 @@ export function recordAppointment(session: Session, input: RecordAppointmentInpu
 }
 
 export type VendorAppointmentInput = RecordAppointmentInput & { orgId: string };
-export type VendorAppointmentCredential = { token: string } | { tokenHash: string };
+/** Trusted server policy from the existing organization flag read, never request JSON. */
+export type VendorAppointmentCredential = ({ token: string } | { tokenHash: string }) & { enhanced: boolean };
 
 /** Server-only capability caller. The gateway validates every supplied scope ID. */
 export function recordVendorAppointment(
@@ -198,6 +200,7 @@ export function recordVendorAppointment(
     operation: "appointment", principal: "vendor", payload,
   }), "utf8").digest();
   return svc(null, async (client) => {
+    await assertEnhancedVendorMutation(client, payload.orgId, payload.vendorJobId, tokenHash, credential.enhanced, input.requestId);
     const row = await maybe<{ r: unknown }>(client,
       "SELECT app.b013_record_vendor_appointment($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::text,$7::timestamptz,$8::timestamptz,$9::timestamptz,$10::timestamptz,$11::text,$12::bytea) AS r",
       [payload.orgId, payload.vendorJobId, tokenHash, input.requestId, payload.versionId,

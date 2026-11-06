@@ -1,3 +1,4 @@
+import { vendorLinkKillSwitchOn } from "./vendor-repair";
 import { withClient } from "./db";
 import { mapDbError } from "./errors";
 import { isUuid } from "./repair-rules";
@@ -33,6 +34,7 @@ async function centerCall<T>(userId:string|null, query:(client:Client)=>Promise<
         if(begun) {
           try { await client.query("ROLLBACK"); } catch(rollbackError) { throw mapDbError(rollbackError); }
         }
+        if(error instanceof CenterDeniedError) return {kind:"denied"} as const;
         const code=typeof error==="object" && error!==null && "code" in error ? (error as {code?:unknown}).code : undefined;
         if(begun && gatewayStarted && !committing && code==="55P03") return {kind:"busy"} as const;
         if(begun && gatewayStarted && !committing && code==="42501" && error instanceof Error && error.message==="Notification unavailable") return {kind:"denied"} as const;
@@ -55,7 +57,7 @@ export async function centerSessionAdmission(session:Session):Promise<CenterAdmi
 export async function centerSessionEnabled(session:Session) {
   const state=await centerSessionAdmission(session); if(state==="busy") throw new CenterBusyError(); return state==="enabled";
 }
-export type CenterPage = {items:CenterItem[]; continuation:string|null};
+export type CenterPage = {items:CenterItem[]; continuation:string|null; readOnly?:boolean};
 type CenterRow = {recipient_id:string|null; kind:CenterKind|null; occurred_at:string|null; read_at:string|null; continuation:string|null};
 function page(rows:CenterRow[]):CenterPage {
   return {items:rows.filter((r):r is CenterRow & CenterItem=>Boolean(r.recipient_id && r.kind && r.occurred_at)),continuation:rows.find(r=>r.continuation)?.continuation ?? null};
@@ -79,6 +81,17 @@ export async function centerVendorEnabled(token:string) {
 }
 export async function centerVendorItems(token:string, mark:string|null=null,cursor?:string) {
   if (!vendorTokenAcceptable(token) || (mark!==null && !isUuid(mark)) || (cursor && !isUuid(cursor))) throw new CenterDeniedError();
-  const result=await centerCall(null,async c=>page((await c.query<CenterRow>(`SELECT recipient_id::text,kind,occurred_at::text,read_at::text,continuation::text FROM app.b028_center_vendor($1,$2,$3)`,[hashVendorToken(token),mark,cursor ?? null])).rows));
+  // Kill switch OFF: the B-028 gateway exactly as before. Kill switch ON: the
+  // B-026 sibling gateway (same single round trip) decides closed-job
+  // read-only inside the gateway, so no extra policy query runs (BLK-MAC-13).
+  const enhanced=vendorLinkKillSwitchOn();
+  const result=await centerCall(null,async c=>{
+    if(!enhanced) return page((await c.query<CenterRow>(`SELECT recipient_id::text,kind,occurred_at::text,read_at::text,continuation::text FROM app.b028_center_vendor($1,$2,$3)`,[hashVendorToken(token),mark,cursor ?? null])).rows);
+    const rows=(await c.query<CenterRow & {read_only:boolean|null}>(`SELECT recipient_id::text,kind,occurred_at::text,read_at::text,continuation::text,read_only FROM app.b026_center_vendor($1,$2,$3)`,[hashVendorToken(token),mark,cursor ?? null])).rows;
+    const readOnly=rows.some(row=>row.read_only===true);
+    // Strip the gateway-only column so delegated pages equal the B-028 shape exactly.
+    const result=page(rows.map(({read_only:_readOnly,...row})=>row));
+    return readOnly ? {...result,readOnly:true} : result;
+  });
   if(result.kind==="busy") throw new CenterBusyError(); if(result.kind==="denied") throw new CenterDeniedError(); return result.value;
 }
