@@ -19,7 +19,7 @@ async function core(c:Client,s:Session){
  if(!eligible(s))return false;
  const q=await c.query<StoredConsent>(`SELECT cs.accepted_at::text,cs.terms_version,cs.privacy_version,cs.source FROM public.organizations o JOIN public.org_members m ON m.org_id=o.id AND m.user_id=$2 AND m.status='active' AND m.role::text=$3 JOIN public.auth_sessions a ON a.id=$4 AND a.user_id=$2 JOIN public.platform_settings f ON f.key='company_profile_edit' JOIN LATERAL (SELECT accepted_at,terms_version,privacy_version,source FROM public.consents WHERE user_id=$2 ORDER BY recorded_at DESC,id DESC LIMIT 1) cs ON true WHERE o.id=$1 AND o.environment='live' AND o.live_org_id IS NULL AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp() AND o.feature_flags->'company_profile_edit'='true'::jsonb AND jsonb_typeof(f.value)='object' AND f.value->'enabled'='true'::jsonb AND CASE WHEN jsonb_typeof(f.value->'allowed_org_ids')='array' THEN NOT EXISTS (SELECT 1 FROM jsonb_array_elements(f.value->'allowed_org_ids') x(value) WHERE jsonb_typeof(x.value)<>'string' OR (x.value #>> '{}') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') ELSE false END AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)`,[s.orgId,s.userId,s.role,s.sessionId]);return q.rowCount===1&&consentCoversCurrent(q.rows[0]??null);
 }
-async function authorized(c:Client,s:Session):Promise<PartnerProof|null>{
+export async function authorizeStaffProfile(c:Client,s:Session):Promise<PartnerProof|null>{
  if(!await core(c,s))return null;
  const value=(await c.query<{value:unknown}>(`SELECT value FROM public.platform_settings WHERE key='design_partner_consent_gate'`)).rows[0]?.value??null;
  const override=(await c.query<{value:unknown}>(`SELECT feature_flags->'design_partner_consent_gate' AS value FROM public.organizations WHERE id=$1`,[s.orgId])).rows[0]?.value??null;
@@ -42,7 +42,7 @@ const select=`SELECT display_name AS name,to_char(updated_at AT TIME ZONE 'UTC',
 /** The caller supplies only the current server session; no target identity is accepted. */
 export async function staffProfileView(s:Session):Promise<StaffProfileView>{
  if(!eligible(s))return unavailable;
- try{return await svc(s.userId,async c=>{if(!await authorized(c,s))return unavailable;const row=(await c.query<Row>(select,[s.userId])).rows[0];if(!row||!await authorized(c,s))return unavailable;return {state:'ready',name:row.name??'',version:staffProfileVersion(s,row.updated_at_utc,row.name)};});}catch(error){logServerError('staff_profile_view',error);return unavailable;}
+ try{return await svc(s.userId,async c=>{if(!await authorizeStaffProfile(c,s))return unavailable;const row=(await c.query<Row>(select,[s.userId])).rows[0];if(!row||!await authorizeStaffProfile(c,s))return unavailable;return {state:'ready',name:row.name??'',version:staffProfileVersion(s,row.updated_at_utc,row.name)};});}catch(error){logServerError('staff_profile_view',error);return unavailable;}
 }
 export async function saveStaffProfile(s:Session,nameInput:unknown,versionInput:unknown):Promise<StaffProfileResult>{
  const name=parseStaffDisplayName(nameInput);if(!name||!validStaffProfileVersion(versionInput))return 'invalid';if(!eligible(s))return 'unavailable';
@@ -51,12 +51,12 @@ export async function saveStaffProfile(s:Session,nameInput:unknown,versionInput:
    await c.query('BEGIN ISOLATION LEVEL READ COMMITTED');
    await c.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','service_role',true)`,[s.userId]);
    await c.query('SET LOCAL ROLE service_role');await c.query(`SET LOCAL lock_timeout='5s'`);
-   if(!await authorized(c,s)){await c.query('ROLLBACK');return 'unavailable';}
+   if(!await authorizeStaffProfile(c,s)){await c.query('ROLLBACK');return 'unavailable';}
    const row=(await c.query<Row>(`${select} FOR UPDATE`,[s.userId])).rows[0];
    if(!row){await c.query('ROLLBACK');return 'unavailable';}
    // Fence absent settings only after the profile wait; do not wait on this fence.
    await c.query('LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT');
-   const proof=await authorized(c,s);
+   const proof=await authorizeStaffProfile(c,s);
    if(!proof||!await finalProof(c,s,proof)){await c.query('ROLLBACK');return 'unavailable';}
    if(row.name!==name&&staffProfileVersion(s,row.updated_at_utc,row.name)!==versionInput){await c.query('ROLLBACK');return 'stale';}
    if(row.name===name){await c.query('ROLLBACK');return 'unchanged';}

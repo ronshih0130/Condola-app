@@ -6,10 +6,13 @@ export function billingPreviewsOn(global: unknown, flags: unknown, orgId: string
   return g.enabled === true && Array.isArray(g.allowed_org_ids) && g.allowed_org_ids.includes(orgId) && f.billing_previews === true;
 }
 
-export async function billingPreviewsEnabled(client: Client, orgId: string): Promise<boolean> {
-  const result = await client.query<{ value: unknown; feature_flags: unknown }>(
-    `SELECT (SELECT value FROM platform_settings WHERE key='billing_previews') AS value, feature_flags FROM organizations WHERE id=$1`, [orgId],
+export async function billingPreviewsEnabled(client: Client, orgId: string, inspectCompanyFlag?: (global: unknown, flags: unknown) => void): Promise<boolean> {
+  const result = await client.query<{ value: unknown; feature_flags: unknown; company_profile?: unknown }>(
+    inspectCompanyFlag
+      ? `SELECT (SELECT value FROM platform_settings WHERE key='billing_previews') AS value, feature_flags, (SELECT value FROM platform_settings WHERE key='company_profile_edit') AS company_profile FROM organizations WHERE id=$1`
+      : `SELECT (SELECT value FROM platform_settings WHERE key='billing_previews') AS value, feature_flags FROM organizations WHERE id=$1`, [orgId],
   );
+  inspectCompanyFlag?.(result.rows[0]?.company_profile, result.rows[0]?.feature_flags);
   return billingPreviewsOn(result.rows[0]?.value,result.rows[0]?.feature_flags,orgId);
 }
 

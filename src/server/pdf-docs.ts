@@ -1,3 +1,5 @@
+import { companyProfileCopy } from "@/i18n/company-profile";
+import type { CompanyData } from "./company-profiles";
 import { dictionary, type Locale, type T } from "@/i18n";
 import type { PdfBlock, PdfDocument, PdfRow } from "@/lib/pdf-document";
 import { formatDate, moneyLabel, ownerSettlement, statementPeriodNet, statementSignedMoney } from "@/server/format";
@@ -46,6 +48,8 @@ export type LeasePdfSource = {
 export type StatementPdfLine = { lineType: string; description: string | null; amount: number };
 
 export type StatementPdfSource = {
+  companyProfile?: CompanyData;
+  companyProfileEnabled?: boolean;
   id: string;
   orgId: string;
   ownerName: string;
@@ -133,6 +137,13 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
   }
   rows.push({ label: t("i_stmt_closing"), value: signed(figures.closing) });
   const blocks: PdfBlock[] = [];
+  if (source.companyProfileEnabled === true && source.companyProfile) {
+    const issuer = source.companyProfile, copy = companyProfileCopy(locale);
+    blocks.push({ kind: "text", heading: copy.title, lines: [
+      issuer.legal_name, [issuer.address.city, issuer.address.district, issuer.address.street].filter(Boolean).join(' '),
+      ...(issuer.tax_id ? [`${copy.identifier}: ${issuer.tax_id}`] : []),
+    ].filter(Boolean) });
+  }
   const addresses = source.addresses.map((address) => address.trim()).filter(Boolean);
   if (addresses.length) {
     blocks.push({ kind: "text", heading: "", lines: addresses.map((address) => `${t("i_address")}：${address}`) });
