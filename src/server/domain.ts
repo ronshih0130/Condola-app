@@ -24,7 +24,7 @@ import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { calculateStatement } from "./statement-calculation";
 import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "./move-in-invoice";
 import { billingPreviewsEnabled } from "./billing-preview-rules";
-import { emitPaymentResult, lockOwnerPaymentResultContext, lockPaymentResultContext } from "./payment-result-events";
+import { authorizeOwnerPaymentConfirm, emitPaymentResult, lockOwnerPaymentResultContext, lockPaymentResultContext, ownerElevated } from "./payment-result-events";
 import { decideConfirmation } from "./b010-proxy-confirm-rules";
 import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
 import { syncVacantOwnerExpense } from "./utility-expense";
@@ -2035,25 +2035,30 @@ export async function confirmPayment(session: Session, paymentId: string, option
   } else if (session.kind !== "owner") {
     throw new FlowError("errors.forbidden");
   }
-  const lockContext=session.kind === "owner" ? lockOwnerPaymentResultContext : lockPaymentResultContext;
-  const result = await tx(session.userId, async (client) => {
-    const initial=await maybe<{lease_id:string}>(client,`SELECT lease_id::text FROM payments WHERE id=$1 AND org_id=$2`,[paymentId,session.orgId]);
+
+  async function body(
+    c: Parameters<typeof lockPaymentResultContext>[0],
+    enabled: boolean | undefined,
+    lockContext: typeof lockPaymentResultContext,
+  ) {
+    const initial=await maybe<{lease_id:string}>(c,`SELECT lease_id::text FROM payments WHERE id=$1 AND org_id=$2`,[paymentId,session.orgId]);
     if (!initial) throw new FlowError("errors.notFound");
-    const enabled=await lockContext(client,session,initial.lease_id);
-    if (session.kind === "owner" && !enabled) throw new FlowError("errors.forbidden");
-    const center=await beginPaymentCenter(client,session,{leaseId:initial.lease_id,paymentId:paymentId,action:"confirm"});
-    const payment = await maybe<{id:string;org_id:string;property_id:string;lease_id:string;currency:string;amount_minor:string;payer_contact_id:string|null;status:string}>(client,
+    const contextEnabled=await lockContext(c,session,initial.lease_id);
+    if (enabled === undefined) enabled=contextEnabled;
+    if (session.kind === "owner" && !contextEnabled) throw new FlowError("errors.forbidden");
+    const center=await beginPaymentCenter(c,session,{leaseId:initial.lease_id,paymentId:paymentId,action:"confirm"});
+    const payment = await maybe<{id:string;org_id:string;property_id:string;lease_id:string;currency:string;amount_minor:string;payer_contact_id:string|null;status:string}>(c,
       `SELECT id,org_id::text,property_id::text,lease_id::text,currency,amount_minor::text,payer_contact_id::text,status::text FROM payments WHERE id=$1 AND org_id=$2 FOR UPDATE`,[paymentId,session.orgId]);
     if (!payment || payment.lease_id !== initial.lease_id) throw new FlowError("errors.notFound");
-    if (enabled && !await lockContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
+    if (enabled && !await lockContext(c,session,payment.lease_id)) throw new FlowError("errors.generic");
     if (payment.status === "confirmed") return {leaseId:payment.lease_id,enabled};
     if (payment.status !== "submitted") throw new FlowError("errors.paymentState");
-    const invoices=await lockAllocationInvoices(client,session.orgId,payment.lease_id);
-    if (enabled && !await lockContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
+    const invoices=await lockAllocationInvoices(c,session.orgId,payment.lease_id);
+    if (enabled && !await lockContext(c,session,payment.lease_id)) throw new FlowError("errors.generic");
     let decision: ReturnType<typeof decideConfirmation> | null = null;
     if (enabled) {
       const collector = await maybe<{collector:"management"|"owner";owner_contact_id:string|null}>(
-        client,
+        c,
         `SELECT collector,owner_contact_id FROM app.b010_payment_collector($1)`,
         [payment.id],
       );
@@ -2073,17 +2078,29 @@ export async function confirmPayment(session: Session, paymentId: string, option
     }
     const balance=invoices.reduce((sum,invoice)=>sum+Number(invoice.balance_minor),0);
     if (Number(payment.amount_minor)>balance) throw new FlowError("errors.amountTooHigh");
-    await client.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now() WHERE id=$1`,[payment.id,session.userId]);
-    await allocateAndLedger(client,payment,session.userId,invoices);
+    await c.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now() WHERE id=$1`,[payment.id,session.userId]);
+    await allocateAndLedger(c,payment,session.userId,invoices);
     if (decision?.ok) {
-      await client.query(
+      await c.query(
         `SELECT app.b010_record_confirmation($1,$2,$3)`,
         [payment.id,options.proxyOwnerConfirmed === true,options.source ?? (session.kind === "owner" ? "owner_portal" : "staff_ui")],
       );
     }
-    const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
-    await finalizePaymentCenter(client,center,source);
+    const source=enabled ? await emitPaymentResult(c,payment.id,"payment_confirmed") : null;
+    await finalizePaymentCenter(c,center,source);
     return {leaseId:payment.lease_id,enabled};
+  }
+
+  const result = await tx(session.userId, async (client) => {
+    if (session.kind === "owner") {
+      const auth=await authorizeOwnerPaymentConfirm(client,session,paymentId);
+      if (auth.state === "off" || auth.state === "forbidden") throw new FlowError("errors.forbidden");
+      if (auth.state === "notFound") throw new FlowError("errors.notFound");
+      return ownerElevated(client,session,async c => {
+        return body(c,true,lockOwnerPaymentResultContext);
+      });
+    }
+    return body(client,undefined,lockPaymentResultContext);
   }, requireOrgScope(session));
   if (!result.enabled) await svc(session.userId, async (client) => queueDemoNotice(client,result.leaseId,"payment_confirmed"));
   return {paymentId,status:"confirmed" as const};

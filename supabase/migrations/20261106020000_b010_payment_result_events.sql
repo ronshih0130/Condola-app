@@ -363,7 +363,8 @@ BEGIN
   IF NOT FOUND OR NOT EXISTS (SELECT 1 FROM app.b010_payment_contexts ctx
     JOIN public.auth_sessions s ON s.id=ctx.session_id AND s.user_id=ctx.actor_id
     WHERE ctx.tx_id=txid_current() AND ctx.org_id=v_requirement.org_id AND ctx.lease_id=v_requirement.lease_id
-      AND ctx.actor_id=auth.uid() AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()) THEN
+      AND ctx.actor_id=auth.uid() AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+      AND (ctx.role <> 'owner' OR p_kind='payment_confirmed')) THEN
     RAISE EXCEPTION 'Payment result unavailable' USING ERRCODE='42501';
   END IF;
 
@@ -404,5 +405,71 @@ END $$;
 
 REVOKE ALL ON FUNCTION app.b010_emit_payment_event(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION app.b010_emit_payment_event(uuid,text) TO authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION app.b010_authorize_owner_payment_confirm(
+  p_payment uuid,
+  p_org uuid,
+  p_environment text,
+  p_session uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_lease uuid;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.organizations o
+    WHERE o.id=p_org AND o.environment::text=p_environment
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM public.organizations o
+    JOIN public.platform_settings f ON f.key='payment_results_v2'
+    WHERE o.id=p_org
+      AND o.feature_flags->'payment_results_v2'='true'::jsonb
+      AND f.value->'enabled'='true'::jsonb
+      AND jsonb_typeof(f.value->'allowed_org_ids')='array'
+      AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)
+  ) THEN
+    RAISE EXCEPTION 'Payment result unavailable' USING ERRCODE='42501';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.contacts c
+    JOIN public.property_owners po ON po.org_id=c.org_id AND po.owner_contact_id=c.id
+    WHERE c.org_id=p_org
+      AND c.user_id=v_actor
+      AND c.archived_at IS NULL
+  ) OR NOT EXISTS (
+    SELECT 1 FROM public.auth_sessions s
+    WHERE s.id=p_session
+      AND s.user_id=v_actor
+      AND s.revoked_at IS NULL
+      AND s.expires_at>clock_timestamp()
+  ) THEN
+    RAISE EXCEPTION 'Payment result unavailable' USING ERRCODE='42501';
+  END IF;
+
+  SELECT p.lease_id INTO v_lease
+  FROM public.payments p
+  WHERE p.id=p_payment AND p.org_id=p_org;
+
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  PERFORM 1
+  WHERE app.b010_lock_owner_payment_context(p_org,p_environment,p_session,v_lease);
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Payment result unavailable' USING ERRCODE='42501';
+  END IF;
+
+  RETURN v_lease;
+END $$;
+
+REVOKE ALL ON FUNCTION app.b010_authorize_owner_payment_confirm(uuid,uuid,text,uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION app.b010_authorize_owner_payment_confirm(uuid,uuid,text,uuid) TO authenticated,service_role;
 
 COMMIT;
