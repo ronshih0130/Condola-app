@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ownerRepairCopy } from "@/i18n/lanes/repair-owner-policy";
 import { ownerPortalCopy } from "@/i18n/owner-portal-access";
 import { ownerRepliesCopy } from "@/i18n/owner-replies-messages";
+import { ownerAccountCopy } from "@/i18n/owner-account";
 import { usePathname } from "next/navigation";
 import { BrandImage } from "./brand";
 import { useLocale, useT } from "./locale";
@@ -19,7 +20,7 @@ export function OwnerNav({
   properties?: { id: string; name: string }[];
   v2?: boolean;
   repairPolicyIds?: string[];
-  /** B-023 owner_portal_extensions ON: adds document center, repair progress, lease replies and messages entries. */
+  /** B-023 owner_portal_extensions ON: adds document center, repair progress, lease replies, messages and account entries. */
   extensions?: boolean;
 }) {
   const t = useT();
@@ -32,8 +33,9 @@ export function OwnerNav({
   ] as const;
   const portal = extensions ? ownerPortalCopy(locale) : null;
   const replies = extensions ? ownerRepliesCopy(locale) : null;
-  const extra = portal && replies ? [["/o/files", portal.navFiles], ["/o/repairs", portal.navRepairs],
-    ["/o/lifecycle", replies.navLifecycle], ["/o/messages", replies.navMessages]] as const : [];
+  const account = extensions ? ownerAccountCopy(locale) : null;
+  const extra = portal && replies && account ? [["/o/files", portal.navFiles], ["/o/repairs", portal.navRepairs],
+    ["/o/lifecycle", replies.navLifecycle], ["/o/messages", replies.navMessages], ["/o/account", account.navAccount]] as const : [];
   return (
     <div className="stage">
       <div className="phone">

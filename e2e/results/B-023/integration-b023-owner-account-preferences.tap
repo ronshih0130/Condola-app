@@ -1,0 +1,54 @@
+TAP version 13
+# database failed { code: '42501', key: 'errors.generic', message: 'database error' }
+# Subtest: own sessions only: live sessions of the caller, current marker, device text without IP
+ok 1 - own sessions only: live sessions of the caller, current marker, device text without IP
+  ---
+  duration_ms: 445.595542
+  ...
+# database failed { code: '42501', key: 'errors.generic', message: 'database error' }
+# database failed { code: '42501', key: 'errors.generic', message: 'database error' }
+# database failed { code: '42501', key: 'errors.generic', message: 'database error' }
+# Subtest: revoke: never another user's session or the current one; one other own session; idempotent replay
+ok 2 - revoke: never another user's session or the current one; one other own session; idempotent replay
+  ---
+  duration_ms: 51.34275
+  ...
+# Subtest: recent-auth: a stale current session is denied with zero writes; revoked current session denied
+ok 3 - recent-auth: a stale current session is denied with zero writes; revoked current session denied
+  ---
+  duration_ms: 67.236375
+  ...
+# Subtest: legacy /m/account revoke actions: owner and tenant sessions get no effect (zero writes); staff unchanged
+ok 4 - legacy /m/account revoke actions: owner and tenant sessions get no effect (zero writes); staff unchanged
+  ---
+  duration_ms: 68.537
+  ...
+# Subtest: profile: own contact only; optimistic version; replay/conflict/unchanged; email/phone read-only
+ok 5 - profile: own contact only; optimistic version; replay/conflict/unchanged; email/phone read-only
+  ---
+  duration_ms: 106.742542
+  ...
+# Subtest: preferences: default ON, per-owner isolation, idempotent replay, producer helper
+ok 6 - preferences: default ON, per-owner isolation, idempotent replay, producer helper
+  ---
+  duration_ms: 73.158042
+  ...
+# Subtest: private helpers and tables are not reachable by API roles
+ok 7 - private helpers and tables are not reachable by API roles
+  ---
+  duration_ms: 2.936417
+  ...
+# Subtest: OFF matrix: absent/false/malformed global, org not allowed, org flag false ⇒ null/unavailable, no gateway call, zero writes
+ok 8 - OFF matrix: absent/false/malformed global, org not allowed, org flag false ⇒ null/unavailable, no gateway call, zero writes
+  ---
+  duration_ms: 174.994042
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1687.280959

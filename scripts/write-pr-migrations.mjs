@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107116000_b023_owner_account_preferences.sql": {
+    addOnly: true,
+    reason: "Adds four private tables with RLS and revokes (owner session revocation ledger, owner profile revision ledger, owner notification preferences defaulting to ON, preference request ledger) and authenticated SECURITY DEFINER owner session-list/revoke-one-other-session, own-contact profile and notification-preference gateways behind the existing default-OFF owner_portal_extensions setting; no existing-table schema, policy or function changes or backfill.",
+  },
   "supabase/migrations/20261107113000_b023_owner_replies_messages.sql": {
     addOnly: true,
     reason: "Adds one thread_kind enum value (unused by existing rows/policies), three private append-only/link tables with RLS and revokes (owner lifecycle replies, owner thread links, owner message request ledger) and authenticated SECURITY DEFINER owner reply/message gateways plus read-only staff (admin/manager) owner-thread/owner-reply readers behind the existing default-OFF owner_portal_extensions setting; no existing-table schema, policy or function changes or backfill.",

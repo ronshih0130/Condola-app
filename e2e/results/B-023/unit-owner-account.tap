@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: OwnerNav: B-023 entries only when extensions is ON; OFF markup is unchanged
+ok 1 - OwnerNav: B-023 entries only when extensions is ON; OFF markup is unchanged
+  ---
+  duration_ms: 54.5955
+  ...
+# Subtest: ownerDisplayName trims, bounds 1..100 code points and rejects control characters
+ok 2 - ownerDisplayName trims, bounds 1..100 code points and rejects control characters
+  ---
+  duration_ms: 0.392958
+  ...
+# Subtest: non-owner or malformed inputs are null/unavailable before any database call
+ok 3 - non-owner or malformed inputs are null/unavailable before any database call
+  ---
+  duration_ms: 0.509375
+  ...
+# Subtest: copy: 屋主 wording, no banned words, same keys in both locales, recent-auth and read-only notes
+ok 4 - copy: 屋主 wording, no banned words, same keys in both locales, recent-auth and read-only notes
+  ---
+  duration_ms: 0.317292
+  ...
+# Subtest: migration: additive, RLS on new tables, revokes on every function, grants only gateways to authenticated
+ok 5 - migration: additive, RLS on new tables, revokes on every function, grants only gateways to authenticated
+  ---
+  duration_ms: 1.408708
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 165.810625
