@@ -57,6 +57,30 @@ test("utilities and statement sources contribute to gross with source metadata",
   assert.deepEqual(preview.components[2], { componentKey: "repair", amountMinor: "700", currency: "USD", sourceRefKind: "repair_cost_item", sourceRefId: "repair" });
 });
 
+test("component currencies must match the bill currency", () => {
+  for (const source of ["postedUtilities", "statementSources"] as const) {
+    assert.throws(() => composeMonthlyBillPreview({
+      ...input,
+      [source]: [{ amountMinor: "300", currency: "EUR" }],
+    }), {
+      name: "TypeError",
+      message: "currency must match the bill currency",
+    });
+  }
+});
+
+test("advance credit currencies must match the bill currency", () => {
+  for (const status of ["approved", "clawback", "carry"] as const) {
+    assert.throws(() => composeMonthlyBillPreview({
+      ...input,
+      advanceCredits: [{ creditId: "credit", amountMinor: "500", currency: "EUR", status }],
+    }), {
+      name: "TypeError",
+      message: "currency must match the bill currency",
+    });
+  }
+});
+
 test("amounts must be canonical decimal integer strings", () => {
   for (const amountMinor of ["1.5", "01", "+1", "-0", " 1", "1e3", ""]) {
     assert.throws(() => composeMonthlyBillPreview({ ...input, plannedRent: { ...input.plannedRent, amountMinor } }), TypeError);

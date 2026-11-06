@@ -32,8 +32,13 @@ export function composeMonthlyBillPreview(input: {
       sourceRefId: line.sourceRefId,
     })),
   ];
-  const gross = components.reduce((sum, line) => sum + parseAmountMinor(line.amountMinor), BigInt(0));
   const advanceCredits = (input.advanceCredits ?? []).map((credit) => ({ ...credit }));
+  for (const line of [...components, ...advanceCredits]) {
+    if (line.currency !== input.currency) {
+      throw new TypeError("currency must match the bill currency");
+    }
+  }
+  const gross = components.reduce((sum, line) => sum + parseAmountMinor(line.amountMinor), BigInt(0));
   let offset = BigInt(0);
   for (const credit of advanceCredits) {
     const amount = parseAmountMinor(credit.amountMinor);

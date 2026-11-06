@@ -12,6 +12,9 @@ export async function recordPeriodDueComponent(
     component: PeriodDueComponentLine;
   },
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!component.sourceRefId?.trim()) {
+    return { ok: false, reason: "invalid" };
+  }
   return tx(session.userId, async (client) => {
     if (
       !(await billingPreviewsEnabled(client, session.orgId)) ||
@@ -24,7 +27,9 @@ export async function recordPeriodDueComponent(
         `INSERT INTO app.tenant_period_due_components
           (org_id, lease_id, period_ym, component_key, amount_minor,
            currency, source_ref_kind, source_ref_id, note, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (org_id, lease_id, period_ym, component_key, source_ref_kind, source_ref_id)
+         DO NOTHING`,
         [
           session.orgId, leaseId, periodYm, component.componentKey,
           component.amountMinor, component.currency, component.sourceRefKind,
