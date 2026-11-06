@@ -377,14 +377,14 @@ export async function propertyDetail(session: Session, id: string) {
   }, requireOrgScope(session));
 }
 
-export async function listOwners(session: Session) {
+export async function listOwners(session: Session, includeArchivedOwners = false) {
   return tx(session.userId, async (client) =>
     many<{ id: string; name: string }>(
       client,
       `SELECT id::text, display_name AS name FROM contacts
-        WHERE org_id = $1 AND is_owner AND archived_at IS NULL
+        WHERE org_id = $1 AND is_owner AND archived_at IS NULL AND ($2::boolean OR app.b015_archive_enabled(org_id) IS NOT TRUE OR owner_archived_at IS NULL)
         ORDER BY display_name`,
-      [session.orgId],
+      [session.orgId, includeArchivedOwners],
     ), requireOrgScope(session),
   );
 }
@@ -1477,7 +1477,7 @@ export async function listOwnerDirectory(session: Session) {
                  WHERE po.owner_contact_id = c.id
               ), '') AS properties
          FROM contacts c
-        WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL
+        WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL AND (app.b015_archive_enabled(c.org_id) IS NOT TRUE OR c.owner_archived_at IS NULL)
         ORDER BY c.display_name`,
       [session.orgId],
     ), requireOrgScope(session),

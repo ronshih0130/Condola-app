@@ -3,6 +3,7 @@ import type { T } from "./index";
 export const ERRORS: Record<string, string> = {
   "errors.forbidden": "i_forbidden",
   "errors.required": "i_required",
+  "errors.busy": "i_portal_timeout",
   "errors.generic": "i_generic",
   "errors.leaseFailed": "i_lease_failed",
   "errors.leaseNetwork": "i_lease_network",

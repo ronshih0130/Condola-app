@@ -1,13 +1,13 @@
 /** Browser-safe archive contract. Scope is a precondition, never authority. */
-export type ArchiveKind = "property" | "unit" | "room";
+export type ArchiveKind = "property" | "unit" | "room" | "owner";
 export type ArchiveRef = { kind: ArchiveKind; id: string };
 export type RenderedArchiveScope = { actorId: string; orgId: string; liveOrgId: string; environment: "live" | "sandbox" };
-export type ArchiveCategory = "leases" | "signing" | "repairs" | "dispatch" | "utilities" | "finance" | "invitations";
+export type ArchiveCategory = "leases" | "signing" | "repairs" | "dispatch" | "utilities" | "finance" | "invitations" | "owners";
 export type ArchiveCoverage = { category: ArchiveCategory; state: "verified" | "unknown" };
 export type ArchiveItem = { category: ArchiveCategory; label: string; href: string | null };
 export type ArchiveObserved = {
   ref: ArchiveRef;
-  propertyId: string;
+  propertyId: string | null;
   unitId: string | null;
   roomId: string | null;
   mode: "whole_unit" | "by_room" | null;
@@ -39,7 +39,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function isArchiveRef(value: unknown): value is ArchiveRef {
   if (!value || typeof value !== "object") return false;
   const v=value as Record<string,unknown>;
-  return (v.kind === "property" || v.kind === "unit" || v.kind === "room") && typeof v.id === "string" && UUID.test(v.id);
+  return (v.kind === "property" || v.kind === "unit" || v.kind === "room" || v.kind === "owner") && typeof v.id === "string" && UUID.test(v.id);
 }
 export function isRenderedArchiveScope(value: unknown): value is RenderedArchiveScope {
   if (!value || typeof value !== "object") return false;

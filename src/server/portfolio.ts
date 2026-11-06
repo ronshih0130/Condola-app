@@ -338,7 +338,7 @@ async function ensureOwner(client: Client, orgId: string, propertyId: string, ow
   const owner = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM contacts
-      WHERE id = $1 AND org_id = $2 AND is_owner AND archived_at IS NULL`,
+      WHERE id = $1 AND org_id = $2 AND is_owner AND archived_at IS NULL AND (app.b015_archive_enabled(org_id) IS NOT TRUE OR owner_archived_at IS NULL)`,
     [ownerContactId, orgId],
   );
   if (!owner) throw new FlowError("errors.required");
