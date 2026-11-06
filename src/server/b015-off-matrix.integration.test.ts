@@ -257,6 +257,41 @@ for (const global of globals) for (const optIn of optIns) {
   });
 }
 
+// Asymmetric controls: each feature must read its OWN gate. With one feature
+// fully ON and the other's organization opt-in false, only the ON feature writes.
+for (const [onKey, offKey] of [['record_archive', 'tenant_directory_edit'], ['tenant_directory_edit', 'record_archive']] as const) {
+  test(`asymmetric controls: ${onKey} ON while ${offKey} OFF`, async () => {
+    await withRestoredControls(async () => {
+      await setControl(onKey, enabled, 'true');
+      await setControl(offKey, enabled, 'false');
+      const configured = await controlsSnapshot();
+      const target = targets.find(t => t.ref.kind === 'property' && t.desired === 'archived');
+      assert.ok(target, 'an active property target exists');
+      if (onKey === 'record_archive') {
+        assert.equal((await ready(target.ref)).writeEnabled, true);
+        assert.equal((await command(target.ref, 'archived')).state, 'changed');
+        assert.equal((await command(target.ref, 'active')).state, 'changed');
+        const before = await businessSnapshot();
+        assert.equal((await directoryContactEditView(staff, contactId)).state, 'disabled');
+        const result = await editDirectoryContact(staff, await editIntent());
+        assert.equal(result.status, 'recorded');
+        if (result.status === 'recorded') assert.equal(result.outcome, 'rejected_disabled');
+        assert.deepEqual(await businessSnapshot(), before, 'directory edit stays disabled under its own OFF gate');
+      } else {
+        const before = await businessSnapshot();
+        assert.equal((await ready(target.ref)).writeEnabled, false);
+        assert.equal((await command(target.ref, 'archived')).state, 'disabled');
+        assert.deepEqual(await businessSnapshot(), before, 'archive stays disabled under its own OFF gate');
+        assert.equal((await directoryContactEditView(staff, contactId)).state, 'enabled');
+        const result = await editDirectoryContact(staff, await editIntent());
+        assert.equal(result.status, 'recorded');
+        if (result.status === 'recorded') assert.equal(result.outcome, 'changed');
+      }
+      assert.deepEqual(await controlsSnapshot(), configured, 'requests never mutate control rows or any org flags');
+    });
+  });
+}
+
 test('control cleanup restores a genuinely absent row and microsecond timestamps even on failure', async () => {
   await withRestoredControls(async () => {
     await setControl('record_archive', undefined, 'absent');
