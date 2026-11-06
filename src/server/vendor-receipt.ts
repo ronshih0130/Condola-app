@@ -477,8 +477,10 @@ export async function createVendorDocumentInvite(
   ticketId: string,
   vendorProfileId: string,
   selection: VendorBuyerSelection,
+  options?: { documentUi: true },
 ) {
   return svc(session.userId, async (client) => {
+    if (options?.documentUi) await admitVendorDocumentsOrgOn(client, session.orgId);
     const access = await authorize(client, session, ticketId, vendorProfileId);
     if (access.ticket.status !== "closed") throw new Error("ticket_not_closed");
     await buyerOn(client, access, selection);
@@ -528,8 +530,9 @@ export async function createVendorDocumentInvite(
   });
 }
 
-export async function revokeVendorDocumentInvite(session: Session, grantId: string) {
+export async function revokeVendorDocumentInvite(session: Session, grantId: string, options?: { documentUi: true }) {
   return svc(session.userId, async (client) => {
+    if (options?.documentUi) await admitVendorDocumentsOrgOn(client, session.orgId);
     await authorizeVendorStaff(client, session);
     const grant = await maybe<Grant>(
       client,

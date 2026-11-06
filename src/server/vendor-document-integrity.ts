@@ -41,15 +41,8 @@ export function decodeDocumentAttachment(base64: unknown, mime: unknown): Uint8A
   return bytes;
 }
 
-export type FixedDataUpdate = {
-  expectedVersion: number;
-  display_name?: string;
-  business_name?: string;
-  representative_name?: string;
-  phone_e164?: string;
-  address?: string;
-  seal?: { base64: string; mimeType: "image/png" | "image/jpeg" };
-};
+export type { FixedDataUpdate } from '@/lib/vendor-document-ui';
+import type { FixedDataUpdate } from '@/lib/vendor-document-ui';
 
 /** Append a version, never mutate an issued version or an old seal object. */
 export async function updateVendorFixedDataOn(client: Client, access: Access, input: FixedDataUpdate) {
@@ -63,6 +56,8 @@ export async function updateVendorFixedDataOn(client: Client, access: Access, in
   for (const key of ["display_name", "business_name", "representative_name", "phone_e164", "address"] as const) {
     if (input[key] === undefined) continue;
     const value = input[key];
+    // Only an individual's optional address supports explicit clearing.
+    if (key === "address" && value === null && next.kind === "individual") { next.address = null; continue; }
     if (typeof value !== "string" || !value.trim() || value.length > (key === "address" ? 500 : 200)
       || /[\u0000-\u001f\u007f]/.test(value)) throw new FlowError("errors.required");
     next[key] = value.trim();
@@ -115,9 +110,11 @@ export async function vendorDocumentHistoryOn(client: Client, access: Access) {
   const rows = await many<{
     id: string; status: "issued" | "voided"; snapshot: {
       document: VendorDocument; profileVersionId: string | null;
-      issuer: { display_name: string; business_name: string | null };
-    }; version: number | null; sha256: string;
-  }>(client, `SELECT d.id::text,d.status,p.snapshot,v.version,d.pdf_sha256 AS sha256
+      issuer: { display_name: string; business_name: string | null; representative_name: string | null; phone_e164: string; address: string | null };
+    }; version: number | null; sha256: string; seal_present: boolean;
+  }>(client, `SELECT d.id::text,d.status,p.snapshot,v.version,d.pdf_sha256 AS sha256,
+      CASE WHEN d.vendor_profile_version_id IS NULL THEN p.snapshot->>'sealFileId' IS NOT NULL
+        ELSE (v.seal_file_id IS NOT NULL OR v.snapshot->'seal'->>'id' IS NOT NULL) END AS seal_present
     FROM vendor_documents d JOIN vendor_document_pdf_bytes p ON p.document_id=d.id AND p.org_id=d.org_id
     LEFT JOIN vendor_profile_versions v ON v.id=d.vendor_profile_version_id AND v.org_id=d.org_id AND v.vendor_profile_id=d.vendor_profile_id
     WHERE d.org_id=$1 AND d.ticket_id=$2 AND d.vendor_profile_id=$3
@@ -128,6 +125,9 @@ export async function vendorDocumentHistoryOn(client: Client, access: Access) {
     id: row.id, status: row.status, docNo: row.snapshot.document.doc_no, kind: row.snapshot.document.kind,
     version: row.version, profileVersionId: row.snapshot.profileVersionId,
     issuerName: row.snapshot.issuer.business_name || row.snapshot.issuer.display_name,
+    fixedData: { display_name: row.snapshot.issuer.display_name, business_name: row.snapshot.issuer.business_name,
+      representative_name: row.snapshot.issuer.representative_name, phone_e164: row.snapshot.issuer.phone_e164,
+      address: row.snapshot.issuer.address }, sealPresent: row.seal_present,
     items: row.snapshot.document.items, totalMinor: String(row.snapshot.document.total_minor), sha256: row.sha256,
     scans: row.snapshot.document.kind === "receipt" ? await many<{
       id: string; document_group_id: string; document_id: string; mime_type: string; sha256: string; created_at: string;
