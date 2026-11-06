@@ -45,11 +45,14 @@ const openActions: Record<string, Record<string, string>> = {
   },
 };
 const openPages: Record<string, Record<string, string>> = {
+  "app/vendor-account/page.tsx": { default: "Public shell only; account API validates auth cookie and current consent before all data and mutations" },
   "app/v/[token]/estimate/page.tsx": { default: "B-026 scoped vendor token and flag gateway, no user session" },
   "app/v/[token]/page.tsx": { default: "Vendor link token authentication, no user session" },
   "app/v/[token]/notifications/page.tsx": { default: "Exact vendor job token gateway, no human user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
+  "api/vendor-account-staff/route.ts": { GET: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope", POST: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope" },
+  "api/vendor-account/route.ts": { GET: "Account cookie identity plus current consent via authorizeVendorAccountRequest; no persona or session writes", POST: "Account cookie identity plus current consent via authorizeVendorAccountRequest; strict same-origin mutation" },
   "api/vendor-estimate/route.ts": { POST: "B-026 scoped vendor token and flag gateway, no user session" },
   "api/auth/enter/route.ts": { GET: "Authentication continuation checks consent" },
   "api/auth/sign-out/route.ts": { POST: "Always permit leaving" },
