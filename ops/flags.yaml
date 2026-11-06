@@ -260,3 +260,12 @@ flags:
     global_kill: "platform_settings.partner_unit_override requires strict boolean enabled and a valid allowed_org_ids array containing the selected organization; absent or malformed is OFF"
     org_override: "organizations.feature_flags.partner_unit_override must be strict boolean true; current canonical membership and selected environment apply"
     activation: "Local synthetic partner terms only; at most 30 elapsed days per audited revision; no hosted activation"
+
+  partner_consent_gate:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "PARTNER_CONSENT_GATE: platform_settings.partner_consent_gate requires strict boolean enabled and valid allowed_org_ids containing the canonical live company; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.partner_consent_gate must be strict boolean true on the canonical live company, including sandbox writes"
+    activation: "OFF; requires separately approved per-company version/locale/full-text SHA-256 in partner_consent_approved_agreements and matching append-only consent; no approvals seeded"
