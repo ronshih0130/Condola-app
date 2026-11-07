@@ -3,6 +3,8 @@ import { hashVendorToken, vendorTokenAcceptable } from "../vendor-repair-rules";
 import { randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "../db";
+import { requireEffectivePerm } from "../b017-custom-role-governance";
+import { FlowError } from "../errors";
 import { createSessionOn, normalizeEmail, provisionAcceptedLogin, type RequestMeta } from "../auth";
 import { consentCoversCurrent, type StoredConsent } from "../consent";
 import { hashInviteToken, mintedLoginEmail, portalShownEmail } from "../portal-invite";
@@ -393,6 +395,17 @@ export async function unlinkLine(id: string, sessionToken: string | undefined, r
   await admit(c, `unlink:${session.user_id}`);
   // Same identity-before-link order as bind and global revoke.
   await c.query("SELECT id FROM app.b033_line_identities WHERE id=$1 FOR UPDATE", [link.login_identity_id]);
+  // B-017: a staff unlink manages another person's contact channel. After the business waits and
+  // before the write, re-check current effective authority for the link's org (restrict-only; native
+  // admin/manager hold tenants.contact, so native behaviour is unchanged). SQL holds it until COMMIT.
+  if (!own) {
+   try {
+    await requireEffectivePerm(c, { kind: "staff", orgId: link.org_id, liveOrgId: link.org_id, userId: session.user_id, sessionId: session.id }, "tenants.contact");
+   } catch (error) {
+    if (error instanceof FlowError) rejectLine(404, "not_found");
+    throw error;
+   }
+  }
   await c.query("UPDATE line_account_links SET status='unlinked',unlinked_at=now(),notification_opt_in=false WHERE id=$1", [id]);
   await c.query(`INSERT INTO audit_log(org_id,actor_user_id,actor_role,table_name,row_id,action,event_type,reason)
    VALUES($1,$2,'app','b033_line_events',$3,'update','line_unlink',$4)`, [link.org_id, session.user_id, id, reason]);

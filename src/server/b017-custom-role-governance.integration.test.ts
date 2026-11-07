@@ -876,3 +876,233 @@ test('R4 restrictive floors use statement initplans and expose no arbitrary-org 
   assert.ok(Number(report.Plan['Actual Rows'])>=1200);
   t.diagnostic(`OFF audit rows=${report.Plan['Actual Rows']}; execution_ms=${report['Execution Time']}; initplan_loops=${init.map(p=>p['Actual Loops']).join(',')}`);
 });
+
+// ---- Integration-merge regressions: merged entry points and token-authenticated LINE staff unlink ----
+import { unitQrStaffUnits, issueUnitQr, revokeUnitQr } from "./unit-qr-signup";
+import { inviteVendorAccount, rebindVendorAccount, correctVendorJobAccount, vendorAccountLinkEvents } from "./vendor-accounts";
+import { resendPortalInvite, portalResendControl } from "./portal-resend";
+import { managerVendorEstimates } from "./vendor-estimates";
+import { vendorDocumentInvitesView } from "./vendor-document-invites";
+import { recipientChannelPlan } from "./recipient-channels";
+import { simulatedResult } from "../lib/portal-resend-state";
+import { randomProof } from "./line/login-link";
+import { LINE_BROWSER_COOKIE, LINE_CSRF_COOKIE } from "./line/login-routes";
+import { DELETE as lineUnlinkDELETE } from "@/app/api/line/links/[id]/route";
+const MERGE_U = "00000000-0000-4000-8000-000000000001";
+function forbidden(e: unknown) { return /forbidden/.test(String((e as Error)?.message ?? e)); }
+async function holdAssignment(s: Session) {
+  // Another transaction owns the actor's authority row: an in-transaction B017 fence fails NOWAIT.
+  const holder = new Client({ connectionString: clone.url }); await holder.connect();
+  await holder.query("BEGIN");
+  assert.equal((await holder.query("SELECT 1 FROM app.b017_assignments WHERE org_id=$1 AND user_id=$2 FOR UPDATE", [s.orgId, s.userId])).rowCount, 1);
+  return async () => { await holder.query("ROLLBACK"); await holder.end(); };
+}
+
+test("B017 merge: restricted custom Manager is refused by every merged staff entry point; granted keys pass", async () => {
+  const previousKey = process.env.UNIT_QR_SIGNING_KEY; process.env.UNIT_QR_SIGNING_KEY = "x".repeat(40);
+  try {
+    await assign(await create(["dash.view"]));
+    const m = await resolveCustomRoleSession(manager); assert.ok(m.customRole);
+    const throwing: Record<string, () => Promise<unknown>> = {
+      unitQrStaffUnits: () => unitQrStaffUnits(m), issueUnitQr: () => issueUnitQr(m, MERGE_U, "https://app.condola.app"),
+      revokeUnitQr: () => revokeUnitQr(m, MERGE_U), inviteVendorAccount: () => inviteVendorAccount(m, MERGE_U, MERGE_U),
+      rebindVendorAccount: () => rebindVendorAccount(m, MERGE_U, MERGE_U), correctVendorJobAccount: () => correctVendorJobAccount(m, MERGE_U, null),
+      vendorAccountLinkEvents: () => vendorAccountLinkEvents(m, MERGE_U), managerVendorEstimates: () => managerVendorEstimates(m, MERGE_U),
+      recipientChannelPlan: () => recipientChannelPlan(m, MERGE_U, "tenant"),
+    };
+    for (const [name, call] of Object.entries(throwing)) await assert.rejects(call(), forbidden, name);
+    // Pre-guard native/custom checks answer with their inert result instead of throwing.
+    assert.deepEqual(await resendPortalInvite(m, { sourceId: MERGE_U, requestId: randomUUID() }), simulatedResult("unavailable"));
+    assert.equal(await portalResendControl(m, MERGE_U, "owner"), null);
+    assert.equal(await vendorDocumentInvitesView(m, MERGE_U), null);
+
+    await assign(await create(["leases.edit", "tickets.update", "tenants.contact", "props.view"]));
+    const g = await resolveCustomRoleSession(manager); assert.ok(g.customRole);
+    for (const key of ["leases.edit", "tickets.update", "tenants.contact"] as const) await guardEffectiveSession(g, key);
+    await unitQrStaffUnits(g);
+    assert.equal(await portalResendControl(g, MERGE_U, "owner"), null);
+    assert.equal(await vendorDocumentInvitesView(g, MERGE_U), null);
+    assert.equal(await recipientChannelPlan(g, MERGE_U, "tenant"), null);
+  } finally { if (previousKey === undefined) delete process.env.UNIT_QR_SIGNING_KEY; else process.env.UNIT_QR_SIGNING_KEY = previousKey; }
+});
+
+test("B017 merge: document-invite and resend readers re-check authority inside their transaction", async () => {
+  await assign(await create(["leases.edit", "tickets.update", "props.view"]));
+  const g = await resolveCustomRoleSession(manager);
+  assert.equal(await vendorDocumentInvitesView(g, MERGE_U), null);
+  assert.equal(await portalResendControl(g, MERGE_U, "owner"), null);
+  const release = await holdAssignment(g);
+  try {
+    await assert.rejects(vendorDocumentInvitesView(g, MERGE_U), forbidden);
+    await assert.rejects(portalResendControl(g, MERGE_U, "owner"), forbidden);
+  } finally { await release(); }
+  // A native (unassigned) Manager is unaffected by the in-transaction re-check.
+  await governCustomRole(admin, { operation: "unassign", memberId: await member(manager), requestId: randomUUID() });
+  const n = await resolveCustomRoleSession(manager);
+  assert.equal(await vendorDocumentInvitesView(n, MERGE_U), null);
+  assert.equal(await portalResendControl(n, MERGE_U, "owner"), null);
+});
+
+test("B017 merge: resend settle re-checks authority before COMMIT after the transport wait", async () => {
+  const previous = (await db.query("SELECT value FROM platform_settings WHERE key='INVITE_RESEND_RESULTS'")).rows[0]?.value;
+  const flags = (await db.query("SELECT feature_flags FROM organizations WHERE id=$1", [ORG_ID])).rows[0].feature_flags;
+  await db.query(`INSERT INTO platform_settings(key,value) VALUES('INVITE_RESEND_RESULTS',$1::jsonb) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [JSON.stringify({ enabled: true, allowed_org_ids: [ORG_ID] })]);
+  await db.query(`UPDATE organizations SET feature_flags=feature_flags || '{"INVITE_RESEND_RESULTS":true}'::jsonb WHERE id=$1`, [ORG_ID]);
+  try {
+    const fixture = async () => {
+      const contact = randomUUID(), sourceId = randomUUID();
+      await db.query(`INSERT INTO contacts(id,org_id,display_name,is_owner) VALUES($1,$2,'B017 resend',true)`, [contact, ORG_ID]);
+      await db.query(`INSERT INTO invitations(id,org_id,kind,contact_id,email,code_hash) VALUES($1,$2,'owner',$3,'b017-resend@example.invalid',$4)`, [sourceId, ORG_ID, contact, randomUUID()]);
+      return { sourceId, requestId: randomUUID() };
+    };
+    const role = await create(["leases.edit", "props.view"]); await assign(role);
+    const g = await resolveCustomRoleSession(manager);
+    assert.deepEqual(await resendPortalInvite(g, await fixture(), { timeoutMs: 5000, transport: async () => "captured" }), simulatedResult("captured"));
+    const input = await fixture();
+    let sent = 0;
+    await assert.rejects(resendPortalInvite(g, input, { timeoutMs: 5000, transport: async () => {
+      sent++; // Authority is revised while the provider call is outstanding.
+      await governCustomRole(admin, { operation: "revise", roleId: role, grants: ["props.view"], requestId: randomUUID() });
+      return "captured";
+    } }), forbidden);
+    assert.equal(sent, 1);
+    assert.notEqual((await db.query("SELECT status::text FROM app.b005_resend_requests WHERE request_id=$1", [input.requestId])).rows[0]?.status, "captured");
+  } finally {
+    await db.query("UPDATE platform_settings SET value=$1::jsonb WHERE key='INVITE_RESEND_RESULTS'", [JSON.stringify(previous ?? {})]);
+    await db.query("UPDATE organizations SET feature_flags=$2::jsonb WHERE id=$1", [ORG_ID, JSON.stringify(flags)]);
+  }
+});
+
+test("B017 merge: LINE staff unlink requires current tenants.contact; own-org native Manager unchanged", async () => {
+  const keys = ["line_platform", "line_tenant_portal"];
+  const settings = (await db.query("SELECT key,value FROM platform_settings WHERE key=ANY($1)", [keys])).rows;
+  const flags = (await db.query("SELECT feature_flags FROM organizations WHERE id=$1", [ORG_ID])).rows[0].feature_flags;
+  const previousEnv = process.env.LINE_PLATFORM_ENABLED;
+  process.env.LINE_PLATFORM_ENABLED = "true";
+  try {
+    for (const key of keys) {
+      await db.query("UPDATE platform_settings SET value=$2 WHERE key=$1", [key, JSON.stringify({ enabled: true, allowed_org_ids: [ORG_ID] })]);
+      await db.query("UPDATE organizations SET feature_flags=feature_flags || jsonb_build_object($2::text,true) WHERE id=$1", [ORG_ID, key]);
+    }
+    const channel = (await db.query("SELECT id FROM line_channels WHERE mode='platform_default' AND is_active")).rows[0].id;
+    await db.query("SELECT app.b033_liff_configure($1,'local-tenant','local-vendor','local-owner')", [channel]);
+    await db.query("UPDATE line_channels SET login_channel_id='local-login',login_channel_secret_ref='local-ref' WHERE id=$1", [channel]);
+    await db.query("SELECT app.b033_channel_verify($1)", [channel]);
+    const contact = (await db.query("SELECT id FROM contacts WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.tenant])).rows[0].id;
+    await db.query("DELETE FROM line_account_links WHERE contact_id=$1", [contact]);
+    const identity = (await db.query(`INSERT INTO app.b033_line_identities(line_channel_id,provider_user_hash,user_id,persona)
+      VALUES($1,encode(sha256(gen_random_uuid()::text::bytea),'hex'),$2,'tenant') RETURNING id`, [channel, USERS.tenant])).rows[0].id;
+    const link = async () => (await db.query(`INSERT INTO line_account_links(org_id,contact_id,line_channel_id,status,login_identity_id,persona,identity_verified_at,linked_at)
+      VALUES($1,$2,$3,'linked',$4,'tenant',now(),now()) RETURNING id`, [ORG_ID, contact, channel, identity])).rows[0].id as string;
+    const status = async (id: string) => (await db.query("SELECT status::text FROM line_account_links WHERE id=$1", [id])).rows[0].status;
+    const unlink = (id: string) => {
+      const browser = randomProof(), csrf = randomProof(), origin = "https://app.condola.app";
+      return lineUnlinkDELETE(new Request(`${origin}/api/line/links/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json", Origin: origin,
+        Cookie: `${LINE_BROWSER_COOKIE}=${browser}; ${LINE_CSRF_COOKIE}=${csrf}; ${SESSION_COOKIE}=${tokens.get(manager.userId)}` },
+        body: JSON.stringify({ csrf, reason: "staff_request" }) }), { params: Promise.resolve({ id }) });
+    };
+    // Flag ON, no assignment: native Manager keeps its staff unlink.
+    const first = await link();
+    assert.equal((await unlink(first)).status, 200); assert.equal(await status(first), "unlinked");
+    // Assigned role without tenants.contact: refused (non-leaking 404), nothing written.
+    await assign(await create(["dash.view"]));
+    const second = await link();
+    const audits = (await db.query("SELECT count(*)::int n FROM audit_log WHERE event_type='line_unlink'")).rows[0].n;
+    const denied = await unlink(second);
+    assert.equal(denied.status, 404); assert.deepEqual(await denied.json(), { error: "not_found" });
+    assert.equal(await status(second), "linked");
+    assert.equal((await db.query("SELECT count(*)::int n FROM audit_log WHERE event_type='line_unlink'")).rows[0].n, audits);
+    // Granting the key restores the staff unlink.
+    await assign(await create(["dash.view", "tenants.contact"]));
+    assert.equal((await unlink(second)).status, 200); assert.equal(await status(second), "unlinked");
+  } finally {
+    for (const row of settings) await db.query("UPDATE platform_settings SET value=$2 WHERE key=$1", [row.key, JSON.stringify(row.value)]);
+    await db.query("UPDATE organizations SET feature_flags=$2::jsonb WHERE id=$1", [ORG_ID, JSON.stringify(flags)]);
+    if (previousEnv === undefined) delete process.env.LINE_PLATFORM_ENABLED; else process.env.LINE_PLATFORM_ENABLED = previousEnv;
+  }
+});
+
+import { confirmBatchPhoto, discardBatchPhotos, prepareBatchPhoto, submitBatchPhotos, ticketPhotoRecovery, type UploadStorageDeps } from "./upload-recovery";
+import { handleUploadBatch } from "./upload-recovery-route";
+import { POST as photoBatchPOST } from "@/app/api/tickets/photos/batch/route";
+const UPLOAD_JPEG = Uint8Array.of(0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+
+test("B017 merge: upload-recovery staff ops require current tickets.update/photo authority at entry and in the transaction", async () => {
+  const previous = (await db.query("SELECT value FROM platform_settings WHERE key='upload_recovery'")).rows[0]?.value;
+  const flags = (await db.query("SELECT feature_flags FROM organizations WHERE id=$1", [ORG_ID])).rows[0].feature_flags;
+  await db.query(`INSERT INTO platform_settings(key,value) VALUES('upload_recovery',$1::jsonb) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [JSON.stringify({ enabled: true, allowed_org_ids: [ORG_ID] })]);
+  await db.query(`UPDATE organizations SET feature_flags=jsonb_set(feature_flags,'{upload_recovery}','true'::jsonb,true) WHERE id=$1`, [ORG_ID]);
+  try {
+    const objects = new Map<string, { bytes: Uint8Array; mime: string }>();
+    const deps: UploadStorageDeps = {
+      info: async (p) => { const o = objects.get(p); return o ? { ok: true, size: o.bytes.length, mime: o.mime } : { ok: false }; },
+      header: async (p) => objects.get(p)!.bytes.slice(0, 16),
+      sign: async (p) => ({ token: "synthetic", uploadUrl: `mock-storage:${p}` }),
+      remove: async (p) => { objects.delete(p); },
+    };
+    const prop = (await db.query(`SELECT property_id FROM leases WHERE org_id=$1 LIMIT 1`, [ORG_ID])).rows[0].property_id;
+    const ticketId = (await db.query(`INSERT INTO maintenance_tickets(org_id,property_id,title,description,reported_by_user,ticket_number)
+      VALUES($1,$2,'b017 upload','b017 upload',$3,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$1)) RETURNING id::text`, [ORG_ID, prop, USERS.admin])).rows[0].id as string;
+    const state = async () => (await db.query(`SELECT (SELECT count(*)::int FROM ticket_attachments WHERE ticket_id=$1) attachments,
+      (SELECT count(*)::int FROM app.b031_upload_items i JOIN app.b031_upload_batches b ON b.id=i.batch_id WHERE b.ticket_id=$1) items,
+      (SELECT count(*)::int FROM app.b031_upload_batches WHERE ticket_id=$1) batches`, [ticketId])).rows[0];
+    const send = async (s: Session, batchKey: string, clientKey: string, internal = false) => {
+      const prepared = await prepareBatchPhoto(s, { ticketId, batchKey, clientKey, fileName: "b017.jpg", mime: "image/jpeg", size: UPLOAD_JPEG.length, internal }, deps);
+      if (prepared.state === "signed") objects.set(prepared.uploadUrl.replace(/^mock-storage:/, ""), { bytes: UPLOAD_JPEG, mime: "image/jpeg" });
+      return (await confirmBatchPhoto(s, { ticketId, batchKey, clientKey }, deps)).state;
+    };
+    const route = (s: Session, op: string, fields: Record<string, unknown>) => handleUploadBatch(new Request("http://127.0.0.1/api/tickets/photos/batch",
+      { method: "POST", body: JSON.stringify({ op, ticketId, ...fields }) }), s);
+
+    // Flag ON, unassigned native Manager: unchanged (internal photo, submit, open draft restore).
+    const n = await resolveCustomRoleSession(manager);
+    const nb = randomUUID();
+    assert.equal(await send(n, nb, randomUUID(), true), "uploaded");
+    assert.equal((await ticketPhotoRecovery(n, ticketId, deps))?.draft?.batchKey, nb);
+    assert.equal((await submitBatchPhotos(n, { ticketId, batchKey: nb, internal: true }, deps)).attached.length, 1);
+    const draft = randomUUID(), draftKey = randomUUID();
+    assert.equal(await send(n, draft, draftKey), "uploaded");
+    // Native route entry (readSession + consent + body) as the cookie Manager.
+    const viaRoute = await photoBatchPOST(new Request("http://127.0.0.1/api/tickets/photos/batch", { method: "POST",
+      body: JSON.stringify({ op: "confirm", ticketId, batchKey: draft, clientKey: draftKey }) }));
+    assert.equal(viaRoute.status, 200, await viaRoute.clone().text());
+
+    // Assigned role without tickets.update (hence no photo authority): every op refused, nothing written.
+    await assign(await create(["dash.view", "props.view"]));
+    const r = await resolveCustomRoleSession(manager); assert.ok(r.customRole); assert.equal(canTicketPhotos(r), false);
+    const before = await state();
+    assert.deepEqual(await ticketPhotoRecovery(r, ticketId, deps), { draft: null });
+    for (const [op, call] of [
+      ["prepare", () => prepareBatchPhoto(r, { ticketId, batchKey: draft, clientKey: randomUUID(), fileName: "x.jpg", mime: "image/jpeg", size: UPLOAD_JPEG.length, internal: false }, deps)],
+      ["confirm", () => confirmBatchPhoto(r, { ticketId, batchKey: draft, clientKey: draftKey }, deps)],
+      ["submit", () => submitBatchPhotos(r, { ticketId, batchKey: draft, internal: false }, deps)],
+      ["discard", () => discardBatchPhotos(r, { ticketId, batchKey: draft }, deps)],
+      ["remove", () => discardBatchPhotos(r, { ticketId, batchKey: draft, clientKey: draftKey }, deps)],
+    ] as const) await assert.rejects(call(), forbidden, op);
+    for (const [op, fields] of [["prepare", { batchKey: draft, clientKey: randomUUID(), fileName: "x.jpg", mime: "image/jpeg", size: UPLOAD_JPEG.length }],
+      ["confirm", { batchKey: draft, clientKey: draftKey }], ["submit", { batchKey: draft }], ["discard", { batchKey: draft }],
+      ["remove", { batchKey: draft, clientKey: draftKey }]] as const) {
+      const res = await route(r, op, fields);
+      assert.equal(res.status, 403, op); assert.deepEqual(await res.json(), { ok: false, error: "errors.forbidden" });
+    }
+    const denied = await photoBatchPOST(new Request("http://127.0.0.1/api/tickets/photos/batch", { method: "POST", body: JSON.stringify({ op: "submit", ticketId, batchKey: draft }) }));
+    assert.equal(denied.status, 403);
+    assert.deepEqual(await state(), before);
+
+    // Granting tickets.update restores the staff ops; the in-transaction fence still applies.
+    await assign(await create(["tickets.update", "props.view"]));
+    const g = await resolveCustomRoleSession(manager); assert.equal(canTicketPhotos(g), true);
+    assert.equal((await ticketPhotoRecovery(g, ticketId, deps))?.draft?.batchKey, draft);
+    const release = await holdAssignment(g);
+    try {
+      await assert.rejects(prepareBatchPhoto(g, { ticketId, batchKey: draft, clientKey: randomUUID(), fileName: "y.jpg", mime: "image/jpeg", size: UPLOAD_JPEG.length, internal: false }, deps), forbidden);
+      await assert.rejects(submitBatchPhotos(g, { ticketId, batchKey: draft, internal: false }, deps), forbidden);
+    } finally { await release(); }
+    assert.deepEqual(await state(), before);
+    assert.equal((await submitBatchPhotos(g, { ticketId, batchKey: draft, internal: false }, deps)).attached.length, 1);
+  } finally {
+    if (previous === undefined) await db.query("DELETE FROM platform_settings WHERE key='upload_recovery'");
+    else await db.query("UPDATE platform_settings SET value=$1::jsonb WHERE key='upload_recovery'", [JSON.stringify(previous)]);
+    await db.query("UPDATE organizations SET feature_flags=$2::jsonb WHERE id=$1", [ORG_ID, JSON.stringify(flags)]);
+  }
+});

@@ -390,5 +390,109 @@
   "src/server/consent-records.ts#myConsentRecords": {
     "reason": "Own consent history only",
     "sha256": "0cb615ac8c9c2f17d4586e92d74d5adb853889350b4505c9bd569144f7fbc929"
+  },
+  "src/app/(line)/o/liff/route.ts#GET": {
+    "classification": "identity-establishment",
+    "reason": "LIFF owner entry bootstrap; the chooser lists only the session user's own portal contacts; no staff authority",
+    "sha256": "fef0c3700f98987f241cd60855ade29a6a13101bce0766fc31d10026dc0b9065"
+  },
+  "src/app/(line)/t/liff/route.ts#GET": {
+    "classification": "identity-establishment",
+    "reason": "LIFF tenant entry bootstrap: flow handle and browser proof; manage mode resolves only the session user's own contact; no staff authority",
+    "sha256": "c5c89ad009a959b571f10691491e369f8fd8cebaed86e1a58ed4679ca51ae819"
+  },
+  "src/app/(line)/v/liff/job/route.ts#GET": {
+    "classification": "bearer",
+    "reason": "Vendor LINE job-claim bearer (claim cookie plus browser proof); no member session",
+    "sha256": "1578aab5e7b9754c75d325b5e806960bb49adf112ad939a5bad9d78a94a36958"
+  },
+  "src/app/(line)/v/liff/route.ts#GET": {
+    "classification": "identity-establishment",
+    "reason": "LIFF vendor entry bootstrap: flow handle and browser proof only; no staff authority",
+    "sha256": "49c77255ef296c20c0c678313ce1f7d936b6fc1bc3d5d46c472a63a5e6b10b9f"
+  },
+  "src/app/(line)/v/liff/route.ts#POST": {
+    "classification": "bearer",
+    "reason": "Vendor job-token bearer issues same-origin LINE browser-proof cookies; no database writes, no member session",
+    "sha256": "7915c42139476a116cca5de6f251554f1ad4cd2d6284cbd6b163ba1143d9a6be"
+  },
+  "src/app/api/line/bind/route.ts#POST": {
+    "classification": "portal-self-service",
+    "reason": "Session user binds LINE to their own contact after recent re-authentication; no staff authority",
+    "sha256": "9569b51611ba8f458039f3b34337917111b73138bf695be57e7a936a91d0d805"
+  },
+  "src/app/api/line/flows/route.ts#POST": {
+    "classification": "identity-establishment",
+    "reason": "Starts LINE login/invite flows; bind/unlink flows require the session user to own the contact; no staff authority",
+    "sha256": "b597daefa00cf6db330b7fff61ff6579cbc6b0782d83361d90492a78a5c3c755"
+  },
+  "src/app/api/line/identity/route.ts#DELETE": {
+    "classification": "portal-self-service",
+    "reason": "Session user revokes their own LINE identity after recent re-authentication; no staff authority",
+    "sha256": "7bec43eef0a6181f8fd82a2ff359dee23b359925a7642058e58b0723389b59ef"
+  },
+  "src/app/api/line/invites/accept/route.ts#POST": {
+    "classification": "identity-establishment",
+    "reason": "Invitation bearer plus account credentials links LINE and establishes the account session",
+    "sha256": "493ddc87cd5affbbc94cc1be657b281d4652a6142890ba02fb9fea0bfc9350ae"
+  },
+  "src/app/api/line/links/[id]/route.ts#DELETE": {
+    "classification": "staff-guarded",
+    "key": "tenants.contact",
+    "reason": "Own-link unlink is self-service; a native admin/manager unlinking another person's link re-checks B017 tenants.contact in the LINE transaction after the identity lock (unlinkLine), pinned by R4 test",
+    "sha256": "fb5fb0229931c1618289d2f0a2a98f4efe7c663ae7634cf84d9cbf475157cd4b"
+  },
+  "src/app/api/line/links/route.ts#GET": {
+    "classification": "portal-self-service",
+    "reason": "Session user lists links of their own LINE identity only; no staff authority",
+    "sha256": "16485d61b541522f9701182b4868e5dcea88ebec3c0a893dfec1b1ac5025d6a6"
+  },
+  "src/app/api/line/login/callback/route.ts#GET": {
+    "classification": "identity-establishment",
+    "reason": "LINE OAuth callback verifies state/PKCE/nonce and establishes the linked account session",
+    "sha256": "78fc9f6329a9b499a2bf43db57e7e3313693dfa811ef216c91c19ad3304f6c09"
+  },
+  "src/app/api/line/login/start/route.ts#GET": {
+    "classification": "identity-establishment",
+    "reason": "LINE OAuth start for an existing browser-bound flow; no member authority",
+    "sha256": "6282e6c00f6bf8cd7f11a46718676291ac48de92539b4cc83f908601b0ce74c6"
+  },
+  "src/app/api/line/portal/route.ts#POST": {
+    "classification": "portal-self-service",
+    "reason": "Selects a portal for which the session user owns a contact; preferences create no authority",
+    "sha256": "9b0a509a454be65cb3f20df05b495028a3585bac1993928f5ce0153fe7393fe3"
+  },
+  "src/app/api/line/reauth/route.ts#POST": {
+    "classification": "identity-establishment",
+    "reason": "Step-up re-authentication with the session user's own password and required MFA",
+    "sha256": "0f92f893b61bcb07533407798b1a662cb4a300f5cc1e7efb4d55ab2bfd88f480"
+  },
+  "src/app/api/line/session/route.ts#POST": {
+    "classification": "identity-establishment",
+    "reason": "Exchanges a verified LINE ID token for the linked account session",
+    "sha256": "ea49212b259a17257adfe3e10f030ea02d9e24512232b1fd49988b29d9bdae95"
+  },
+  "src/app/api/line/vendor-job/route.ts#GET": {
+    "classification": "bearer",
+    "reason": "Vendor LINE job-claim bearer (claim cookie plus browser proof); no member session",
+    "sha256": "c05495969757b2b01a4aed555f30217a019876fef94638fde1c1d5b579bb6ebe"
+  },
+  "src/app/api/line/vendor-job/route.ts#POST": {
+    "classification": "bearer",
+    "reason": "Vendor LINE job-claim bearer report write (claim cookie, browser proof, CSRF); no member session",
+    "sha256": "c05495969757b2b01a4aed555f30217a019876fef94638fde1c1d5b579bb6ebe"
+  },
+  "src/app/api/line/webhook/route.ts#POST": {
+    "classification": "webhook",
+    "reason": "LINE Messaging webhook authenticated by channel signature; no member session",
+    "sha256": "8376dcc3f0118854fd3f9a78c56575a13c653c4d20893f4bb953661023dbe2a5"
+  },
+  "src/server/upload-recovery.ts#uploadRecoveryEnabled": {
+    "reason": "Feature-flag admission read only (boolean b031_upload_recovery_on for the session org); no business data; every caller guards tickets.update before its first business query",
+    "sha256": "e0c670292c66581e2b4a7dec1d6c1e6a7015b43300f78aa8f9f6348ed6a0e131"
+  },
+  "src/server/payment-center-events.ts#producePaymentResultEvent": {
+    "reason": "Internal: same-transaction notification event producer only; all request callers must guard first and remain scanned through this body",
+    "sha256": "22ac1f1396e3b75dad65c76401ab744a0e4bff0f9a5ebd2c941db07db14a364d"
   }
 }

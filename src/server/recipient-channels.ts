@@ -1,5 +1,5 @@
 import { tx } from "./db";
-import { guardEffectiveSession } from "./b017-custom-role-governance";
+import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { requireOrgScope } from "./org-guard";
 import { planChannels, type Channel, type Portal } from "./recipient-channels-rules";
 import type { Session } from "./types";
@@ -9,10 +9,11 @@ import type { Session } from "./types";
 export async function recipientChannelPlan(session: Session, contactId: string, persona: Portal, requested?: readonly Channel[]) {
   if (session.kind !== "staff") return null;
   session = await guardEffectiveSession(session, "tenants.contact");
-  return tx(session.userId, async (client) => {
+  // B-017: re-check effective authority inside the read-only transaction before returning (native OFF: no-op).
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tenants.contact", async () => {
     const row = (await client.query<{ portal: Portal | null; email_available: boolean; in_app_available: boolean; line_bound: boolean; line_friend: boolean }>(
       `SELECT * FROM app.prop06_recipient_channels($1,$2,$3)`, [session.orgId, contactId, persona])).rows[0];
     if (!row) return null;
     return planChannels({ portal: row.portal, emailAvailable: row.email_available, inAppAvailable: row.in_app_available, lineBound: row.line_bound, lineFriend: row.line_friend }, requested);
-  }, requireOrgScope(session), { readOnly: true });
+  }), requireOrgScope(session), { readOnly: true });
 }
