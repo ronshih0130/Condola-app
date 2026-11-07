@@ -1,0 +1,147 @@
+{
+  "screen": {
+    "sql": [
+      "BEGIN",
+      "SELECT set_config('request.jwt.claim.sub', $1, true)",
+      "SELECT set_config('request.jwt.claim.role', 'authenticated', true)",
+      "SELECT set_config('app.active_org_id', $1, true)",
+      "SELECT set_config('app.env', $1, true)",
+      "SET LOCAL ROLE authenticated",
+      "SELECT COALESCE((\n      SELECT json_agg((to_jsonb(s) - 'ord') ORDER BY s.ord)\n        FROM (\n          SELECT q.*, row_number() OVER (ORDER BY q.occurred_at DESC, q.id::bigint DESC) AS ord\n            FROM (SELECT a.id::text AS id,\n       to_char(a.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS occurred_key,\n       a.occurred_at,\n       coalesce(nullif(btrim(p.display_name), ''), '') AS actor_name,\n       (a.actor_user_id IS NOT NULL) AS has_actor,\n       a.table_name,\n       a.row_id,\n       a.action::text AS action,\n       a.event_type,\n       a.changed_cols,\n       a.reason\n  FROM audit_log a\n  LEFT JOIN profiles p ON p.id = a.actor_user_id\n WHERE a.org_id = $1\n   AND a.occurred_at >= $2::timestamptz\n   AND a.occurred_at < $3::timestamptz\n ORDER BY a.occurred_at DESC, a.id DESC\n LIMIT $4) q\n        ) s\n    ), '[]'::json) AS page,\n    COALESCE((\n      SELECT json_agg(json_build_object(\n               'id', m.user_id::text,\n               'name', coalesce(nullif(btrim(p.display_name), ''), '')\n             ) ORDER BY coalesce(nullif(btrim(p.display_name), ''), ''), m.user_id)\n        FROM org_members m\n        LEFT JOIN profiles p ON p.id = m.user_id\n       WHERE m.org_id = $1 AND m.status = 'active'\n    ), '[]'::json) AS actors",
+      "SELECT 'contacts' AS src, id::text AS id, display_name AS text, NULL::text AS parent, is_tenant, is_owner, NULL::text AS mode\n    FROM contacts\n   WHERE org_id = $1 AND id = ANY($2::uuid[])\nUNION ALL\nSELECT 'leases' AS src, l.id::text AS id, btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, '')) AS text, NULL::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, NULL::text AS mode\n    FROM leases l\n    \n  JOIN properties p ON p.id = l.property_id\n  JOIN units u ON u.id = l.unit_id\n  LEFT JOIN rooms r ON r.id = l.target_room_id\n  JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'\n  JOIN contacts c ON c.id = lp.contact_id\n   WHERE l.org_id = $1 AND l.id = ANY($3::uuid[])",
+      "COMMIT"
+    ],
+    "result": {
+      "entries": [
+        {
+          "who": "林雅婷",
+          "whoKey": null,
+          "actionKey": "i_audit_act_update",
+          "fields": [],
+          "other": false,
+          "masked": true,
+          "reason": "",
+          "recordKey": "i_audit_rec_contact",
+          "recordText": "",
+          "href": null,
+          "found": false,
+          "when": "2020-01-02 09:01"
+        },
+        {
+          "who": "林雅婷",
+          "whoKey": null,
+          "actionKey": "i_audit_act_update",
+          "fields": [
+            "i_audit_f_end",
+            "i_audit_f_rent"
+          ],
+          "other": false,
+          "masked": false,
+          "reason": "b031a-off 屋主同意",
+          "recordKey": "i_audit_rec_lease",
+          "recordText": "",
+          "href": null,
+          "found": false,
+          "when": "2020-01-02 09:00"
+        }
+      ],
+      "hasMore": false,
+      "actors": [
+        {
+          "id": "20000000-0000-4000-8000-000000000004",
+          "name": "吳大維"
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000003",
+          "name": "周美玲"
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000001",
+          "name": "林雅婷"
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000002",
+          "name": "黃志明"
+        }
+      ],
+      "filters": {
+        "actorId": null,
+        "action": null,
+        "eventType": null,
+        "tableName": null,
+        "from": "2020-01-02",
+        "to": "2020-01-02"
+      }
+    },
+    "html": "<table class=\"t rf\" data-testid=\"audit-list\"><thead><tr><th>誰</th><th>做了什麼</th><th>哪一筆</th><th>時間（台北）</th></tr></thead><tbody><tr data-testid=\"audit-row\"><td>林雅婷</td><td><div>修改</div><div class=\"small muted\">敏感欄位已遮罩</div></td><td data-label=\"哪一筆\">租客／屋主 已刪除</td><td data-label=\"時間（台北）\">2020-01-02 09:01</td></tr><tr data-testid=\"audit-row\"><td>林雅婷</td><td><div>修改</div><div class=\"small muted\">結束日、租金</div><div class=\"small\">b031a-off 屋主同意</div></td><td data-label=\"哪一筆\">租約 已刪除</td><td data-label=\"時間（台北）\">2020-01-02 09:00</td></tr></tbody></table>"
+  },
+  "history-lease": {
+    "sql": [
+      "BEGIN",
+      "SELECT set_config('request.jwt.claim.sub', $1, true)",
+      "SELECT set_config('request.jwt.claim.role', 'authenticated', true)",
+      "SELECT set_config('app.active_org_id', $1, true)",
+      "SELECT set_config('app.env', $1, true)",
+      "SET LOCAL ROLE authenticated",
+      "SELECT a.id::text AS id,\n       to_char(a.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS occurred_key,\n       a.occurred_at,\n       coalesce(nullif(btrim(p.display_name), ''), '') AS actor_name,\n       (a.actor_user_id IS NOT NULL) AS has_actor,\n       a.table_name,\n       a.row_id,\n       a.action::text AS action,\n       a.event_type,\n       a.changed_cols,\n       a.reason\n  FROM audit_log a\n  LEFT JOIN profiles p ON p.id = a.actor_user_id\n WHERE a.org_id = $1\n   AND a.table_name = $2\n   AND a.row_id = $3\n ORDER BY a.occurred_at DESC, a.id DESC\n LIMIT $4",
+      "SELECT 'leases' AS src, l.id::text AS id, btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, '')) AS text, NULL::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, NULL::text AS mode\n    FROM leases l\n    \n  JOIN properties p ON p.id = l.property_id\n  JOIN units u ON u.id = l.unit_id\n  LEFT JOIN rooms r ON r.id = l.target_room_id\n  JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'\n  JOIN contacts c ON c.id = lp.contact_id\n   WHERE l.org_id = $1 AND l.id = ANY($2::uuid[])",
+      "COMMIT"
+    ],
+    "result": {
+      "entries": [
+        {
+          "who": "林雅婷",
+          "whoKey": null,
+          "actionKey": "i_audit_act_update",
+          "fields": [
+            "i_audit_f_end",
+            "i_audit_f_rent"
+          ],
+          "other": false,
+          "masked": false,
+          "reason": "b031a-off 屋主同意",
+          "recordKey": "i_audit_rec_lease",
+          "recordText": "",
+          "href": null,
+          "found": false,
+          "when": "2020-01-02 09:00"
+        }
+      ],
+      "hasMore": false
+    },
+    "html": "<table class=\"t rf\" data-testid=\"audit-list\"><thead><tr><th>誰</th><th>做了什麼</th><th>哪一筆</th><th>時間（台北）</th></tr></thead><tbody><tr data-testid=\"audit-row\"><td>林雅婷</td><td><div>修改</div><div class=\"small muted\">結束日、租金</div><div class=\"small\">b031a-off 屋主同意</div></td><td data-label=\"哪一筆\">租約 已刪除</td><td data-label=\"時間（台北）\">2020-01-02 09:00</td></tr></tbody></table>"
+  },
+  "history-contact": {
+    "sql": [
+      "BEGIN",
+      "SELECT set_config('request.jwt.claim.sub', $1, true)",
+      "SELECT set_config('request.jwt.claim.role', 'authenticated', true)",
+      "SELECT set_config('app.active_org_id', $1, true)",
+      "SELECT set_config('app.env', $1, true)",
+      "SET LOCAL ROLE authenticated",
+      "SELECT a.id::text AS id,\n       to_char(a.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS occurred_key,\n       a.occurred_at,\n       coalesce(nullif(btrim(p.display_name), ''), '') AS actor_name,\n       (a.actor_user_id IS NOT NULL) AS has_actor,\n       a.table_name,\n       a.row_id,\n       a.action::text AS action,\n       a.event_type,\n       a.changed_cols,\n       a.reason\n  FROM audit_log a\n  LEFT JOIN profiles p ON p.id = a.actor_user_id\n WHERE a.org_id = $1\n   AND a.table_name = $2\n   AND a.row_id = $3\n ORDER BY a.occurred_at DESC, a.id DESC\n LIMIT $4",
+      "SELECT 'contacts' AS src, id::text AS id, display_name AS text, NULL::text AS parent, is_tenant, is_owner, NULL::text AS mode\n    FROM contacts\n   WHERE org_id = $1 AND id = ANY($2::uuid[])",
+      "COMMIT"
+    ],
+    "result": {
+      "entries": [
+        {
+          "who": "林雅婷",
+          "whoKey": null,
+          "actionKey": "i_audit_act_update",
+          "fields": [],
+          "other": false,
+          "masked": true,
+          "reason": "",
+          "recordKey": "i_audit_rec_contact",
+          "recordText": "",
+          "href": null,
+          "found": false,
+          "when": "2020-01-02 09:01"
+        }
+      ],
+      "hasMore": false
+    },
+    "html": "<table class=\"t rf\" data-testid=\"audit-list\"><thead><tr><th>誰</th><th>做了什麼</th><th>哪一筆</th><th>時間（台北）</th></tr></thead><tbody><tr data-testid=\"audit-row\"><td>林雅婷</td><td><div>修改</div><div class=\"small muted\">敏感欄位已遮罩</div></td><td data-label=\"哪一筆\">租客／屋主 已刪除</td><td data-label=\"時間（台北）\">2020-01-02 09:01</td></tr></tbody></table>"
+  }
+}

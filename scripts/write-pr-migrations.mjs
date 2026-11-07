@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107130000_b031_audit_detail.sql": {
+    addOnly: false,
+    reason: "Adds a private append-only audit detail table, an AFTER INSERT trigger on audit_log that writes masked allowlisted before/after values only when the default-OFF audit_detail flag is ON, and an admin-only SECURITY DEFINER reader granted to authenticated. Existing audit rows are unchanged.",
+  },
   "supabase/migrations/20261106234000_b031_session_hardening.sql": {
     addOnly: false,
     reason: "Adds private credential/challenge epochs and explicit LINE challenge exemptions with constraints, RLS, restricted SECURITY DEFINER functions and a default-OFF session hardening flag.",

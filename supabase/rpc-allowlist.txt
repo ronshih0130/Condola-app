@@ -59,6 +59,12 @@ app.audit_event(p_org uuid, p_event text, p_detail jsonb)
 # @mode authenticated
 app.tenant_signed_pdf_readable(p_org uuid, p_lease uuid)
 
+# B-031 AUDIT_DETAIL reader (schema app, not a PostgREST RPC). Fixed-search-path
+# SECURITY DEFINER; returns zero rows unless the caller is an active admin of the
+# pinned organization and the strict audit_detail flag is ON for it.
+# @mode authenticated
+app.b031_audit_detail_rows(p_org uuid, p_ids bigint[])
+
 # Read-only regional deposit hint resolver. SECURITY INVOKER uses caller RLS.
 # The mutating trigger separately acquires policy locks through its app helper.
 # @mode authenticated

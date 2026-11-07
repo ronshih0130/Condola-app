@@ -250,3 +250,11 @@ flags:
     global_kill: "platform_settings.session_hardening.enabled must be strict JSON boolean true"
     org_override: "none; credential epochs apply globally across an account's organizations"
     activation: "local synthetic tests only; staging not activated"
+  audit_detail:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.audit_detail requires strict boolean enabled and a valid allowed_org_ids array containing the selected organization; absent or malformed is OFF"
+    org_override: "organizations.feature_flags.audit_detail must be strict boolean true"
+    activation: "local synthetic tests only; staging not activated; no retention policy change"

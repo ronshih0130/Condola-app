@@ -1,9 +1,38 @@
 import Link from "next/link";
 import { makeT, type T } from "@/i18n";
-import { loadAuditHistory, type AuditTable, type AuditView } from "@/server/audit-read";
+import { loadAuditHistory, type AuditDetailValue, type AuditDetailView, type AuditTable, type AuditView } from "@/server/audit-read";
 import { showDemoLineCopy } from "@/server/demo";
 import { displaySampleName } from "@/sample-name";
 import { getSession } from "@/server/session";
+
+function detailText(value: AuditDetailValue, t: T) {
+  if (!value) return t("i_audit_detail_blank");
+  return "key" in value ? t(value.key) : value.text;
+}
+
+/** B-031 AUDIT_DETAIL. Rendered only when the DB gateway returned detail for this row. */
+export function AuditDetailBlock({ detail, t }: { detail: AuditDetailView; t: T }) {
+  return (
+    <div className="small" data-testid="audit-detail">
+      <div className="muted">{t("i_audit_detail")}</div>
+      <div data-testid="audit-detail-reason">
+        {detail.reason ? t("i_audit_detail_reason", { reason: detail.reason }) : t("i_audit_detail_no_reason")}
+      </div>
+      <ul data-testid="audit-detail-changes" style={{ margin: 0, paddingLeft: 16 }}>
+        {detail.changes.map((change, index) => (
+          <li key={`${change.fieldKey}-${index}`}>
+            {t("i_audit_detail_change", {
+              field: t(change.fieldKey),
+              before: detailText(change.before, t),
+              after: detailText(change.after, t),
+            })}
+          </li>
+        ))}
+      </ul>
+      {detail.withheld > 0 ? <div className="muted">{t("i_audit_detail_withheld", { count: detail.withheld })}</div> : null}
+    </div>
+  );
+}
 
 export function AuditRows({ entries, t, testId }: { entries: AuditView[]; t: T; testId: string; demoLine?: boolean }) {
   return (
@@ -29,6 +58,7 @@ export function AuditRows({ entries, t, testId }: { entries: AuditView[]; t: T; 
                 {entry.other ? <div className="small muted">{t("i_audit_f_other")}</div> : null}
                 {entry.masked ? <div className="small muted">{t("i_audit_masked")}</div> : null}
                 {entry.reason ? <div className="small">{entry.reason}</div> : null}
+                {entry.detail ? <AuditDetailBlock detail={entry.detail} t={t} /> : null}
               </td>
               <td data-label={t("i_audit_which")}>
                 {entry.href ? <Link href={entry.href}>{record}</Link> : record}
