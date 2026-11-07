@@ -1,0 +1,221 @@
+{
+ "cases": 24,
+ "results": [
+  {
+   "control": "absent global",
+   "portal": "m",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "absent global",
+   "portal": "t",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "absent global",
+   "portal": "o",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "absent global",
+   "portal": "v",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "false global",
+   "portal": "m",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "false global",
+   "portal": "t",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "false global",
+   "portal": "o",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "false global",
+   "portal": "v",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "malformed global enabled",
+   "portal": "m",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "malformed global enabled",
+   "portal": "t",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "malformed global enabled",
+   "portal": "o",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "malformed global enabled",
+   "portal": "v",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "malformed global allowlist",
+   "portal": "m",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "malformed global allowlist",
+   "portal": "t",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "malformed global allowlist",
+   "portal": "o",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "malformed global allowlist",
+   "portal": "v",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "org missing from allowlist",
+   "portal": "m",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "org missing from allowlist",
+   "portal": "t",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "org missing from allowlist",
+   "portal": "o",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "org missing from allowlist",
+   "portal": "v",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "false org control",
+   "portal": "m",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "false org control",
+   "portal": "t",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "false org control",
+   "portal": "o",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  },
+  {
+   "control": "false org control",
+   "portal": "v",
+   "entryHidden": true,
+   "routeStatus": 404,
+   "markStatus": 404,
+   "markers": 0,
+   "rowsUnchanged": true
+  }
+ ]
+}
