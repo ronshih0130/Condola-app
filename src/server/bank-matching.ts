@@ -1,3 +1,4 @@
+import { recordStoredFileUsage, withUsageTransaction } from './usage-events';
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "./db";
@@ -28,7 +29,7 @@ async function operation<T>(session: Session, write: boolean, fn: (client: Clien
     await client.query(write ? "BEGIN" : "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     try {
       if (!await authorize(client,session,write)) { await client.query("ROLLBACK"); return null; }
-      const result = await fn(client); await client.query("COMMIT"); return result;
+      const result = await withUsageTransaction(client, () => fn(client)); await client.query("COMMIT"); return result;
     } catch { await client.query("ROLLBACK"); throw fail(); }
   });
 }
@@ -70,6 +71,7 @@ export async function importBankFile(session: Session, accountId: string, bytes:
     const prior = (await client.query<{import_id:string;encoding:string;date_format:string}>(`SELECT import_id::text,encoding,date_format FROM app.b009_file_imports WHERE org_id=$1 AND bank_account_id=$2 AND file_hash=$3`,[session.orgId,accountId,hash])).rows[0];
     if (prior) { if (prior.encoding !== encoding || prior.date_format !== dateFormat) throw fail(); return { importId:prior.import_id, duplicate:true, duplicateRows:rows.length }; }
     const file = (await client.query<{id:string}>(`INSERT INTO files(org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,uploaded_by) VALUES ($1,'bank-imports',$2,'statement.csv','text/csv',$3,$4) RETURNING id::text`,[session.orgId,`b009/${randomUUID()}.csv`,bytes.length,session.userId])).rows[0].id;
+    await recordStoredFileUsage(client, session.orgId, file);
     const imported = (await client.query<{id:string}>(`INSERT INTO bank_statement_imports(org_id,bank_account_id,file_id,status,row_count,uploaded_by) VALUES ($1,$2,$3,'completed',$4,$5) RETURNING id::text`,[session.orgId,accountId,file,rows.length,session.userId])).rows[0].id;
     await client.query(`INSERT INTO app.b009_file_imports(org_id,bank_account_id,file_hash,import_id,encoding,date_format) VALUES ($1,$2,$3,$4,$5,$6)`,[session.orgId,accountId,hash,imported,encoding,dateFormat]);
     const keys = bankRowKeys(accountId,rows);

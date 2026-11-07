@@ -1,3 +1,4 @@
+import { recordUsage, usageDedupeKey } from '../usage-events';
 import type { Client } from "pg";
 import { svc } from "../db";
 import { leaseIdentityReady } from "../id-docs";
@@ -367,6 +368,9 @@ export class EsignRepo {
       await this.save(client, caseId, state, after, input.finalPdfBytes);
       const completed = after.versions.find((item) => item.id === input.versionId);
       if (v?.status !== "completed" && completed?.status === "completed") {
+        await recordUsage(client, { orgId: actor.orgId, dimension: 'signatures', quantity: BigInt(1), occurredAt: completed.completedAt!,
+          sourceTable: 'esign_versions', sourceId: input.versionId,
+          dedupeKey: usageDedupeKey('signatures', 'esign_versions', input.versionId, completed.finalDigest) });
         const result = await client.query<FirstPeriodLeaseSource & { id: string; status: string; esign_status: string; created_by: string }>(
           `SELECT l.id::text, l.status::text, l.esign_status::text, l.first_period_basis,
                   l.rent_amount_minor::text, l.currency, l.start_date::text, l.end_date::text,

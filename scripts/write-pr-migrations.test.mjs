@@ -30,6 +30,13 @@ test("migration manifest includes every changed SQL file and classifies unsafe c
     for (const file of ["20261030150400_ticket_job_type_reserve.sql", "20261030150500_revoke_public_function_execute.sql", "20261030151200_id_purge_dry_run_guard.sql", "20261030151500_paper_lease_versions.sql", "20261031100201_b001_esign_internal_helpers.sql"]) {
       assert.match(manifest, new RegExp(`\\| ${file.replaceAll(".", "\\.")} \\| A \\| no \\|`));
     }
+    const b030 = manifest.split("\n").find(line => line.startsWith("| 20261107070000_b030_usage_subscription_state.sql |"));
+    assert.ok(b030);
+    assert.match(b030, /\| A \| no \|/);
+    assert.match(b030, /constraints/);
+    assert.match(b030, /revokes/);
+    assert.match(b030, /grants role-specific gateway EXECUTE/);
+    assert.match(b030, /assignment trigger/);
     assert.match(manifest, /20261025120000_id_consent_notice\.sql \| A \| yes \|/);
     assert.match(readFileSync(path.join(out, "PERMISSIONS.md"), "utf8"), /Live database check was not run/);
   } finally {

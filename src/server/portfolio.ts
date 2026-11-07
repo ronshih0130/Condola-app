@@ -1,3 +1,4 @@
+import { recordUsage, usageDedupeKey } from './usage-events';
 import { typedAddressDisplay } from "@/property-address";
 import { maybe, one, tx } from "./db";
 import { FlowError } from "./errors";
@@ -713,6 +714,8 @@ async function unitForFloor(client: Client, orgId: string, propertyId: string, f
        VALUES ($1, $2, $3, $3, $4, $5, $6) RETURNING id::text`,
       [orgId, propertyId, floor, kind === "room" ? "by_room" : "whole_unit", areaUnit, key],
     );
+    await recordUsage(client, { orgId, dimension: 'units', quantity: BigInt(1), occurredAt: new Date(),
+      sourceTable: 'units', sourceId: created.id, dedupeKey: usageDedupeKey('units', 'units', created.id) });
     return { id: created.id, areaUnit, created: true };
   }
   const ancestry = await admitActiveArchiveAncestry(client, orgId, {kind:"unit",id:existing.id});

@@ -1,5 +1,6 @@
 import type { Client } from "pg";
 import type { Session } from "./types";
+import { recordUsage, usageDedupeKey } from './usage-events';
 
 export type PaymentCenterAction = "confirm" | "reject" | "reverse" | "record" | "legacy_match" | "bank_match";
 type Kind = "payment_confirmed" | "payment_rejected" | "payment_reversed";
@@ -86,6 +87,13 @@ export async function finalizePaymentCenter(client:Client,ticket:Ticket|null,sou
   if (sourceId && !source) throw unavailable();
   const neutral=(await client.query<{id:string;at:string}>(`INSERT INTO app.b017_occurrences(org_id,lease_id,payment_id,kind,occurrence_key,actor_id,payer_contact_id,payer_principal_user_id,occurred_at) VALUES($1,$2,$3,$4,$4,$5,$6,$7,coalesce($8::timestamptz,clock_timestamp())) RETURNING id::text,occurred_at::text AS at`,[session.orgId,leaseId,paymentId,kind,session.userId,payment.payer,payment.principal,source?.at ?? null])).rows[0];
   const event=(await client.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,neutral_source_id,occurred_at) VALUES($1,$2,$3,$4) RETURNING id::text`,[session.orgId,kind,neutral.id,neutral.at])).rows[0];
-  if (payment.eligible) await client.query(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,contact_id) SELECT $1,$2,'tenant',c.user_id,c.id FROM public.contacts c JOIN public.lease_parties lp ON lp.org_id=c.org_id AND lp.contact_id=c.id WHERE c.org_id=$1 AND c.id=$3 AND c.user_id=$4 AND c.is_tenant AND c.archived_at IS NULL AND lp.lease_id=$5 AND lp.role IN ('primary','co_tenant') LIMIT 1`,[session.orgId,event.id,payment.payer,payment.principal,leaseId]);
+  if (payment.eligible) {
+    const recipients = await client.query<{ id: string }>(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,contact_id) SELECT $1,$2,'tenant',c.user_id,c.id FROM public.contacts c JOIN public.lease_parties lp ON lp.org_id=c.org_id AND lp.contact_id=c.id WHERE c.org_id=$1 AND c.id=$3 AND c.user_id=$4 AND c.is_tenant AND c.archived_at IS NULL AND lp.lease_id=$5 AND lp.role IN ('primary','co_tenant') LIMIT 1 RETURNING id::text`,[session.orgId,event.id,payment.payer,payment.principal,leaseId]);
+    for (const recipient of recipients.rows) await recordUsage(client, {
+      orgId: session.orgId, dimension: 'notifications', quantity: BigInt(1), occurredAt: neutral.at,
+      sourceTable: 'b028_center_recipients', sourceId: recipient.id,
+      dedupeKey: usageDedupeKey('notifications', 'b028_center_recipients', recipient.id),
+    });
+  }
   await leave(client,state);
 }

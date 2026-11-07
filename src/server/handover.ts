@@ -1,3 +1,4 @@
+import { recordHandoverAttachmentUsage } from './usage-events';
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
@@ -173,6 +174,7 @@ export async function finalizeHandoverUpload(session: Session, leaseId: string, 
       const result = (await client.query<{ id: string }>(`SELECT id FROM app.handover_attachments WHERE intent_id=$1`, [intentId])).rows[0];
       await recheckSessionDeadline(client, session);
       if (!result) throw new FlowError("errors.generic");
+      await recordHandoverAttachmentUsage(client, session.orgId, result.id);
       return result;
     }
     if (intent.status !== "pending" || !intent.usable) throw new FlowError("errors.notFound");
@@ -189,6 +191,7 @@ export async function finalizeHandoverUpload(session: Session, leaseId: string, 
     await client.query(`UPDATE app.handover_upload_intents SET status='attached' WHERE id=$1`, [intent.id]);
     await writeAudit(session.orgId, session.userId, "handover_attachment_published", { lease_id: leaseId, version_id: version.id, attachment_id: attachment.id, sha256: sha }, client);
     await recheckSessionDeadline(client, session);
+    await recordHandoverAttachmentUsage(client, session.orgId, attachment.id);
     return attachment;
   });
 }

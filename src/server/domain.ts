@@ -1,3 +1,4 @@
+import { recordUsage, recordStoredFileUsage, recordPaperSignatureUsage, usageDedupeKey } from './usage-events';
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
@@ -201,6 +202,8 @@ async function insertPropertyUnit(
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
         [input.orgId, input.propertyId, input.label, input.floor, input.rentalMode, input.areaUnit, input.baseRentMinor, addressKeyValue],
       );
+  await recordUsage(client, { orgId: input.orgId, dimension: 'units', quantity: BigInt(1), occurredAt: new Date(),
+    sourceTable: 'units', sourceId: unit.id, dedupeKey: usageDedupeKey('units', 'units', unit.id) });
   const roomIds: string[] = [];
   for (const room of input.rooms) {
     const inserted = await one<{ id: string }>(
@@ -1708,6 +1711,8 @@ export async function uploadSignedLeasePdf(
         WHERE id = $1 AND org_id = $4`,
       [leaseId, stored.id, hash, session.orgId],
     );
+    await recordStoredFileUsage(client, session.orgId, stored.id);
+    await recordPaperSignatureUsage(client, session.orgId, leaseId, hash);
     if (activated) {
       await ensureThread(client, leaseId);
       const invoiceId = await issueMoveInInvoice(client, leaseId);
@@ -2175,6 +2180,7 @@ export async function importBankCsv(session: Session, csv: string) {
        VALUES ($1,'bank-imports',$2,'statement.csv','text/csv',$3,$4) RETURNING id`,
       [session.orgId, `demo/${randomUUID()}.csv`, Buffer.byteLength(csv), session.userId],
     );
+    await recordStoredFileUsage(client, session.orgId, file.id);
     let mapping = await maybe<{ id: string }>(
       client,
       `SELECT id FROM bank_csv_mappings WHERE bank_account_id = $1 LIMIT 1`,

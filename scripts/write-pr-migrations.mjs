@@ -14,6 +14,18 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107070000_b030_usage_subscription_state.sql": {
+    addOnly: false,
+    reason: "Adds private plan/subscription/event/assignment tables with CHECK, foreign-key and uniqueness constraints, RLS and privilege revokes; grants role-specific gateway EXECUTE and installs an isolated assignment trigger on maintenance_tickets with audit-based recovery. Strict usage_subscriptions OFF; no real provider or restrictions.",
+  },
+  "supabase/migrations/20261106110000_b029_usage_events_flag.sql": {
+    addOnly: true,
+    reason: "Seeds default-OFF usage_events setting only; B-029 hooks use the existing PROP-07 recorder and store.",
+  },
+  "supabase/migrations/20261106100000_prop07_usage_source_ids.sql": {
+    addOnly: true,
+    reason: "Adds private append-only app.usage_events (source table/id, dedupe key, sandbox marker), an idempotent service-role SECURITY DEFINER recorder and an admin-only formal summary excluding sandbox; no hooks or callers, no flag (PROP-07 foundation for B-029).",
+  },
   "supabase/migrations/20261106230000_b025_legacy_zero_history_seal.sql": {
     addOnly: false,
     reason: "Replaces the service-only legacy seal gateway so zero-history legacy business profiles read their seal from the live profile under the same grant/flag admission; versioned profiles are unchanged. No table, column, grant widening or flag activation.",
