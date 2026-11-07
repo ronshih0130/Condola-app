@@ -54,10 +54,13 @@ async function connect() { const c = new Client({ connectionString: process.env.
 /** Real B-013 gateway (service_role), the actual child-row writer for estimates. */
 async function submitEstimate(c: Client, ticket: string) {
   const args = [ticket, null, "500001", fixture.currency, fixture.minorUnit, "Synthetic lock measurement", []];
+  // B-028 package 4: environment tuple + request principal (svc() sets the sub from Session.userId).
+  await c.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [USERS.manager]);
   await c.query("SET LOCAL ROLE service_role");
-  const result = await c.query(`SELECT app.b013_submit_estimate($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::bigint,$7::text,$8::smallint,$9::text,$10::jsonb,$11::bytea) result`,
-    [ORG_ID, fixture.session, randomUUID(), ...args.slice(0, 6), JSON.stringify(args[6]), digest(args)]);
+  const result = await c.query(`SELECT app.b013_submit_estimate($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::uuid,$7::uuid,$8::bigint,$9::text,$10::smallint,$11::text,$12::jsonb,$13::bytea) result`,
+    [ORG_ID, ORG_ID, "live", fixture.session, randomUUID(), ...args.slice(0, 6), JSON.stringify(args[6]), digest(args)]);
   await c.query("RESET ROLE");
+  await c.query("SELECT set_config('request.jwt.claim.sub','',true)");
   return result.rows[0].result as { status: string; version_id?: string };
 }
 
@@ -249,7 +252,7 @@ test("unbounded: the production estimate call path sets no lock/statement timeou
     const overrides = (await c.query<{ n: number }>(`SELECT count(*)::int n FROM pg_db_role_setting s
       LEFT JOIN pg_roles r ON r.oid=s.setrole WHERE (s.setdatabase=0 OR s.setdatabase=(SELECT oid FROM pg_database WHERE datname=current_database()))
       AND (s.setrole=0 OR r.rolname IN ('service_role',current_user)) AND array_to_string(s.setconfig,',') ~ '(lock|statement)_timeout'`)).rows[0].n;
-    const proconfig = (await c.query<{ cfg: string[] | null }>(`SELECT proconfig cfg FROM pg_proc WHERE oid='app.b013_submit_estimate(uuid,uuid,uuid,uuid,uuid,bigint,text,smallint,text,jsonb,bytea)'::regprocedure`)).rows[0].cfg ?? [];
+    const proconfig = (await c.query<{ cfg: string[] | null }>(`SELECT proconfig cfg FROM pg_proc WHERE oid='app.b013_submit_estimate(uuid,uuid,text,uuid,uuid,uuid,uuid,bigint,text,smallint,text,jsonb,bytea)'::regprocedure`)).rows[0].cfg ?? [];
     callerTimeouts = { connectionDefaults: Object.fromEntries(defaults.map(d => [d.name, d.setting])), roleOrDatabaseTimeoutOverrides: overrides,
       gatewayProconfig: proconfig, callPath: "repair-approval.ts submitEstimate -> run -> svc -> svcOn (no SET lock_timeout/statement_timeout)" };
     assert.equal(defaults.find(d => d.name === "lock_timeout")?.setting, "0");

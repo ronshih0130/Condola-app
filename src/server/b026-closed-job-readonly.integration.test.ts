@@ -426,8 +426,8 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
         await staff.query("SELECT id FROM repair_vendor_jobs WHERE ticket_id=$1 ORDER BY id FOR UPDATE NOWAIT", [job.ticketId]);
         await staff.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','service_role',true)", [admin.userId]);
         await staff.query("SET LOCAL ROLE service_role");
-        const result = await staff.query(`SELECT app.b013_record_appointment($1,$2,$3,$4,$5,'vendor_rejected',NULL,NULL,NULL,NULL,$6,'Staff request') AS r`,
-          [ORG_ID, admin.sessionId, requestId, versionId, job.jobId, Buffer.alloc(32, 1)]);
+        const result = await staff.query(`SELECT app.b013_record_appointment($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::uuid,$7::uuid,'vendor_rejected',NULL,NULL,NULL,NULL,$8::bytea,'Staff request') AS r`,
+          [admin.orgId, admin.liveOrgId, admin.environment, admin.sessionId, requestId, versionId, job.jobId, Buffer.alloc(32, 1)]);
         assert.equal(result.rows[0].r.status, "recorded");
         await staff.query("COMMIT");
         assert.equal((await pending).status, "rejected_conflict");

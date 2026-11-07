@@ -60,15 +60,28 @@ async function link(contact: string, user: string, persona: "tenant" | "owner", 
 }
 async function submit(ticketId: string, expected: string | null = null, amount = "500001") {
   const args = [ticketId, expected, amount, currency, minorUnit, "SCOPE-SECRET replace pipe", []];
-  return svc(null, async c => (await c.query(`SELECT app.b013_submit_estimate($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,
-    $6::bigint,$7::text,$8::smallint,$9::text,$10::jsonb,$11::bytea) r`, [ORG_ID, managerSession, randomUUID(),
-    ...args.slice(0, 6), JSON.stringify(args[6]), sha(args)])).rows[0].r);
+  // B-028 package 4: session mutators bind the environment tuple and the request principal.
+  return svc(USERS.manager, async c => (await c.query(`SELECT app.b013_submit_estimate($1::uuid,$2::uuid,$3::text,$4::uuid,
+    $5::uuid,$6::uuid,$7::uuid,$8::bigint,$9::text,$10::smallint,$11::text,$12::jsonb,$13::bytea) r`,
+  [ORG_ID, ORG_ID, "live", managerSession, randomUUID(), ...args.slice(0, 6), JSON.stringify(args[6]), sha(args)])).rows[0].r);
+}
+/** A real owner-visible ticket photo (private-bucket file + attachment) whose file name carries a secret marker. */
+async function secretPhoto(ticketId: string) {
+  const file = randomUUID(), attachment = randomUUID();
+  await db.query(`INSERT INTO files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,uploaded_by)
+    VALUES($1::uuid,$2::uuid,'ticket-photos-private','org/'||$2::uuid::text||'/tickets/'||$3::uuid::text||'/'||$1::uuid::text||'.jpg',
+    'PHOTO-SECRET.jpg','image/jpeg',1024,$4)`, [file, ORG_ID, ticketId, USERS.admin]);
+  await db.query("INSERT INTO ticket_attachments(id,org_id,ticket_id,file_id) VALUES($1,$2,$3,$4)", [attachment, ORG_ID, ticketId, file]);
+  return attachment;
 }
 async function emergency(version: string) {
-  const photos = [{ id: "PHOTO-SECRET-ref" }], args = [version, "water", "EMERGENCY-REASON-SECRET", photos];
-  return svc(null, async c => (await c.query(`SELECT app.b013_authorize_emergency($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::text,
-    $6::text,$7::jsonb,$8::bytea) r`, [ORG_ID, adminSession, randomUUID(), version, "water", "EMERGENCY-REASON-SECRET",
-    JSON.stringify(photos), sha(args)])).rows[0].r);
+  const ticketId = (await db.query("SELECT ticket_id FROM app.b013_estimate_versions WHERE id=$1", [version])).rows[0].ticket_id;
+  const photoId = await secretPhoto(ticketId);
+  const photos = [{ id: photoId }], args = [version, "water", "EMERGENCY-REASON-SECRET", photos];
+  const r = await svc(USERS.admin, async c => (await c.query(`SELECT app.b013_authorize_emergency($1::uuid,$2::uuid,$3::text,$4::uuid,
+    $5::uuid,$6::uuid,$7::text,$8::text,$9::jsonb,$10::bytea) r`, [ORG_ID, ORG_ID, "live", adminSession, randomUUID(), version,
+    "water", "EMERGENCY-REASON-SECRET", JSON.stringify(photos), sha(args)])).rows[0].r);
+  return { ...r, photoId };
 }
 function transport(mode: PushOutcome["status"] = "accepted") { return createCapturedLineTransport({ mode }); }
 function pushes(t: ReturnType<typeof transport>) {
@@ -246,7 +259,7 @@ test("emergency owner notice omits reason and photos; superseded approvals close
   // The request is superseded by the emergency authorization; only the emergency notice is sent.
   const texts = pushes(t).map(p => p.messages[0].text);
   assert.deepEqual(texts, [`緊急修繕通知：報修單 #2001 已依緊急例外安排處理。請登入查看詳情：https://liff.line.me/${OWNER_LIFF}?org=${ORG_ID}`]);
-  for (const secret of ["EMERGENCY-REASON", "PHOTO-SECRET", "water"]) assert.equal(JSON.stringify(pushes(t)).includes(secret), false);
+  for (const secret of ["EMERGENCY-REASON", "PHOTO-SECRET", "water", e.photoId]) assert.equal(JSON.stringify(pushes(t)).includes(secret), false);
   assert.equal(await n("SELECT count(*) n FROM app.b038_repair_pushes WHERE source_kind='approval_requested'"), 0);
   // A queued request that becomes stale before dispatch closes as superseded with no delivery.
   const ticket2 = randomUUID();
@@ -254,7 +267,7 @@ test("emergency owner notice omits reason and photos; superseded approvals close
     VALUES($1,$2,2002,$3,'plumbing','normal','open','B038 second','undecided')`, [ticket2, ORG_ID, property]);
   const v2 = await submit(ticket2);
   assert.equal(await svc(null, async c => (await c.query("SELECT app.b038_repair_enqueue($1) n", [ORG_ID])).rows[0].n), 1);
-  await emergency(v2.version_id);
+  assert.equal((await emergency(v2.version_id)).status, "recorded");
   const stale = transport(); await run(stale);
   assert.equal(pushes(stale).filter(p => p.messages[0].text.includes("待您決定")).length, 0);
   const id = (await rows("SELECT notification_id::text id,outcome,reason FROM app.b038_repair_pushes WHERE version_id=$1 AND source_kind='approval_requested'", [v2.version_id]))[0];

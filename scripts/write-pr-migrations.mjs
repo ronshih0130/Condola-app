@@ -449,7 +449,12 @@ const added = {
   "supabase/migrations/20261105190000_b024_vendor_completion_reason.sql": {
     addOnly: false,
     reason: "Adds immutable appointment response_reason checks, replaces the staff signature with a trailing default, and adds a service-only token-scoped vendor gateway with replay and flag-OFF rejection; no table grants, flag seeds or ticket status changes.",
-  },  "supabase/migrations/20261107160000_s3_contacts_user_id_guard.sql": {
+  },
+  "supabase/migrations/20261107170000_s3_b026_photo_refs.sql": {
+    addOnly: false,
+    reason: "CREATE OR REPLACE of app.b026_submit_vendor_estimate (same signature, owner, SECURITY DEFINER, search_path, grants); the stored evidence check now calls the private B-028 app.b028_repair_photo_refs (same org/ticket, private-bucket file, not internal) instead of the shape-only app.b013_photo_refs. Vendor-job allowlist and its 42501 precedence unchanged; no table, column, flag or grant change; old Worker compatible.",
+  },
+  "supabase/migrations/20261107160000_s3_contacts_user_id_guard.sql": {
     addOnly: false,
     reason: "Adds a private SECURITY DEFINER trigger on contacts that refuses anon/authenticated changes to user_id except attaching a passwordless login created in the same transaction (createLease); no table, column, grant or flag change; old Worker compatible.",
   },
