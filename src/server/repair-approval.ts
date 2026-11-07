@@ -58,7 +58,12 @@ async function run<T>(
     const result = parse(row.r);
     // B-028 package 2: the recorded repair source as a durable event on this transaction.
     const source = notify?.(result);
-    if (source && typeof source[1] === "string") await produceNotificationEvent(client, session.orgId, source[0], source[1]);
+    if (source && typeof source[1] === "string") {
+      // S3 BLK-MAC-24: the mutator's lock_timeout is function-scoped; bound the
+      // producer and the COMMIT that follow it the same way (55P03 on timeout).
+      await client.query("SET LOCAL lock_timeout = '3s'");
+      await produceNotificationEvent(client, session.orgId, source[0], source[1]);
+    }
     return result;
   });
 }

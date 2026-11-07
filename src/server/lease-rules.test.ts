@@ -259,6 +259,8 @@ test("the lease idempotency migration is additive and later than shared staging 
     "20261107105000_b039_line_dispatch_pushes.sql",
     "20261107120000_b028_repair_context_integrity.sql",
     "20261107133000_b031_upload_recovery.sql",
+    "20261107150000_s3_bounded_share_locks.sql",
+    "20261107151000_s3_b013_mutator_lock_timeout.sql",
     "20261107160000_s3_contacts_user_id_guard.sql",
     "20261107170000_s3_b026_photo_refs.sql",
   ]);
