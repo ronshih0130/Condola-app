@@ -188,6 +188,15 @@ flags:
     org_override: "organizations.feature_flags.tenant_thread_create must be boolean true"
     activation: "B-019 local synthetic validation only; no hosted activation"
 
+  tenant_account_settings:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.tenant_account_settings requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.tenant_account_settings must be boolean true"
+    activation: "B-020 slice: tenant session list/revoke; data-request backend only (UI awaits approved copy); local synthetic validation only"
+
   owner_receipt_title:
     owner: Ron
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"

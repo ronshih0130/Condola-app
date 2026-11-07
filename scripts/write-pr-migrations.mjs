@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106140000_b020_tenant_account.sql": {
+    addOnly: true,
+    reason: "Seeds default-OFF tenant_account_settings; adds private app.b020_data_requests (one open request per kind) and tenant-scoped SECURITY DEFINER session list/revoke and data-request RPCs deriving user/org from auth.uid() and the pin; no existing-table change.",
+  },
   "supabase/migrations/20261106130000_b019_tenant_thread_create.sql": {
     addOnly: true,
     reason: "Seeds default-OFF tenant_thread_create and adds a SECURITY DEFINER RPC letting an authorized lease tenant start the lease thread idempotently (existing one-per-lease index; first message id = request id); no table or grant change beyond the RPC.",

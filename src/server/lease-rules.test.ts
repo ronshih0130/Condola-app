@@ -235,6 +235,7 @@ test("the lease idempotency migration is additive and later than shared staging 
     "20261106110000_b029_usage_events_flag.sql",
     "20261106120000_prop06_recipient_channels.sql",
     "20261106130000_b019_tenant_thread_create.sql",
+    "20261106140000_b020_tenant_account.sql",
     "20261106160000_b028_legacy_claim_invoice_fence.sql",
     "20261106170000_b025_vendor_document_integrity.sql",
     "20261106180000_b027_partner_controls.sql",
