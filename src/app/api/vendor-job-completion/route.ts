@@ -44,6 +44,8 @@ export async function POST(request: Request) {
       ?? (error as { cause?: { code?: string } }).cause?.code;
     if (code === "40001") return Response.json({ status: "rejected_conflict" }, { status: 409, headers });
     if (code === "42501") return new Response(null, { status: 403, headers });
+    // S3 BLK-MAC-24: a bounded lock/statement timeout is retryable with the same requestId.
+    if (code === "55P03" || code === "57014") return Response.json({ status: "busy" }, { headers });
     if (error instanceof FlowError) return new Response(null, { status: 403, headers });
     throw error;
   }

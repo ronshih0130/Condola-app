@@ -14,6 +14,14 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107150000_s3_bounded_share_locks.sql": {
+    addOnly: false,
+    reason: "BLK-MAC-17: adds two private invoker helpers (EXECUTE revoked from PUBLIC/anon/authenticated/service_role): app.lock_tables_bounded (bounded LOCK TABLE wait, lock_timeout max(2s, deadlock_timeout+1s), deadlock re-raised as 55P03) and app.lock_tables_nowait_retry (bounded NOWAIT retry, jittered, ~2s budget, never queues). Re-creates 27 existing functions from their current definitions with only their 36 single-shot table-level LOCK TABLE ... NOWAIT statements replaced: 23 functions use the bounded wait, the four never-wait sites (b017_old_source_insert, b017_occurrence_valid, b028_center_recipient_valid, b017_resolution_admit) use the NOWAIT retry; fails closed on any count/ownership mismatch. A concurrent autovacuum/analyze or vacuum truncation is waited out (or retried past) instead of an immediate 55P03; a long holder still yields a bounded 55P03. Owners, grants, proconfig and row-level NOWAIT locks unchanged; the three B-010 polling functions keep NOWAIT. No table, column, flag or data change.",
+  },
+  "supabase/migrations/20261107151000_s3_b013_mutator_lock_timeout.sql": {
+    addOnly: false,
+    reason: "BLK-MAC-24: ALTER FUNCTION ... SET lock_timeout = '3s' on the six B-013 repair mutators (submit/decide/emergency/appointment session mutators from 20261107120000, vendor appointment and reminder), so a held parent row yields a bounded 55P03 instead of an unbounded wait. Bodies, owners, grants and search_path unchanged. No table, column, flag or data change.",
+  },
   "supabase/migrations/20261107120000_b028_repair_context_integrity.sql": {
     addOnly: false,
     reason: "Drops and recreates the four B-013 session mutators (submit/decide/emergency/appointment) with (p_live, p_env) after p_org; bodies unchanged apart from a private actor helper binding the selected environment/live-org tuple and request principal, and a private photo helper requiring real owner-visible same-org/same-ticket photos. Adds a validated composite appointment->vendor-job (org_id, ticket_id, id) foreign key. Old callers of the dropped signatures fail. Same service_role grants; rollout defaults OFF.",
