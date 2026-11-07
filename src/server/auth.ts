@@ -1107,6 +1107,14 @@ async function acceptPortalInvite(
     await notePortalReject(token, meta.ip);
     return { ok: false as const, error: "auth" as const, kind };
   }
+  // Staff choose the contact email and hold the raw link, so the link proves
+  // nothing about an existing login. A login without a password may get its
+  // first password only from an invite issued for that same login.
+  if (existing && !existing.has_password && existing.id !== row.user_id) {
+    await notePortalReject(token, meta.ip);
+    return { ok: false as const, error: "auth" as const, kind };
+  }
+  const passwordVerified = Boolean(existing?.has_password && existing.matches);
 
   let saved: { userId: string } | { conflict: true } | null = null;
   try {
@@ -1136,7 +1144,16 @@ async function acceptPortalInvite(
             return { conflict: true as const };
           }
           userId = created;
-        } else if (!existing?.has_password) {
+        } else if (!passwordVerified) {
+          // Without its password, a login that already serves another contact is not rewritten or rebound.
+          const elsewhere = await client.query(
+            `SELECT 1 FROM contacts WHERE user_id = $1 AND id <> $2 LIMIT 1`,
+            [userId, row.contact_id],
+          );
+          if (elsewhere.rows[0]) {
+            await client.query("ROLLBACK");
+            return { conflict: true as const };
+          }
           await client.query(
             `UPDATE auth.users
                 SET email = $2,
