@@ -13,6 +13,10 @@ export type UploadRecoveryCopy = {
   restored: string;
   leftOut: string;
   list: string;
+  remove: string;
+  discard: string;
+  busy: string;
+  trim: string;
 };
 
 export function uploadRecoveryCopy(locale: string): UploadRecoveryCopy {
@@ -31,6 +35,10 @@ export function uploadRecoveryCopy(locale: string): UploadRecoveryCopy {
         restored: "已保留上次上傳的照片，已上傳的照片不會重複加入。",
         leftOut: "上傳失敗的檔案不會加入。可以先重試，或只加入已上傳的照片。",
         list: "照片上傳狀態",
+        remove: "移除",
+        discard: "捨棄這次的照片",
+        busy: "系統忙碌中，照片都還在，請稍後再試一次。",
+        trim: "照片超過 8 張上限。請移除幾張後再加入。",
       }
     : {
         queued: "Waiting to upload",
@@ -46,5 +54,9 @@ export function uploadRecoveryCopy(locale: string): UploadRecoveryCopy {
         restored: "Photos from your last attempt are kept. Uploaded photos will not be added twice.",
         leftOut: "Failed files are not added. Retry them first, or add only the uploaded photos.",
         list: "Photo upload status",
+        remove: "Remove",
+        discard: "Discard these photos",
+        busy: "The system is busy. Your photos are kept. Please try again in a moment.",
+        trim: "This is over the 8-photo limit. Remove some photos, then add them again.",
       };
 }

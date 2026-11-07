@@ -67,3 +67,20 @@ test("upload recovery copy exists in EN and zh-TW with the same keys and no forb
   }
   assert.notEqual(en.retry, zh.retry);
 });
+
+test("batch uploader: 'kept' copy only when a restored file is uploaded; remove/discard and closed-draft recovery wired", () => {
+  const source = read("./ticket-photo-batch.tsx");
+  assert.match(source, /const restoredKept = Boolean\(draft\?\.items\.some\(\(item\) => item\.state === "uploaded"\)\);/);
+  assert.match(source, /\{restoredKept \? <p className="tiny" data-testid="repair-photo-restored">\{copy\.restored\}<\/p> : null\}/);
+  assert.equal(source.match(/copy\.restored/g)?.length, 1);
+  assert.match(source, /if \(state === "closed"\) \{[\s\S]*?startNewDraft\(\);\n\s*await send\(item, true\);/);
+  assert.match(source, /op: clientKey \? "remove" : "discard"/);
+  assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB/);
+  // Route order (documented): session 401 -> consent gate -> handleUploadBatch (one flag read, 404 when OFF).
+  const route = read("../app/api/tickets/photos/batch/route.ts");
+  const order = ["await readSession()", 'await requireCurrentConsent(session, "api")', "await handleUploadBatch(request, session)"].map((call) => route.indexOf(call));
+  assert.ok(order.every((index, i) => index > 0 && (i === 0 || index > order[i - 1])), "route order");
+  const handler = read("../server/upload-recovery-route.ts");
+  const flag = handler.indexOf("if (!(await uploadRecoveryEnabled(session.orgId))) return NextResponse.json");
+  assert.ok(flag > 0 && flag < handler.indexOf("await request.json()"), "flag read before parsing or any op");
+});

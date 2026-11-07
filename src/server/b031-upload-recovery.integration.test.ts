@@ -14,8 +14,9 @@ import { insertTestAuthSession } from "./test-auth-session";
 import { confirmTicketPhoto, issueUploadGrant } from "./ticket-photos";
 import type { Session } from "./types";
 import {
-  confirmBatchPhoto, prepareBatchPhoto, submitBatchPhotos, ticketPhotoRecovery, uploadRecoveryEnabled, type UploadStorageDeps,
+  confirmBatchPhoto, discardBatchPhotos, prepareBatchPhoto, submitBatchPhotos, ticketPhotoRecovery, uploadRecoveryEnabled, type UploadStorageDeps,
 } from "./upload-recovery";
+import { handleUploadBatch } from "./upload-recovery-route";
 
 // B-031 slice 3 UPLOAD_RECOVERY. Local disposable PostgreSQL clone only; storage is an
 // in-memory mock (no bucket, no network). All people, files and keys are synthetic.
@@ -97,7 +98,7 @@ async function sendFile(s: Session, storage: Storage, ticketId: string, batchKey
   const bytes = options.bytes ?? JPEG, mime = options.mime ?? "image/jpeg";
   const prepared = await prepareBatchPhoto(s, { ticketId, batchKey, clientKey, fileName: name, mime, size: bytes.length,
     internal: options.internal ?? false }, storage.deps);
-  if (prepared.state === "uploaded" || prepared.state === "attached") return prepared.state;
+  if (prepared.state === "uploaded" || prepared.state === "attached" || prepared.state === "closed") return prepared.state;
   if (prepared.state === "signed") {
     if (options.failPut) return "failed";
     storage.put(prepared.uploadUrl, bytes, mime);
@@ -174,7 +175,7 @@ test("partial failure: 3 files, #2 fails, retry #2 only -> exactly 3 attached, n
   // Final submit is idempotent; replays after submit report attached; new files are refused.
   assert.deepEqual(await submitBatchPhotos(wang, { ticketId, batchKey: batch, internal: false }), submitted);
   assert.equal(await sendFile(wang, storage, ticketId, batch, keys[2], "three.jpg"), "attached");
-  await assert.rejects(sendFile(wang, storage, ticketId, batch, randomUUID(), "late.jpg"), rejectsWith("errors.forbidden"));
+  assert.equal(await sendFile(wang, storage, ticketId, batch, randomUUID(), "late.jpg"), "closed"); // Client starts a new draft.
   assert.deepEqual(await counts(ticketId), { attachments: 3, files: 3, items: 3, batches: 1 });
   assert.equal((await ticketPhotoRecovery(wang, ticketId))?.draft, null);
 });
@@ -321,7 +322,8 @@ test("another user or org cannot read, attach or replay someone else's batch (AP
     await assert.rejects(asUser(userId, orgId, `SELECT app.b031_upload_lock_batch($1, $2, false)`, [ORG_ID, batch]), sqlDenied);
     await assert.rejects(asUser(userId, orgId, `SELECT * FROM app.b031_upload_reserve($1, $2, $3, $4, 'x.jpg', 'image/jpeg', 16)`,
       [ORG_ID, batch, randomUUID(), ticketPhotoPath(ORG_ID, ticketId, randomUUID(), "image/jpeg")]), sqlDenied);
-    await assert.rejects(asUser(userId, orgId, `SELECT app.b031_upload_close_batch($1, $2)`, [ORG_ID, batch]), sqlDenied);
+    await assert.rejects(asUser(userId, orgId, `SELECT app.b031_upload_close_batch($1, $2, true)`, [ORG_ID, batch]), sqlDenied);
+    await assert.rejects(asUser(userId, orgId, `SELECT app.b031_upload_discard_item($1, $2, $3)`, [ORG_ID, batch, other]), sqlDenied);
   }
   // The same key under another owner is a different (new) draft, never the victim's.
   await asUser(USERS.admin, ORG_ID, `SELECT app.b031_upload_open_batch($1, $2, $3, false)`, [ORG_ID, ticketId, batch]);
@@ -346,7 +348,7 @@ test("another user or org cannot read, attach or replay someone else's batch (AP
     WHERE n.nspname = 'app' AND p.proname LIKE 'b031_upload%' AND r.rolname IN ('anon', 'authenticated', 'service_role')`);
   const executable = grants.rows.filter((g) => g.ok).map((g) => `${g.role}:${g.fn.replace(/\(.*/, "")}`).sort();
   assert.deepEqual(executable, [
-    "authenticated:app.b031_upload_close_batch", "authenticated:app.b031_upload_items_for", "authenticated:app.b031_upload_lock_batch",
+    "authenticated:app.b031_upload_close_batch", "authenticated:app.b031_upload_discard_item", "authenticated:app.b031_upload_items_for", "authenticated:app.b031_upload_lock_batch",
     "authenticated:app.b031_upload_mark_attached", "authenticated:app.b031_upload_mark_uploaded", "authenticated:app.b031_upload_open_batch",
     "authenticated:app.b031_upload_open_draft", "authenticated:app.b031_upload_reserve", "service_role:app.b031_upload_recovery_on",
   ]);
@@ -420,6 +422,8 @@ test("flag OFF: one flag read, zero writes, existing photo path SQL unchanged; m
     ["prepare", () => prepareBatchPhoto(wang, { ticketId, batchKey: batch, clientKey: key, fileName: "x.jpg", mime: "image/jpeg", size: 16, internal: false }, storage.deps)],
     ["confirm", () => confirmBatchPhoto(wang, { ticketId, batchKey: batch, clientKey: key }, storage.deps)],
     ["submit", () => submitBatchPhotos(wang, { ticketId, batchKey: batch, internal: false })],
+    ["discard", () => discardBatchPhotos(wang, { ticketId, batchKey: batch })],
+    ["remove", () => discardBatchPhotos(wang, { ticketId, batchKey: batch, clientKey: key })],
   ];
   for (const [name, run] of offCalls) {
     const { statements, result } = await traced(run);
@@ -467,5 +471,180 @@ test("flag OFF: one flag read, zero writes, existing photo path SQL unchanged; m
   if (process.env.B031_UPLOAD_RECORD_TRACE === "1") writeFileSync(OFF_TRACE, `${JSON.stringify(baseline, null, 2)}\n`);
   assert.deepEqual(baseline, JSON.parse(readFileSync(OFF_TRACE, "utf8")));
   assert.equal((await counts(ticketId)).items, 0);
+  await disable();
+});
+
+// ---- Fix round 1 regressions (independent review M1, MINOR 1-5) ----
+
+async function attachedCount(ticketId: string) {
+  return (await query<{ n: number }>(`SELECT count(*)::int AS n FROM ticket_attachments WHERE ticket_id = $1`, [ticketId])).rows[0].n;
+}
+async function uploadAll(s: Session, storage: Storage, ticketId: string, batch: string, n: number) {
+  const keys: string[] = [];
+  for (let i = 0; i < n; i += 1) { const k = randomUUID(); keys.push(k); assert.equal(await sendFile(s, storage, ticketId, batch, k, `f${i}.jpg`), "uploaded"); }
+  return keys;
+}
+
+test("M1 repro A: 6 photos, 2 lost PUTs, reload -> re-choosing works, submit attaches, draft no longer restored", async () => {
+  await enable();
+  const wang = await session(USERS.tenant2, "tenant", null);
+  const ticketId = await ticket(wang, wangLease);
+  const storage = mockStorage();
+  const b1 = randomUUID();
+  await uploadAll(wang, storage, ticketId, b1, 6);
+  await submitBatchPhotos(wang, { ticketId, batchKey: b1, internal: false }, storage.deps);
+  const b2 = randomUUID();
+  assert.equal(await sendFile(wang, storage, ticketId, b2, randomUUID(), "x.jpg", { failPut: true }), "failed");
+  assert.equal(await sendFile(wang, storage, ticketId, b2, randomUUID(), "y.jpg", { failPut: true }), "failed");
+  const view = await ticketPhotoRecovery(wang, ticketId, storage.deps);
+  assert.deepEqual(view?.draft?.items.map((i) => i.state), ["signed", "signed"]); // Nothing kept -> no "kept" copy (UI test).
+  assert.equal(view?.draft?.batchKey, b2);
+  // Re-choosing creates new keys in the restored draft; reserved-but-unconfirmed paths hold no photo slot.
+  assert.equal(await sendFile(wang, storage, ticketId, b2, randomUUID(), "x.jpg"), "uploaded");
+  const removedBefore = storage.calls.remove;
+  const result = await submitBatchPhotos(wang, { ticketId, batchKey: b2, internal: false }, storage.deps);
+  assert.equal(result.attached.length, 1);
+  assert.equal(result.skipped, 2);
+  assert.equal(storage.calls.remove - removedBefore, 2); // Both stale reserved paths cleaned up after commit.
+  assert.equal(await attachedCount(ticketId), 7);
+  assert.equal((await ticketPhotoRecovery(wang, ticketId, storage.deps))?.draft, null);
+  assert.equal((await counts(ticketId)).items, 7); // Closed drafts keep only attached rows.
+
+  // Limit still holds at confirm time: 7 attached, two reserved -> first confirm ok, second limited.
+  const b3 = randomUUID(), k1 = randomUUID(), k2 = randomUUID();
+  for (const k of [k1, k2]) {
+    const p = await prepareBatchPhoto(wang, { ticketId, batchKey: b3, clientKey: k, fileName: "z.jpg", mime: "image/jpeg", size: JPEG.length, internal: false }, storage.deps);
+    assert.equal(p.state, "signed");
+    if (p.state === "signed") storage.put(p.uploadUrl, JPEG, "image/jpeg");
+  }
+  assert.equal((await confirmBatchPhoto(wang, { ticketId, batchKey: b3, clientKey: k1 }, storage.deps)).state, "uploaded");
+  await assert.rejects(confirmBatchPhoto(wang, { ticketId, batchKey: b3, clientKey: k2 }, storage.deps), rejectsWith("errors.photoLimit"));
+  await assert.rejects(sendFile(wang, storage, ticketId, b3, randomUUID(), "w.jpg"), rejectsWith("errors.photoLimit"));
+  // Explicit discard of the caller's own open draft: closes without attaching, removes reserved objects.
+  const objectsBefore = storage.objects.size;
+  assert.deepEqual(await discardBatchPhotos(wang, { ticketId, batchKey: b3 }, storage.deps), { removed: 2, state: "closed" });
+  assert.equal(storage.objects.size, objectsBefore - 2); // k1 + k2 objects removed (w.jpg was refused, never reserved).
+  assert.equal(await attachedCount(ticketId), 7);
+  assert.equal((await ticketPhotoRecovery(wang, ticketId, storage.deps))?.draft, null);
+  assert.deepEqual(await discardBatchPhotos(wang, { ticketId, batchKey: b3 }, storage.deps), { removed: 0, state: "closed" });
+});
+
+test("M1 repro B: a draft rejected by the 8-photo trigger stays recoverable by trimming or discarding", async () => {
+  await enable();
+  const wang = await session(USERS.tenant2, "tenant", null);
+  const ticketId = await ticket(wang, wangLease);
+  const storage = mockStorage();
+  const b1 = randomUUID(), b2 = randomUUID();
+  await uploadAll(wang, storage, ticketId, b1, 5);
+  const keys = await uploadAll(wang, storage, ticketId, b2, 5);
+  await submitBatchPhotos(wang, { ticketId, batchKey: b1, internal: false }, storage.deps);
+  await assert.rejects(submitBatchPhotos(wang, { ticketId, batchKey: b2, internal: false }, storage.deps), rejectsWith("errors.photoLimit"));
+  assert.equal(await attachedCount(ticketId), 5);
+  const view = await ticketPhotoRecovery(wang, ticketId, storage.deps);
+  assert.deepEqual(view?.draft?.items.map((i) => i.state), ["uploaded", "uploaded", "uploaded", "uploaded", "uploaded"]);
+  // Trim two files (owner-scoped), then submit the rest.
+  for (const k of keys.slice(0, 2)) assert.deepEqual(await discardBatchPhotos(wang, { ticketId, batchKey: b2, clientKey: k }, storage.deps), { removed: 1, state: "open" });
+  assert.deepEqual(await discardBatchPhotos(wang, { ticketId, batchKey: b2, clientKey: keys[0] }, storage.deps), { removed: 0, state: "open" });
+  assert.equal((await submitBatchPhotos(wang, { ticketId, batchKey: b2, internal: false }, storage.deps)).attached.length, 3);
+  assert.equal(await attachedCount(ticketId), 8);
+  const files = await query<{ n: number }>(`SELECT count(*)::int AS n FROM files WHERE storage_path LIKE '%/tickets/' || $1 || '/%'`, [ticketId]);
+  assert.equal(files.rows[0].n, 8);
+  assert.equal(storage.objects.size, 8);
+  // Attached files cannot be removed: attach and close are one transaction, so the closed draft refuses.
+  assert.deepEqual(await discardBatchPhotos(wang, { ticketId, batchKey: b2, clientKey: keys[4] }, storage.deps), { removed: 0, state: "closed" });
+  assert.equal(await attachedCount(ticketId), 8);
+});
+
+test("probes C/D: a batch is bound to its ticket; a demoted staff member cannot submit", async () => {
+  await enable();
+  const wang = await session(USERS.tenant2, "tenant", null);
+  const maint = await session(USERS.maintenance, "staff", "maintenance");
+  const t1 = await ticket(wang, wangLease), t2 = await ticket(wang, wangLease);
+  const storage = mockStorage();
+  const b = randomUUID(), k = randomUUID();
+  assert.equal(await sendFile(wang, storage, t1, b, k, "c.jpg"), "uploaded");
+  await assert.rejects(sendFile(wang, storage, t2, b, randomUUID(), "c2.jpg"), rejectsWith("errors.forbidden"));
+  await assert.rejects(confirmBatchPhoto(wang, { ticketId: t2, batchKey: b, clientKey: k }, storage.deps), rejectsWith("errors.forbidden"));
+  await assert.rejects(submitBatchPhotos(wang, { ticketId: t2, batchKey: b, internal: false }, storage.deps), rejectsWith("errors.forbidden"));
+  await assert.rejects(discardBatchPhotos(wang, { ticketId: t2, batchKey: b }, storage.deps), rejectsWith("errors.forbidden"));
+  assert.equal(await attachedCount(t2), 0);
+  const mb = randomUUID();
+  assert.equal(await sendFile(maint, storage, t1, mb, randomUUID(), "i.jpg", { internal: true }), "uploaded");
+  await query(`UPDATE org_members SET role = 'accountant' WHERE user_id = $1 AND org_id = $2`, [USERS.maintenance, ORG_ID]);
+  try {
+    await assert.rejects(submitBatchPhotos(maint, { ticketId: t1, batchKey: mb, internal: true }, storage.deps), rejectsWith("errors.forbidden"));
+  } finally {
+    await query(`UPDATE org_members SET role = 'maintenance' WHERE user_id = $1 AND org_id = $2`, [USERS.maintenance, ORG_ID]);
+  }
+  assert.equal(await attachedCount(t1), 0);
+});
+
+test("MINOR 1: a held batch lock makes submit fail fast with errors.busy (bounded wait), no partial writes", { timeout: 20_000 }, async () => {
+  await enable();
+  const wang = await session(USERS.tenant2, "tenant", null);
+  const ticketId = await ticket(wang, wangLease);
+  const storage = mockStorage();
+  const b = randomUUID();
+  await uploadAll(wang, storage, ticketId, b, 1);
+  const holder = new Client({ connectionString: process.env.DATABASE_URL });
+  await holder.connect();
+  try {
+    await holder.query("BEGIN");
+    await holder.query(`SELECT 1 FROM app.b031_upload_batches WHERE client_batch_key = $1 FOR UPDATE`, [b]);
+    const started = Date.now();
+    await assert.rejects(submitBatchPhotos(wang, { ticketId, batchKey: b, internal: false }, storage.deps), rejectsWith("errors.busy"));
+    await assert.rejects(sendFile(wang, storage, ticketId, b, randomUUID(), "b.jpg"), rejectsWith("errors.busy"));
+    assert.ok(Date.now() - started < 9_000, "both waits bounded by lock_timeout 3s");
+  } finally {
+    await holder.query("ROLLBACK").catch(() => {});
+    await holder.end();
+  }
+  assert.equal(await attachedCount(ticketId), 0);
+  assert.equal((await submitBatchPhotos(wang, { ticketId, batchKey: b, internal: false }, storage.deps)).attached.length, 1);
+});
+
+test("MINOR 4/5: reload after a lost PUT adopts the stored object; adding after a lost submit response starts a new draft", async () => {
+  await enable();
+  const wang = await session(USERS.tenant2, "tenant", null);
+  const ticketId = await ticket(wang, wangLease);
+  const storage = mockStorage();
+  const b = randomUUID(), k = randomUUID();
+  const p = await prepareBatchPhoto(wang, { ticketId, batchKey: b, clientKey: k, fileName: "lost.jpg", mime: "image/jpeg", size: JPEG.length, internal: false }, storage.deps);
+  if (p.state === "signed") storage.put(p.uploadUrl, JPEG, "image/jpeg"); // PUT landed; response and confirm lost; reload.
+  const view = await ticketPhotoRecovery(wang, ticketId, storage.deps);
+  assert.deepEqual(view?.draft?.items.map((i) => [i.clientKey, i.state]), [[k, "uploaded"]]);
+  assert.equal(storage.objects.size, 1); // No second object needed.
+  // Storage unavailable on restore: stays signed (no throw).
+  const b2 = randomUUID(), k2 = randomUUID();
+  await prepareBatchPhoto(wang, { ticketId, batchKey: b2, clientKey: k2, fileName: "u.jpg", mime: "image/jpeg", size: JPEG.length, internal: false }, storage.deps);
+  const down = await ticketPhotoRecovery(wang, ticketId, { ...storage.deps, info: async () => { throw new FlowError("errors.photoStorage"); } });
+  assert.ok(down?.draft);
+
+  // Lost submit response: the submit committed, the browser still holds the old draft key.
+  await submitBatchPhotos(wang, { ticketId, batchKey: b, internal: false }, storage.deps);
+  assert.equal(await sendFile(wang, storage, ticketId, b, randomUUID(), "next.jpg"), "closed");
+  const fresh = randomUUID();
+  assert.equal(await sendFile(wang, storage, ticketId, fresh, randomUUID(), "next.jpg"), "uploaded");
+  assert.equal((await submitBatchPhotos(wang, { ticketId, batchKey: b, internal: false }, storage.deps)).attached.length, 1); // Replay is safe.
+  assert.equal(await attachedCount(ticketId), 1);
+});
+
+test("MINOR 2: route body OFF answers 404 after exactly one flag read for every op; ON runs the op owner-scoped", async () => {
+  await disable();
+  const wang = await session(USERS.tenant2, "tenant", null);
+  const ticketId = await ticket(wang, wangLease);
+  const body = (op: string) => new Request("http://127.0.0.1/api/tickets/photos/batch", { method: "POST", body: JSON.stringify({ op, ticketId, batchKey: randomUUID(), clientKey: randomUUID() }) });
+  const before = await counts(ticketId);
+  for (const op of ["prepare", "confirm", "submit", "discard", "remove", "bogus"]) {
+    const { statements, result } = await traced(() => handleUploadBatch(body(op), wang));
+    assert.deepEqual(statements, [FLAG_READ], op);
+    assert.equal((result as Response).status, 404, op);
+    assert.deepEqual(await (result as Response).json(), { ok: false, error: "errors.notFound" });
+  }
+  assert.deepEqual(await counts(ticketId), before);
+  await enable();
+  const unknown = await handleUploadBatch(body("discard"), wang);
+  assert.equal(unknown.status, 403); // Unknown draft key for this owner: refused, never a new draft.
+  assert.equal((await handleUploadBatch(body("bogus"), wang)).status, 404);
   await disable();
 });

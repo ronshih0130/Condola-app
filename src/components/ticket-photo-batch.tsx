@@ -110,17 +110,42 @@ export function TicketPhotoBatchUpload({
     setItems((current) => current.map((item) => (item.clientKey === clientKey ? { ...item, ...patch } : item)));
   }
 
-  async function send(item: Item) {
+  function errorText(key: unknown) {
+    if (key === "errors.busy") return copy.busy;
+    return messageFor(typeof key === "string" ? key : undefined, messages);
+  }
+
+  /**
+   * The server says this draft is already closed (e.g. the submit committed but its
+   * response was lost, or another tab discarded it). Start a new draft key; drop rows
+   * that no longer exist server-side and show the ticket's real photos via refresh.
+   */
+  function startNewDraft() {
+    batchKey.current = crypto.randomUUID();
+    setItems((current) => current.filter((item) => item.file && item.status !== "uploaded" && item.status !== "attached"));
+    router.refresh();
+  }
+
+  async function send(item: Item, rotated = false) {
     if (!item.file || !item.mime) return;
     update(item.clientKey, { status: "uploading", error: undefined });
     try {
       const base = { ticketId, batchKey: batchKey.current, clientKey: item.clientKey };
       const prepared = await post({ op: "prepare", ...base, fileName: item.name, mime: item.mime, size: item.file.size, internal });
       if (!prepared.ok) {
-        update(item.clientKey, { status: "failed", error: messageFor(prepared.payload.error as string | undefined, messages) });
+        update(item.clientKey, { status: "failed", error: errorText(prepared.payload.error) });
         return;
       }
       const state = prepared.payload.state;
+      if (state === "closed") {
+        if (rotated) {
+          update(item.clientKey, { status: "failed", error: messages.generic });
+          return;
+        }
+        startNewDraft();
+        await send(item, true);
+        return;
+      }
       if (state === "uploaded" || state === "attached") {
         update(item.clientKey, { status: state });
         return;
@@ -136,7 +161,7 @@ export function TicketPhotoBatchUpload({
       }
       const confirmed = await post({ op: "confirm", ...base });
       if (!confirmed.ok || confirmed.payload.state === "missing") {
-        update(item.clientKey, { status: "failed", error: messageFor(confirmed.payload.error as string | undefined, messages) });
+        update(item.clientKey, { status: "failed", error: errorText(confirmed.payload.error) });
         return;
       }
       update(item.clientKey, { status: confirmed.payload.state === "attached" ? "attached" : "uploaded" });
@@ -181,9 +206,10 @@ export function TicketPhotoBatchUpload({
     setBusy(true);
     setError("");
     try {
+      // A lost response is safe to repeat: a closed draft replays the same attachments.
       const result = await post({ op: "submit", ticketId, batchKey: batchKey.current, internal });
       if (!result.ok) {
-        setError(messageFor(result.payload.error as string | undefined, messages));
+        setError(result.payload.error === "errors.photoLimit" ? copy.trim : errorText(result.payload.error));
         return;
       }
       batchKey.current = crypto.randomUUID();
@@ -198,7 +224,33 @@ export function TicketPhotoBatchUpload({
     }
   }
 
+  /** Remove one file (clientKey) or discard the whole draft, server-side first. */
+  async function discard(clientKey?: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await post({ op: clientKey ? "remove" : "discard", ticketId, batchKey: batchKey.current, clientKey });
+      if (!result.ok) {
+        setError(errorText(result.payload.error));
+        return;
+      }
+      if (!clientKey || result.payload.state === "closed") {
+        batchKey.current = crypto.randomUUID();
+        setItems(clientKey ? (current) => current.filter((item) => item.file && item.status !== "uploaded" && item.status !== "attached" && item.clientKey !== clientKey) : []);
+        router.refresh();
+        return;
+      }
+      setItems((current) => current.filter((item) => item.clientKey !== clientKey));
+    } catch {
+      setError(messages.generic);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const uploaded = items.filter((item) => item.status === "uploaded").length;
+  const removable = items.some((item) => item.status !== "attached");
+  const restoredKept = Boolean(draft?.items.some((item) => item.state === "uploaded"));
   const retryable = items.some((item) => item.status === "failed" && item.file);
   const failedCount = items.filter((item) => item.status === "failed").length;
   const statusText: Record<Status, string> = {
@@ -213,7 +265,7 @@ export function TicketPhotoBatchUpload({
     <div data-testid="repair-photo-batch">
       <h4 className="ticket-photo-heading">{label}</h4>
       <p className="tiny muted" id={`${uploadId}-hint`}>{hint}</p>
-      {draft && draft.items.length ? <p className="tiny" data-testid="repair-photo-restored">{copy.restored}</p> : null}
+      {restoredKept ? <p className="tiny" data-testid="repair-photo-restored">{copy.restored}</p> : null}
       {allowInternal ? (
         <label className="small">
           <input type="checkbox" checked={internal} disabled={busy} onChange={(event) => setInternal(event.target.checked)} /> {messages.internal}
@@ -239,6 +291,14 @@ export function TicketPhotoBatchUpload({
             <li key={item.clientKey} data-status={item.status}>
               {item.name} · {statusText[item.status]}
               {item.error ? <span className="tiny muted"> · {item.error}</span> : null}
+              {item.status === "failed" || item.status === "uploaded" ? (
+                <>
+                  {" "}
+                  <button className="btn sm" type="button" disabled={busy} onClick={() => discard(item.clientKey)} data-testid="repair-photo-remove">
+                    {copy.remove}
+                  </button>
+                </>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -253,6 +313,11 @@ export function TicketPhotoBatchUpload({
         {uploaded ? (
           <button className="btn pri sm" type="button" disabled={busy} onClick={submit} data-testid="repair-photo-submit">
             {busy ? copy.submitting : copy.submit.replaceAll("{count}", String(uploaded))}
+          </button>
+        ) : null}
+        {removable ? (
+          <button className="btn sm" type="button" disabled={busy} onClick={() => discard()} data-testid="repair-photo-discard">
+            {copy.discard}
           </button>
         ) : null}
       </div>
