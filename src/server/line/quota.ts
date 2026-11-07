@@ -15,13 +15,17 @@ type Context = { recipient_contact_id: string; link_id: string | null; line_prov
   provider_user_hash: string | null; eligible: boolean; fallback_ready: boolean; enabled: boolean };
 type Reservation = { period_month: string; status: "reserved" | "dispatching" | "unknown" | "settled" | "released" | "expired" | "line_budget" | "fallback"; pushed_count: number; reserved_count: number };
 async function context(c: Client, req: LinePush): Promise<Context | undefined> {
+  // Slice-2 links own their persona; identity.persona only describes the first binding.
+  // Preserve slice-1 eligibility for legacy links without a link persona.
   return (await c.query<Context>(`SELECT n.recipient_contact_id,ch.line_provider_id,l.id AS link_id,i.provider_user_hash,app.b028_delivery_enabled(n.org_id) AS fallback_ready,
     app.b033_push_enabled(n.org_id) AS enabled,
     (app.b033_push_enabled(n.org_id) IS TRUE AND ch.id=app.b033_selected_channel(n.org_id)
       AND ch.is_active AND ch.tenant_config_verified_at IS NOT NULL
       AND CASE $4 WHEN 'tenant' THEN ch.liff_id_tenant IS NOT NULL WHEN 'owner' THEN ch.liff_id_owner IS NOT NULL
         WHEN 'vendor' THEN ch.liff_id_vendor IS NOT NULL ELSE false END AND i.id IS NOT NULL AND i.status='linked' AND i.unlinked_at IS NULL
-      AND i.user_id=ct.user_id AND i.persona=$4 AND i.friend_state AND l.is_friend
+      AND CASE WHEN l.persona IS NULL THEN i.user_id=ct.user_id AND i.persona=$4
+        ELSE l.persona=$4 AND i.user_id=app.b033_contact_user(l.org_id,l.contact_id,l.persona) END
+      AND i.friend_state AND l.is_friend
       AND l.status='linked' AND l.unlinked_at IS NULL AND l.identity_verified_at IS NOT NULL
       AND l.notification_opt_in AND ct.archived_at IS NULL
       AND CASE $4 WHEN 'tenant' THEN ct.is_tenant WHEN 'owner' THEN ct.is_owner WHEN 'vendor' THEN ct.is_vendor ELSE false END) IS TRUE AS eligible

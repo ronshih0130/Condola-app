@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { runInNewContext } from "node:vm";
+
+const script = readFileSync("public/line-bootstrap.js", "utf8");
+test("LIFF redirect processing precedes URL normalization and preserves the opaque invitation flow", async () => {
+ const events: string[] = [];
+ await runInNewContext(script, {
+  document: { getElementById: () => ({ textContent: JSON.stringify({ liffId: "local", orgId: "org", flow: "opaque", csrf: "proof" }) }) },
+  window: { liff: { init: async () => { events.push("init"); }, isLoggedIn: () => false,
+   login: ({ redirectUri }: { redirectUri: string }) => { events.push(redirectUri); } } },
+  history: { replaceState: () => events.push("normalize") },
+  location: { origin: "https://local.test", pathname: "/t/liff" },
+  fetch: () => { throw new Error("unexpected request"); },
+ });
+ assert.deepEqual(events, ["init", "normalize", "https://local.test/t/liff?flow=opaque"]);
+});
+test("LIFF sends its ID token only to the same-origin session endpoint without persisting it", async () => {
+ const calls: { path: string; body: Record<string, string> }[] = [], next: string[] = [];
+ await runInNewContext(script, {
+  document: { getElementById: () => ({ textContent: JSON.stringify({ liffId: "local", orgId: "org", flow: null, csrf: "proof", persona: "vendor" }) }) },
+  window: { liff: { init: async () => {}, isLoggedIn: () => true, getIDToken: () => "local-id-token" } },
+  history: { replaceState: () => {} }, location: { pathname: "/v/liff", assign: (value: string) => next.push(value) },
+  fetch: async (path: string, options: { body: string }) => {
+   calls.push({ path, body: JSON.parse(options.body) });
+   return { ok: true, json: async () => path.endsWith("flows") ? { flow: "opaque" } : { next: "/vendor-account" } };
+  },
+ });
+ assert.deepEqual(calls, [
+  { path: "/api/line/flows", body: { purpose: "login", orgId: "org", persona: "vendor", csrf: "proof" } },
+  { path: "/api/line/session", body: { flow: "opaque", idToken: "local-id-token", csrf: "proof" } },
+ ]);
+ assert.deepEqual(next, ["/vendor-account"]);
+});

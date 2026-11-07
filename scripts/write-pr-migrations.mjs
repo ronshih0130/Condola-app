@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107050000_b033_line_login_link.sql": {
+    addOnly: false,
+    reason: "Additive one-time flows, session provenance, private limits, portal gates and service-only LIFF/link gateways. Trusted links no longer require raw provider ids; configuration and privilege changes require Class B review.",
+  },
   "supabase/migrations/20261107000000_b033_line_shared_foundation.sql": {
     addOnly: false,
     reason: "Additive LINE foundation with constrained private identity/flow/event/reservation tables, service-only quota usage and gateways, verified-link columns and guard, delivery dedupe, and default-OFF settings. No legacy identity backfill or live transport; constraints and privilege revokes require Class B review.",
