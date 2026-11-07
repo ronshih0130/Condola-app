@@ -14,6 +14,14 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107060000_b005_unit_qr_signup.sql": {
+    addOnly: false,
+    reason: "New private unit QR contexts and pending applicants, constraints, RLS and service-only SECURITY DEFINER gateways with revoked direct access. Default OFF; no existing identity or lease entitlement changes.",
+  },
+  "supabase/migrations/20261106090000_b005_resend_results.sql": {
+    addOnly: false,
+    reason: "Private durable resend reservations, immutable terminal results, constrained SECURITY DEFINER gateways and revoked direct access; default-OFF simulation only. No existing invitation state is changed.",
+  },
   "supabase/migrations/20261107070000_b030_usage_subscription_state.sql": {
     addOnly: false,
     reason: "Adds private plan/subscription/event/assignment tables with CHECK, foreign-key and uniqueness constraints, RLS and privilege revokes; grants role-specific gateway EXECUTE and installs an isolated assignment trigger on maintenance_tickets with audit-based recovery. Strict usage_subscriptions OFF; no real provider or restrictions.",

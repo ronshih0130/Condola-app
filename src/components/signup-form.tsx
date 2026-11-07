@@ -6,7 +6,7 @@ import { PendingSubmit } from "./pending-submit";
 import { useT } from "./locale";
 import { actionPreviewCode, actionStartSignup } from "@/server/signup-actions";
 
-export function SignupForm({ error }: { error?: string }) {
+export function SignupForm({ error, unitQr }: { error?: string; unitQr?: string }) {
   const t = useT();
   const [code, setCode] = useState("");
   const [note, setNote] = useState("");
@@ -23,6 +23,7 @@ export function SignupForm({ error }: { error?: string }) {
         setConsentError(true);
       }}
     >
+      {unitQr ? <input type="hidden" name="unitQrContinuation" value={unitQr} /> : null}
       {error === "duplicate" ? (
         <div className="alert bad" data-testid="signup-duplicate">
           <p>{t("i_signup_dup")}</p>

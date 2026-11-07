@@ -2,6 +2,7 @@ import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { OwnerForm } from "@/components/owner-form";
+import { PortalResendEntry } from "@/components/portal-resend-entry";
 import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionUpdateOwner } from "@/server/actions";
@@ -37,6 +38,7 @@ export default async function EditOwnerPage({
         {session.role === "admin" || session.role === "manager" ? (
           <PortalInviteButton key={owner.id} kind="owner" contactId={owner.id} activated={activated} />
         ) : null}
+        <PortalResendEntry session={session} kind="owner" contactId={owner.id} />
         <OwnerForm
           key={owner.id}
           t={t}
