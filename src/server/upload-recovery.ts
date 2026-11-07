@@ -28,6 +28,9 @@ import type { UploadItemState, UploadRecoveryDraft, UploadRecoveryView } from "@
  * same storage path and state, so a file that already succeeded is not stored
  * or attached twice, and a failed file can be retried alone. Final submit
  * inserts files + ticket_attachments once, through the caller's existing RLS.
+ * Only verified uploads hold a photo slot. The owner can remove one file or
+ * discard the whole draft; closing a draft deletes its unattached rows and the
+ * server removes their reserved objects.
  *
  * Flag OFF: every entry point issues only the flag read and writes nothing.
  */
@@ -73,6 +76,32 @@ function requireKeys(...keys: string[]) {
   if (!keys.every((key) => isUuid(key))) throw new FlowError("errors.notFound");
 }
 
+function dbCode(error: unknown) {
+  const cause = error instanceof FlowError ? (error.cause as { code?: unknown } | undefined) : undefined;
+  return typeof cause?.code === "string" ? cause.code : "";
+}
+
+/** The draft was closed (submitted or discarded) — the client starts a new draft. */
+const isClosed = (error: unknown) => dbCode(error) === "P0B33";
+
+/**
+ * One bounded transaction as the caller (RLS). Lock waits 3 s, statements 8 s, like
+ * slice 1; a lock or statement timeout becomes the existing errors.busy result.
+ */
+async function batchTx<T>(session: Session, fn: (client: Client) => Promise<T>): Promise<T> {
+  try {
+    return await tx(session.userId, async (client) => {
+      await client.query("SET LOCAL lock_timeout = '3s'");
+      await client.query("SET LOCAL statement_timeout = '8s'");
+      return fn(client);
+    }, requireOrgScope(session));
+  } catch (error) {
+    const code = dbCode(error);
+    if (code === "55P03" || code === "57014") throw new FlowError("errors.busy");
+    throw error;
+  }
+}
+
 /** The ticket must be visible to the caller under the existing ticket RLS. */
 async function visibleTicket(client: Client, session: Session, ticketId: string) {
   const ticket = await maybe<{ id: string; org_id: string }>(
@@ -94,28 +123,79 @@ async function batchItems(client: Client, session: Session, batchKey: string) {
   return result.rows;
 }
 
-/** Draft restore for the ticket page. One flag read when OFF. */
-export async function ticketPhotoRecovery(session: Session, ticketId: string): Promise<UploadRecoveryView> {
+/** Best effort, after commit: only reserved, unattached paths of the caller on this ticket. */
+async function removeObjects(session: Session, ticketId: string, paths: string[], deps: UploadStorageDeps) {
+  for (const path of paths) {
+    if (!isTicketPhotoPath(path, session.orgId, ticketId)) continue;
+    await (deps.remove ?? removeRepairObject)(path).catch(() => undefined);
+  }
+}
+
+const DISCARD_KEYS = new Set(["errors.photoType", "errors.photoSize", "errors.photoHeic"]);
+
+/** Verify the stored object for a `signed` item and mark it uploaded. */
+async function adoptStored(session: Session, ticketId: string, batchKey: string, item: ItemRow, deps: UploadStorageDeps) {
+  if (!isTicketPhotoPath(item.storage_path, session.orgId, ticketId)) throw new FlowError("errors.forbidden");
+  const info = await (deps.info ?? repairObjectInfo)(item.storage_path);
+  if (!info.ok) return "missing" as const;
+  let accepted: { size: number; mime: string };
+  try {
+    const header = await (deps.header ?? repairObjectHeader)(item.storage_path);
+    accepted = acceptPhotoObject({ size: info.size ?? 0, mime: info.mime ?? "", header }, item.mime_type);
+  } catch (error) {
+    // Reserved, unattached path of this caller only: the rejected object is removed.
+    if (error instanceof FlowError && DISCARD_KEYS.has(error.key)) await (deps.remove ?? removeRepairObject)(item.storage_path);
+    throw error;
+  }
+  return batchTx(session, async (client) => {
+    await visibleTicket(client, session, ticketId);
+    const marked = await one<{ state: UploadItemState }>(
+      client,
+      `SELECT app.b031_upload_mark_uploaded($1::uuid, $2::uuid, $3::uuid, $4, $5::bigint) AS state`,
+      [session.orgId, batchKey, item.client_key, accepted.mime, accepted.size],
+    );
+    return marked.state;
+  });
+}
+
+/**
+ * Draft restore for the ticket page. One flag read when OFF. A restored `signed`
+ * file whose object did reach storage (lost response, then reload) is verified and
+ * adopted here, so re-choosing it is unnecessary and no second object is stored.
+ */
+export async function ticketPhotoRecovery(session: Session, ticketId: string, deps: UploadStorageDeps = {}): Promise<UploadRecoveryView> {
   if (!(await uploadRecoveryEnabled(session.orgId))) return null;
   try {
     assertActor(session, false);
     if (!isUuid(ticketId)) return { draft: null };
-    const draft = await tx(session.userId, async (client) => {
+    const read = () => batchTx(session, async (client) => {
       await visibleTicket(client, session, ticketId);
       const open = await maybe<{ client_batch_key: string; internal: boolean }>(
         client,
         `SELECT client_batch_key::text, internal FROM app.b031_upload_open_draft($1::uuid, $2::uuid)`,
         [session.orgId, ticketId],
       );
-      if (!open) return null;
-      const rows = await batchItems(client, session, open.client_batch_key);
-      return {
-        batchKey: open.client_batch_key,
-        internal: session.kind === "staff" && open.internal,
-        items: rows.map((row) => ({ clientKey: row.client_key, name: row.file_name, state: row.state })),
-      };
-    }, requireOrgScope(session));
-    return { draft };
+      return open ? { open, rows: await batchItems(client, session, open.client_batch_key) } : null;
+    });
+    let found = await read();
+    if (!found) return { draft: null };
+    let adopted = false;
+    for (const row of found.rows.filter((r) => r.state === "signed")) {
+      try {
+        if ((await adoptStored(session, ticketId, found.open.client_batch_key, row, deps)) === "uploaded") adopted = true;
+      } catch {
+        // Storage unavailable, limit reached or a rejected object: stays `signed` (choose again or remove).
+      }
+    }
+    if (adopted) found = await read();
+    if (!found) return { draft: null };
+    return {
+      draft: {
+        batchKey: found.open.client_batch_key,
+        internal: session.kind === "staff" && found.open.internal,
+        items: found.rows.map((row) => ({ clientKey: row.client_key, name: row.file_name, state: row.state })),
+      },
+    };
   } catch (error) {
     if (error instanceof FlowError && (error.key === "errors.forbidden" || error.key === "errors.notFound")) return { draft: null };
     throw error;
@@ -123,12 +203,14 @@ export async function ticketPhotoRecovery(session: Session, ticketId: string): P
 }
 
 export type PrepareResult =
-  | { state: "uploaded" | "attached" | "stored" }
+  | { state: "uploaded" | "attached" | "stored" | "closed" }
   | { state: "signed"; uploadUrl: string; token: string };
 
 /**
  * Reserve (or replay) one file of a batch. "stored" means the object is already
  * in storage for this key (a lost response after the PUT): confirm, do not PUT.
+ * "closed" means the draft was already submitted or discarded (e.g. a lost submit
+ * response): the client starts a new draft key and sends the file again.
  */
 export async function prepareBatchPhoto(
   session: Session,
@@ -140,16 +222,22 @@ export async function prepareBatchPhoto(
   requireKeys(input.ticketId, input.batchKey, input.clientKey);
   const meta = assertPhotoMeta(input);
   const proposed = ticketPhotoPath(session.orgId, input.ticketId, newPhotoFileId(), meta.mime);
-  const reserved = await tx(session.userId, async (client) => {
-    await visibleTicket(client, session, input.ticketId);
-    await client.query(`SELECT app.b031_upload_open_batch($1::uuid, $2::uuid, $3::uuid, $4::boolean)`,
-      [session.orgId, input.ticketId, input.batchKey, input.internal]);
-    return one<{ storage_path: string; state: UploadItemState }>(
-      client,
-      `SELECT storage_path, state FROM app.b031_upload_reserve($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::bigint)`,
-      [session.orgId, input.batchKey, input.clientKey, proposed, meta.fileName, meta.mime, meta.size],
-    );
-  }, requireOrgScope(session));
+  let reserved: { storage_path: string; state: UploadItemState };
+  try {
+    reserved = await batchTx(session, async (client) => {
+      await visibleTicket(client, session, input.ticketId);
+      await client.query(`SELECT app.b031_upload_open_batch($1::uuid, $2::uuid, $3::uuid, $4::boolean)`,
+        [session.orgId, input.ticketId, input.batchKey, input.internal]);
+      return one<{ storage_path: string; state: UploadItemState }>(
+        client,
+        `SELECT storage_path, state FROM app.b031_upload_reserve($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::bigint)`,
+        [session.orgId, input.batchKey, input.clientKey, proposed, meta.fileName, meta.mime, meta.size],
+      );
+    });
+  } catch (error) {
+    if (isClosed(error)) return { state: "closed" };
+    throw error;
+  }
   if (!isTicketPhotoPath(reserved.storage_path, session.orgId, input.ticketId)) throw new FlowError("errors.forbidden");
   if (reserved.state !== "signed") return { state: reserved.state };
   const info = await (deps.info ?? repairObjectInfo)(reserved.storage_path);
@@ -157,8 +245,6 @@ export async function prepareBatchPhoto(
   const signed = await (deps.sign ?? signRepairUpload)(reserved.storage_path);
   return { state: "signed", uploadUrl: signed.uploadUrl, token: signed.token };
 }
-
-const DISCARD_KEYS = new Set(["errors.photoType", "errors.photoSize", "errors.photoHeic"]);
 
 /**
  * Verify the stored object for this key and mark it uploaded (not attached).
@@ -172,49 +258,30 @@ export async function confirmBatchPhoto(
   await requireEnabled(session);
   assertActor(session, false);
   requireKeys(input.ticketId, input.batchKey, input.clientKey);
-  const item = await tx(session.userId, async (client) => {
+  const item = await batchTx(session, async (client) => {
     await visibleTicket(client, session, input.ticketId);
     return (await batchItems(client, session, input.batchKey)).find((row) => row.client_key === input.clientKey) ?? null;
-  }, requireOrgScope(session));
+  });
   if (!item || item.ticket_id !== input.ticketId) throw new FlowError("errors.forbidden");
   if (item.state !== "signed") return { state: item.state };
-  if (!isTicketPhotoPath(item.storage_path, session.orgId, input.ticketId)) throw new FlowError("errors.forbidden");
-  const info = await (deps.info ?? repairObjectInfo)(item.storage_path);
-  if (!info.ok) return { state: "missing" };
-  let accepted: { size: number; mime: string };
-  try {
-    const header = await (deps.header ?? repairObjectHeader)(item.storage_path);
-    accepted = acceptPhotoObject({ size: info.size ?? 0, mime: info.mime ?? "", header }, item.mime_type);
-  } catch (error) {
-    // Reserved, unattached path of this caller only: the rejected object is removed.
-    if (error instanceof FlowError && DISCARD_KEYS.has(error.key)) await (deps.remove ?? removeRepairObject)(item.storage_path);
-    throw error;
-  }
-  const state = await tx(session.userId, async (client) => {
-    await visibleTicket(client, session, input.ticketId);
-    const marked = await one<{ state: UploadItemState }>(
-      client,
-      `SELECT app.b031_upload_mark_uploaded($1::uuid, $2::uuid, $3::uuid, $4, $5::bigint) AS state`,
-      [session.orgId, input.batchKey, input.clientKey, accepted.mime, accepted.size],
-    );
-    return marked.state;
-  }, requireOrgScope(session));
-  return { state };
+  return { state: await adoptStored(session, input.ticketId, input.batchKey, item, deps) };
 }
 
 /**
  * Final submit. Attaches every uploaded file of the batch exactly once, in one
- * transaction holding the batch lock, then closes the draft. A replay of a
- * submitted batch returns the same attachment ids and writes nothing.
+ * transaction holding the batch lock, then closes the draft (unattached rows are
+ * deleted and their reserved objects removed after commit). A replay of a closed
+ * batch returns the same attachment ids and writes nothing.
  */
 export async function submitBatchPhotos(
   session: Session,
   input: { ticketId: string; batchKey: string; internal: boolean },
+  deps: UploadStorageDeps = {},
 ): Promise<{ attached: string[]; skipped: number }> {
   await requireEnabled(session);
   assertActor(session, input.internal);
   requireKeys(input.ticketId, input.batchKey);
-  return tx(session.userId, async (client) => {
+  const outcome = await batchTx(session, async (client) => {
     const ticket = await visibleTicket(client, session, input.ticketId);
     const locked = await one<{ submitted: boolean }>(
       client,
@@ -224,7 +291,7 @@ export async function submitBatchPhotos(
     const rows = await batchItems(client, session, input.batchKey);
     if (rows.some((row) => row.ticket_id !== ticket.id)) throw new FlowError("errors.forbidden");
     const attachedBefore = rows.filter((row) => row.state === "attached").map((row) => row.attachment_id!);
-    if (locked.submitted) return { attached: attachedBefore, skipped: rows.length - attachedBefore.length };
+    if (locked.submitted) return { attached: attachedBefore, skipped: 0, removed: [] as string[] };
     const uploaded = rows.filter((row) => row.state === "uploaded");
     if (!uploaded.length) throw new FlowError("errors.required");
     const internal = session.kind === "staff" && (rows[0]?.internal ?? false);
@@ -248,7 +315,44 @@ export async function submitBatchPhotos(
         [session.orgId, input.batchKey, row.client_key, attachment.id]);
       attached.push(attachment.id);
     }
-    await client.query(`SELECT app.b031_upload_close_batch($1::uuid, $2::uuid)`, [session.orgId, input.batchKey]);
-    return { attached, skipped: rows.length - attached.length };
-  }, requireOrgScope(session));
+    const removed = (await client.query<{ path: string }>(
+      `SELECT app.b031_upload_close_batch($1::uuid, $2::uuid, false) AS path`, [session.orgId, input.batchKey])).rows.map((r) => r.path);
+    return { attached, skipped: rows.length - attached.length, removed };
+  });
+  await removeObjects(session, input.ticketId, outcome.removed, deps);
+  return { attached: outcome.attached, skipped: outcome.skipped };
+}
+
+/**
+ * The owner removes one unattached file (clientKey) or discards the whole open draft
+ * without attaching anything. Reserved objects are removed after commit.
+ */
+export async function discardBatchPhotos(
+  session: Session,
+  input: { ticketId: string; batchKey: string; clientKey?: string },
+  deps: UploadStorageDeps = {},
+): Promise<{ removed: number; state: "open" | "closed" }> {
+  await requireEnabled(session);
+  assertActor(session, false);
+  requireKeys(input.ticketId, input.batchKey, ...(input.clientKey === undefined ? [] : [input.clientKey]));
+  let paths: string[];
+  try {
+    paths = await batchTx(session, async (client) => {
+      await visibleTicket(client, session, input.ticketId);
+      const own = await batchItems(client, session, input.batchKey);
+      if (own.some((row) => row.ticket_id !== input.ticketId)) throw new FlowError("errors.forbidden");
+      if (input.clientKey !== undefined) {
+        const item = await client.query<{ path: string | null }>(
+          `SELECT app.b031_upload_discard_item($1::uuid, $2::uuid, $3::uuid) AS path`, [session.orgId, input.batchKey, input.clientKey]);
+        return item.rows.flatMap((r) => (r.path ? [r.path] : []));
+      }
+      return (await client.query<{ path: string }>(
+        `SELECT app.b031_upload_close_batch($1::uuid, $2::uuid, true) AS path`, [session.orgId, input.batchKey])).rows.map((r) => r.path);
+    });
+  } catch (error) {
+    if (isClosed(error)) return { removed: 0, state: "closed" };
+    throw error;
+  }
+  await removeObjects(session, input.ticketId, paths, deps);
+  return { removed: paths.length, state: input.clientKey === undefined ? "closed" : "open" };
 }

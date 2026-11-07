@@ -4,7 +4,10 @@
 -- Retry-safe ticket photos: a per-owner draft batch and one row per client file key,
 -- unique on (org, batch, client key). Final submit inserts files/ticket_attachments
 -- through the caller's existing RLS (never through these definers), exactly once.
--- Down: DROP FUNCTION app.b031_upload_*; DROP TABLE app.b031_upload_items, app.b031_upload_batches;
+-- Only `uploaded` items count toward the 8-photo limit; the owner can remove an item or
+-- discard the whole draft (closing deletes every unattached item and returns its path so
+-- the server removes the object). Locking gateways bound waits with lock_timeout 3s.
+-- Down: DROP FUNCTION app.b031_upload_* (incl. close_batch(uuid,uuid,boolean), discard_item); DROP TABLE app.b031_upload_items, app.b031_upload_batches;
 --       DELETE FROM public.platform_settings WHERE key = 'upload_recovery';
 BEGIN;
 SET LOCAL lock_timeout = '5s';
@@ -23,7 +26,10 @@ CREATE TABLE app.b031_upload_batches (
   client_batch_key uuid NOT NULL,
   internal boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  -- Closed: by submit (discarded = false) or by the owner's discard (discarded = true).
   submitted_at timestamptz,
+  discarded boolean NOT NULL DEFAULT false,
+  CHECK (NOT discarded OR submitted_at IS NOT NULL),
   UNIQUE (org_id, owner_user_id, client_batch_key),
   UNIQUE (org_id, id),
   FOREIGN KEY (org_id, ticket_id) REFERENCES public.maintenance_tickets(org_id, id) ON DELETE CASCADE
@@ -118,7 +124,7 @@ REVOKE ALL ON FUNCTION app.b031_upload_own_batch(uuid, uuid, boolean) FROM PUBLI
 -- Open (or reopen) the caller's draft and record its non-file field.
 CREATE FUNCTION app.b031_upload_open_batch(p_org uuid, p_ticket uuid, p_batch_key uuid, p_internal boolean)
 RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp SET lock_timeout = '3s' AS $$
 DECLARE b app.b031_upload_batches;
 BEGIN
   IF NOT app.b031_upload_recovery_on(p_org) THEN
@@ -148,26 +154,31 @@ GRANT EXECUTE ON FUNCTION app.b031_upload_open_batch(uuid, uuid, uuid, boolean) 
 CREATE FUNCTION app.b031_upload_reserve(p_org uuid, p_batch_key uuid, p_client_key uuid, p_path text,
   p_file_name text, p_mime text, p_size bigint)
 RETURNS TABLE(storage_path text, state text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
-DECLARE b app.b031_upload_batches; v_open integer; v_attached integer;
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp SET lock_timeout = '3s' AS $$
+DECLARE b app.b031_upload_batches; v_rows integer; v_uploaded integer; v_attached integer;
 BEGIN
   b := app.b031_upload_own_batch(p_org, p_batch_key, true);
   IF p_client_key IS NULL THEN
     RAISE EXCEPTION 'permission denied: upload item' USING ERRCODE = '42501';
   END IF;
+  -- A closed draft only replays attached keys; anything else tells the client to start a new draft.
   RETURN QUERY SELECT i.storage_path, i.state FROM app.b031_upload_items i
-    WHERE i.org_id = b.org_id AND i.batch_id = b.id AND i.client_key = p_client_key;
+    WHERE i.org_id = b.org_id AND i.batch_id = b.id AND i.client_key = p_client_key
+      AND (b.submitted_at IS NULL OR i.state = 'attached');
   IF FOUND THEN RETURN; END IF;
   IF b.submitted_at IS NOT NULL THEN
-    RAISE EXCEPTION 'permission denied: upload batch submitted' USING ERRCODE = '42501';
+    RAISE EXCEPTION 'upload batch closed' USING ERRCODE = 'P0B33';
   END IF;
   IF p_path IS NULL OR p_path !~* ('^org/' || b.org_id::text || '/tickets/' || b.ticket_id::text
       || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$') THEN
     RAISE EXCEPTION 'ticket photo path' USING ERRCODE = '42501';
   END IF;
+  -- Only verified uploads hold a photo slot; a reserved-but-unconfirmed path does not.
+  -- At most 16 unattached rows per draft bound restore probes and abuse.
   SELECT count(*) INTO v_attached FROM public.ticket_attachments a WHERE a.ticket_id = b.ticket_id;
-  SELECT count(*) INTO v_open FROM app.b031_upload_items i WHERE i.batch_id = b.id AND i.state <> 'attached';
-  IF v_attached + v_open >= 8 THEN
+  SELECT count(*) FILTER (WHERE i.state = 'uploaded'), count(*) FILTER (WHERE i.state <> 'attached')
+    INTO v_uploaded, v_rows FROM app.b031_upload_items i WHERE i.batch_id = b.id;
+  IF v_attached + v_uploaded >= 8 OR v_rows >= 16 THEN
     RAISE EXCEPTION 'ticket photo limit' USING ERRCODE = 'check_violation';
   END IF;
   INSERT INTO app.b031_upload_items(org_id, batch_id, client_key, storage_path, file_name, mime_type, size_bytes)
@@ -217,10 +228,16 @@ GRANT EXECUTE ON FUNCTION app.b031_upload_open_draft(uuid, uuid) TO authenticate
 -- After the server verified the stored object. Idempotent; never regresses a state.
 CREATE FUNCTION app.b031_upload_mark_uploaded(p_org uuid, p_batch_key uuid, p_client_key uuid, p_mime text, p_size bigint)
 RETURNS text
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp SET lock_timeout = '3s' AS $$
 DECLARE b app.b031_upload_batches; v_state text;
 BEGIN
   b := app.b031_upload_own_batch(p_org, p_batch_key, true);
+  IF b.submitted_at IS NULL AND EXISTS (SELECT 1 FROM app.b031_upload_items i
+      WHERE i.batch_id = b.id AND i.client_key = p_client_key AND i.state = 'signed')
+    AND (SELECT count(*) FROM public.ticket_attachments a WHERE a.ticket_id = b.ticket_id)
+      + (SELECT count(*) FROM app.b031_upload_items i WHERE i.batch_id = b.id AND i.state = 'uploaded') >= 8 THEN
+    RAISE EXCEPTION 'ticket photo limit' USING ERRCODE = 'check_violation';
+  END IF;
   UPDATE app.b031_upload_items i SET state = 'uploaded', mime_type = p_mime, size_bytes = p_size, updated_at = clock_timestamp()
    WHERE i.org_id = b.org_id AND i.batch_id = b.id AND i.client_key = p_client_key AND i.state = 'signed'
      AND b.submitted_at IS NULL;
@@ -239,7 +256,7 @@ GRANT EXECUTE ON FUNCTION app.b031_upload_mark_uploaded(uuid, uuid, uuid, text, 
 -- The attachment must be this batch's ticket/org and point at this item's path.
 CREATE FUNCTION app.b031_upload_mark_attached(p_org uuid, p_batch_key uuid, p_client_key uuid, p_attachment uuid)
 RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp SET lock_timeout = '3s' AS $$
 DECLARE b app.b031_upload_batches;
 BEGIN
   b := app.b031_upload_own_batch(p_org, p_batch_key, true);
@@ -262,7 +279,7 @@ GRANT EXECUTE ON FUNCTION app.b031_upload_mark_attached(uuid, uuid, uuid, uuid) 
 -- record the latest non-file field while open, report whether it already closed.
 CREATE FUNCTION app.b031_upload_lock_batch(p_org uuid, p_batch_key uuid, p_internal boolean)
 RETURNS boolean
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp SET lock_timeout = '3s' AS $$
 DECLARE b app.b031_upload_batches;
 BEGIN
   b := app.b031_upload_own_batch(p_org, p_batch_key, true);
@@ -279,17 +296,44 @@ $$;
 REVOKE ALL ON FUNCTION app.b031_upload_lock_batch(uuid, uuid, boolean) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION app.b031_upload_lock_batch(uuid, uuid, boolean) TO authenticated;
 
--- Close the draft. Called last, in the same transaction as the attachments.
-CREATE FUNCTION app.b031_upload_close_batch(p_org uuid, p_batch_key uuid)
-RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+-- Close the caller's draft: after the attachments of a submit (p_discard = false) or as an
+-- explicit discard without attaching (p_discard = true). Every unattached item is deleted and its
+-- reserved path returned so the server removes the (possibly present) object. Idempotent.
+CREATE FUNCTION app.b031_upload_close_batch(p_org uuid, p_batch_key uuid, p_discard boolean)
+RETURNS SETOF text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp SET lock_timeout = '3s' AS $$
 DECLARE b app.b031_upload_batches;
 BEGIN
   b := app.b031_upload_own_batch(p_org, p_batch_key, true);
-  UPDATE app.b031_upload_batches SET submitted_at = clock_timestamp() WHERE id = b.id AND submitted_at IS NULL;
+  IF b.submitted_at IS NOT NULL OR p_discard IS NULL THEN RETURN; END IF;
+  UPDATE app.b031_upload_batches SET submitted_at = clock_timestamp(), discarded = p_discard WHERE id = b.id;
+  RETURN QUERY DELETE FROM app.b031_upload_items i
+    WHERE i.org_id = b.org_id AND i.batch_id = b.id AND i.state <> 'attached' RETURNING i.storage_path;
 END
 $$;
-REVOKE ALL ON FUNCTION app.b031_upload_close_batch(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION app.b031_upload_close_batch(uuid, uuid) TO authenticated;
+REVOKE ALL ON FUNCTION app.b031_upload_close_batch(uuid, uuid, boolean) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION app.b031_upload_close_batch(uuid, uuid, boolean) TO authenticated;
+
+-- Remove one unattached file from the caller's open draft (trim after a photo-limit rejection,
+-- or drop a restored file that cannot be re-sent). Returns its path, or NULL if already gone.
+CREATE FUNCTION app.b031_upload_discard_item(p_org uuid, p_batch_key uuid, p_client_key uuid)
+RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp SET lock_timeout = '3s' AS $$
+DECLARE b app.b031_upload_batches; v_path text;
+BEGIN
+  b := app.b031_upload_own_batch(p_org, p_batch_key, true);
+  IF b.submitted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'upload batch closed' USING ERRCODE = 'P0B33';
+  END IF;
+  IF EXISTS (SELECT 1 FROM app.b031_upload_items i WHERE i.batch_id = b.id AND i.client_key = p_client_key AND i.state = 'attached') THEN
+    RAISE EXCEPTION 'permission denied: upload item attached' USING ERRCODE = '42501';
+  END IF;
+  DELETE FROM app.b031_upload_items i WHERE i.org_id = b.org_id AND i.batch_id = b.id AND i.client_key = p_client_key
+    RETURNING i.storage_path INTO v_path;
+  RETURN v_path;
+END
+$$;
+REVOKE ALL ON FUNCTION app.b031_upload_discard_item(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION app.b031_upload_discard_item(uuid, uuid, uuid) TO authenticated;
 
 COMMIT;
