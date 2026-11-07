@@ -58,7 +58,7 @@ test("HTTP lost-response retry replays one committed decision", async (t) => {
   const pending = new Map<Client, { key: string; command: Command } | null>();
   const calls: unknown[][] = [];
   const probes: unknown[][] = [];
-  let commits = 0;
+  let commits = 0, bounds = 0;
   t.mock.method(nextHeaders, "cookies", async () => ({
     get: (name: string) => name === "condola_session" ? { value: "unit-session" } : undefined,
   }));
@@ -83,11 +83,18 @@ test("HTTP lost-response retry replays one committed decision", async (t) => {
       return { rows: [] };
     }
     if (sql.includes("set_config(") || sql === "SET LOCAL ROLE service_role") return { rows: [] };
+    // S3 BLK-MAC-24: the producer and COMMIT after a recorded call run under a bounded lock wait.
+    if (sql === "SET LOCAL lock_timeout = '3s'") {
+      assert.ok(pending.has(this), "lock bound is set inside the open transaction");
+      bounds++;
+      return { rows: [] };
+    }
     // B-028 notification_events_v2 OFF: one read-only probe inside the open decision
     // transaction, right after its gateway call, then nothing else.
     if (sql.startsWith(NOTIFICATION_EVENTS_PROBE)) {
       assert.ok(pending.has(this), "probe runs inside the open transaction");
       assert.equal(probes.length, calls.length - 1, "exactly one probe per recorded decision call");
+      assert.equal(bounds, calls.length, "the lock bound precedes the producer probe");
       probes.push(values);
       return { rows: [{ enabled: false, role: "service_role", owner: false }] };
     }

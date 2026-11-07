@@ -17,12 +17,18 @@
 --     native 55P03; a deadlock resolved against this waiter is re-raised as 55P03.
 -- (B) app.lock_tables_nowait_retry(tables, mode): bounded NOWAIT retry (20-50ms
 --     jittered sleeps, ~2s budget, then the original 55P03), matching the B-010 r3
---     polling approach. It never queues, so it adds no waiting edge and cannot close
---     a lock cycle. Used for the four sites that must never wait: the triggers
---     b017_old_source_insert, b017_occurrence_valid, b028_center_recipient_valid
---     (they run inside an arbitrary writer transaction that may already hold child
---     locks) and b017_resolution_admit ("never waits on a late admission edge").
---     It rides out a short autovacuum/truncation; it does not make one yield.
+--     polling approach. It never queues, so it adds no waiting edge (cannot close a
+--     lock cycle) and never makes later writers queue behind it. Used for every
+--     SHARE-mode (writer-conflicting) request that can be reached while the
+--     transaction already holds row/write locks: the triggers b017_old_source_insert,
+--     b017_occurrence_valid, b028_center_recipient_valid, b017_resolution_admit ("never
+--     waits on a late admission edge"), b028_center_session's contacts lock (after
+--     b028_center_context row pins and cursor deletes) and b013_owner_view's
+--     regional_defaults lock (after b013_owner_context row pins). It rides out a short
+--     autovacuum/truncation; it does not make one yield.
+--     (A) remains only where the request is the transaction's first SHARE acquisition
+--     before any row/write lock (top-level gateways), or is ACCESS SHARE / ROW
+--     EXCLUSIVE, which ordinary writers (ROW EXCLUSIVE) neither block nor queue behind.
 -- Either way every existing 55P03 -> busy mapping is unchanged.
 --
 -- Each listed function is re-created from its current definition with only its
@@ -91,74 +97,90 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.lock_tables_nowait_retry(regclass[], text) FROM PUBLIC, anon, authenticated, service_role;
 
--- Exact current signatures, the number of NOWAIT table-lock statements each one
--- contains (latest definitions as of 20261107120000) and its strategy.
+-- Exact current signatures and, per NOWAIT table-lock statement in source order
+-- (latest definitions as of 20261107120000), the strategy that replaces it.
 DO $s3_bounded_share_locks$
 DECLARE
  v_targets constant jsonb := jsonb_build_object(
-  'app.b010_manual_reminder(uuid,uuid,text,uuid,uuid,uuid,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b010_schedule_rent(uuid,uuid,timestamp with time zone)', jsonb_build_array(1, 'bounded'),
-  'app.b010_tenant_due_preference(uuid,uuid,text,uuid,uuid,boolean)', jsonb_build_array(1, 'bounded'),
-  'app.b013_change_default(uuid,uuid,text,uuid,uuid,uuid,text,text,text)', jsonb_build_array(3, 'bounded'),
-  'app.b013_change_override(uuid,uuid,text,uuid,uuid,uuid,text,text,text)', jsonb_build_array(2, 'bounded'),
-  'app.b013_close_default(uuid,uuid,text,uuid,uuid,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b013_close_override(uuid,uuid,text,uuid,uuid,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b013_default_result(uuid,uuid,text,uuid,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b013_default_status(uuid,uuid,text,uuid,uuid,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b013_finish_default(uuid,uuid,text,uuid,uuid,uuid,text)', jsonb_build_array(2, 'bounded'),
-  'app.b013_finish_override(uuid,uuid,text,uuid,uuid,uuid,text)', jsonb_build_array(2, 'bounded'),
-  'app.b013_override_result(uuid,uuid,text,uuid,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b013_override_status(uuid,uuid,text,uuid,uuid,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b013_owner_context(uuid,uuid,text,uuid,uuid)', jsonb_build_array(4, 'bounded'),
-  'app.b013_owner_view(uuid,uuid,text,uuid,uuid)', jsonb_build_array(2, 'bounded'),
-  'app.b015_edit_context(uuid,uuid,text,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b017_occurrence_valid()', jsonb_build_array(1, 'nowait_retry'),
-  'app.b017_old_source_insert()', jsonb_build_array(1, 'nowait_retry'),
-  'app.b017_resolution_admit(uuid)', jsonb_build_array(1, 'nowait_retry'),
-  'app.b028_center_context(uuid,uuid,text,uuid,text,text)', jsonb_build_array(1, 'bounded'),
-  'app.b028_center_recipient_valid()', jsonb_build_array(1, 'nowait_retry'),
-  'app.b028_center_session(uuid,uuid,text,uuid,text,text,uuid,uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b028_center_vendor_context(text)', jsonb_build_array(1, 'bounded'),
-  'app.b028_claim_manual(uuid,uuid,text,uuid,uuid,uuid,uuid[])', jsonb_build_array(1, 'bounded'),
-  'app.b028_claim_scheduled(uuid,uuid,uuid[],timestamp with time zone)', jsonb_build_array(1, 'bounded'),
-  'app.b028_delivery_enabled(uuid)', jsonb_build_array(1, 'bounded'),
-  'app.b028_finish_manual(uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,text)', jsonb_build_array(1, 'bounded'));
+  'app.b010_manual_reminder(uuid,uuid,text,uuid,uuid,uuid,uuid)', jsonb_build_array('bounded'),
+  'app.b010_schedule_rent(uuid,uuid,timestamp with time zone)', jsonb_build_array('bounded'),
+  'app.b010_tenant_due_preference(uuid,uuid,text,uuid,uuid,boolean)', jsonb_build_array('bounded'),
+  'app.b013_change_default(uuid,uuid,text,uuid,uuid,uuid,text,text,text)', jsonb_build_array('bounded', 'bounded', 'bounded'),
+  'app.b013_change_override(uuid,uuid,text,uuid,uuid,uuid,text,text,text)', jsonb_build_array('bounded', 'bounded'),
+  'app.b013_close_default(uuid,uuid,text,uuid,uuid,uuid)', jsonb_build_array('bounded'),
+  'app.b013_close_override(uuid,uuid,text,uuid,uuid,uuid)', jsonb_build_array('bounded'),
+  'app.b013_default_result(uuid,uuid,text,uuid,uuid)', jsonb_build_array('bounded'),
+  'app.b013_default_status(uuid,uuid,text,uuid,uuid,uuid)', jsonb_build_array('bounded'),
+  'app.b013_finish_default(uuid,uuid,text,uuid,uuid,uuid,text)', jsonb_build_array('bounded', 'bounded'),
+  'app.b013_finish_override(uuid,uuid,text,uuid,uuid,uuid,text)', jsonb_build_array('bounded', 'bounded'),
+  'app.b013_override_result(uuid,uuid,text,uuid,uuid)', jsonb_build_array('bounded'),
+  'app.b013_override_status(uuid,uuid,text,uuid,uuid,uuid)', jsonb_build_array('bounded'),
+  'app.b013_owner_context(uuid,uuid,text,uuid,uuid)', jsonb_build_array('bounded', 'bounded', 'bounded', 'bounded'),
+  'app.b013_owner_view(uuid,uuid,text,uuid,uuid)', jsonb_build_array('bounded', 'nowait_retry'),
+  'app.b015_edit_context(uuid,uuid,text,uuid)', jsonb_build_array('bounded'),
+  'app.b017_occurrence_valid()', jsonb_build_array('nowait_retry'),
+  'app.b017_old_source_insert()', jsonb_build_array('nowait_retry'),
+  'app.b017_resolution_admit(uuid)', jsonb_build_array('nowait_retry'),
+  'app.b028_center_context(uuid,uuid,text,uuid,text,text)', jsonb_build_array('bounded'),
+  'app.b028_center_recipient_valid()', jsonb_build_array('nowait_retry'),
+  'app.b028_center_session(uuid,uuid,text,uuid,text,text,uuid,uuid)', jsonb_build_array('nowait_retry'),
+  'app.b028_center_vendor_context(text)', jsonb_build_array('bounded'),
+  'app.b028_claim_manual(uuid,uuid,text,uuid,uuid,uuid,uuid[])', jsonb_build_array('bounded'),
+  'app.b028_claim_scheduled(uuid,uuid,uuid[],timestamp with time zone)', jsonb_build_array('bounded'),
+  'app.b028_delivery_enabled(uuid)', jsonb_build_array('bounded'),
+  'app.b028_finish_manual(uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,text)', jsonb_build_array('bounded'));
  v_statement constant text := '(LOCK\s+TABLE\s+([^;]+?)\s+IN\s+(ACCESS SHARE|ROW EXCLUSIVE|SHARE)\s+MODE\s+NOWAIT\s*;)';
- v_sig text; v_spec jsonb; v_expected integer; v_helper text; v_def text; v_new text; v_found integer;
- v_total integer := 0; v_retry integer := 0; m text[];
+ v_sig text; v_spec jsonb; v_helper text; v_def text; v_new text; v_rest text; v_pos integer; v_found integer;
+ v_bounded integer; v_retry integer; v_total integer := 0; v_total_retry integer := 0; m text[];
 BEGIN
  FOR v_sig, v_spec IN SELECT key, value FROM jsonb_each(v_targets) ORDER BY key LOOP
-  v_expected := (v_spec->>0)::integer;
-  v_helper := CASE v_spec->>1 WHEN 'bounded' THEN 'app.lock_tables_bounded' WHEN 'nowait_retry' THEN 'app.lock_tables_nowait_retry' END;
-  IF v_helper IS NULL THEN RAISE EXCEPTION 'S3 lock bounds: unknown strategy for %', v_sig; END IF;
   IF to_regprocedure(v_sig) IS NULL THEN
    RAISE EXCEPTION 'S3 lock bounds: expected function % is missing', v_sig;
   END IF;
-  -- Every target is SECURITY DEFINER; the invoker helper then runs as the
-  -- target's owner, who must be able to execute it (EXECUTE is revoked above).
-  IF NOT (SELECT p.prosecdef AND has_function_privilege(p.proowner, (v_helper || '(regclass[],text)')::regprocedure, 'EXECUTE')
+  v_bounded := (SELECT count(*) FROM jsonb_array_elements_text(v_spec) x WHERE x = 'bounded');
+  v_retry := (SELECT count(*) FROM jsonb_array_elements_text(v_spec) x WHERE x = 'nowait_retry');
+  IF v_bounded + v_retry <> jsonb_array_length(v_spec) THEN
+   RAISE EXCEPTION 'S3 lock bounds: unknown strategy for %', v_sig;
+  END IF;
+  -- Every target is SECURITY DEFINER; the invoker helpers then run as the
+  -- target's owner, who must be able to execute them (EXECUTE is revoked above).
+  IF NOT (SELECT p.prosecdef
+     AND has_function_privilege(p.proowner, 'app.lock_tables_bounded(regclass[],text)', 'EXECUTE')
+     AND has_function_privilege(p.proowner, 'app.lock_tables_nowait_retry(regclass[],text)', 'EXECUTE')
     FROM pg_proc p WHERE p.oid = v_sig::regprocedure) THEN
-   RAISE EXCEPTION 'S3 lock bounds: % is not SECURITY DEFINER or its owner cannot execute %', v_sig, v_helper;
+   RAISE EXCEPTION 'S3 lock bounds: % is not SECURITY DEFINER or its owner cannot execute the helpers', v_sig;
   END IF;
   v_def := pg_get_functiondef(v_sig::regprocedure);
-  v_new := v_def; v_found := 0;
-  FOR m IN SELECT regexp_matches(v_def, v_statement, 'g') LOOP
+  -- Positional rewrite: the i-th statement in source order gets the i-th strategy.
+  v_rest := v_def; v_new := ''; v_found := 0;
+  LOOP
+   m := regexp_match(v_rest, v_statement);
+   EXIT WHEN m IS NULL;
+   v_pos := strpos(v_rest, m[1]);
    v_found := v_found + 1;
-   v_new := replace(v_new, m[1], format('PERFORM %s(ARRAY[%s]::regclass[], %L);', v_helper,
+   v_helper := CASE v_spec->>(v_found - 1) WHEN 'bounded' THEN 'app.lock_tables_bounded'
+    WHEN 'nowait_retry' THEN 'app.lock_tables_nowait_retry' END;
+   IF v_helper IS NULL THEN
+    RAISE EXCEPTION 'S3 lock bounds: % has more NOWAIT table-lock statements than expected (%)', v_sig, jsonb_array_length(v_spec);
+   END IF;
+   v_new := v_new || left(v_rest, v_pos - 1) || format('PERFORM %s(ARRAY[%s]::regclass[], %L);', v_helper,
     (SELECT string_agg(quote_literal(btrim(t.name)), ',' ORDER BY t.ord) FROM unnest(string_to_array(m[2], ',')) WITH ORDINALITY AS t(name, ord)),
-    m[3]));
+    m[3]);
+   v_rest := substr(v_rest, v_pos + length(m[1]));
   END LOOP;
-  IF v_found <> v_expected
-   OR (SELECT count(*) FROM regexp_matches(v_new, 'PERFORM ' || replace(v_helper, '.', '\.') || '\(ARRAY\[', 'g')) <> v_expected
+  v_new := v_new || v_rest;
+  IF v_found <> jsonb_array_length(v_spec)
+   OR (SELECT count(*) FROM regexp_matches(v_new, 'PERFORM app\.lock_tables_bounded\(ARRAY\[', 'g')) <> v_bounded
+   OR (SELECT count(*) FROM regexp_matches(v_new, 'PERFORM app\.lock_tables_nowait_retry\(ARRAY\[', 'g')) <> v_retry
    OR v_new ~* 'LOCK\s+TABLE[^;]*NOWAIT' THEN
-   RAISE EXCEPTION 'S3 lock bounds: % has % NOWAIT table-lock statement(s), expected %', v_sig, v_found, v_expected;
+   RAISE EXCEPTION 'S3 lock bounds: % has % NOWAIT table-lock statement(s), expected %', v_sig, v_found, jsonb_array_length(v_spec);
   END IF;
   EXECUTE v_new;
   v_total := v_total + v_found;
-  IF v_spec->>1 = 'nowait_retry' THEN v_retry := v_retry + v_found; END IF;
+  v_total_retry := v_total_retry + v_retry;
  END LOOP;
- IF v_total <> 36 OR v_retry <> 4 THEN
-  RAISE EXCEPTION 'S3 lock bounds: replaced % statements (% retry), expected 36 (4 retry)', v_total, v_retry;
+ IF v_total <> 36 OR v_total_retry <> 6 THEN
+  RAISE EXCEPTION 'S3 lock bounds: replaced % statements (% retry), expected 36 (6 retry)', v_total, v_total_retry;
  END IF;
  -- Fail closed if any other single-shot table-level NOWAIT remains in app/public.
  IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace

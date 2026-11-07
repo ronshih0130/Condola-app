@@ -40,13 +40,18 @@ const POLLING_EXEMPT = [
   "app.b010_guard_payment_transition()",
   "app.b010_lock_payment_context(uuid,uuid,text,uuid,uuid,text)",
 ];
-// (B) bounded NOWAIT retry: sites that must never queue (no waiting edge).
+// (B) bounded NOWAIT retry: SHARE requests reachable while the transaction already
+// holds row/write locks, so they must never queue (no waiting edge, no writer convoy).
 const NOWAIT_RETRY = [
   "app.b017_occurrence_valid()",
   "app.b017_old_source_insert()",
   "app.b017_resolution_admit(uuid)",
   "app.b028_center_recipient_valid()",
+  "app.b028_center_session(uuid,uuid,text,uuid,text,text,uuid,uuid)",
 ];
+// Mixed: ACCESS SHARE on its private tables stays (A); the regional_defaults SHARE
+// after b013_owner_context's row pins is (B).
+const MIXED_OWNER_VIEW = "app.b013_owner_view(uuid,uuid,text,uuid,uuid)";
 const RETRY_HELPER = "app.lock_tables_nowait_retry(regclass[],text)";
 // (A) bounded blocking wait.
 const BOUNDED = [
@@ -64,10 +69,8 @@ const BOUNDED = [
   "app.b013_override_result(uuid,uuid,text,uuid,uuid)",
   "app.b013_override_status(uuid,uuid,text,uuid,uuid,uuid)",
   "app.b013_owner_context(uuid,uuid,text,uuid,uuid)",
-  "app.b013_owner_view(uuid,uuid,text,uuid,uuid)",
   "app.b015_edit_context(uuid,uuid,text,uuid)",
   "app.b028_center_context(uuid,uuid,text,uuid,text,text)",
-  "app.b028_center_session(uuid,uuid,text,uuid,text,text,uuid,uuid)",
   "app.b028_center_vendor_context(text)",
   "app.b028_claim_manual(uuid,uuid,text,uuid,uuid,uuid,uuid[])",
   "app.b028_claim_scheduled(uuid,uuid,uuid[],timestamp with time zone)",
@@ -192,7 +195,20 @@ test("catalog: no single-shot table-level NOWAIT remains; helper is private and 
     assert.match(src, /PERFORM app\.lock_tables_nowait_retry\(ARRAY\[/, sig);
     assert.doesNotMatch(src, /lock_tables_bounded/, sig);
   }
-  assert.equal(BOUNDED.length + NOWAIT_RETRY.length, 27);
+  const mixed = (await db.query<{ src: string }>("SELECT prosrc src FROM pg_proc WHERE oid=$1::regprocedure", [MIXED_OWNER_VIEW])).rows[0].src;
+  assert.deepEqual([...mixed.matchAll(/PERFORM app\.(lock_tables_bounded|lock_tables_nowait_retry)\(ARRAY\[([^\]]*)\][^;]*'([A-Z ]+)'\);/g)].map(x => [x[1], x[2], x[3]]), [
+    ["lock_tables_bounded", "'app.b013_default_roots','app.b013_default_revisions','app.b013_override_revisions'", "ACCESS SHARE"],
+    ["lock_tables_nowait_retry", "'app.b013_regional_defaults'", "SHARE"],
+  ]);
+  assert.deepEqual([BOUNDED.length, NOWAIT_RETRY.length], [21, 5]);
+  // (A) keeps no SHARE request in a function that has row-locked before it: every
+  // remaining bounded SHARE is on platform_settings as a gateway's first lock.
+  const shareTargets = new Set<string>();
+  for (const sig of BOUNDED) {
+    const src = (await db.query<{ src: string }>("SELECT prosrc src FROM pg_proc WHERE oid=$1::regprocedure", [sig])).rows[0].src;
+    for (const x of src.matchAll(/PERFORM app\.lock_tables_bounded\(ARRAY\[([^\]]*)\][^;]*'SHARE'\);/g)) shareTargets.add(x[1]);
+  }
+  assert.deepEqual([...shareTargets], ["'public.platform_settings'"]);
   const helper = (await db.query(`SELECT p.prosecdef,p.proconfig,p.provolatile,
       has_function_privilege('service_role',p.oid,'EXECUTE') service,has_function_privilege('authenticated',p.oid,'EXECUTE') authenticated,
       has_function_privilege('anon',p.oid,'EXECUTE') anon,
@@ -470,4 +486,139 @@ test("BLK-MAC-24 vendor-job-response route: held ticket -> bounded wait -> retry
   assert.equal(retry.status, 200);
   assert.equal(again.status, "recorded");
   } finally { await db.query("REVOKE SELECT ON app.b013_estimate_heads FROM service_role"); }
+});
+
+/** Tenant recipient of a ticket-backed center event: b028_center_session's tenant
+ * path reaches its contacts SHARE request after b028_center_context's row pins. */
+async function centerTenantFixture() {
+  const lease = (await db.query<{ lease_id: string; tenant_id: string; tenant_user: string; property_id: string }>(`SELECT l.id::text lease_id,ct.id::text tenant_id,ct.user_id::text tenant_user,l.property_id::text property_id
+    FROM leases l JOIN lease_parties lp ON lp.lease_id=l.id AND lp.role='primary' JOIN contacts ct ON ct.id=lp.contact_id
+    WHERE l.org_id=$1 AND ct.user_id IS NOT NULL ORDER BY l.id LIMIT 1`, [ORG_ID])).rows[0];
+  assert.ok(lease);
+  await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='notification_center_v2'`, [ORG_ID]);
+  await db.query(`UPDATE organizations SET feature_flags=feature_flags||'{"notification_center_v2":true}'::jsonb,plan_tier='beta' WHERE id=$1`, [ORG_ID]);
+  const sessionId = randomUUID();
+  await db.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '2 hours')`, [sessionId, lease.tenant_user, randomUUID()]);
+  const vendorContact = (await db.query<{ id: string }>(`INSERT INTO contacts(org_id,is_vendor,display_name,phone_e164) VALUES($1,true,'S3 center vendor','+886900111226') RETURNING id::text`, [ORG_ID])).rows[0].id;
+  const centerTicket = (await db.query<{ id: string }>(`INSERT INTO maintenance_tickets(org_id,ticket_number,property_id,lease_id,title,status,reported_by_user,reported_by_contact_id,assigned_vendor_contact_id)
+    VALUES($1,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$1),$2,$3,'S3 center probe','open',$4,$5,$6) RETURNING id::text`,
+  [ORG_ID, lease.property_id, lease.lease_id, lease.tenant_user, lease.tenant_id, vendorContact])).rows[0].id;
+  const job = (await db.query<{ id: string; created_at: string }>(`INSERT INTO repair_vendor_jobs(org_id,ticket_id,vendor_name,vendor_phone,contact_window,token_hash,expires_at,vendor_contact_id)
+    VALUES($1,$2,'S3 center vendor','+886900111226','day',$3,clock_timestamp()+interval '2 hours',$4) RETURNING id::text,created_at::text`,
+  [ORG_ID, centerTicket, randomBytes(32).toString("hex"), vendorContact])).rows[0];
+  await db.query("BEGIN");
+  try {
+    const event = (await db.query<{ id: string }>(`INSERT INTO app.b028_center_events(org_id,kind,ticket_id,job_id,occurred_at) VALUES($1,'vendor_job_assigned',$2,$3,$4) RETURNING id::text`,
+      [ORG_ID, centerTicket, job.id, job.created_at])).rows[0].id;
+    await db.query(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,contact_id) VALUES($1,$2,'tenant',$3,$4)`, [ORG_ID, event, lease.tenant_user, lease.tenant_id]);
+    await db.query("COMMIT");
+  } catch (error) { await db.query("ROLLBACK"); throw error; }
+  /** The tenant center session read in its own service transaction, as notification-center.ts runs it. */
+  const read = async (c: Client) => {
+    await c.query("BEGIN");
+    try {
+      await c.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','service_role',true)`, [lease.tenant_user]);
+      await c.query("SET LOCAL ROLE service_role");
+      const rows = (await c.query(`SELECT * FROM app.b028_center_session($1,$1,'live',$2,'tenant',NULL,NULL,NULL)`, [ORG_ID, sessionId])).rows;
+      await c.query("COMMIT");
+      return rows.length;
+    } catch (error) { await c.query("ROLLBACK").catch(() => {}); throw error; }
+  };
+  return { vendorContact, read };
+}
+/** Wait until `pid` is inside a NOWAIT retry sleep (or, pre-fix, queued on a lock). */
+async function untilParked(observer: Client, pid: number) {
+  const started = performance.now();
+  while (performance.now() - started < 1500) {
+    const row = (await observer.query<{ t: string | null; e: string | null }>("SELECT wait_event_type t,wait_event e FROM pg_stat_activity WHERE pid=$1", [pid])).rows[0];
+    if (row?.e === "PgSleep" || row?.t === "Lock") return row.t === "Lock" ? "queued" : "retrying";
+    await pause(10);
+  }
+  return "not-parked";
+}
+
+test("BLK-MAC-17 b028_center_session contacts lock: no deadlock with a contacts writer that needs the pinned org row, and no writer convoy", async (t) => {
+  const fx = await centerTenantFixture();
+  const observer = await connect();
+  try {
+    assert.ok((await fx.read(observer)) >= 1, "fixture must reach the tenant ticket recipient");
+    // (a) W holds ROW EXCLUSIVE on contacts, then needs the organizations row the
+    // center session pinned FOR SHARE (via b028_center_context) before its contacts lock.
+    const w = await connect(), f = await connect();
+    try {
+      const fpid = (await f.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0].pid;
+      await w.query("BEGIN");
+      await w.query("UPDATE contacts SET display_name=display_name WHERE id=$1", [fx.vendorContact]);
+      const center = timed(() => fx.read(f));
+      const parked = await untilParked(observer, fpid);
+      const writer = await timed(() => w.query("UPDATE organizations SET name=name WHERE id=$1", [ORG_ID]));
+      const read = await center;
+      t.diagnostic(`(a) center ${parked}; writer: ${writer.ms}ms ${writer.error ? codeOf(writer.error) : "ok"}; center: ${read.ms}ms ${read.error ? codeOf(read.error) : "ok"}`);
+      assert.equal(parked, "retrying", "the center session queued on the contacts lock");
+      assert.equal(writer.error, undefined, `writer got ${codeOf(writer.error)} (${(writer.error as Error | undefined)?.message})`);
+      assert.equal(codeOf(read.error), "55P03");
+      assert.ok(read.ms < RETRY_BUDGET_MS + SLACK_MS && writer.ms < RETRY_BUDGET_MS + SLACK_MS, `${read.ms}/${writer.ms}ms`);
+    } finally {
+      await w.query("ROLLBACK").catch(() => {});
+      await Promise.allSettled([w.end(), f.end()]);
+    }
+    // (b) While an autovacuum-mode holder blocks the SHARE request, an unrelated
+    // contacts writer must not queue behind it; the read then succeeds.
+    const f2 = await connect();
+    try {
+      const fpid = (await f2.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0].pid;
+      const released = hold("public.contacts", "SHARE UPDATE EXCLUSIVE", 1500);
+      await pause(50);
+      const center = timed(() => fx.read(f2));
+      const parked = await untilParked(observer, fpid);
+      const unrelated = await timed(() => db.query("UPDATE contacts SET display_name=display_name WHERE id=$1", [fx.vendorContact]));
+      const read = await center;
+      await released;
+      t.diagnostic(`(b) center ${parked}; unrelated contacts UPDATE: ${unrelated.ms}ms ${unrelated.error ? codeOf(unrelated.error) : "ok"}; center: ${read.ms}ms ${read.error ? codeOf(read.error) : `ok rows=${read.value}`}`);
+      assert.equal(parked, "retrying");
+      assert.equal(unrelated.error, undefined);
+      assert.ok(unrelated.ms < 400, `unrelated contacts writer stalled ${unrelated.ms}ms behind a queued SHARE request`);
+      assert.equal(read.error, undefined, `center read failed ${codeOf(read.error)}`);
+      assert.ok((read.value as number) >= 1);
+    } finally { await f2.end(); }
+  } finally { await observer.end(); }
+});
+
+test("BLK-MAC-24 producer: a notification event lock held after the mutator succeeds is bounded (55P03), not an unbounded wait", async (t) => {
+  await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='notification_events_v2'`, [ORG_ID]);
+  await db.query(`UPDATE organizations SET feature_flags=feature_flags||'{"notification_events_v2":true}'::jsonb WHERE id=$1`, [ORG_ID]);
+  const holder = await connect(), observer = await connect();
+  try {
+    const producerTicket = await newTicket("S3 producer probe");
+    const holderPid = (await holder.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0].pid;
+    await holder.query("BEGIN");
+    // Conflicts only with the producer's INSERT; the mutator never touches this table.
+    await holder.query("LOCK TABLE app.b028_notification_events IN SHARE MODE");
+    let settled = false;
+    const call = timed(() => submitEstimate(manager, { requestId: randomUUID(), ticketId: producerTicket, expectedHeadId: null,
+      amountMinor: BigInt(500001), currency, minorUnit, workScope: "S3 producer probe", evidence: [] })).finally(() => { settled = true; });
+    let blocked = false;
+    const started = performance.now();
+    while (!settled && performance.now() - started < PROBE_DEADLINE_MS) {
+      if ((await observer.query("SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)) AND query LIKE '%b028_produce_event%'", [holderPid])).rowCount) blocked = true;
+      await pause(25);
+    }
+    if (!settled) {
+      await observer.query("SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))", [holderPid]);
+      await call;
+      assert.fail(`producer still waiting after ${PROBE_DEADLINE_MS}ms (unbounded)`);
+    }
+    const result = await call;
+    const cause = (result.error as { cause?: { code?: string } } | undefined)?.cause;
+    t.diagnostic(`submitEstimate with held notification events table: ${result.ms}ms blocked=${blocked} cause=${cause?.code}`);
+    assert.ok(blocked, "the producer never queued behind the held table");
+    assert.equal(cause?.code, "55P03");
+    assert.ok(result.ms >= MUTATOR_MS - 150 && result.ms < MUTATOR_MS + SLACK_MS, `${result.ms}ms`);
+    assert.equal((await db.query("SELECT count(*)::int n FROM app.b013_estimate_versions WHERE ticket_id=$1", [producerTicket])).rows[0].n, 0, "business change must roll back with the event");
+  } finally {
+    await holder.query("ROLLBACK").catch(() => {});
+    await Promise.allSettled([holder.end(), observer.end()]);
+    await db.query(`UPDATE platform_settings SET value='{"enabled":false,"allowed_org_ids":[]}'::jsonb WHERE key='notification_events_v2'`);
+    await db.query(`UPDATE organizations SET feature_flags=feature_flags-'notification_events_v2' WHERE id=$1`, [ORG_ID]);
+  }
 });

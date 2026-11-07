@@ -5,7 +5,7 @@ LOCAL EVIDENCE ONLY. Disposable local PostgreSQL 16.15 (`deadlock_timeout=1s`), 
 
 Migrations: `20261107150000_s3_bounded_share_locks.sql` (BLK-MAC-17) and
 `20261107151000_s3_b013_mutator_lock_timeout.sql` (BLK-MAC-24). Test:
-`src/server/s3-lock-bounds.integration.test.ts` (8 tests).
+`src/server/s3-lock-bounds.integration.test.ts` (10 tests). Review round 1 changes are marked R1.
 
 ## 1. Mechanism
 
@@ -36,19 +36,45 @@ public table makes likely. That is why every single-shot table-level NOWAIT is i
   never queues: `LOCK ... NOWAIT`, on 55P03 sleep 20-50 ms (jittered) and retry, ~2 s budget, then
   re-raise the original 55P03 ("could not obtain lock on relation"). No waiting edge, so it cannot close a
   lock cycle; it rides out a short autovacuum/truncation but does not make one yield (L2 decision 2).
-* Three categories: (A) bounded wait - 23 functions, 32 statements; (B) bounded NOWAIT retry - the four
-  sites that must never wait (`b017_old_source_insert`, `b017_resolution_admit` carry explicit "never wait"
-  comments; `b017_occurrence_valid`, `b028_center_recipient_valid` are triggers in the same position, inside
-  an arbitrary writer transaction) - 4 statements; (C) unchanged B-010 polling functions - 3.
+* Rule (R1): a SHARE request (the only mode here that conflicts with ordinary writers' ROW EXCLUSIVE) that
+  can be reached while the transaction already holds row or write locks uses (B); otherwise (A). Two
+  hazards are covered: (a) a lock cycle with a writer of that table that then needs a row this transaction
+  pinned, and (b) later writers queuing behind a queued SHARE request while autovacuum holds the table.
+  ACCESS SHARE / ROW EXCLUSIVE waits stay (A): ordinary writers neither block nor queue behind them, and no
+  application code takes SHARE-or-stronger on their target tables (checked: SQL and TS take such locks only
+  on platform_settings).
+* Categories, per statement: (A) bounded wait - 30 statements in 22 functions; (B) bounded NOWAIT retry -
+  6 statements: 5 functions entirely (`b017_old_source_insert`, `b017_resolution_admit` [explicit "never
+  wait" comments], `b017_occurrence_valid`, `b028_center_recipient_valid` [triggers inside an arbitrary
+  writer transaction], `b028_center_session` [R1, reviewer MAJOR: contacts SHARE after b028_center_context's
+  org/session/member row pins, the cursor DELETE and per-row FOR SHARE pins]) plus `b013_owner_view`'s
+  regional_defaults SHARE [R1: after b013_owner_context's FOR UPDATE / FOR SHARE row pins; its ACCESS SHARE
+  statement stays (A)]; (C) unchanged B-010 polling functions - 3.
+* R1 review of the reviewer's other MINOR sites, kept (A): `b028_delivery_enabled` - its platform_settings
+  SHARE is the first lock of each of its only four callers (b028_delivery_enqueue/claim/status/complete),
+  each the first statement of its own `deliverySvc` transaction in notification-delivery.ts (no other SQL
+  or TS callers). `b010_schedule_rent` - first lock of the function; only caller is local-rent-reminders.ts,
+  first statement of its own `svc` transaction; no SQL callers. The other (A) platform_settings sites are
+  likewise first-lock gateways (`b010_manual_reminder`, `b028_claim_manual`, `b028_claim_scheduled`,
+  `b010_tenant_due_preference`, `b015_edit_context`, `b028_center_vendor_context`, `b028_center_context`,
+  `b013_owner_context`), or re-request a SHARE the transaction already holds and so never wait
+  (`b028_finish_manual` after `b028_claim_manual`; `b028_center_context` inside payment-center-events after
+  `beginPaymentCenter`/`b010_lock_payment_context` took it; nested `b013_owner_context` calls). The catalog
+  test pins that every remaining (A) SHARE request is on platform_settings.
 * 20261107150000 re-creates each (A)/(B) function from `pg_get_functiondef` with only its NOWAIT
-  table-lock statements replaced, in place and order, by `PERFORM app.lock_tables_bounded(...)` or
-  `PERFORM app.lock_tables_nowait_retry(...)`.
+  table-lock statements replaced positionally (i-th statement -> i-th listed strategy) by
+  `PERFORM app.lock_tables_bounded(...)` or `PERFORM app.lock_tables_nowait_retry(...)`.
   Fails closed (RAISE) if a signature is missing, a target is not SECURITY DEFINER or its owner cannot
-  execute its helper, a per-function count differs, the totals are not 36 (4 retry), or any unlisted
-  app/public function still has a table-level NOWAIT.
+  execute the helpers, a per-function count or per-helper count differs, the totals are not 36 (6 retry),
+  or any unlisted app/public function still has a table-level NOWAIT.
 * 20261107151000: `ALTER FUNCTION ... SET lock_timeout = '3s'` on the six B-013 repair mutators; verifies
   proconfig afterwards (RAISE if missing).
-* TS: `repair-approval.ts` unchanged (`FlowError` with `cause.code="55P03"`). Routes (L2 decision 3): the
+* TS: `repair-approval.ts run()` (R1, reviewer MINOR 2): the mutators' lock_timeout is function-scoped, so
+  the notification producer (`b028_produce_event`, no timeout of its own) and the COMMIT that follow a
+  recorded result ran unbounded. It now issues `SET LOCAL lock_timeout = '3s'` immediately before
+  `produceNotificationEvent` (only when there is an event to produce; only the producer and COMMIT remain
+  in the transaction). A timeout surfaces exactly like a mutator timeout (`FlowError`, `cause.code` 55P03)
+  and the business change rolls back with it. Routes (L2 decision 3): the
   only production callers of the six mutators are `owner-repair-decision` (decideEstimate),
   `vendor-job-response` and `vendor-job-completion` (recordVendorAppointment). All three now map
   `55P03`/`57014` (read from `error.code ?? error.cause.code`) to `200 {status:"busy"}`, the existing
@@ -70,13 +96,13 @@ public table makes likely. That is why every single-shot table-level NOWAIT is i
 | `app.b028_center_context(uuid,uuid,text,uuid,text,text)` | 20261031100215 | platform_settings SHARE |
 | `app.b028_center_vendor_context(text)` | 20261031100215 | platform_settings SHARE |
 | `app.b028_center_recipient_valid()` (trigger) | 20261031100217 | contacts SHARE - **(B) retry** |
-| `app.b028_center_session(uuid,uuid,text,uuid,text,text,uuid,uuid)` | 20261031100217 | contacts SHARE |
+| `app.b028_center_session(uuid,uuid,text,uuid,text,text,uuid,uuid)` | 20261031100217 | contacts SHARE - **(B) retry (R1)** |
 | `app.b017_occurrence_valid()` (trigger) | 20261031100217 | platform_settings SHARE - **(B) retry** |
 | `app.b017_old_source_insert()` (trigger) | 20261031100217 | platform_settings SHARE - **(B) retry** |
 | `app.b017_resolution_admit(uuid)` | 20261031100217 | platform_settings SHARE - **(B) retry** |
 | `app.b015_edit_context(uuid,uuid,text,uuid)` | 20261031100218 | platform_settings SHARE |
 | `app.b013_owner_context(uuid,uuid,text,uuid,uuid)` | 20261031100220 | auth_sessions AS; organizations,contacts,properties,property_owners AS; platform_settings SHARE; audit_log AS |
-| `app.b013_owner_view(uuid,uuid,text,uuid,uuid)` | 20261031100220 | default_roots,default_revisions,override_revisions AS; regional_defaults SHARE |
+| `app.b013_owner_view(uuid,uuid,text,uuid,uuid)` | 20261031100220 | default_roots,default_revisions,override_revisions AS; regional_defaults SHARE - **(B) retry (R1)** |
 | `app.b013_change_default(...9)` | 20261031100220 | policy_commands RE; default_roots,default_revisions RE; audit_log RE |
 | `app.b013_close_default(...6)` | 20261031100220 | policy_commands RE |
 | `app.b013_default_status(...6)` | 20261031100220 | policy_commands AS |
@@ -126,15 +152,32 @@ close a deadlock cycle). Their ~2s x 3 polling budget already rides out a short 
 First pre-fix run (5 tests): 0/5 pass. Post-fix: 8/8 pass. The route "before" column is from code reading
 (no mapping existed; the owner route rethrew, the vendor routes returned 403 for any FlowError).
 
+R1 additions:
+
+| Probe | Before R1 (4a3f278) | After R1 |
+|---|---|---|
+| (a) center_session (tenant, ticket recipient) vs a writer holding ROW EXCLUSIVE on contacts that then updates the pinned organizations row | center **queued** on contacts (waiting edge); deadlock detector fired at ~1 s (reviewer's ordering: the writer got 40P01 -> 500) | center never queues (retrying); writer completes at 1997 ms, no 40P01; center gives up with 55P03 at 2009 ms |
+| (b) same, with an autovacuum-mode holder on contacts for 1.5 s and an unrelated `UPDATE contacts` | unrelated writer stalled ~1.5 s behind the queued SHARE (reviewer) | unrelated writer 2 ms; center read succeeds at 1479 ms |
+| `submitEstimate` with `app.b028_notification_events` held (producer blocked, mutator not) | still waiting at 6000 ms (test cancelled it) | FlowError cause 55P03 at 3021 ms; no estimate row committed |
+
+The (a) regression asserts the property for both orderings (the session never queues); its own sequencing
+lets the center queue first, so pre-R1 the detector picked the center (55P03), not the writer.
+
 ## 5. Changed existing assertions (semantics legitimately changed: immediate NOWAIT -> bounded wait)
 
 * `repair-owner-default.integration.test.ts`, test "cold calls authenticate before private DDL admission
   and reject actual relation contention ... in both orders": for each ACCESS EXCLUSIVE-held probe table the
   live-session expectation was `55P03` + message `/could not obtain lock on relation/` + `doesNotMatch(/timeout/)`.
-  Now: still `55P03`, message `/canceling statement due to lock timeout/`, elapsed 1800-3500 ms. The
+  Now: still `55P03`, message `/canceling statement due to lock timeout/`, elapsed 1800-5000 ms (R1:
+  upper bound widened from 3500 for full test:rls load; tolerance only, no retry). R1: the
+  `app.b013_regional_defaults` probe now hits a (B) retry site, so its exhausted-budget message is the NOWAIT
+  one (`/could not obtain lock on relation/`) after the same ~2 s; the expectation is per probe. The
   expired-session `42501` expectation and the reverse-order DDL NOWAIT checks are unchanged. Title updated.
 * `repair-owner-override.integration.test.ts`, test "cold private/public DDL and exact write-mode admissions
   deny ... after auth": same single assertion change; title updated ("within the S3 lock bound").
+* R1: `src/app/api/owner-repair-decision/request-id.test.ts` (unit, mocked pg) rejects unexpected SQL; it
+  now accepts the new `SET LOCAL lock_timeout = '3s'`, asserting it runs inside the open transaction and
+  before the producer probe of each recorded call.
 * No retries added anywhere.
 
 ## 6. Residual risks
@@ -143,11 +186,15 @@ First pre-fix run (5 tests): 0/5 pass. Post-fix: 8/8 pass. The route "before" co
    `busy` after ~2 s while one runs on platform_settings, contacts, audit_log or the B-013 tables. A real
    autovacuum test was not added: it is not deterministic on a shared local cluster without changing
    `autovacuum_naptime` (cluster-wide, out of bounds). The deterministic holders above stand in for it.
-2. **Waiting edges at (A) sites.** The 23 (A) functions now queue (up to 2 s) instead of failing at once.
-   A cycle is resolved by the deadlock detector within `deadlock_timeout`; if the helper side is the victim
-   it surfaces as 55P03 (tested), but if the *other* transaction detects first it gets 40P01. The four (B)
-   sites never queue. (B) does not make autovacuum yield: a SHARE UPDATE EXCLUSIVE held over ~2 s on
-   platform_settings/contacts (e.g. a long vacuum of a large `contacts`) still fails them with 55P03.
+2. **Waiting edges at (A) sites.** (A) requests queue (up to 2 s). Per the R1 rule they are first-lock
+   platform_settings SHARE requests or ACCESS SHARE / ROW EXCLUSIVE requests, so a cycle needs a
+   platform_settings writer (flag flip / demo reset) waiting on a lock this fresh transaction does not yet
+   hold, or a SHARE-or-stronger/DDL holder on a B-013 table; neither exists in application code. Residual
+   convoy: while a first-lock platform_settings SHARE request is queued behind autovacuum (<= ~1 s, until
+   the worker is cancelled), platform_settings writers (flag flips) queue behind it. If a cycle does occur,
+   the helper side surfaces 55P03 (tested); the other side would get 40P01. (B) does not make autovacuum
+   yield: SHARE UPDATE EXCLUSIVE held over ~2 s on contacts/platform_settings/regional_defaults (e.g. a long
+   vacuum of a large `contacts`) still fails (B) sites with 55P03.
 3. **Polling exemptions keep NOWAIT**: a SHARE UPDATE EXCLUSIVE / truncation lock held longer than their
    ~6 s polling budget (large `invoices` truncation, wraparound vacuum) still yields their existing bounded
    55P03 'busy' result.
@@ -170,6 +217,12 @@ First pre-fix run (5 tests): 0/5 pass. Post-fix: 8/8 pass. The route "before" co
    pre-package-4 signature. When it lands on this stack its "unbounded" scenario must be inverted to the
    bounded 55P03 (and its signature updated).
 8. **Other stacks** that add or redefine functions after `20261107150000` are not covered by the patch.
+9. **TS-side single-shot NOWAIT table locks (outside the SQL inventory, not changed):**
+   `src/server/payment-center-events.ts:49` (`beginPaymentCenter`, platform_settings SHARE NOWAIT, mid
+   financial transaction) and `src/server/staff-profile.ts:58` (platform_settings SHARE NOWAIT). Same
+   autovacuum exposure (immediate 55P03). The TS sites in onboarding-progress.ts, bank-matching.ts,
+   handover.ts and domain.ts:1747 take `LOCK TABLE platform_settings IN SHARE MODE` with no NOWAIT and no
+   timeout (unbounded against a long holder; autovacuum yields to them).
 
 ## 7. Re-running the inventory on an integrated tip
 
