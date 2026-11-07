@@ -90,7 +90,7 @@ export function ownerAccountCopy(locale: string) {
     signedOut: 'That device has been signed out.',
     reauthNote: 'To protect your account, signing out another device requires a sign-in within the last 15 minutes. Sign out (this signs out all of your devices), sign in again, then return here.',
     reauthRequired: 'Sign-in required: sign out, sign in again and retry within 15 minutes.',
-    current: 'Only this device cannot be signed out here; Sign out below signs out all of your devices.',
+    current: "This device can't be signed out on its own here. Sign out below signs out all of your devices.",
     gone: 'That device is already signed out.',
     conflict: 'This action was already used. Refresh the page.',
     unavailable: 'This could not be completed. Refresh the page and try again.',
