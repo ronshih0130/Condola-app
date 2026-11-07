@@ -57,6 +57,6 @@ export function uploadRecoveryCopy(locale: string): UploadRecoveryCopy {
         remove: "Remove",
         discard: "Discard these photos",
         busy: "The system is busy. Your photos are kept. Please try again in a moment.",
-        trim: "This is over the 8-photo limit. Remove some photos, then add them again.",
+        trim: "This is over the 8-photo limit. Remove some photos, then try adding again.",
       };
 }
