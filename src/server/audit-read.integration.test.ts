@@ -152,10 +152,11 @@ test("the audit page stays within three queries", async () => {
      VALUES ${values}`,
     [ORG_ID, USERS.admin, rowId],
   );
+  // Page bundle + record names + the B-031 AUDIT_DETAIL gateway read (zero rows while OFF).
   const screen = await queryCount(() => loadAuditScreen(admin, {}));
-  assert.equal(screen, 2);
+  assert.equal(screen, 3);
   const history = await queryCount(() => loadAuditHistory(admin, "leases", "10000000-0000-4000-8000-0000000000c1"));
-  assert.ok(history <= 2);
+  assert.ok(history <= 3);
   const empty = await queryCount(() => loadAuditScreen(admin, { from: "1990-01-01", to: "1990-01-01" }));
   assert.equal(empty, 1);
   const denied = await queryCount(() => loadAuditScreen(accountant, {}));

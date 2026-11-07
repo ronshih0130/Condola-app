@@ -1,3 +1,4 @@
+import type { Locale } from "@/i18n";
 import { many, tx } from "./db";
 import { formatTaipei } from "./time";
 import type { Session } from "./types";
@@ -435,6 +436,23 @@ export type AuditView = {
   href: string | null;
   found: boolean;
   when: string;
+  /** B-031 AUDIT_DETAIL. Present only when the DB gateway returned detail (flag ON, admin, same org). */
+  detail?: AuditDetailView;
+};
+
+/** A display value: literal text, an i18n key, or empty. */
+export type AuditDetailValue = { text: string } | { key: string } | null;
+
+export type AuditDetailChange = {
+  fieldKey: string;
+  before: AuditDetailValue;
+  after: AuditDetailValue;
+};
+
+export type AuditDetailView = {
+  reason: string;
+  changes: AuditDetailChange[];
+  withheld: number;
 };
 
 export function presentAudit(row: RawAudit, hit: RecordHit | null): AuditView {
@@ -657,7 +675,168 @@ async function lookupRecords(
   return found;
 }
 
-type ScreenBundle = { page: RawAudit[] | string; actors: { id: string; name: string }[] | string };
+/**
+ * B-031 AUDIT_DETAIL read side. app.b031_audit_detail_rows returns rows only for
+ * an active admin of the pinned organization while the audit_detail flag is ON;
+ * everyone else gets zero rows. Values were masked when written; this module
+ * re-masks text, accepts only allowlisted fields and formats money with BigInt.
+ */
+export const AUDIT_DETAIL_SQL = "SELECT audit_id, reason, changes, withheld FROM app.b031_audit_detail_rows($1::uuid, $2::bigint[])";
+
+export type RawDetail = { audit_id: string; reason: string | null; changes: unknown; withheld: number | string | null };
+
+const DETAIL_FIELDS: Record<string, { key: string; kind: string }> = {
+  rent_amount_minor: { key: "i_audit_f_rent", kind: "money" },
+  deposit_amount_minor: { key: "i_audit_f_deposit", kind: "money" },
+  base_rent_minor: { key: "i_audit_d_base_rent", kind: "money" },
+  deposit_months: { key: "i_audit_d_deposit_months", kind: "number" },
+  due_day: { key: "i_audit_f_due", kind: "number" },
+  start_date: { key: "i_audit_f_start", kind: "date" },
+  end_date: { key: "i_audit_f_end", kind: "date" },
+  terminated_on: { key: "i_audit_d_terminated_on", kind: "date" },
+  moved_out_on: { key: "i_audit_d_moved_out_on", kind: "date" },
+  status: { key: "i_audit_f_status", kind: "code" },
+  renewal_status: { key: "i_audit_d_renewal_status", kind: "code" },
+  role: { key: "i_audit_f_role", kind: "code" },
+  rental_mode: { key: "i_audit_f_mode", kind: "code" },
+  default_rental_mode: { key: "i_audit_f_mode", kind: "code" },
+  termination_reason: { key: "i_audit_d_termination_reason", kind: "text" },
+  deposit_override_reason: { key: "i_audit_d_deposit_reason", kind: "text" },
+  display_name: { key: "i_audit_f_name", kind: "text" },
+  name: { key: "i_audit_f_name", kind: "text" },
+  company_name: { key: "i_audit_d_company", kind: "text" },
+  address_display: { key: "i_audit_f_address", kind: "text" },
+  label: { key: "i_audit_f_label", kind: "text" },
+  title: { key: "i_audit_d_title", kind: "text" },
+  email: { key: "i_audit_d_email", kind: "email" },
+  phone_e164: { key: "i_audit_d_phone", kind: "phone" },
+  is_tenant: { key: "i_audit_d_is_tenant", kind: "bool" },
+  is_owner: { key: "i_audit_d_is_owner", kind: "bool" },
+  is_vendor: { key: "i_audit_d_is_vendor", kind: "bool" },
+  is_billing_owner: { key: "i_audit_d_billing_owner", kind: "bool" },
+  archived_at: { key: "i_audit_d_archived_at", kind: "time" },
+};
+
+const CODE_KEYS: Record<string, string> = {
+  admin: "i_role_admin",
+  manager: "i_role_manager",
+  accountant: "i_role_accountant",
+  maintenance: "i_role_maintenance",
+  draft: "i_st_draft",
+  pending_signature: "i_st_pending",
+  active: "i_st_active",
+  ended: "i_st_ended",
+  terminated: "i_st_terminated",
+  cancelled: "i_st_cancelled",
+  invited: "i_audit_v_invited",
+  suspended: "i_audit_v_suspended",
+  removed: "i_audit_v_removed",
+  whole_unit: "i_audit_v_whole_unit",
+  by_room: "i_audit_v_by_room",
+  none: "i_audit_v_none",
+  reminder_sent: "i_audit_v_reminder_sent",
+  offered: "i_audit_v_offered",
+  renewed: "i_audit_v_renewed",
+  declined: "i_audit_v_declined",
+  month_to_month: "i_audit_v_month_to_month",
+};
+
+const MINOR = /^-?\d{1,19}$/;
+const DECIMAL = /^-?\d{1,19}(\.\d{1,6})?$/;
+
+/** Exact-integer minor units. No Number() round trip, so large amounts never lose precision. */
+export function detailMoney(minor: string, currency: string, locale: Locale) {
+  if (!MINOR.test(minor)) return MASK;
+  const value = BigInt(minor);
+  const negative = value < BigInt(0);
+  const abs = negative ? -value : value;
+  const hundred = BigInt(100);
+  const whole = new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US").format(abs / hundred);
+  const cents = (abs % hundred).toString().padStart(2, "0");
+  const code = /^[A-Z]{3}$/.test(currency) ? currency : "TWD";
+  const body = code === "TWD" ? `NT$${whole}${cents === "00" ? "" : `.${cents}`}` : `${code} ${whole}.${cents}`;
+  return negative ? `-${body}` : body;
+}
+
+/** Partial masks from the write side keep at most a first character and two trailing digits. */
+function partialMasked(kind: "email" | "phone", value: string) {
+  if (kind === "email") return /^[^@\s*]\*{3}@[^@\s]+$/.test(value) && !maskAuditText(value).masked ? value : MASK;
+  return /^(\+886|\+|\d)\*+\d{2}$/.test(value) ? value : MASK;
+}
+
+function detailValue(kind: string, raw: unknown, currency: string, locale: Locale): AuditDetailValue {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string") return { text: MASK };
+  switch (kind) {
+    case "money":
+      return { text: detailMoney(raw, currency, locale) };
+    case "number":
+      return { text: DECIMAL.test(raw) ? raw : MASK };
+    case "date":
+      return { text: DAY.test(raw) ? raw : MASK };
+    case "time": {
+      const when = /^\d{4}-\d{2}-\d{2}[T ]/.test(raw) ? formatTaipei(raw) : "";
+      return { text: when || MASK };
+    }
+    case "bool":
+      if (raw === "true") return { key: "i_audit_v_yes" };
+      return raw === "false" ? { key: "i_audit_v_no" } : { text: MASK };
+    case "code":
+      if (!/^[a-z_]{1,40}$/.test(raw)) return { text: MASK };
+      return CODE_KEYS[raw] ? { key: CODE_KEYS[raw] } : { text: raw };
+    case "email":
+    case "phone":
+      return { text: partialMasked(kind, raw) };
+    case "text":
+      return { text: maskAuditText(raw).text.slice(0, 200) };
+    default:
+      return { text: MASK };
+  }
+}
+
+/** Unknown fields or kinds are dropped and counted as withheld, never shown. */
+export function presentDetail(raw: RawDetail, locale: Locale): AuditDetailView | null {
+  let list: unknown = raw.changes;
+  if (typeof list === "string") {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(list)) return null;
+  const changes: AuditDetailChange[] = [];
+  let withheld = Math.max(0, Math.floor(Number(raw.withheld) || 0));
+  for (const item of list.slice(0, 40)) {
+    const entry = (item ?? {}) as { f?: unknown; k?: unknown; b?: unknown; a?: unknown; c?: unknown };
+    const field = typeof entry.f === "string" ? DETAIL_FIELDS[entry.f] : undefined;
+    if (!field || entry.k !== field.kind) {
+      withheld += 1;
+      continue;
+    }
+    const currency = typeof entry.c === "string" ? entry.c : "TWD";
+    changes.push({
+      fieldKey: field.key,
+      before: detailValue(field.kind, entry.b, currency, locale),
+      after: detailValue(field.kind, entry.a, currency, locale),
+    });
+  }
+  if (!changes.length) return null;
+  return { reason: raw.reason ? maskAuditText(raw.reason).text.slice(0, 500) : "", changes, withheld };
+}
+
+/** Skipped for an empty page. Otherwise one statement; zero rows unless the DB permits detail. */
+async function lookupDetails(client: Parameters<typeof many>[0], orgId: string, rows: RawAudit[]) {
+  const found = new Map<string, RawDetail>();
+  const ids = rows.map((row) => row.id).filter((id) => cursorId(id));
+  if (!ids.length) return found;
+  for (const detail of await many<RawDetail>(client, AUDIT_DETAIL_SQL, [orgId, ids])) {
+    found.set(String(detail.audit_id), detail);
+  }
+  return found;
+}
+
+type ScreenBundle ={ page: RawAudit[] | string; actors: { id: string; name: string }[] | string };
 
 function asJson<T>(value: T | string): T {
   return typeof value === "string" ? (JSON.parse(value) as T) : value;
@@ -710,12 +889,21 @@ function pageInput(session: Session, filters: AuditFilters, rowId: string | null
   };
 }
 
-async function presentPage(client: Parameters<typeof many>[0], orgId: string, rows: RawAudit[], pageSize: number) {
+async function presentPage(client: Parameters<typeof many>[0], orgId: string, rows: RawAudit[], pageSize: number, locale: Locale) {
   const hasMore = rows.length > pageSize;
   const page = hasMore ? rows.slice(0, pageSize) : rows;
   const labels = await lookupRecords(client, orgId, page);
+  const details = await lookupDetails(client, orgId, page);
   return {
-    entries: page.map((row) => presentAudit(row, labels.get(`${row.table_name}:${row.row_id}`) ?? null)),
+    entries: page.map((row) => {
+      const view = presentAudit(row, labels.get(`${row.table_name}:${row.row_id}`) ?? null);
+      const detail = details.get(row.id);
+      if (!detail) return view;
+      const presented = presentDetail(detail, locale);
+      // The detail block carries the reason re-masked at write (token-like runs included),
+      // so the summary line does not repeat the raw stored reason.
+      return presented ? { ...view, reason: "", detail: presented } : view;
+    }),
     hasMore,
   };
 }
@@ -729,7 +917,7 @@ async function readPage(
 ) {
   const { sql, params } = auditPageQuery(pageInput(session, filters, rowId, pageSize));
   const rows = await many<RawAudit>(client, sql, params);
-  return presentPage(client, session.orgId, rows, pageSize);
+  return presentPage(client, session.orgId, rows, pageSize, session.locale);
 }
 
 function scope(session: Session) { return requireOrgScope(session); }
@@ -754,7 +942,7 @@ export async function loadAuditScreen(
         reason: row.reason ?? null,
         event_type: row.event_type ?? null,
       }));
-      const page = await presentPage(client, session.orgId, rows, AUDIT_PAGE_SIZE);
+      const page = await presentPage(client, session.orgId, rows, AUDIT_PAGE_SIZE, session.locale);
       const actors = asJson<{ id: string; name: string }[]>(bundle?.actors ?? []);
       return {
         ...page,

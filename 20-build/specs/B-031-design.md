@@ -8,7 +8,7 @@
 | Slice | Package | Flag (default OFF) | Status |
 |---|---|---|---|
 | 1 | SESSION_HARDENING — credential epoch fencing every password-authenticated session / challenge path; token-free logs | `session_hardening` | in progress |
-| 2 | AUDIT_DETAIL — authorized before/after/reason audit detail with masking and role filtering | `audit_detail` | planned |
+| 2 | AUDIT_DETAIL — authorized before/after/reason audit detail with masking and role filtering | `audit_detail` | implemented (local) |
 | 3 | UPLOAD_RECOVERY — retry-safe uploads (no duplicates, successful parts kept) | `upload_recovery` | planned |
 
 Out of scope (all slices): legal/consent copy edits, production deletion, browser storage of secrets/session tokens,
@@ -115,3 +115,81 @@ inside the 90–120 second margin and a late successful finish after reconciliat
 for an orphaned upstream write *after* reconciliation with no later finish callback. Before flag activation,
 Claude must resolve this with a provider-enforced commit deadline or additional provider-aware fencing.
 No such hosted-provider guarantee was added or remotely verified in this local-only round.
+
+## Slice 2 — AUDIT_DETAIL
+
+**Problem.** The audit screen shows who/what/which/when and a masked reason, but not the values that changed.
+`audit_log.old_row/new_row` hold full snapshots (sensitive fields included) and are deliberately never read by
+the Worker. Acceptance: for an important mutation, a permitted viewer sees actor, time, reason and before/after.
+
+**Write (reuses the existing audit path).** The generic `fn_audit` trigger already writes one `audit_log` row per
+row change, with `changed_cols`, `old_row`, `new_row` and `app.change_reason`. Migration
+`20261107130000_b031_audit_detail.sql` adds `AFTER INSERT ON audit_log` trigger `trg_b031_audit_detail`
+(`WHEN action = 'update'` on the six covered tables) calling `app.b031_capture_audit_detail()`. Only when the flag
+is ON for the row's org, it stores a field-level diff in private append-only `app.b031_audit_details(audit_id PK,
+org_id, table_name, reason, changes jsonb, withheld)`. No application write code changed.
+
+**Allowlist (deny by default).** Only these columns are copied; every other changed column is counted in `withheld`
+(name and value never stored). A key-name guard also rejects anything matching token/secret/password/hash/session/
+encrypt/storage/legal_name/id_number/national/passport/bank/account/line_user/einvoice/tax.
+
+| Table | Fields (kind) |
+|---|---|
+| leases | rent_amount_minor, deposit_amount_minor (money); deposit_months, due_day (number); start_date, end_date, terminated_on, moved_out_on (date); status, renewal_status (code); termination_reason, deposit_override_reason (text) |
+| contacts | display_name, company_name (text); email (partial); phone_e164 (partial); is_tenant, is_owner, is_vendor (bool); archived_at (time) |
+| org_members | role, status (code); is_billing_owner (bool); title (text) |
+| properties | name, address_display (text); default_rental_mode (code); archived_at (time) |
+| units / rooms | label (text); base_rent_minor (money); rental_mode (units, code); archived_at (time) |
+
+**Masking at write.** Email → first character + `***@domain`; phone → `+886`, stars and last two digits; text and
+reason → national ID / resident certificate numbers, UUIDs, emails, Taiwan phone numbers, 10+ digit runs (account
+numbers) and 20+ character token-like runs replaced with `••••••••••`, text capped at 200 and reason at 500
+characters. Money/number/date/time/bool/code must match a strict shape or are fully masked. Money is exact
+`numeric` JSON text; the reader formats it with `BigInt` (never a float). The read side re-masks text, accepts only
+partial-mask shapes for phone/email and drops unknown fields/kinds into `withheld`.
+
+**Read and role filtering (in the DB).** `app.b031_audit_detail_rows(p_org uuid, p_ids bigint[])` is the only
+reader: SECURITY DEFINER, `search_path = pg_catalog, pg_temp`, EXECUTE granted to `authenticated` only (no anon,
+PUBLIC or service_role). It returns zero rows unless `auth.uid()` is set, `app.active_org_id` equals `p_org`,
+`app.has_role(p_org, '{admin}')` (the existing `audit_access` model: admin only) and the flag is ON for `p_org`;
+rows are filtered by `org_id = p_org` and joined to their `audit_log` row. The table itself has RLS enabled and no
+grants, so cross-org and non-admin reads are impossible even with direct SQL as `authenticated`.
+
+**Viewer.** `loadAuditScreen` / `loadAuditHistory` call the reader once for a non-empty page (inside the same
+authenticated transaction) and attach `detail` to matching rows; the summary reason line is then left to the
+detail block (re-masked reason). `AuditRows` renders 變更明細 / Change detail: reason (or 未填寫原因 / No reason
+recorded), `field：before → after`, and a withheld-fields note. Actor and time are the existing row columns.
+EN and zh-TW strings added to `src/i18n/{en,zh-TW}.json`.
+
+**Reason semantics.** Optional, and never fabricated: the stored reason is whatever the existing flow set in
+`app.change_reason` (blank/whitespace → none). Flows that already require one keep requiring it (archive/restore,
+deposit above cap). No new reason input was added to forms (needs copy/product decision).
+
+**Flag `audit_detail` (default OFF).** `platform_settings.audit_detail = {"enabled":false,"allowed_org_ids":[]}`
+plus `organizations.feature_flags.audit_detail === true`, strict JSON booleans and an array allowlist naming the
+org. OFF: the capture trigger writes nothing; the reader returns zero rows (also for detail captured while ON);
+pages render exactly as before. The only OFF difference is one extra read statement on non-empty audit pages
+(`audit-read.integration` query budget updated from 2 to 3).
+
+**Coverage.** Covered (row-level updates of allowlisted fields through `fn_audit`, any writer): lease rent/deposit
+edits (`updateLease`, exercised in the test), lease date/status changes (e.g. end date, `moved_out_on` from
+`move-out-notice.ts`), owner contact edits (`updateOwner`, exercised), tenant directory contact edits (B015 sets a
+fixed reason code), role/status/title changes (`setMemberRole` exercised, `setMemberActive`), property name/address
+edits (`portfolio.ts`), property/unit/room archive and restore (`archiveCommand`, user reason required). Not
+covered: inserts and deletes, app-event rows written by `recordAudit` (auth_events, PDF downloads),
+invoices/payments/ledger/expenses, bank accounts and payee details, identity documents, invitations, utility runs,
+fee rules, management agreements, and every non-allowlisted column of the covered tables (counted only).
+
+**Known limitation.** `setMemberRole` / `setMemberActive` update `org_members` on the server owner connection,
+so `fn_audit` records no actor for that row (shown as 系統); the paired `role_change` event row carries the actor.
+Fixing it changes OFF SQL for those flows and is left as a follow-up.
+
+**Retention.** Detail rows follow their `audit_log` rows: append-only, no purge. No retention policy was introduced;
+CAP-P-21 values are unchanged. Whether masked detail needs its own retention window is a Ron/CEO decision.
+
+**Tests.** `src/server/b031-audit-detail.integration.test.ts` (8): ON production paths; masking of stored JSON,
+view, rendered HTML, console logs and URLs; DB-level role filtering via `tx()` as authenticated (manager,
+accountant, maintenance, tenant, owner, other-org admin, pin mismatch, cross-org ids, suspended admin, anon,
+service_role, direct table access); 10 OFF flag shapes with zero writes/reads; complete OFF SQL trace, presented
+result and rendered rows equal to the 1bba9f3 baseline (`src/server/fixtures/b031-audit-detail-off.json`);
+reason semantics; non-covered rows; append-only and exact BigInt display. Unit `src/server/b031-audit-detail.test.ts` (5).
