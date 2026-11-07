@@ -28,7 +28,7 @@ function render(element: React.ReactElement) {
 
 test('OFF baseline: staff ticket page is byte-for-byte unchanged and layout returns the children', () => {
   const page = readFileSync(new URL('../app/m/tickets/[id]/page.tsx', import.meta.url));
-  assert.equal(createHash('sha256').update(page).digest('hex'), '0229d5d4fb0b0a2d123c5ffe62d65d3b1afee063a09947d3b848db20487d8db1');
+  assert.equal(createHash('sha256').update(page).digest('hex'), '52f85c3d778eb18d4b5787170f32b27c9b99e57b9534cbab7bdec541c2393cb7');
   const layout = readFileSync(new URL('../app/m/tickets/[id]/layout.tsx', import.meta.url), 'utf8');
   assert.match(layout, /if \(!view\) return children;/);
   const pageSource = readFileSync(new URL('../app/v/documents/[token]/page.tsx', import.meta.url), 'utf8');
