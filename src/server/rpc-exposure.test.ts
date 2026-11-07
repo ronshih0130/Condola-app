@@ -57,8 +57,11 @@ function clientGraph(): string[] {
     const source = read(file);
     if (source.startsWith('"use server"') || source.startsWith("'use server'")) continue;
     bundled.push(file);
-    for (const match of source.matchAll(/from\s+["']([^"']+)["']/g)) {
-      const next = resolveImport(file, match[1]);
+    // Whole-statement `import type` / `export type` is erased at compile time and never reaches the
+    // browser bundle, so it is not followed; every other import/export (incl. mixed `{ type X, y }`) is.
+    for (const match of source.matchAll(/(?:^|[;\n])\s*(import|export)(\s+type)?\b[^;]*?\bfrom\s+["']([^"']+)["']/g)) {
+      if (match[2]) continue;
+      const next = resolveImport(file, match[3]);
       if (next) queue.push(next);
     }
   }
