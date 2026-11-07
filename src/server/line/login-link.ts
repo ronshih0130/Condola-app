@@ -364,7 +364,7 @@ export async function listLineLinks(sessionToken?: string) {
   if (!session) rejectLine(401, "reauth_required");
   // Identity ownership retains access to historical links after account reassignment.
   // Current contact mappings authorize binding/login/push, not listing or self-unlink.
-  const rows = (await c.query(`SELECT l.id,l.org_id AS "orgId",l.status,l.is_friend AS "isFriend",l.notification_opt_in AS "notificationOptIn"
+  const rows = (await c.query(`SELECT l.id,l.org_id AS "orgId",l.persona,l.login_identity_id AS "identityId",l.status,l.is_friend AS "isFriend",l.notification_opt_in AS "notificationOptIn"
    FROM line_account_links l JOIN app.b033_line_identities i ON i.id=l.login_identity_id
    WHERE i.user_id=$1 AND app.b033_portal_enabled(l.org_id,l.persona) ORDER BY l.id`, [session.user_id])).rows;
   if (!rows.length) {

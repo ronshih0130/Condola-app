@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107090000_b037_line_rent_pushes.sql": {
+    addOnly: false,
+    reason: "Adds private RLS/REVOKE ALL rent-push claim and evaluated-event tables with composite FKs and CHECK/UNIQUE constraints, seven service-only SECURITY DEFINER gateways plus four ungranted helpers, a same-body replacement of app.b033_push_expire (single-Email and suppression rules for B-037 claims) and a default-OFF line_rent_push setting. No backfill and no change to B-010 producers, B-028 claims or legacy email_log reminders; constraints, privilege revokes and the function replacement require Class B review.",
+  },
   "supabase/migrations/20261107105000_b039_line_dispatch_pushes.sql": {
     addOnly: false,
     reason: "Additive private dispatch-event outbox (claim, announcement dependency, backoff) with constraints, RLS, six service-only pinned definer gateways plus an ungranted internal replay classifier (L2 decision pending Class B review); a validated CHECK on notifications constrains only the new vendor dispatch event types; default-OFF line_dispatch_push setting. No backfill or activation.",

@@ -1,0 +1,56 @@
+[
+ {
+  "layer": "environment kill",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ },
+ {
+  "layer": "line_rent_push platform disabled",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ },
+ {
+  "layer": "line_rent_push org flag missing",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ },
+ {
+  "layer": "line_rent_push org flag non-boolean",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ },
+ {
+  "layer": "line_rent_push malformed allowlist",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ },
+ {
+  "layer": "line_rent_push other org only",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ },
+ {
+  "layer": "line_push off",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ },
+ {
+  "layer": "line_platform off",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ },
+ {
+  "layer": "notification_delivery_v2 off",
+  "writes": 0,
+  "transportCalls": 0,
+  "existingRemindersUnchanged": true
+ }
+]

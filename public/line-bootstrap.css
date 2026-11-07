@@ -1,0 +1,17 @@
+/* Public LIFF shell uses the existing brand-v2 tokens, without the protected app layout. */
+*{box-sizing:border-box}
+body{margin:0;background:var(--c-bg,#F4F6F8);color:var(--c-text,#1B2533);font:16px/1.6 system-ui,sans-serif}
+.auth-wrap{max-width:440px;margin:28px auto;padding:0 16px}
+.brand{display:block;margin:0 auto 24px;max-width:100%;height:auto}
+.card{padding:24px;background:var(--c-surface,#fff);border:1px solid var(--c-border,#DDE3EA);border-radius:16px}
+h1{font-size:24px;line-height:1.4;margin:0 0 16px;overflow-wrap:anywhere}
+a{color:var(--c-primary,#14325C)}
+form{display:grid;gap:16px;margin:24px 0}
+label{display:block}
+input:not([type=checkbox]){display:block;width:100%;min-height:44px;padding:8px;margin-top:6px;font:inherit;border:1px solid var(--c-border-strong,#7F8B9C);border-radius:8px}
+input[type=checkbox]{width:20px;height:20px;vertical-align:middle;margin-right:8px}
+button{width:100%;min-height:44px;padding:10px 16px;margin:8px 0;font:inherit;border:1px solid var(--c-primary,#14325C);border-radius:8px;background:var(--c-surface,#fff);color:var(--c-primary,#14325C);cursor:pointer}
+button[type=submit]{background:var(--c-primary,#14325C);color:#fff}
+button:disabled{opacity:.6;cursor:wait}
+:focus-visible{outline:3px solid var(--c-focus,#2F6BFF);outline-offset:3px}
+[hidden]{display:none}

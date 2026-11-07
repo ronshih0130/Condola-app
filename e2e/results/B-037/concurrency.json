@@ -1,0 +1,29 @@
+{
+ "firstAttempt": "timeout",
+ "concurrentRetries": [
+  "busy",
+  "sent"
+ ],
+ "transportCalls": 2,
+ "sameRetryKey": true,
+ "reservationRows": 1,
+ "reservation": {
+  "status": "settled",
+  "attempt_count": 2
+ },
+ "rotation": {
+  "orgAStuckClaims": 3,
+  "limit": 2,
+  "runs": [
+   [
+    "retry",
+    "retry"
+   ],
+   [
+    "retry",
+    "sent"
+   ]
+  ],
+  "orgBSentOnRun": 2
+ }
+}
