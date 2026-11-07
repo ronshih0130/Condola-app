@@ -245,3 +245,41 @@ fails on any new single-shot NOWAIT table lock, any (A)/(B) site using the wrong
 mutator without `lock_timeout=3s`. A function
 redefined by a later migration (`CREATE OR REPLACE` from its old source text) silently reverts to NOWAIT; the
 catalog test is the tripwire, and the fix is a follow-up migration listing it.
+
+## 8. Integration tip (integration/s3-draft-1106 @ 0caf36e, merge of #95)
+
+The tip adds the LINE stack (B-033...B-039), B-017 governance, B-018, B-025/B-026/B-027, B-028 p1/p2/p4/p5,
+B-029/B-030, B-005, B-019, B-020 s1, PROP-04/06 and B-031 slice 3. A fresh build failed at the migration's
+own fail-closed guard ("an unlisted function still takes a NOWAIT table lock"), as designed.
+
+**Inventory** (live catalog, all migrations before 20261107150000 applied, DB `condola_integ_lock`): 41
+single-shot table-level NOWAIT statements in 31 functions. That is the 40/30 of section 3 (every per-function
+count unchanged) plus one new function.
+
+| Added / reclassified | Statement | Category | Justification |
+|---|---|---|---|
+| `app.b033_line_enabled(uuid)` (new, 20261107000000) | platform_settings SHARE | **(B) retry** | Shared LINE flag helper, reached via `b033_selected_channel` / `b033_portal_enabled` / `b033_push_enabled` after row locks: `b033_link` (two FOR UPDATE), `b039_dispatch_no_channel` (FOR UPDATE), the `b038_repair_claim` loop (FOR UPDATE OF p SKIP LOCKED). |
+| `app.b028_delivery_enabled(uuid)` (was A) | platform_settings SHARE | **(B) retry** | On this tip it is also called from the LINE fallbacks: `b037_push_fallback` reaches it via `b033_push_fallback` after a FOR SHARE NOWAIT row pin and an owner e-mail step; also `b033_push_enabled`, `b038_fallback`. No longer a first-lock-only helper. |
+| `app.b028_center_vendor_context(text)` (stays A) | platform_settings SHARE | (A) | New caller `b026_center_vendor` calls it as its first lock, like `b028_center_vendor(_enabled)`. |
+
+The remaining (A) platform_settings gateways have the same callers as on the S3 branch (rechecked).
+
+**Totals after the change:** 28 functions, 37 statements: 29 (A) bounded in 21 functions, 8 (B) retry
+(7 functions entirely + `b013_owner_view`'s regional_defaults). Plus the 3 (C) B-010 polling functions
+unchanged. The migration's fail-closed totals are now 37 (8 retry).
+
+**Later migrations:** `20261107151000` (ALTER FUNCTION lock_timeout on the six mutators, same signatures on
+this tip), `20261107160000` (contacts user_id guard trigger: no NOWAIT) and `20261107170000` (re-creates
+`b026_submit_vendor_estimate`: row-level FOR UPDATE/SHARE NOWAIT only, out of scope). None re-creates a
+target or adds a table-level NOWAIT, so no later file needed editing. The catalog test on the fully
+migrated DB confirms the end state.
+
+**B-028 package 5 measurement** (`b028-parent-lock-measurement.integration.test.ts`), inverted:
+* "production-call-path-unbounded-wait" became "production-call-path-bounded-wait". It asserts the gateway
+  proconfig carries `lock_timeout=3s`, connection/role/database defaults are still 0, the production
+  `submitEstimate()` call queues behind the held ticket row, and it fails with 55P03 at the gateway bound.
+* "ticket-held-past-lock-timeout" relied on a test-set 250 ms lock_timeout around the gateway. The
+  function-scoped 3 s now overrides it inside the gateway, so the scenario became
+  "ticket-held-past-gateway-lock-timeout" (hold 4.5 s; 55P03 at >= 2.85 s and < hold).
+* Not regenerated: the dated `e2e-evidence/B-028/parent-lock-measurement.local.json` and
+  `20-build/specs/B-028-design.md` (line ~249) still describe the pre-S3 unbounded measurement.

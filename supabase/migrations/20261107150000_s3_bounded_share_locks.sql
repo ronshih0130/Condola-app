@@ -24,8 +24,11 @@
 --     b017_occurrence_valid, b028_center_recipient_valid, b017_resolution_admit ("never
 --     waits on a late admission edge"), b028_center_session's contacts lock (after
 --     b028_center_context row pins and cursor deletes) and b013_owner_view's
---     regional_defaults lock (after b013_owner_context row pins). It rides out a short
---     autovacuum/truncation; it does not make one yield.
+--     regional_defaults lock (after b013_owner_context row pins), and the shared
+--     flag helpers b033_line_enabled / b028_delivery_enabled (reached from the LINE
+--     push paths after FOR UPDATE / FOR SHARE row pins: b033_link,
+--     b039_dispatch_no_channel, the b038_repair_claim loop, b037_push_fallback). It
+--     rides out a short autovacuum/truncation; it does not make one yield.
 --     (A) remains only where the request is the transaction's first SHARE acquisition
 --     before any row/write lock (top-level gateways), or is ACCESS SHARE / ROW
 --     EXCLUSIVE, which ordinary writers (ROW EXCLUSIVE) neither block nor queue behind.
@@ -98,7 +101,8 @@ END $$;
 REVOKE ALL ON FUNCTION app.lock_tables_nowait_retry(regclass[], text) FROM PUBLIC, anon, authenticated, service_role;
 
 -- Exact current signatures and, per NOWAIT table-lock statement in source order
--- (latest definitions as of 20261107120000), the strategy that replaces it.
+-- (latest definitions on the integration tip, all migrations before this one), the
+-- strategy that replaces it.
 DO $s3_bounded_share_locks$
 DECLARE
  v_targets constant jsonb := jsonb_build_object(
@@ -127,7 +131,8 @@ DECLARE
   'app.b028_center_vendor_context(text)', jsonb_build_array('bounded'),
   'app.b028_claim_manual(uuid,uuid,text,uuid,uuid,uuid,uuid[])', jsonb_build_array('bounded'),
   'app.b028_claim_scheduled(uuid,uuid,uuid[],timestamp with time zone)', jsonb_build_array('bounded'),
-  'app.b028_delivery_enabled(uuid)', jsonb_build_array('bounded'),
+  'app.b028_delivery_enabled(uuid)', jsonb_build_array('nowait_retry'),
+  'app.b033_line_enabled(uuid)', jsonb_build_array('nowait_retry'),
   'app.b028_finish_manual(uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,text)', jsonb_build_array('bounded'));
  v_statement constant text := '(LOCK\s+TABLE\s+([^;]+?)\s+IN\s+(ACCESS SHARE|ROW EXCLUSIVE|SHARE)\s+MODE\s+NOWAIT\s*;)';
  v_sig text; v_spec jsonb; v_helper text; v_def text; v_new text; v_rest text; v_pos integer; v_found integer;
@@ -179,8 +184,8 @@ BEGIN
   v_total := v_total + v_found;
   v_total_retry := v_total_retry + v_retry;
  END LOOP;
- IF v_total <> 36 OR v_total_retry <> 6 THEN
-  RAISE EXCEPTION 'S3 lock bounds: replaced % statements (% retry), expected 36 (6 retry)', v_total, v_total_retry;
+ IF v_total <> 37 OR v_total_retry <> 8 THEN
+  RAISE EXCEPTION 'S3 lock bounds: replaced % statements (% retry), expected 37 (8 retry)', v_total, v_total_retry;
  END IF;
  -- Fail closed if any other single-shot table-level NOWAIT remains in app/public.
  IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace

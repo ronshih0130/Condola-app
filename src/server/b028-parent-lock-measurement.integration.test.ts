@@ -17,18 +17,21 @@ import type { Session } from "./types";
 // wait and blocking relationships (pg_stat_activity / pg_locks /
 // pg_blocking_pids) so the T0 rehearsal knows what to look for. It is NOT the
 // T0 rehearsal: hosted roles, data volume, concurrency and timings differ.
-// The lock_timeout bounds below are imposed BY THIS TEST ONLY. The production
-// call path (repair-approval.ts -> svc -> svcOn) sets no lock_timeout or
-// statement_timeout, and the gateway has none; the "unbounded" scenario shows a
-// blocked production call still waiting after a test-side deadline.
+// S3 BLK-MAC-24 (20261107151000): the B-013 repair mutators carry a
+// function-scoped lock_timeout=3s, which governs every lock wait inside the
+// gateway (it overrides the transaction-level lock_timeout this test sets around
+// the call; that one still bounds the test's own parent statements). The
+// "production-call-path-bounded-wait" scenario shows a blocked production call
+// (repair-approval.ts -> svc -> svcOn, no caller timeout) failing with 55P03 at
+// the gateway bound instead of waiting as long as the holder.
 // Set B028_PARENT_LOCK_JSON=<path> to write the measurements as JSON.
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 
 const HOLD_MS = 400;
 const LOCK_TIMEOUT_MS = 3000;
-const SHORT_LOCK_TIMEOUT_MS = 250;
+const GATEWAY_LOCK_TIMEOUT_MS = 3000; // proconfig lock_timeout of the B-013 mutators (S3)
 const POLL_MS = 20;
-const UNBOUNDED_PROBE_MS = 1500;
+const PRODUCTION_DEADLINE_MS = GATEWAY_LOCK_TIMEOUT_MS + 3000; // test-side cancel if the bound regresses
 
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>>;
 let fixture: {
@@ -232,11 +235,13 @@ test("repair_vendor_jobs: parent update blocks the appointment insert guard; chi
   assertBlocked(await measure("appointment-insert-then-job-update", "public.repair_vendor_jobs", "appointmentInsert", "jobUpdate", true));
 });
 
-test("bounded: a parent held past lock_timeout fails the gateway with 55P03, not an unbounded wait", async () => {
-  const m = await measure("ticket-held-past-lock-timeout", "public.maintenance_tickets", "ticketUpdateTimeout", "submitTimeout", true, SHORT_LOCK_TIMEOUT_MS, 1500);
+test("bounded: a parent held past the gateway's own lock_timeout fails the gateway with 55P03, not an unbounded wait", async () => {
+  // S3: the gateway's function-scoped 3s bound governs (a shorter caller bound no longer applies inside it).
+  const hold = GATEWAY_LOCK_TIMEOUT_MS + 1500;
+  const m = await measure("ticket-held-past-gateway-lock-timeout", "public.maintenance_tickets", "ticketUpdateTimeout", "submitTimeout", true, GATEWAY_LOCK_TIMEOUT_MS, hold);
   assert.equal(m.outcome, "error:55P03");
   assert.ok(m.blockedByHolder);
-  assert.ok(m.elapsedMs >= SHORT_LOCK_TIMEOUT_MS * 0.75 && m.elapsedMs < 1500, `${m.elapsedMs}ms`);
+  assert.ok(m.elapsedMs >= GATEWAY_LOCK_TIMEOUT_MS * 0.95 && m.elapsedMs < hold, `${m.elapsedMs}ms`);
 });
 
 test("properties and contacts: parent update blocks the estimate gateway's FOR SHARE (properties, then OF po, c)", async () => {
@@ -244,21 +249,22 @@ test("properties and contacts: parent update blocks the estimate gateway's FOR S
   assertBlocked(await measure("owner-contact-update-then-estimate-submit", "public.contacts", "contactUpdate", "submit", true));
 });
 
-test("unbounded: the production estimate call path sets no lock/statement timeout and keeps waiting behind a held parent", async () => {
+test("bounded: the production estimate call path is bounded by the gateway lock_timeout and fails 55P03 behind a held parent", async () => {
   const c = await connect(), holder = await connect();
   try {
-    // Defaults a fresh service connection inherits (no role/database override).
+    // Defaults a fresh service connection inherits (no role/database override): the
+    // bound comes from the gateway itself, not from the caller or the database.
     const defaults = (await c.query<{ name: string; setting: string }>(`SELECT name,setting FROM pg_settings WHERE name IN ('lock_timeout','statement_timeout','idle_in_transaction_session_timeout') ORDER BY name`)).rows;
     const overrides = (await c.query<{ n: number }>(`SELECT count(*)::int n FROM pg_db_role_setting s
       LEFT JOIN pg_roles r ON r.oid=s.setrole WHERE (s.setdatabase=0 OR s.setdatabase=(SELECT oid FROM pg_database WHERE datname=current_database()))
       AND (s.setrole=0 OR r.rolname IN ('service_role',current_user)) AND array_to_string(s.setconfig,',') ~ '(lock|statement)_timeout'`)).rows[0].n;
     const proconfig = (await c.query<{ cfg: string[] | null }>(`SELECT proconfig cfg FROM pg_proc WHERE oid='app.b013_submit_estimate(uuid,uuid,text,uuid,uuid,uuid,uuid,bigint,text,smallint,text,jsonb,bytea)'::regprocedure`)).rows[0].cfg ?? [];
     callerTimeouts = { connectionDefaults: Object.fromEntries(defaults.map(d => [d.name, d.setting])), roleOrDatabaseTimeoutOverrides: overrides,
-      gatewayProconfig: proconfig, callPath: "repair-approval.ts submitEstimate -> run -> svc -> svcOn (no SET lock_timeout/statement_timeout)" };
+      gatewayProconfig: proconfig, callPath: "repair-approval.ts submitEstimate -> run -> svc -> svcOn (no caller timeout; gateway lock_timeout=3s)" };
     assert.equal(defaults.find(d => d.name === "lock_timeout")?.setting, "0");
     assert.equal(defaults.find(d => d.name === "statement_timeout")?.setting, "0");
     assert.equal(overrides, 0);
-    assert.ok(!proconfig.some(v => /timeout/.test(v)), JSON.stringify(proconfig));
+    assert.ok(proconfig.includes(`lock_timeout=${GATEWAY_LOCK_TIMEOUT_MS / 1000}s`), JSON.stringify(proconfig));
 
     const holderPid = (await holder.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0].pid;
     await holder.query("BEGIN");
@@ -266,34 +272,36 @@ test("unbounded: the production estimate call path sets no lock/statement timeou
     const session: Session = { userId: USERS.manager, sessionId: fixture.session, kind: "staff", role: "manager", orgId: ORG_ID, liveOrgId: ORG_ID,
       environment: "live", locale: "en", calendar: "gregorian", leaseId: null, email: "synthetic@example.test", name: "Synthetic" };
     const started = performance.now();
-    let settled = false;
+    let settled = false, settledMs = 0;
     const call = submitEstimateGateway(session, { requestId: randomUUID(), ticketId: fixture.tickets.unbounded, expectedHeadId: null,
-      amountMinor: BigInt(500001), currency: fixture.currency, minorUnit: fixture.minorUnit, workScope: "Synthetic unbounded probe", evidence: [] })
-      .then(() => "ok", (error: { code?: string; message?: string }) => `error:${error.code ?? error.message ?? "unknown"}`).finally(() => { settled = true; });
+      amountMinor: BigInt(500001), currency: fixture.currency, minorUnit: fixture.minorUnit, workScope: "Synthetic bounded probe", evidence: [] })
+      .then(() => "ok", (error: { code?: string; cause?: { code?: string }; message?: string }) => `error:${error.code ?? error.cause?.code ?? error.message ?? "unknown"}`)
+      .finally(() => { settled = true; settledMs = Math.round(performance.now() - started); });
     let waiterPid: number | null = null, samples = 0, last: Sample | null = null, first: Sample | null = null;
-    while (performance.now() - started < UNBOUNDED_PROBE_MS) {
+    while (!settled && performance.now() - started < PRODUCTION_DEADLINE_MS) {
       const found = (await c.query<{ pid: number }>(`SELECT pid FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid)) AND query LIKE '%b013_submit_estimate%'`, [holderPid])).rows[0];
       if (found) {
         waiterPid = found.pid;
-        last = (await c.query<Sample>(`SELECT a.wait_event_type,a.wait_event,pg_blocking_pids($1) blockers,NULL::json waiting,NULL::json tuple_locks FROM pg_stat_activity a WHERE a.pid=$1`, [waiterPid])).rows[0] ?? null;
-        if (last?.blockers.length) { samples++; first ??= last; }
+        const sample = (await c.query<Sample>(`SELECT a.wait_event_type,a.wait_event,pg_blocking_pids($1) blockers,NULL::json waiting,NULL::json tuple_locks FROM pg_stat_activity a WHERE a.pid=$1`, [waiterPid])).rows[0] ?? null;
+        if (sample?.blockers.length) { samples++; first ??= sample; last = sample; }
       }
       await new Promise(resolve => setTimeout(resolve, POLL_MS));
     }
-    const stillWaiting = !settled && waiterPid !== null && Boolean(last?.blockers.includes(holderPid)) && last?.wait_event_type === "Lock";
-    const elapsedAtProbe = Math.round(performance.now() - started);
-    // Test-side cancellation only; production has no such deadline.
-    if (waiterPid !== null) await c.query("SELECT pg_cancel_backend($1)", [waiterPid]);
+    // Test-side cancellation only if the gateway bound regressed.
+    if (!settled && waiterPid !== null) await c.query("SELECT pg_cancel_backend($1)", [waiterPid]);
+    const stillWaiting = !settled;
     const outcome = await Promise.race([call, new Promise<string>(resolve => setTimeout(() => resolve("not-settled-after-cancel"), 5000))]);
     await holder.query("ROLLBACK");
-    measurements.push({ scenario: "production-call-path-unbounded-wait", parent: "public.maintenance_tickets",
-      first: statements.ticketUpdateUnbounded.label, second: "submitEstimate() TS wrapper via svc (no lock_timeout/statement_timeout)", expectBlocked: true,
-      holderPid, waiterPid: waiterPid ?? 0, holdMs: UNBOUNDED_PROBE_MS, lockTimeoutMs: 0, elapsedMs: elapsedAtProbe, observedBlocked: samples > 0,
+    measurements.push({ scenario: "production-call-path-bounded-wait", parent: "public.maintenance_tickets",
+      first: statements.ticketUpdateUnbounded.label, second: "submitEstimate() TS wrapper via svc (gateway lock_timeout=3s)", expectBlocked: true,
+      holderPid, waiterPid: waiterPid ?? 0, holdMs: PRODUCTION_DEADLINE_MS, lockTimeoutMs: GATEWAY_LOCK_TIMEOUT_MS, elapsedMs: stillWaiting ? PRODUCTION_DEADLINE_MS : settledMs, observedBlocked: samples > 0,
       blockedSamples: samples, blockerPids: [...new Set([...(first?.blockers ?? []), ...(last?.blockers ?? [])])], blockedByHolder: Boolean(last?.blockers.length === 1 && last.blockers[0] === holderPid),
-      firstBlockedSample: first, outcome: `${stillWaiting ? "still_waiting" : "not_waiting"}_at_${UNBOUNDED_PROBE_MS}ms; test cancelled via pg_cancel_backend -> ${outcome}` });
+      firstBlockedSample: first, outcome: stillWaiting ? `still_waiting_at_${PRODUCTION_DEADLINE_MS}ms; test cancelled -> ${outcome}` : outcome });
     assert.ok(waiterPid, "production call never reached the gateway");
-    assert.ok(stillWaiting, "production call path was expected to still be waiting (no caller timeout)");
-    assert.notEqual(outcome, "ok");
+    assert.ok(samples > 0 && first?.wait_event_type === "Lock", "production call never queued behind the held parent");
+    assert.ok(!stillWaiting, `production call still waiting after ${PRODUCTION_DEADLINE_MS}ms (gateway bound missing)`);
+    assert.equal(outcome, "error:55P03");
+    assert.ok(settledMs >= GATEWAY_LOCK_TIMEOUT_MS * 0.95 && settledMs < GATEWAY_LOCK_TIMEOUT_MS + 1500, `${settledMs}ms`);
   } finally {
     await holder.query("ROLLBACK").catch(() => {});
     await Promise.allSettled([c.end(), holder.end()]);

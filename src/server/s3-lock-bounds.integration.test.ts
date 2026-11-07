@@ -48,6 +48,9 @@ const NOWAIT_RETRY = [
   "app.b017_resolution_admit(uuid)",
   "app.b028_center_recipient_valid()",
   "app.b028_center_session(uuid,uuid,text,uuid,text,text,uuid,uuid)",
+  // Integration tip: shared flag helpers reached from LINE push paths after row pins.
+  "app.b028_delivery_enabled(uuid)",
+  "app.b033_line_enabled(uuid)",
 ];
 // Mixed: ACCESS SHARE on its private tables stays (A); the regional_defaults SHARE
 // after b013_owner_context's row pins is (B).
@@ -74,7 +77,6 @@ const BOUNDED = [
   "app.b028_center_vendor_context(text)",
   "app.b028_claim_manual(uuid,uuid,text,uuid,uuid,uuid,uuid[])",
   "app.b028_claim_scheduled(uuid,uuid,uuid[],timestamp with time zone)",
-  "app.b028_delivery_enabled(uuid)",
   "app.b028_finish_manual(uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,text)",
 ];
 const MUTATORS = [
@@ -122,7 +124,8 @@ async function timed<T>(fn: () => Promise<T>): Promise<{ ms: number; value?: T; 
 }
 const codeOf = (error: unknown) => (error as { code?: string } | undefined)?.code;
 
-/** b028_delivery_enabled: smallest production gateway with the platform_settings SHARE admission. */
+/** b028_delivery_enabled: smallest production gateway with the platform_settings SHARE admission
+ * ((B) NOWAIT retry on the integration tip; the owner policy view below covers an (A) site). */
 async function deliveryEnabled() {
   const c = await connect();
   try {
@@ -200,7 +203,7 @@ test("catalog: no single-shot table-level NOWAIT remains; helper is private and 
     ["lock_tables_bounded", "'app.b013_default_roots','app.b013_default_revisions','app.b013_override_revisions'", "ACCESS SHARE"],
     ["lock_tables_nowait_retry", "'app.b013_regional_defaults'", "SHARE"],
   ]);
-  assert.deepEqual([BOUNDED.length, NOWAIT_RETRY.length], [21, 5]);
+  assert.deepEqual([BOUNDED.length, NOWAIT_RETRY.length], [20, 7]);
   // (A) keeps no SHARE request in a function that has row-locked before it: every
   // remaining bounded SHARE is on platform_settings as a gateway's first lock.
   const shareTargets = new Set<string>();
