@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106130000_b019_tenant_thread_create.sql": {
+    addOnly: true,
+    reason: "Seeds default-OFF tenant_thread_create and adds a SECURITY DEFINER RPC letting an authorized lease tenant start the lease thread idempotently (existing one-per-lease index; first message id = request id); no table or grant change beyond the RPC.",
+  },
   "supabase/migrations/20261106080000_prop04_consent_records.sql": {
     addOnly: true,
     reason: "Adds an authenticated-only SECURITY DEFINER reader of own consent evidence with pinned org/environment scope; no existing-table, writer, flag or backfill changes.",

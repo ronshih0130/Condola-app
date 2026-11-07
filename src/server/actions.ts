@@ -587,6 +587,15 @@ export async function actionMessage(formData: FormData) {
   }
 }
 
+/** B-019: tenant starts the lease conversation (flag tenant_thread_create OFF by default). */
+export async function actionStartTenantThread(formData: FormData) {
+  await requireCurrentConsent();
+  const session = await getSession();
+  const { startTenantThread } = await import("./tenant-thread");
+  const result = await startTenantThread(session, { leaseId: text(formData.get("leaseId")), requestId: text(formData.get("requestId")), body: text(formData.get("body")) });
+  redirect(result.state === "started" ? "/t/messages" : `/t/messages?error=${result.state === "invalid" ? "errors.required" : "errors.forbidden"}`);
+}
+
 export async function actionInvite(formData: FormData) {
   await requireCurrentConsent();
   try {
