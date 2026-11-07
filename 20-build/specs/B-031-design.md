@@ -141,12 +141,24 @@ encrypt/storage/legal_name/id_number/national/passport/bank/account/line_user/ei
 | properties | name, address_display (text); default_rental_mode (code); archived_at (time) |
 | units / rooms | label (text); base_rent_minor (money); rental_mode (units, code); archived_at (time) |
 
-**Masking at write.** Email → first character + `***@domain`; phone → `+886`, stars and last two digits; text and
-reason → national ID / resident certificate numbers, UUIDs, emails, Taiwan phone numbers, 10+ digit runs (account
-numbers) and 20+ character token-like runs replaced with `••••••••••`, text capped at 200 and reason at 500
-characters. Money/number/date/time/bool/code must match a strict shape or are fully masked. Money is exact
-`numeric` JSON text; the reader formats it with `BigInt` (never a float). The read side re-masks text, accepts only
-partial-mask shapes for phone/email and drops unknown fields/kinds into `withheld`.
+**Masking at write.** Email → first character + `***@domain`; phone → `+886`, stars and last two digits. Text and
+reason (`app.b031_mask_text`): first width folding (a character whose NFKC form is one ASCII letter/digit/`@`/`+`
+becomes that form, so full-width ０-９ Ａ-Ｚ ＠ ＋ and circled digits are caught; Chinese punctuation is kept), then
+in order: emails; UUIDs; national ID / resident certificate numbers with optional separators (`A 123 456 789`,
+`A1234-56789`); token-like runs of 16+ `[A-Za-z0-9_+/=.-]` containing **both** a letter and a digit (snake_case
+reason codes such as `tenant_directory_contact_edit` and ordinary long words have no digit and are kept); any 10+
+digits joined by up to two separators (space, ideographic space, `-` `.` `(` `)` and full-width forms: bank
+accounts `822-12-345678-9`, cards `4111-1111-1111-1111`); Taiwan phone numbers (`+886` or leading `0`, 8+ digits,
+`(02) 2345-6789`). Matches become `••••••••••`; text is capped at 200 and reason at 500 characters.
+Money/number/date/time/bool/code must match a strict shape or are fully masked. Money is exact `numeric` JSON
+text; the reader formats it with `BigInt` (never a float). The read side runs the same rules in the same order
+(`maskDetailText`, defence in depth; write side authoritative) and then `maskAuditText`, accepts only partial-mask
+shapes for phone/email and drops unknown fields/kinds into `withheld`. A plain 9-digit run is not masked.
+The OFF page keeps the unchanged `maskAuditText`.
+
+**Capture never blocks business writes.** The capture body runs in a `BEGIN … EXCEPTION WHEN OTHERS` block: on any
+error the detail row is skipped and `RAISE WARNING 'b031 audit detail skipped: <SQLSTATE>'` (no values) is emitted;
+the insert uses `ON CONFLICT (audit_id) DO NOTHING`.
 
 **Read and role filtering (in the DB).** `app.b031_audit_detail_rows(p_org uuid, p_ids bigint[])` is the only
 reader: SECURITY DEFINER, `search_path = pg_catalog, pg_temp`, EXECUTE granted to `authenticated` only (no anon,
@@ -193,3 +205,10 @@ accountant, maintenance, tenant, owner, other-org admin, pin mismatch, cross-org
 service_role, direct table access); 10 OFF flag shapes with zero writes/reads; complete OFF SQL trace, presented
 result and rendered rows equal to the 1bba9f3 baseline (`src/server/fixtures/b031-audit-detail-off.json`);
 reason semantics; non-covered rows; append-only and exact BigInt display. Unit `src/server/b031-audit-detail.test.ts` (5).
+
+**Fix round 1 (independent Claude review of ff674a5: 2 MAJOR, 3 MINOR).** M1 width folding + separator-joined digit
+groups + spaced/full-width IDs on both sides; M2 token rule requires a letter and a digit, so fixed reason codes
+and long names are no longer hidden (ON shows the same reason text as OFF); capture exception guard and
+`ON CONFLICT DO NOTHING`; `i_audit_v_none` (尚無續約動作 / No renewal activity) and `i_audit_d_base_rent`
+(月租 / Monthly rent) aligned. Reviewer probes are regression tests: write/read parity over all probes, a production
+write with the M1 formats, ON-vs-OFF reason codes, forced capture failure and an id conflict.

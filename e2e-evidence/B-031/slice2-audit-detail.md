@@ -1,6 +1,6 @@
 # B-031 slice 2 — AUDIT_DETAIL local evidence
 
-**LOCAL PASS · flag `audit_detail` default OFF · uncommitted working tree on `feat/b-031-audit-detail` (base `1bba9f3`).**
+**LOCAL PASS · flag `audit_detail` default OFF · committed as `ff674a5` on `feat/b-031-audit-detail` (base `1bba9f3`); fix round 1 (independent review) uncommitted on top.**
 Design: [`20-build/specs/B-031-design.md`](../../20-build/specs/B-031-design.md) § Slice 2.
 
 ## Acceptance
@@ -16,6 +16,7 @@ Design: [`20-build/specs/B-031-design.md`](../../20-build/specs/B-031-design.md)
 | URL scan | #2: every rendered href is an existing record link (`/m/owners/<uuid>` etc.); no query parameters, audit ids or secrets |
 | OFF zero-write / zero-read | #4: 10 flag shapes (default, global off, string booleans, org not allowlisted, allowlist missing/string, org flag absent/string/false, row absent) write no detail rows and read none, even with detail captured earlier while ON |
 | OFF equality | #5: complete SQL trace of `loadAuditScreen` and two `loadAuditHistory` flows equals the 1bba9f3 baseline apart from exactly one reader statement; presented result (cursors excluded) and `AuditRows` markup are identical. Baseline `src/server/fixtures/b031-audit-detail-off.json` was captured by running the fixture against the unmodified 1bba9f3 `audit-read.ts` / `audit-log.tsx` |
+| Review fix round 1 | #9–#12: write/read masking parity over all reviewer probes (bank/card groups, full-width phone/ID, spaced ID, landline, tokens) with reason codes kept; production write of M1 formats stored masked; fixed reason codes shown identically ON and OFF; forced capture failure and audit id conflict keep the business write. Unit #6–#9 |
 | Reason semantics | #6: optional; blank/whitespace → none (rendered 未填寫原因); capped at 500; never fabricated |
 | Scope | #7: inserts, deletes, NULL-org rows, non-covered tables and `recordAudit` events produce no detail. #8: append-only (UPDATE/DELETE rejected); exact BigInt amount display |
 
@@ -23,7 +24,7 @@ Design: [`20-build/specs/B-031-design.md`](../../20-build/specs/B-031-design.md)
 
 | Command | Result |
 |---|---|
-| `b031-audit-detail.integration.test.ts` | 8/8 |
+| `b031-audit-detail.integration.test.ts` | 12/12 |
 | `audit-read.integration.test.ts` | 3/4 — #4 "keyset plans seek an index" fails identically with every slice-2 object dropped from the DB (pre-existing planner choice on this cluster, not caused by this slice) |
 | `b005-invite-audit.integration.test.ts` | 3/3 |
 | `tenant-signed-pdf-download-audit.integration.test.ts` | 1/1 |

@@ -61,3 +61,18 @@ export function offFlow(reader: Reader, flow: (typeof OFF_FLOWS)[number]) {
 export function withoutCursors(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value, (key, item) => (key === "cursor" ? undefined : item)));
 }
+
+/** Independent-review probes (fix round 1): masked on both sides, and kept verbatim on both sides. */
+export const SENSITIVE_PROBES = [
+  "822-12-345678-9", "8221 2345 6789 0123", "4111-1111-1111-1111", "4111 1111 1111 1111", "012-345-678-901",
+  "０９１２３４５６７８", "Ａ１２３４５６７８９", "A 123 456 789", "A1234-56789", "A123456789", "A800000014", "AB12345678",
+  "(02) 2345-6789", "02-2345-6789", "(02)2345-6789", "0912 345 678", "0912-345-678", "0912345678",
+  "+886 912 345 678", "+886-2-2345-6789", "+886912345678", "＋８８６９１２３４５６７８",
+  "9f8e7d6c5b4a3928170", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc", "U4af4980629a1b2c3d4e5f60718293a4b",
+  "tok_9f8e7d6c5b4a39281706f5e4d3c2b1a0", "0d6e1d3a-1111-4222-8333-444455556666", "wang＠gmail.com", "wang@gmail.com",
+];
+export const KEPT_PROBES = [
+  "tenant_directory_contact_edit", "owner_repair_override_value", "確認登記電費", "同期分攤改由新草稿取代",
+  "Supercalifragilisticexpialidocious Ltd", "陳先生（屋主）同意，門牌 100 號 3F-1", "租金 30000 改 33000，2026-01-05 起",
+  "coast-only-marker", "Morgan Lee", "物業經理",
+];

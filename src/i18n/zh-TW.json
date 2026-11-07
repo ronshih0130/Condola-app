@@ -2289,7 +2289,7 @@
   "i_audit_v_removed": "已移除",
   "i_audit_v_whole_unit": "整層出租",
   "i_audit_v_by_room": "分租",
-  "i_audit_v_none": "未續約",
+  "i_audit_v_none": "尚無續約動作",
   "i_audit_v_reminder_sent": "已提醒",
   "i_audit_v_offered": "已提出續約",
   "i_audit_v_renewed": "已續約",

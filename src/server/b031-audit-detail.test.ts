@@ -5,7 +5,8 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AuditDetailBlock, AuditRows } from "@/components/audit-log";
 import { makeT } from "@/i18n";
-import { detailMoney, presentDetail, type AuditView } from "./audit-read";
+import { detailMoney, foldWidth, maskDetailText, presentDetail, type AuditView } from "./audit-read";
+import { KEPT_PROBES, SENSITIVE_PROBES } from "./b031-audit-detail-fixture";
 
 (globalThis as { React?: unknown }).React = React;
 
@@ -105,4 +106,56 @@ test("migration is additive, default OFF, private, and pins search_path on every
   const block = flags.slice(flags.indexOf("  audit_detail:")).split("\n").slice(1, 8).map((line) => line.trim().split(":")[0]);
   assert.deepEqual(block, ["owner", "expires_at", "default", "ring", "global_kill", "org_override", "activation"]);
   assert.match(flags, /audit_detail:\n {4}owner: Ron\n[\s\S]*?default: false/);
+});
+
+// Fix round 1 (independent review M1/M2): reviewer probes as regressions.
+test("detail masking covers spaced, dashed, parenthesised and full-width Taiwan formats", () => {
+  for (const probe of SENSITIVE_PROBES) {
+    for (const text of [probe, `備註 ${probe} 結束`]) {
+      const result = maskDetailText(text);
+      assert.equal(result.masked, true, text);
+      assert.doesNotMatch(result.text, /[0-9０-９]{2}/, `${text} -> ${result.text}`);
+      assert.equal(result.text.includes("gmail"), false, text);
+    }
+  }
+});
+
+test("reason codes, ordinary words and short numbers are never masked as tokens", () => {
+  for (const probe of KEPT_PROBES) assert.deepEqual(maskDetailText(probe), { text: probe, masked: false }, probe);
+  assert.equal(foldWidth("陳先生（屋主）Ａ１＠"), "陳先生（屋主）A1@");
+});
+
+test("reviewer present.ts probe: no raw value survives presentDetail", () => {
+  const view = presentDetail({
+    audit_id: "1",
+    reason: "退押金至 822-12-345678-9 或 (02) 2345-6789 身分證 Ａ１２３４５６７８９ A 123 456 789 卡 4111 1111 1111 1111",
+    changes: [
+      { f: "termination_reason", k: "text", b: null, a: "帳戶 822-12-345678-9 ０９１２３４５６７８" },
+      { f: "label", k: "text", b: "3F", a: "3F (02) 2345-6789" },
+      { f: "address_display", k: "text", b: null, a: "台北市 Ａ１２３４５６７８９" },
+      { f: "email", k: "email", b: "w***@gmail.com", a: "w***@A123456789.tw" },
+      { f: "phone_e164", k: "phone", b: "+886*******78", a: "0912345678" },
+      { f: "rent_amount_minor", k: "money", b: "3000000", a: "3100000", c: "USD" },
+    ],
+    withheld: 2,
+  }, "zh-TW");
+  assert.ok(view);
+  const packed = JSON.stringify(view);
+  for (const raw of ["822-12", "2345-6789", "１２３", "123 456", "4111", "A123456789", "0912345678", "０９１２"]) {
+    assert.equal(packed.includes(raw), false, raw);
+  }
+  assert.match(view.reason, /^退押金至 /);
+  assert.deepEqual(view.changes[0].after, { text: "帳戶 ••••••••••" });
+  assert.deepEqual(view.changes[1].after, { text: "3F ••••••••••" });
+  assert.deepEqual(view.changes[3], { fieldKey: "i_audit_d_email", before: { text: "w***@gmail.com" }, after: { text: "••••••••••" } });
+  assert.deepEqual(view.changes[4].after, { text: "••••••••••" });
+});
+
+test("detail value labels say the same thing in both locales", () => {
+  const zh = makeT("zh-TW");
+  const en = makeT("en");
+  assert.equal(zh("i_audit_d_base_rent"), zh("i_base_rent"));
+  assert.equal(en("i_audit_d_base_rent"), en("i_base_rent"));
+  assert.equal(zh("i_audit_v_none"), "尚無續約動作");
+  assert.equal(en("i_audit_v_none"), "No renewal activity");
 });

@@ -6,10 +6,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Client, type QueryResult } from "pg";
 import { AuditRows } from "@/components/audit-log";
 import { makeT } from "@/i18n";
-import { AUDIT_DETAIL_SQL, loadAuditHistory, loadAuditScreen, type AuditView } from "./audit-read";
+import { AUDIT_DETAIL_SQL, loadAuditHistory, loadAuditScreen, maskDetailText, type AuditView } from "./audit-read";
 import { writeAudit } from "./audit";
 import { setMemberRole } from "./auth";
-import { OFF_FLOWS, adminSession, insertOffFixture, offFlow, withoutCursors } from "./b031-audit-detail-fixture";
+import { KEPT_PROBES, OFF_FLOWS, SENSITIVE_PROBES, adminSession, insertOffFixture, offFlow, withoutCursors } from "./b031-audit-detail-fixture";
 import { query, tx, withClient } from "./db";
 import { createLease, createProperty, updateLease } from "./domain";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
@@ -397,5 +397,84 @@ test("detail rows are append-only and big amounts keep exact precision", async (
   assert.deepEqual(entry.detail?.changes[0].after, { text: "NT$9,007,199,254,740,993.01" });
   await assert.rejects(() => query(`UPDATE app.b031_audit_details SET reason = 'x' WHERE audit_id = $1`, [row.audit_id]), (error) => code(error) === "23514");
   await assert.rejects(() => query(`DELETE FROM app.b031_audit_details WHERE audit_id = $1`, [row.audit_id]), (error) => code(error) === "23514");
+  await setFlag(OFF, {});
+});
+
+// ---- Fix round 1 (independent review) regressions ----
+
+test("write-side and read-side masking agree on every reviewer probe (M1/M2)", async () => {
+  for (const probe of [...SENSITIVE_PROBES, ...KEPT_PROBES]) {
+    for (const text of [probe, `備註 ${probe} 結束`]) {
+      const stored = (await query<{ v: string }>(`SELECT app.b031_mask_text($1) AS v`, [text])).rows[0].v;
+      assert.equal(maskDetailText(text).text, stored, text);
+      if (KEPT_PROBES.includes(probe)) assert.equal(stored, text, `kept: ${text}`);
+      else assert.doesNotMatch(stored, /[0-9]{2}/, `masked: ${text} -> ${stored}`);
+    }
+  }
+});
+
+test("production write stores spaced, dashed and full-width Taiwan formats masked (M1)", async () => {
+  await setFlag(ON);
+  const { ownerId } = await ownerFixture();
+  const raw = ["822-12-345678-9", "8221 2345 6789 0123", "4111-1111-1111-1111", "０９１２３４５６７８", "Ａ１２３４５６７８９", "A 123 456 789", "(02) 2345-6789"];
+  await tx(admin.userId, async (client) => {
+    await client.query(`SELECT set_config('app.change_reason', $1, true)`, [`退押金至 ${raw[0]} 或 ${raw[6]}`]);
+    await client.query(`UPDATE contacts SET company_name = $2 WHERE id = $1`, [ownerId, raw.join(" 、 ")]);
+  }, { orgId: ORG_ID });
+  const stored = (await query<{ reason: string; changes: unknown }>(
+    `SELECT reason, changes FROM app.b031_audit_details WHERE org_id = $1 AND table_name = 'contacts' ORDER BY audit_id DESC LIMIT 1`, [ORG_ID],
+  )).rows[0];
+  const packed = JSON.stringify(stored);
+  assert.match(stored.reason, /^退押金至 /);
+  assert.doesNotMatch(packed, /[0-9０-９]{2}/, packed);
+  const html = render((await loadAuditHistory(admin, "contacts", ownerId)).entries.filter((entry) => entry.detail));
+  for (const value of [...raw, "0912345678", "A123456789"]) assert.equal(html.includes(value), false, value);
+});
+
+test("ON never shows less of a fixed reason code than OFF (M2)", async () => {
+  const row = "10000000-0000-4000-8000-0000000b31ff";
+  const write = (reason: string) => query(
+    `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, reason, changed_cols, old_row, new_row)
+     VALUES ($1, $2, 'authenticated', 'contacts', $3, 'update', $4, ARRAY['display_name'], '{"display_name":"A"}', '{"display_name":"B"}')`,
+    [ORG_ID, USERS.admin, row, reason],
+  );
+  for (const reason of ["tenant_directory_contact_edit", "owner_repair_override_value", "確認登記電費"]) {
+    await setFlag(OFF, {});
+    await write(reason);
+    const off = (await loadAuditHistory(admin, "contacts", row)).entries[0];
+    assert.equal(off.reason, reason);
+    assert.equal(off.detail, undefined);
+    await setFlag(ON);
+    await write(reason);
+    const on = (await loadAuditHistory(admin, "contacts", row)).entries[0];
+    assert.equal(on.detail?.reason, reason, "detail shows the full code");
+    assert.match(render([on]), new RegExp(`原因：${reason}`));
+  }
+  await setFlag(OFF, {});
+});
+
+test("a failure inside detail capture never rolls back the business write (guard + ON CONFLICT)", async () => {
+  await setFlag(ON);
+  const before = await detailCount();
+  await query(`ALTER TABLE app.b031_audit_details ADD CONSTRAINT b031_test_force_fail CHECK (false) NOT VALID`);
+  try {
+    await tx(admin.userId, async (client) => {
+      await client.query(`UPDATE org_members SET title = 'Guarded write' WHERE org_id = $1 AND user_id = $2`, [ORG_ID, USERS.accountant]);
+    }, { orgId: ORG_ID });
+  } finally {
+    await query(`ALTER TABLE app.b031_audit_details DROP CONSTRAINT b031_test_force_fail`);
+  }
+  assert.equal((await query<{ title: string }>(`SELECT title FROM org_members WHERE org_id = $1 AND user_id = $2`, [ORG_ID, USERS.accountant])).rows[0].title, "Guarded write");
+  assert.equal(await detailCount(), before, "no detail row");
+  assert.ok((await query(`SELECT 1 FROM audit_log WHERE table_name = 'org_members' AND new_row->>'title' = 'Guarded write'`)).rowCount === 1, "audit row kept");
+
+  // An existing detail row under the next audit id: ON CONFLICT DO NOTHING keeps the write.
+  const next = (await query<{ id: string }>(`SELECT (nextval(pg_get_serial_sequence('public.audit_log', 'id')) + 1)::text AS id`)).rows[0].id;
+  await query(`INSERT INTO app.b031_audit_details (audit_id, org_id, table_name, changes) VALUES ($1, $2, 'org_members', '[{"f":"title","k":"text","b":null,"a":"pre"}]')`, [next, ORG_ID]);
+  await tx(admin.userId, async (client) => {
+    await client.query(`UPDATE org_members SET title = 'Conflict write' WHERE org_id = $1 AND user_id = $2`, [ORG_ID, USERS.accountant]);
+  }, { orgId: ORG_ID });
+  assert.equal((await query<{ id: string }>(`SELECT id::text FROM audit_log WHERE new_row->>'title' = 'Conflict write'`)).rows[0].id, next);
+  assert.equal((await query<{ a: string }>(`SELECT changes->0->>'a' AS a FROM app.b031_audit_details WHERE audit_id = $1`, [next])).rows[0].a, "pre");
   await setFlag(OFF, {});
 });

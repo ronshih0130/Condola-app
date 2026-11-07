@@ -50,24 +50,44 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
   )
 $$;
 
--- Free text: hide emails, UUIDs, national ID / resident certificate numbers,
--- token-like runs, Taiwan phone numbers and long digit runs (account numbers).
-CREATE FUNCTION app.b031_mask_text(p text) RETURNS text
+-- Width folding: a character whose NFKC form is one ASCII letter, digit, @ or + is
+-- replaced by that form (full-width ０-９ Ａ-Ｚ ＠ ＋, circled digits, ...). Other
+-- characters, including Chinese punctuation, are kept as written.
+CREATE FUNCTION app.b031_fold_width(p text) RETURNS text
 LANGUAGE sql IMMUTABLE SET search_path = pg_catalog, pg_temp AS $$
-  SELECT CASE WHEN p IS NULL THEN NULL ELSE
-    regexp_replace(
-    regexp_replace(
-    regexp_replace(
-    regexp_replace(
-    regexp_replace(
-    regexp_replace(p,
-      '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '••••••••••', 'g'),
-      '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}', '••••••••••', 'g'),
-      '[A-Za-z0-9_+/=-]{20,}', '••••••••••', 'g'),
-      '[A-Za-z][1289][0-9]{8}|[A-Za-z]{2}[0-9]{8}', '••••••••••', 'g'),
-      '(\+[ ]?886|\m0)[ ().-]?[0-9]([ ().-]?[0-9]){6,9}(?![0-9])', '••••••••••', 'g'),
-      '[0-9]{10,}', '••••••••••', 'g')
-  END
+  SELECT CASE WHEN p IS NULL THEN NULL ELSE coalesce((
+    SELECT string_agg(CASE WHEN s.n ~ '^[0-9A-Za-z@+]$' THEN s.n ELSE s.c END, '' ORDER BY s.i)
+      FROM (SELECT t.c, t.i, normalize(t.c, NFKC) AS n
+              FROM regexp_split_to_table(p, '') WITH ORDINALITY AS t(c, i)) s
+  ), '') END
+$$;
+
+-- Free text, after width folding. Separators S = space, ideographic space, - . ( )
+-- and their full-width forms; digit groups may be joined by up to two of them.
+--   emails; UUIDs; national ID / resident certificate numbers (separators allowed);
+--   token-like runs: 16+ of [A-Za-z0-9_+/=.-] containing both a letter and a digit
+--   (snake_case reason codes and ordinary words have no digit and are kept);
+--   any 10+ digits joined by separators (bank accounts, cards); then Taiwan phone
+--   numbers (+886 or a leading 0, 8+ digits). Mirrored by maskDetailText in audit-read.ts.
+CREATE FUNCTION app.b031_mask_text(p text) RETURNS text
+LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+  m constant text := '••••••••••';
+  sep constant text := '[- ().．（）－　]';
+  tok constant text := '[A-Za-z0-9_+/=.-]';
+  t text;
+BEGIN
+  IF p IS NULL THEN RETURN NULL; END IF;
+  t := app.b031_fold_width(p);
+  t := regexp_replace(t, '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', m, 'g');
+  t := regexp_replace(t, '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}', m, 'g');
+  t := regexp_replace(t, '(?<![A-Za-z])[A-Za-z]' || sep || '?[1289](' || sep || '?[0-9]){8}', m, 'g');
+  t := regexp_replace(t, '(?<![A-Za-z])[A-Za-z]{2}(' || sep || '?[0-9]){8}', m, 'g');
+  t := regexp_replace(t, '(^|[^A-Za-z0-9_+/=.-])(?=' || tok || '*[0-9])(?=' || tok || '*[A-Za-z])' || tok || '{16,}(?!' || tok || ')', '\1' || m, 'g');
+  t := regexp_replace(t, '(?<![0-9])[+(（]?[0-9](' || sep || '{0,2}[0-9]){9,}(?![0-9])', m, 'g');
+  t := regexp_replace(t, '(\+' || sep || '?886|(?<![0-9A-Za-z])\(?0)' || sep || '{0,2}[0-9](' || sep || '{0,2}[0-9]){6,9}(?![0-9])', m, 'g');
+  RETURN t;
+END
 $$;
 
 -- One allowlisted scalar to masked text. Unexpected shapes are fully masked.
@@ -92,11 +112,12 @@ BEGIN
     WHEN 'code' THEN
       RETURN CASE WHEN v ~ '^[a-z_]{1,40}$' THEN v ELSE '••••••••••' END;
     WHEN 'email' THEN
+      v := app.b031_fold_width(v);
       at_position := strpos(v, '@');
       IF at_position < 2 THEN RETURN '••••••••••'; END IF;
       RETURN left(v, 1) || '***@' || left(app.b031_mask_text(substr(v, at_position + 1)), 120);
     WHEN 'phone' THEN
-      v := regexp_replace(v, '[^0-9+]', '', 'g');
+      v := regexp_replace(app.b031_fold_width(v), '[^0-9+]', '', 'g');
       IF length(v) < 6 THEN RETURN '••••••••••'; END IF;
       IF v ~ '^\+886[0-9]+$' THEN
         RETURN '+886' || repeat('*', length(v) - 6) || right(v, 2);
@@ -165,41 +186,48 @@ DECLARE
   changes jsonb := '[]'::jsonb;
   withheld integer := 0;
 BEGIN
-  IF NEW.old_row IS NULL OR NEW.new_row IS NULL OR NEW.changed_cols IS NULL THEN RETURN NULL; END IF;
-  IF NOT app.b031_audit_detail_on(NEW.org_id) THEN RETURN NULL; END IF;
-  FOREACH col IN ARRAY NEW.changed_cols LOOP
-    CONTINUE WHEN col IN ('updated_at', 'created_at');
-    kind := app.b031_audit_detail_kind(NEW.table_name, col);
-    IF kind IS NULL THEN
-      withheld := withheld + 1;
-      CONTINUE;
-    END IF;
-    entry := jsonb_build_object(
-      'f', col,
-      'k', kind,
-      'b', app.b031_mask_value(kind, NEW.old_row -> col),
-      'a', app.b031_mask_value(kind, NEW.new_row -> col)
-    );
-    IF kind = 'money' THEN
-      IF cur IS NULL THEN
-        cur := btrim(coalesce(NEW.new_row ->> 'currency', NEW.old_row ->> 'currency', ''));
-        IF cur = '' AND NEW.table_name = 'units' THEN
-          SELECT btrim(p.currency) INTO cur FROM public.properties p
-           WHERE p.id = (NEW.new_row ->> 'property_id')::uuid AND p.org_id = NEW.org_id;
-        ELSIF cur = '' AND NEW.table_name = 'rooms' THEN
-          SELECT btrim(p.currency) INTO cur FROM public.units u
-            JOIN public.properties p ON p.id = u.property_id AND p.org_id = u.org_id
-           WHERE u.id = (NEW.new_row ->> 'unit_id')::uuid AND u.org_id = NEW.org_id;
-        END IF;
-        IF cur IS NULL OR cur !~ '^[A-Z]{3}$' THEN cur := 'TWD'; END IF;
+  -- Detail capture must never roll back the audited business write: any error
+  -- skips the detail row only. The warning carries the SQLSTATE, never values.
+  BEGIN
+    IF NEW.old_row IS NULL OR NEW.new_row IS NULL OR NEW.changed_cols IS NULL THEN RETURN NULL; END IF;
+    IF NOT app.b031_audit_detail_on(NEW.org_id) THEN RETURN NULL; END IF;
+    FOREACH col IN ARRAY NEW.changed_cols LOOP
+      CONTINUE WHEN col IN ('updated_at', 'created_at');
+      kind := app.b031_audit_detail_kind(NEW.table_name, col);
+      IF kind IS NULL THEN
+        withheld := withheld + 1;
+        CONTINUE;
       END IF;
-      entry := entry || jsonb_build_object('c', cur);
-    END IF;
-    changes := changes || jsonb_build_array(entry);
-  END LOOP;
-  IF jsonb_array_length(changes) = 0 THEN RETURN NULL; END IF;
-  INSERT INTO app.b031_audit_details (audit_id, org_id, table_name, reason, changes, withheld)
-  VALUES (NEW.id, NEW.org_id, NEW.table_name, left(app.b031_mask_text(nullif(btrim(NEW.reason), '')), 500), changes, withheld);
+      entry := jsonb_build_object(
+        'f', col,
+        'k', kind,
+        'b', app.b031_mask_value(kind, NEW.old_row -> col),
+        'a', app.b031_mask_value(kind, NEW.new_row -> col)
+      );
+      IF kind = 'money' THEN
+        IF cur IS NULL THEN
+          cur := btrim(coalesce(NEW.new_row ->> 'currency', NEW.old_row ->> 'currency', ''));
+          IF cur = '' AND NEW.table_name = 'units' THEN
+            SELECT btrim(p.currency) INTO cur FROM public.properties p
+             WHERE p.id = (NEW.new_row ->> 'property_id')::uuid AND p.org_id = NEW.org_id;
+          ELSIF cur = '' AND NEW.table_name = 'rooms' THEN
+            SELECT btrim(p.currency) INTO cur FROM public.units u
+              JOIN public.properties p ON p.id = u.property_id AND p.org_id = u.org_id
+             WHERE u.id = (NEW.new_row ->> 'unit_id')::uuid AND u.org_id = NEW.org_id;
+          END IF;
+          IF cur IS NULL OR cur !~ '^[A-Z]{3}$' THEN cur := 'TWD'; END IF;
+        END IF;
+        entry := entry || jsonb_build_object('c', cur);
+      END IF;
+      changes := changes || jsonb_build_array(entry);
+    END LOOP;
+    IF jsonb_array_length(changes) = 0 THEN RETURN NULL; END IF;
+    INSERT INTO app.b031_audit_details (audit_id, org_id, table_name, reason, changes, withheld)
+    VALUES (NEW.id, NEW.org_id, NEW.table_name, left(app.b031_mask_text(nullif(btrim(NEW.reason), '')), 500), changes, withheld)
+    ON CONFLICT (audit_id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'b031 audit detail skipped: %', SQLSTATE;
+  END;
   RETURN NULL;
 END
 $$;
@@ -230,7 +258,7 @@ BEGIN
 END
 $$;
 
-REVOKE ALL ON FUNCTION app.b031_audit_detail_on(uuid), app.b031_mask_text(text), app.b031_mask_value(text, jsonb),
+REVOKE ALL ON FUNCTION app.b031_audit_detail_on(uuid), app.b031_fold_width(text), app.b031_mask_text(text), app.b031_mask_value(text, jsonb),
   app.b031_audit_detail_kind(text, text), app.b031_capture_audit_detail(), app.b031_audit_detail_rows(uuid, bigint[])
   FROM PUBLIC, anon, authenticated, service_role;
 -- tx() reads as authenticated with request.jwt.claim.sub and app.active_org_id set.

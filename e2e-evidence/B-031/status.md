@@ -3,7 +3,7 @@
 | Slice | Flag | State |
 |---|---|---|
 | 1 SESSION_HARDENING | `session_hardening` | committed `d4f5dc6` (PR #71); see design doc |
-| 2 AUDIT_DETAIL | `audit_detail` (OFF) | implemented (local), uncommitted; [evidence](slice2-audit-detail.md) |
+| 2 AUDIT_DETAIL | `audit_detail` (OFF) | implemented (local), `ff674a5` + fix round 1 (uncommitted); [evidence](slice2-audit-detail.md) |
 | 3 UPLOAD_RECOVERY | `upload_recovery` | planned |
 
 Open for Ron/CEO: retention of audit detail (none introduced; follows `audit_log`), whether important edits must

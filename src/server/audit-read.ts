@@ -285,6 +285,43 @@ export function maskAuditText(value: string) {
   return { text: text.replace(/[ \t]{2,}/g, " ").trim(), masked };
 }
 
+/**
+ * B-031 width folding, mirroring app.b031_fold_width: a character whose NFKC form is
+ * one ASCII letter, digit, @ or + becomes that form. Chinese punctuation is kept.
+ */
+export function foldWidth(value: string) {
+  return Array.from(value, (char) => {
+    const folded = char.normalize("NFKC");
+    return /^[0-9A-Za-z@+]$/.test(folded) ? folded : char;
+  }).join("");
+}
+
+const SEP = "[- ().．（）－　]";
+const TOK = "[A-Za-z0-9_+/=.-]";
+const DETAIL_RULES: [RegExp, string][] = [
+  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, MASK],
+  [/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/g, MASK],
+  [new RegExp(`(?<![A-Za-z])[A-Za-z]${SEP}?[1289](${SEP}?[0-9]){8}`, "g"), MASK],
+  [new RegExp(`(?<![A-Za-z])[A-Za-z]{2}(${SEP}?[0-9]){8}`, "g"), MASK],
+  [new RegExp(`(^|[^A-Za-z0-9_+/=.-])(?=${TOK}*[0-9])(?=${TOK}*[A-Za-z])${TOK}{16,}(?!${TOK})`, "g"), `$1${MASK}`],
+  [new RegExp(`(?<![0-9])[+(（]?[0-9](${SEP}{0,2}[0-9]){9,}(?![0-9])`, "g"), MASK],
+  [new RegExp(`(\\+${SEP}?886|(?<![0-9A-Za-z])\\(?0)${SEP}{0,2}[0-9](${SEP}{0,2}[0-9]){6,9}(?![0-9])`, "g"), MASK],
+];
+
+/**
+ * Detail text masking: the same rules, in the same order, as app.b031_mask_text
+ * (the write side is authoritative; this is defence in depth), then maskAuditText.
+ * Snake_case reason codes and ordinary words contain no digit and are never masked
+ * as tokens. Used only for AUDIT_DETAIL values; the OFF page keeps maskAuditText.
+ */
+export function maskDetailText(value: string) {
+  const original = foldWidth(value);
+  let text = original;
+  for (const [pattern, replacement] of DETAIL_RULES) text = text.replace(pattern, replacement);
+  const rest = maskAuditText(text);
+  return { text: rest.text, masked: rest.masked || text !== original };
+}
+
 export function encodeCursor(at: string, id: string) {
   return Buffer.from(`${at}\n${id}`, "utf8").toString("base64url");
 }
@@ -760,7 +797,7 @@ export function detailMoney(minor: string, currency: string, locale: Locale) {
 
 /** Partial masks from the write side keep at most a first character and two trailing digits. */
 function partialMasked(kind: "email" | "phone", value: string) {
-  if (kind === "email") return /^[^@\s*]\*{3}@[^@\s]+$/.test(value) && !maskAuditText(value).masked ? value : MASK;
+  if (kind === "email") return /^[^@\s*]\*{3}@[^@\s]+$/.test(value) && !maskDetailText(value.slice(value.indexOf("@") + 1)).masked ? value : MASK;
   return /^(\+886|\+|\d)\*+\d{2}$/.test(value) ? value : MASK;
 }
 
@@ -788,7 +825,7 @@ function detailValue(kind: string, raw: unknown, currency: string, locale: Local
     case "phone":
       return { text: partialMasked(kind, raw) };
     case "text":
-      return { text: maskAuditText(raw).text.slice(0, 200) };
+      return { text: maskDetailText(raw).text.slice(0, 200) };
     default:
       return { text: MASK };
   }
@@ -822,7 +859,7 @@ export function presentDetail(raw: RawDetail, locale: Locale): AuditDetailView |
     });
   }
   if (!changes.length) return null;
-  return { reason: raw.reason ? maskAuditText(raw.reason).text.slice(0, 500) : "", changes, withheld };
+  return { reason: raw.reason ? maskDetailText(raw.reason).text.slice(0, 500) : "", changes, withheld };
 }
 
 /** Skipped for an empty page. Otherwise one statement; zero rows unless the DB permits detail. */
