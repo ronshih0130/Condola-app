@@ -8,6 +8,7 @@ import { selectedLease } from "@/lib/tenant-lease";
 import { actionCancelRepair, actionTicket } from "@/server/actions";
 import { isUuid } from "@/server/repair-rules";
 import { tenantRepairs, ticketDetail } from "@/server/queries";
+import { ticketPhotoRecovery } from "@/server/upload-recovery";
 import type { T } from "@/i18n";
 
 function repairStatusLabel(status: string, t: T) {
@@ -32,6 +33,7 @@ export default async function RepairPage({
   const detail = selectedId ? await ticketDetail(session, selectedId) : null;
   const own = detail && repairs.some((repair) => repair.id === detail.ticket.id) ? detail : null;
   const confirming = params.cancel === "1" && own?.ticket.status === "open";
+  const uploadRecovery = own ? await ticketPhotoRecovery(session, own.ticket.id) : null;
   return (
     <div>
       <h2>{t("i_rich_repair")}</h2>
@@ -101,6 +103,7 @@ export default async function RepairPage({
             canViewPhotos={true}
             allowInternal={false}
             returnTo="tenant"
+            uploadRecovery={uploadRecovery}
           />
         </div>
       ) : null}

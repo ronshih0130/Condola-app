@@ -28,7 +28,7 @@ async function wipe(client: Client) {
   await client.query("SET session_replication_role = replica");
   // These specific private tables refer to demo rows wiped below. Older schemas
   // may not have them yet; leave unrelated private application data alone.
-  for (const table of ["b031_challenge_exempt", "b031_challenge_epochs", "b031_credential_epochs", "b009_row_identities", "b009_decisions"]) {
+  for (const table of ["b031_upload_items", "b031_upload_batches", "b031_challenge_exempt", "b031_challenge_epochs", "b031_credential_epochs", "b009_row_identities", "b009_decisions"]) {
     if ((await client.query("SELECT to_regclass($1) AS name", [`app.${table}`])).rows[0].name) {
       await client.query(`DELETE FROM app.${table}`);
     }
