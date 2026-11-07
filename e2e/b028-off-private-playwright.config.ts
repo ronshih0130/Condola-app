@@ -7,6 +7,9 @@ import { resolve } from "node:path";
 const origin = "http://localhost:43153";
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 for (const name of Object.keys(env)) if (/SUPABASE|GOTRUE|BREVO|RESEND|LINE_CHANNEL|CLOUDFLARE|PROD|TOKEN/i.test(name)) delete env[name];
+// Keep the local dev server from sending tool telemetry off the machine (matches scripts/run-e2e.ts).
+env.NEXT_TELEMETRY_DISABLED = "1";
+env.WRANGLER_SEND_METRICS = "false";
 export default defineConfig({
   testDir: ".", testMatch: ["b028-center-local.spec.ts"], fullyParallel: false, workers: 1, timeout: 600_000, expect: { timeout: 20_000 }, reporter: "line",
   use: { baseURL: origin, trace: "off", video: "off", screenshot: "off" },

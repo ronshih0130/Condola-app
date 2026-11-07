@@ -179,7 +179,7 @@ Each case: home 200 with no `notification-center-entry`; notifications route HTT
 POST (`/api/notification-center/mark`, vendor: `/vendor-mark` with token) answers 404; zero `b028_center_reads` rows;
 every `public`/`app` row across all orgs unchanged (snapshot before/after; only `auth_sessions.last_active_at/expires_at`,
 which every authenticated request refreshes, are excluded). Final ON: each recipient is still unread and the identical
-mark request now returns 200, proving the OFF 404s came from the control. No non-local request, console error (other
+mark request now returns 200, proving the OFF 404s came from the control. No non-local browser request (server-side Next/Wrangler telemetry disabled in the config env), console error (other
 than the expected route 404) or 5xx. If Chromium is not installed the file skips cleanly (`test.skip`; test-level, so the config's local
 webServer still boots first); the same matrix
 runs at server-render level in `src/server/notification-off.integration.test.ts` (unchanged, 24 cases). Repair commands
