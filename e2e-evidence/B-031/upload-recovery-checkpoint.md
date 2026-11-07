@@ -1,12 +1,12 @@
 # B-031 slice 3 UPLOAD_RECOVERY — local checkpoint
 
-**LOCAL ONLY / UNCOMMITTED / flag `upload_recovery` default OFF.** Branch `feat/b-031-upload-recovery`, base
-`1bba9f3`. Design: [B-031-design.md § Slice 3](../../20-build/specs/B-031-design.md). Not reviewed, not QA-signed,
+**LOCAL ONLY / committed `1de6596` + fix round 1 `1334825` / flag `upload_recovery` default OFF.** Branch `feat/b-031-upload-recovery`, base
+`1bba9f3`. Design: [B-031-design.md § Slice 3](../../20-build/specs/B-031-design.md). Claude independent review (not Codex QA): r1 FAIL (1 MAJOR, 5 MINOR) → fix round 1 → r2 PASS (7 MINOR, recorded in the hub). Not Codex-QA-signed,
 no staging/production activation.
 
 Acceptance: "Given partial upload failure, when retrying, then successful files remain and are not duplicated."
 
-## Disconnect / retry evidence (`src/server/b031-upload-recovery.integration.test.ts`, 7/7)
+## Disconnect / retry evidence (`src/server/b031-upload-recovery.integration.test.ts`, 13/13 after fix round 1)
 
 | Case | Result |
 |---|---|
