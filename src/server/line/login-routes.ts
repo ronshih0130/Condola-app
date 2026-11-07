@@ -1,6 +1,9 @@
 import { LINE_JOB_COOKIE } from "./vendor-scope";
 import { NextResponse } from "next/server";
 import { sessionCookie, SESSION_COOKIE } from "../auth";
+import { ORG_COOKIE } from "../org-scope";
+import { PORTAL_ROLE_COOKIE } from "../portal-role";
+import { selectLinePortal } from "./portal";
 import { readLineConfig } from "./config";
 import { resolveLocalLineSecret } from "./secrets";
 import type { SecretResolver } from "./webhook";
@@ -27,10 +30,17 @@ export function browserProof(request: Request): BrowserProof {
 export function lineCookie(response: NextResponse, name: string, value: string, httpOnly = true) {
  response.cookies.set(name, value, { secure: true, httpOnly, sameSite: "lax", path: "/", maxAge: 300 });
 }
-function response(body: unknown, status = 200, token?: string) {
+function response(body: unknown, status = 200, token?: string, scope?: { orgId: string; persona: LinePersona }) {
  const res = NextResponse.json(body, { status, headers: privateHeaders });
  if (token) { const c = sessionCookie(token, false); res.cookies.set(c.name, c.value, { ...c.options, secure: true }); }
+ if (scope) portalCookies(res, scope);
  return res;
+}
+function portalCookies(res: NextResponse, scope: { orgId: string; persona: LinePersona }) {
+ const options = { secure: true, httpOnly: true, sameSite: "lax" as const, path: "/" };
+ res.cookies.set(ORG_COOKIE, scope.orgId, options);
+ res.cookies.set(PORTAL_ROLE_COOKIE, scope.persona, options);
+ res.cookies.set("condola_lease", "", { ...options, maxAge: 0 });
 }
 export async function lineResponse(work: () => Promise<Response>) {
  try { return await work(); }
@@ -63,6 +73,18 @@ export function createLineHandlers(deps: { resolveSecret?: SecretResolver; excha
  const resolve = deps.resolveSecret ?? resolveLocalLineSecret;
  const exchange = deps.exchangeCode ?? (async () => rejectLine(503, "line_unavailable"));
  return {
+  portal: (request: Request) => lineResponse(async () => {
+   envGate(); const b = await body(request);
+   if (!b.orgId || !["tenant", "owner", "vendor"].includes(b.persona)) rejectLine(400, "invalid_request");
+   const scope = { orgId: b.orgId, persona: b.persona as LinePersona };
+   // Match flow endpoints: a disabled portal is absent even without browser cookies.
+   await lineTransaction(async c => {
+    if (!(await c.query("SELECT app.b033_portal_enabled($1,$2) enabled", [scope.orgId, scope.persona])).rows[0].enabled) rejectLine(404, "not_found");
+   });
+   csrfCheck(request, browserProof(request), b.csrf);
+   const result = await selectLinePortal(cookie(request, SESSION_COOKIE), scope);
+   return response(result, 200, undefined, scope);
+  }),
   reauth: (request: Request) => lineResponse(async () => {
    envGate(); const b = await body(request), proof = browserProof(request);
    if (!b.orgId || !["tenant", "owner", "vendor"].includes(b.persona)) rejectLine(400, "invalid_request");
@@ -91,7 +113,9 @@ export function createLineHandlers(deps: { resolveSecret?: SecretResolver; excha
     error: url.searchParams.get("error") ?? undefined, origin: url.origin }, proof, resolve, exchange, meta(request), auth(request));
    const res = new NextResponse(null, { status: 303, headers: { ...privateHeaders, Location: new URL(result.next, url.origin).toString() } });
    if ("token" in result && result.token) { const co = sessionCookie(result.token, false); res.cookies.set(co.name, co.value, { ...co.options, secure: true }); }
+   // A vendor job claim (B-035) is not an account session and sets no portal preferences.
    if ("jobClaim" in result) lineCookie(res, LINE_JOB_COOKIE, result.jobClaim);
+   if ("orgId" in result) portalCookies(res, result);
    res.cookies.set(LINE_PKCE_COOKIE, "", { path: "/", maxAge: 0 }); return res;
   }),
   session: (request: Request) => lineResponse(async () => {
@@ -100,7 +124,7 @@ export function createLineHandlers(deps: { resolveSecret?: SecretResolver; excha
    csrfCheck(request, proof, b.csrf);
    const result = await exchangeLineSession(b.flow ?? "", proof, b.idToken ?? "", resolve, meta(request), auth(request, b));
    if ("jobClaim" in result) { const res = response({ next: result.next }); lineCookie(res, LINE_JOB_COOKIE, result.jobClaim); return res; }
-   return "token" in result ? response({ next: result.next }, 200, result.token) : response(result);
+   return "token" in result && result.token ? response({ next: result.next }, 200, result.token, result) : response(result);
   }),
   bind: (request: Request) => link(request, "bind"),
   accept: (request: Request) => link(request, "invite"),
@@ -120,7 +144,7 @@ export function createLineHandlers(deps: { resolveSecret?: SecretResolver; excha
    envGate(); const b = await body(request), proof = browserProof(request);
    await lineTransaction(c => flowOn(c, b.flow ?? "", proof)); csrfCheck(request, proof, b.csrf);
    const result = await acceptLineLink({ ...b, flow: b.flow ?? "", ...auth(request, b) }, proof, resolve, meta(request), purpose);
-   return response(purpose === "bind" ? { linkId: result.linkId, status: result.status } : { next: result.next, linkId: result.linkId }, 200, result.token);
+   return response(purpose === "bind" ? { linkId: result.linkId, status: result.status } : { next: result.next, linkId: result.linkId }, 200, result.token, result);
   });
  }
 }

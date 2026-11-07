@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { SESSION_COOKIE } from "../auth";
+import { linePortalChoices } from "./portal";
 import { makeT } from "@/i18n";
 import { lineTenantCopy } from "@/i18n/line-tenant";
 import { readLineConfig } from "./config";
@@ -14,7 +16,7 @@ const toLogin = () => new NextResponse(null, { status: 303, headers: { ...privat
 /**
  * Public route-group entry. No protected portal layout, provisioning, or third-party script loads.
  * Each portal keeps its own reviewed contract: tenant B-034 (binding/manage page, lost-cookie 303),
- * vendor B-035 (strict OFF, generic Email guidance, lost-cookie 303), owner B-033/B-036 (plain entry).
+ * vendor B-035 (strict OFF, generic Email guidance, lost-cookie 303), owner B-036 (plain entry + existing-session role chooser).
  * OFF, missing or malformed gates return 404 with the Email link and no cookies or writes.
  */
 export function createLiffBootstrap(persona: LinePersona) {
@@ -90,7 +92,10 @@ export function createLiffBootstrap(persona: LinePersona) {
    html = `<!doctype html><html lang="${locale}" data-brand="v2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><link rel="stylesheet" href="/brand/v2/theme.css"><link rel="stylesheet" href="/line-bootstrap.css"><title>${escape(t("i_login_title"))}</title></head><body><main class="auth-wrap" data-line-entry="${liffPath(persona)}"><img class="brand" src="/brand/v2/logo/lockup_stacked_color.svg" width="200" height="148" alt="${escape(t("i_brand"))}"><div class="card pad"><h1>${escape(confirm ? copy.bind : t("i_login_title"))}</h1><a id="email-login" href="/login">${escape(copy.fallback)}</a>${form}${manage}<p id="line-status" role="status" hidden>${escape(copy.unavailable)}</p>${data}</div></main></body></html>`;
    csp = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
   } else {
-   html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(t("i_login_title"))}</title></head><body><main data-line-entry="${liffPath(persona)}"><h1>${escape(t("i_login_title"))}</h1><a id="email-login" href="/login">${escape(t("i_login_title"))}</a>${data}</main></body></html>`;
+   // B-036 owner chooser: existing-session roles only; POST /api/line/portal rechecks each selection.
+   const choices = persona === "owner" && config ? await linePortalChoices(cookie(request, SESSION_COOKIE)) : [];
+   const picker = choices.map(choice => `<button type="button" data-line-portal="${choice.persona}" data-line-org="${choice.orgId}">${escape(choice.name)} · ${escape(t(choice.persona === "owner" ? "i_mode_own" : choice.persona === "tenant" ? "i_mode_ten" : "i_expense_vendor"))}</button>`).join("");
+   html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(t("i_login_title"))}</title></head><body><main data-line-entry="${liffPath(persona)}"><h1>${escape(t("i_login_title"))}</h1><a id="email-login" href="/login">${escape(t("i_login_title"))}</a>${picker}${data}</main></body></html>`;
    csp = "default-src 'none'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
   }
   const res = new NextResponse(html, { status, headers: { ...privateHeaders, "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp } });

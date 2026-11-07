@@ -68,19 +68,24 @@ async function boundedPush(transport: Pick<LineTransport, "push">, req: LinePush
 }
 /** Business caller authorizes notification scope. There are no legacy producer callers in slice 1. */
 /** B-039: business re-authorization inside the dispatcher's decision transaction (after replay checks,
- * before guard/reservation). "off"/"defer" write nothing; "stale" is superseded without reservation or Email.
- * A throwing hook never falls back to Email: authority was not established, so the result is unknown. */
+ * before guard/reservation). "off"/"defer" write nothing; "stale" is superseded without reservation or Email. */
 export type LinePushAuthorize = (c: Client) => Promise<"ok" | "stale" | "off" | "defer">;
+/** B-038: same position. "deny" records the deduplicated Email fallback with `deniedReason`; "skip" defers
+ * without writes. */
+export type LinePushAuthorizeCheck = { check: (c: Client) => Promise<"allow" | "deny" | "skip">; deniedReason: string };
+// Either hook form: a throwing hook never falls back to Email; authority was not established, so the result is unknown.
+// Callers that omit it are unchanged.
 // Fixed allow-list: B-037 rent pushes use their gateway so an existing B-010 Email claim stays the only Email.
 const FALLBACK_SQL = {
   b033: "SELECT * FROM app.b033_push_fallback($1,$2,$3,$4,$5,$6)",
   b037: "SELECT * FROM app.b037_push_fallback($1,$2,$3,$4,$5,$6)",
 } as const;
 export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransport, "push">, env: LineEnv = process.env,
-  options: { timeoutMs?: number; authorize?: LinePushAuthorize; fallbackGateway?: keyof typeof FALLBACK_SQL } = {}) {
+  options: { timeoutMs?: number; authorize?: LinePushAuthorize | LinePushAuthorizeCheck; fallbackGateway?: keyof typeof FALLBACK_SQL } = {}) {
   const config = readLineConfig(env), owner = randomUUID();
   let ctx: Context | undefined;
   let reservation: Reservation | undefined;
+  // Set when the business re-authorization itself throws; such a failure must never fall back to Email.
   let authorizeFailed = false;
   let state: string | undefined;
   let fallbackResult: Awaited<ReturnType<typeof fallback>> | undefined;
@@ -109,11 +114,20 @@ export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransp
       if (prior?.status === "settled") { state = "settled"; return; }
       if (prior?.status === "expired") { fallbackResult = await fallback(c, "line_unknown_possible_duplicate"); return; }
       if (options.authorize) {
-        let verdict: Awaited<ReturnType<LinePushAuthorize>>;
-        try { verdict = await options.authorize(c); } catch (error) { authorizeFailed = true; throw error; }
-        if (verdict === "off") { state = "disabled"; return; }
-        if (verdict === "defer") { state = "deferred"; return; }
-        if (verdict !== "ok") { state = "superseded"; return; }
+        const hook = options.authorize;
+        if (typeof hook === "function") {
+          let verdict: Awaited<ReturnType<LinePushAuthorize>>;
+          try { verdict = await hook(c); } catch (error) { authorizeFailed = true; throw error; }
+          if (verdict === "off") { state = "disabled"; return; }
+          if (verdict === "defer") { state = "deferred"; return; }
+          if (verdict !== "ok") { state = "superseded"; return; }
+        } else {
+          let decision: "allow" | "deny" | "skip";
+          try { decision = await hook.check(c); }
+          catch (error) { authorizeFailed = true; throw error; }
+          if (decision === "skip") { state = "deferred"; return; }
+          if (decision !== "allow") { fallbackResult = await fallback(c, hook.deniedReason); return; }
+        }
       }
       if (!config.guardReady || !ctx.eligible || !req.identityPepper ||
         !/^U[0-9a-f]{32}$/.test(req.to) || providerUserHash(ctx.line_provider_id, req.to, req.identityPepper) !== ctx.provider_user_hash) {
