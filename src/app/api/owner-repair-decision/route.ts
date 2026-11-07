@@ -39,9 +39,13 @@ export async function POST(request: Request) {
     const result = await decideEstimate(session, { ...input, requestId: input.requestId });
     return Response.json(result, { headers });
   } catch (error) {
-    const code = (error as { code?: string }).code;
+    // Gateway errors arrive as FlowError with the PostgreSQL code on `cause`.
+    const code = (error as { code?: string }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
     if (code === "40001") return Response.json({ status: "rejected_conflict" }, { status: 409, headers });
     if (code === "42501") return new Response(null, { status: 403, headers });
+    // S3 BLK-MAC-24: a bounded lock/statement timeout is retryable with the same requestId.
+    if (code === "55P03" || code === "57014") return Response.json({ status: "busy" }, { headers });
     throw error;
   }
 }
