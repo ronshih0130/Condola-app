@@ -977,16 +977,22 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
 
 /** Hosted team logins must be provisioned by GoTrue, including identities and tokens. */
 export async function upsertInvitedUser(client: Client, email: string, name: string, password: string) {
-  const existing = await client.query<{ id: string; has_password: boolean; matches: boolean }>(
+  const existing = await client.query<{ id: string; has_password: boolean; matches: boolean; claimed?: boolean }>(
     `SELECT id::text,
             (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password,
-            (encrypted_password IS NOT NULL AND encrypted_password = crypt($2, encrypted_password)) AS matches
-       FROM auth.users WHERE lower(email) = lower($1)`,
+            (encrypted_password IS NOT NULL AND encrypted_password = crypt($2, encrypted_password)) AS matches,
+            (EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = u.id)
+              OR EXISTS (SELECT 1 FROM org_members m WHERE m.user_id = u.id)) AS claimed
+       FROM auth.users u WHERE lower(email) = lower($1)`,
     [email, password],
   );
   const account = existing.rows[0];
   // Like portal acceptance, never replace an established password.
   if (account?.has_password && !account.matches) return null;
+  // The admin holds the raw link, so it proves nothing about an existing login.
+  // A login without a password that already serves a contact or a firm is
+  // someone else's account waiting for its own invite; never give it a password here.
+  if (account && !account.has_password && account.claimed) return null;
 
   let id = account?.id ?? "";
   const url = supabaseUrl();
@@ -1142,6 +1148,14 @@ async function acceptPortalInvite(
     await notePortalReject(token, meta.ip);
     return { ok: false as const, error: "auth" as const, kind };
   }
+  // Staff choose the contact email and hold the raw link, so the link proves
+  // nothing about an existing login. A login without a password may get its
+  // first password only from an invite issued for that same login.
+  if (existing && !existing.has_password && existing.id !== row.user_id) {
+    await notePortalReject(token, meta.ip);
+    return { ok: false as const, error: "auth" as const, kind };
+  }
+  const passwordVerified = Boolean(existing?.has_password && existing.matches);
 
   let saved: { userId: string } | { conflict: true } | null = null;
   try {
@@ -1171,7 +1185,23 @@ async function acceptPortalInvite(
             return { conflict: true as const };
           }
           userId = created;
-        } else if (!existing?.has_password) {
+        } else if (!passwordVerified) {
+          // Lock the login and recheck it here: a password set since the lookup, or one
+          // the lookup never saw (no account matched the shown email), is never replaced.
+          const login = await client.query<{ has_password: boolean }>(
+            `SELECT (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password
+               FROM auth.users WHERE id = $1 FOR UPDATE`,
+            [userId],
+          );
+          // Without its password, a login that already serves another contact is not rewritten or rebound.
+          const elsewhere = await client.query(
+            `SELECT 1 FROM contacts WHERE user_id = $1 AND id <> $2 LIMIT 1 FOR SHARE`,
+            [userId, row.contact_id],
+          );
+          if (!login.rows[0] || login.rows[0].has_password || elsewhere.rows[0]) {
+            await client.query("ROLLBACK");
+            return { conflict: true as const };
+          }
           await client.query(
             `UPDATE auth.users
                 SET email = $2,

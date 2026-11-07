@@ -192,7 +192,7 @@ async function withInviteAuthEnv(run: () => Promise<void>, remote = true) {
   }
 }
 
-function inviteClient(account?: { id: string; has_password: boolean; matches: boolean }) {
+function inviteClient(account?: { id: string; has_password: boolean; matches: boolean; claimed?: boolean }) {
   const statements: string[] = [];
   const client = {
     async query(sql: string) {
@@ -275,6 +275,28 @@ test("an existing passwordless login is updated through GoTrue", async () => {
     assert.equal(await upsertInvitedUser(client, "invitee@example.com", "新人", "Fresh1234"), INVITEE_ID);
     assert.equal(statements.some((sql) => /INSERT INTO auth\.users|UPDATE auth\.users/.test(sql)), false);
   });
+});
+
+test("a passwordless login that serves a contact or a firm never gets a password from a team invite", async () => {
+  for (const remote of [true, false]) {
+    await withInviteAuthEnv(async () => {
+      global.fetch = async () => { throw new Error("Must not provision a claimed login"); };
+      const claimed = { id: INVITEE_ID, has_password: false, matches: false, claimed: true };
+      const direct = inviteClient(claimed);
+      assert.equal(await upsertInvitedUser(direct.client, "invitee@example.com", "新人", "Fresh1234"), null);
+      assert.match(direct.statements[0], /FROM contacts c WHERE c\.user_id = u\.id/);
+      assert.match(direct.statements[0], /FROM org_members m WHERE m\.user_id = u\.id/);
+      assert.equal(direct.statements.some((sql) => /^\s*(INSERT|UPDATE)\b/.test(sql)), false);
+      const accept = inviteClient(claimed);
+      assert.deepEqual(
+        await acceptTeamInvite(accept.client, "token", "新人", "Fresh1234", { ua: null, ip: null }),
+        { ok: false, error: "auth", kind: "team_member" },
+      );
+      assert.equal(accept.statements.at(-1), "ROLLBACK");
+      assert.equal(accept.statements.includes("COMMIT"), false);
+      assert.equal(accept.statements.some((sql) => /^\s*(INSERT|UPDATE)\b/.test(sql)), false);
+    }, remote);
+  }
 });
 
 test("GoTrue failures roll back acceptance without SQL fallback or consuming the invite", async () => {
