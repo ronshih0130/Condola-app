@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { acceptInvite, signIn } from "./auth";
-import { query, withClient } from "./db";
+import { acceptInvite, inviteMember, signIn } from "./auth";
+import { query, tx, withClient } from "./db";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { hashInviteToken, issuePortalInvite } from "./portal-invite";
 import { createOwner, updateOwner } from "./portfolio";
@@ -262,4 +262,214 @@ test("a brand-new email creates a login, and replaying the used link changes not
   assert.equal(after.encrypted_password, before.encrypted_password);
   assert.equal(after.sessions, before.sessions);
   assert.equal((await signIn(email, ATTACKER_PASSWORD, false, meta)).ok, false);
+});
+
+test("an owner's own activated login is not given a new password when no account matches the shown email", async () => {
+  // The login address is minted, so acceptance looks up the contact email, finds no account,
+  // and falls back to the contact's own login. That login already has a password.
+  const shown = `own.activated.${stamp()}@example.com`;
+  const minted = `portal-${randomUUID()}@demo.condola.local`;
+  const user = await query<{ id: string }>(
+    `INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
+     VALUES (gen_random_uuid(), $1, crypt('Owner1234', gen_salt('bf')), now(), '{}'::jsonb, 'authenticated', 'authenticated')
+     RETURNING id::text`,
+    [minted],
+  );
+  const userId = user.rows[0].id;
+  await query(`INSERT INTO profiles (id, display_name, email) VALUES ($1, '已啟用屋主', $2)`, [userId, minted]);
+  const owner = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, user_id, is_owner, display_name, email, locale)
+     VALUES ($1, $2, true, '已啟用屋主', $3, 'zh-TW') RETURNING id::text`,
+    [ORG_ID, userId, shown],
+  );
+  const ownerId = owner.rows[0].id;
+  await query(
+    `INSERT INTO invitations (org_id, kind, contact_id, email, code_hash, status, expires_at, invited_by)
+     VALUES ($1, 'owner', $2, $3, $4, 'pending', now() + interval '7 days', $5)`,
+    [ORG_ID, ownerId, shown, hashInviteToken(`old-format-${stamp()}`), USERS.manager],
+  );
+  const before = await loginState(userId);
+  const issued = await issuePortalInvite(staff(USERS.manager, "manager"), { kind: "owner", contactId: ownerId, pageId: ownerId }, "https://app.condola.app");
+  assert.equal(issued.activated, false);
+  if (issued.activated) return;
+  const result = await acceptInvite(issued.token, "", ATTACKER_PASSWORD, "", meta);
+  assert.deepEqual(await takeoverFacts(result, { userId, contactId: ownerId, email: minted, before }, ownerId, shown), {
+    ...REFUSED,
+    ownerContactUser: "victim",
+  });
+  assert.equal((await signIn(minted, "Owner1234", false, meta)).ok, true);
+});
+
+async function membership(orgId: string, userId: string) {
+  const row = await query<{ status: string }>(`SELECT status::text FROM org_members WHERE org_id = $1 AND user_id = $2`, [orgId, userId]);
+  return row.rows[0]?.status ?? null;
+}
+
+async function withTeamInvites<T>(run: () => Promise<T>) {
+  const previous = process.env.TEAM_INVITES_ORG_ALLOWLIST;
+  process.env.TEAM_INVITES_ORG_ALLOWLIST = ORG_ID;
+  try {
+    return await run();
+  } finally {
+    if (previous === undefined) delete process.env.TEAM_INVITES_ORG_ALLOWLIST;
+    else process.env.TEAM_INVITES_ORG_ALLOWLIST = previous;
+  }
+}
+
+test("team invite: an admin cannot set a password on another firm's unactivated tenant login", async () => {
+  await withTeamInvites(async () => {
+    const email = `team.victim.${stamp()}@example.com`;
+    const userId = await passwordlessLogin(email, "海岸租客");
+    const contactId = await tenantContact(ORG2_ID, userId, "海岸租客", email);
+    const before = await loginState(userId);
+    const issued = await inviteMember(staff(USERS.admin, "admin"), { email, name: "誘餌", role: "manager" });
+    const result = await acceptInvite(issued.token, "攻擊者", ATTACKER_PASSWORD, ATTACKER_PASSWORD, meta, "", "", true);
+    const after = await loginState(userId);
+    const invite = await query<{ status: string }>(`SELECT status::text FROM invitations WHERE id = $1`, [issued.invitationId]);
+    assert.deepEqual(
+      {
+        result: { ok: result.ok, error: result.ok ? null : result.error, sessionToken: "token" in result },
+        passwordHashChanged: after.encrypted_password !== before.encrypted_password,
+        sessionsAdded: Number(after.sessions) - Number(before.sessions),
+        member: await membership(ORG_ID, userId),
+        victimContactStillBound: (await contactUser(contactId)) === userId,
+        inviteStatus: invite.rows[0].status,
+        attackerPasswordSignsIn: (await signIn(email, ATTACKER_PASSWORD, false, meta)).ok,
+      },
+      {
+        result: { ok: false, error: "auth", sessionToken: false },
+        passwordHashChanged: false,
+        sessionsAdded: 0,
+        member: null,
+        victimContactStillBound: true,
+        inviteStatus: "pending",
+        attackerPasswordSignsIn: false,
+      },
+    );
+  });
+});
+
+test("team invite: an unclaimed passwordless login and a brand-new email still accept", async () => {
+  await withTeamInvites(async () => {
+    const email = `team.unclaimed.${stamp()}@example.com`;
+    const userId = await passwordlessLogin(email, "新人");
+    const issued = await inviteMember(staff(USERS.admin, "admin"), { email, name: "新人", role: "manager" });
+    const accepted = await acceptInvite(issued.token, "新人", "Member1234", "Member1234", meta, "", "", true);
+    assert.equal(accepted.ok, true);
+    assert.equal(await membership(ORG_ID, userId), "active");
+    assert.equal((await signIn(email, "Member1234", false, meta)).ok, true);
+
+    const fresh = `team.fresh.${stamp()}@example.com`;
+    const link = await inviteMember(staff(USERS.admin, "admin"), { email: fresh, name: "新人二", role: "manager" });
+    const created = await acceptInvite(link.token, "新人二", "Member1234", "Member1234", meta, "", "", true);
+    assert.equal(created.ok, true);
+    assert.equal((await signIn(fresh, "Member1234", false, meta)).ok, true);
+  });
+});
+
+/** The API role path: what PostgREST or a tx() caller runs as. */
+async function asStaffApi<T>(run: (client: import("pg").Client) => Promise<T>) {
+  return tx(USERS.manager, run, { orgId: ORG_ID, environment: "live" });
+}
+
+/** True only when the S3 guard refused the write (42501), not some other failure. */
+async function rejected(run: () => Promise<unknown>) {
+  try {
+    await run();
+    return false;
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string } }).cause;
+    assert.equal(cause?.code, "42501");
+    return true;
+  }
+}
+
+test("staff cannot point a contact at an existing login through the API role", async () => {
+  // P2: contacts.user_id is writable under the team_write policy, so a direct write
+  // would make the owner invite look like it was issued for that login.
+  const email = `orphan.${stamp()}@example.com`;
+  const orphan = await passwordlessLogin(email, "孤兒登入");
+  const ownerId = await createOwner(staff(USERS.manager, "manager"), { name: "誘餌屋主", email: `decoy.${stamp()}@example.com`, phone: "", propertyIds: [] });
+  const writeRejected = await rejected(() =>
+    asStaffApi((client) => client.query(`UPDATE contacts SET user_id = $2 WHERE id = $1`, [ownerId, orphan])),
+  );
+  const before = await loginState(orphan);
+  const issued = await issuePortalInvite(staff(USERS.manager, "manager"), { kind: "owner", contactId: ownerId, pageId: ownerId }, "https://app.condola.app");
+  assert.equal(issued.activated, false);
+  if (issued.activated) return;
+  const result = await acceptInvite(issued.token, "", ATTACKER_PASSWORD, "", meta);
+  const after = await loginState(orphan);
+  assert.deepEqual(
+    {
+      writeRejected,
+      result: { ok: result.ok, sessionToken: "token" in result },
+      passwordHashChanged: after.encrypted_password !== before.encrypted_password,
+      sessionsAdded: Number(after.sessions) - Number(before.sessions),
+      attackerPasswordSignsIn: (await signIn(email, ATTACKER_PASSWORD, false, meta)).ok,
+    },
+    {
+      writeRejected: true,
+      // With the write refused the link is for the decoy address, which has no account yet.
+      result: { ok: true, sessionToken: true },
+      passwordHashChanged: false,
+      sessionsAdded: 0,
+      attackerPasswordSignsIn: false,
+    },
+  );
+  assert.notEqual(await contactUser(ownerId), orphan);
+
+  const insertRejected = await rejected(() =>
+    asStaffApi((client) =>
+      client.query(
+        `INSERT INTO contacts (org_id, user_id, is_owner, display_name, locale) VALUES ($1, $2, true, '直寫屋主', 'zh-TW')`,
+        [ORG_ID, orphan],
+      ),
+    ),
+  );
+  assert.equal(insertRejected, true);
+  const count = await query<{ n: string }>(`SELECT count(*)::text AS n FROM contacts WHERE user_id = $1`, [orphan]);
+  assert.equal(count.rows[0].n, "0");
+
+  // A bound contact cannot be unbound or moved either.
+  const boundEmail = `bound.${stamp()}@example.com`;
+  const bound = await passwordlessLogin(boundEmail, "已綁定");
+  const boundContact = await tenantContact(ORG_ID, bound, "已綁定", boundEmail);
+  assert.equal(await rejected(() => asStaffApi((client) => client.query(`UPDATE contacts SET user_id = NULL WHERE id = $1`, [boundContact]))), true);
+  assert.equal(await rejected(() => asStaffApi((client) => client.query(`UPDATE contacts SET user_id = $2 WHERE id = $1`, [boundContact, orphan]))), true);
+  assert.equal(await contactUser(boundContact), bound);
+
+  // Writing the same value, or any other column, is unaffected.
+  await asStaffApi((client) =>
+    client.query(`UPDATE contacts SET user_id = $2, display_name = '已綁定二' WHERE id = $1`, [boundContact, bound]),
+  );
+});
+
+test("the API role may still attach a login it created in the same transaction (createLease path)", async () => {
+  const email = `fresh.lease.${stamp()}@example.com`;
+  const contactId = await asStaffApi(async (client) => {
+    await client.query(`SET LOCAL ROLE service_role`);
+    const user = await client.query<{ id: string }>(`SELECT app.provision_portal_user($1, '新租客', NULL)::text AS id`, [email]);
+    await client.query(`SET LOCAL ROLE authenticated`);
+    const row = await client.query<{ id: string }>(
+      `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, locale) VALUES ($1, $2, true, '新租客', $3, 'zh-TW') RETURNING id::text`,
+      [ORG_ID, user.rows[0].id, email],
+    );
+    return row.rows[0].id;
+  });
+  assert.ok(await contactUser(contactId));
+  const attached = await asStaffApi(async (client) => {
+    const row = await client.query<{ id: string }>(
+      `INSERT INTO contacts (org_id, is_tenant, display_name, locale) VALUES ($1, true, '後補登入', 'zh-TW') RETURNING id::text`,
+      [ORG_ID],
+    );
+    // Same statements as attachPortalUser / insertPortalUserUnlessEmailTaken in domain.ts.
+    await client.query(`SAVEPOINT attach_portal_login`);
+    await client.query(`SET LOCAL ROLE service_role`);
+    const user = await client.query<{ id: string }>(`SELECT app.provision_portal_user($1, '後補登入', NULL)::text AS id`, [`attach.${stamp()}@example.com`]);
+    await client.query(`RELEASE SAVEPOINT attach_portal_login`);
+    await client.query(`SET LOCAL ROLE authenticated`);
+    await client.query(`UPDATE contacts SET user_id = $2 WHERE id = $1 AND user_id IS NULL`, [row.rows[0].id, user.rows[0].id]);
+    return { contactId: row.rows[0].id, userId: user.rows[0].id };
+  });
+  assert.equal(await contactUser(attached.contactId), attached.userId);
 });

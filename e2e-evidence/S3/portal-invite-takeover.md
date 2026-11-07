@@ -1,6 +1,6 @@
 # S3 — portal invite account takeover (acceptPortalInvite)
 
-Branch `fix/s3-portal-invite-takeover` at `origin/main` 44ecf53. Local DB `condola_s3inv` (127.0.0.1:55432) only. Uncommitted at time of writing.
+Branch `fix/s3-portal-invite-takeover` at `origin/main` 44ecf53. Local DB `condola_s3inv` (127.0.0.1:55432) only. Round 0 committed as eb2421f (Draft PR #93). Round 1 (review fix) uncommitted at time of writing.
 
 ## Scenario
 
@@ -66,15 +66,117 @@ A wrong password already returns before this point, so both conditions select th
 - Other `acceptInvite` callers: `property-owner.integration` 1/1, `team-invite-link.integration` 15/15, `team-invite-allowlist.integration` 7/7, `team-invites.test` 8/8, `consent.test` 11/11
 - `npm run typecheck` exit 0; `npm run lint` 0 errors (15 warnings, none in touched files); `npm run copy:check` 6/6; `npm run test:unit` 895/895
 
+## Review fix round 1 (after eb2421f)
+
+An independent security review of eb2421f returned FAIL. It found one blocker, one major issue and two minor ones. Its probes
+(`rv93/probe93.integration.test.ts`) confirmed P1 and P2 on eb2421f: `ok=true`, hash changed, attacker signs in.
+
+### BLOCKER 1: same takeover through team invites
+
+`upsertInvitedUser` (called by `acceptTeamInvite`) gave an existing passwordless account a password, on both the local
+SQL path and the hosted GoTrue `PUT /admin/users/{id}` path. It then added `org_members` and issued a session.
+The admin holds the raw team link.
+
+Fix: the account lookup now also returns `claimed`, meaning the account is bound to any contact or has any `org_members` row.
+A passwordless account that is `claimed` returns `null`, so `acceptTeamInvite` gives the existing `auth` error. This runs before
+either path writes anything or calls GoTrue. An existing password must still match, as before. An unclaimed passwordless account
+or a brand-new email still accepts.
+
+### MAJOR 2: contacts.user_id writable by the API role
+
+The `team_write` policy plus the table grant let staff `UPDATE contacts SET user_id` as `authenticated`. The portal fix trusts
+`row.user_id` as "this contact's own login", so a direct write could aim an invite at any login.
+
+Every legitimate writer, with the DB role it uses:
+
+| Writer | Statement | Role |
+|---|---|---|
+| `acceptPortalInvite` bind (auth.ts) | `UPDATE contacts SET user_id` | connection owner (withClient, no role switch) |
+| `seed.ts` / `resetAndSeed` | `INSERT … user_id` | connection owner |
+| `sandbox-seed.ts` | `INSERT … user_id = NULL` | NULL only |
+| `createLease` → `insertTenantContact` (domain.ts:789) | `INSERT contacts (user_id …)` with a login just made by `app.provision_portal_user` | **authenticated** (tx) |
+| `createLease` → `attachPortalUser` (domain.ts:821) | `UPDATE contacts SET user_id WHERE user_id IS NULL` with a login just provisioned | **authenticated** (tx) |
+| SQL functions in migrations | none write `contacts.user_id` (b015 directory edit changes name/email/phone only) | n/a |
+
+Two legitimate `createLease` paths write `user_id` as `authenticated`. A column-level REVOKE would therefore break lease
+creation, so the migration does not use one. Migration `20261107160000_s3_contacts_user_id_guard.sql` instead adds a private
+`SECURITY DEFINER` trigger, following the b009 pattern. It applies only to `anon`/`authenticated`, with the caller taken from the
+`role` setting and falling back to `session_user`. Under those roles it allows a `user_id` write only when the value is unchanged,
+when an insert sets NULL, or when the change is NULL → a login that:
+- was created in this same transaction (`auth.users.created_at = now()`, which `provision_portal_user` sets),
+- has no password,
+- is bound to no other contact.
+
+Everything else raises `42501`. `service_role` and owners are unaffected. Function EXECUTE is revoked from PUBLIC, anon,
+authenticated and service_role. The migration is registered in `scripts/write-pr-migrations.mjs` and the `lease-rules.test.ts`
+migration list. It adds no table, column, grant or flag.
+
+### MINOR: shown-email order
+
+`issuePortalInvite` shows `portalShownEmail(contactEmail, loginEmail)`, so the contact email comes first. Acceptance looks up
+`portalShownEmail(login_email, contact_email)`, so the login email comes first. **Not changed; documented here.** Switching
+acceptance to contact-first would change which account is checked whenever both addresses are real and differ. That is not
+behaviour-preserving, and it would move the password check away from the bound login. The visible effect: when the two
+addresses differ, the page shows the contact email but asks for the login account's password.
+
+### MINOR: unlocked "bound elsewhere" check, plus a related gap
+
+When an existing login is reused without a verified password, acceptance now locks the `auth.users` row (`FOR UPDATE`) and
+re-reads `has_password` inside the transaction. The "bound elsewhere" read is now `FOR SHARE`. This also closes two round-0
+residuals:
+- **TOCTOU:** a password set between the lookup and the write is now caught.
+- **Own-login rewrite:** previously, when no account matched the shown email (a minted login address), the contact's own
+  *activated* login could get a new password without proof. Now refused.
+
+### Round-1 tests (`s3-portal-invite-takeover.integration.test.ts`, now 11 tests)
+
+| # | Test | eb2421f | round 1 |
+|---|------|---------|---------|
+| 7 | an owner's own activated login is not given a new password when no account matches the shown email | **FAIL**: ok=true, password changed, login email changed, session, attacker signs in | PASS |
+| 8 | team invite: an admin cannot set a password on another firm's unactivated tenant login (P1) | **FAIL**: ok=true, hash changed, ORG1 membership `active`, session, invite accepted, attacker signs in | PASS |
+| 9 | team invite: an unclaimed passwordless login and a brand-new email still accept | PASS | PASS |
+| 10 | staff cannot point a contact at an existing login through the API role (P2; also INSERT with user_id, unbind, move; same-value write still allowed; refusals must be `42501`) | **FAIL**: writeRejected=false, hash changed, session, attacker signs in | PASS |
+| 11 | the API role may still attach a login it created in the same transaction (createLease INSERT and attachPortalUser UPDATE statement sequences) | PASS | PASS |
+
+Counts: eb2421f **8 pass / 3 fail**. Round 1 **11 pass / 0 fail**. Tests 1–6 from round 0 still pass.
+
+There is also a hosted-path unit test in `team-invites.test.ts`: "a passwordless login that serves a contact or a firm never
+gets a password from a team invite". It runs with the GoTrue URL set and unset, and requires: no fetch, no INSERT/UPDATE,
+`upsertInvitedUser` → null, and `acceptTeamInvite` → `auth` with ROLLBACK. It fails with the new check disabled (verified)
+and passes with it.
+
+Reviewer probes on the round-1 tree:
+- P1 `ok=false/auth`, no hash change, no attacker sign-in.
+- P2: the direct write is refused ("contacts.user_id is assigned by the server"). The invite then goes to the decoy address,
+  the orphan's hash is unchanged, and the attacker cannot sign in.
+- P2b now throws at the probe's unguarded direct write. That is the guard working.
+- P3–P6 unchanged (refused / victim wins).
+
+### Round-1 validation (fresh `condola_s3inv` with the new migration)
+
+- s3-portal-invite-takeover 11/11, portal-invite.integration 16/16, auth.integration 18/18
+- signup.integration 1/1, signup-gotrue.integration 3/3
+- team-invite-link.integration 15/15, team-invite-allowlist.integration 7/7, team-invites 9/9, consent 11/11, property-owner.integration 1/1
+- function-privileges 7/7, rpc-exposure 3/3, lease-rules 9/9, write-pr-migrations.test 2/2
+- createLease and contact paths: lease-create.integration 4/4, lease-create-archive.integration 9/9, rls 8/8, sandbox-rls 4/4, org-isolation.integration 3/3, import.integration 18/18, onboarding-progress.integration 1/1
+- typecheck exit 0; lint 0 errors (15 warnings, none in touched files); copy:check 6/6; test:unit 896/896
+
 ## Not addressed (product decisions / residual risk)
 
-- **Staff-held raw owner tokens and manager-issued owner invites.** A manager can still point an owner contact at an address
-  that has no account yet and accept the link themselves. That creates a login under someone else's email (email squatting).
-  Later invites to that address must then prove the squatter's password. Who may issue invites, and whether staff should see raw tokens, is a separate product decision.
+- **Staff-held raw tokens (owner, tenant and team).** A manager or admin can still invite an address that has no account yet and
+  accept the link themselves. That creates a login under someone else's email (email squatting), and later invites to that
+  address must then prove the squatter's password. Through a team invite the same applies to an *unclaimed* passwordless
+  account: one bound to no contact and no firm (an orphan, e.g. its contact was deleted). Who may issue invites, and whether
+  staff see raw tokens, is a separate product decision.
 - **Dual-role person who has not activated yet.** A tenant with a provisioned, passwordless login who receives an owner invite
-  for the same email is now refused with the existing `auth` error. They must first accept their own tenant invite, then accept
-  the owner invite with that password. The existing `auth` copy may not explain this. Product/copy follow-up, not changed here.
-- **Own-login rewrite.** An invite for the contact's *own* login still sets a password without proof when that login has no password (intended first activation).
-  It does the same when no account matches the shown email and the login serves only this contact. That second case was already possible before this fix and is narrow (minted login address).
-- **TOCTOU.** `has_password` is read before the transaction, as before. A concurrent first activation of the same own login could be overwritten. This was already possible and is narrow.
-- Archived contacts still count as "bound elsewhere". This refuses more cases, not fewer.
+  or a team invite for the same email is refused with the existing `auth` error. They must first accept their own tenant
+  invite, then accept the second invite with that password. The existing `auth` copy may not explain this. Product/copy
+  follow-up, not changed here.
+- **Shown-email order mismatch** (see above). Documented, not changed.
+- **First activation of an own passwordless login** still sets a password without proof. This is intended: the invite was
+  issued for exactly that login, and staff can no longer repoint `user_id` through the API.
+- **The trigger's freshness test is `created_at = now()`.** A login made in a different transaction with an identical
+  transaction-start timestamp would pass. That is not realistic, and such a login would still need to be passwordless and
+  unbound.
+- Archived contacts still count as "bound" for the acceptance check and the trigger. This refuses more cases, not fewer.
+- The GoTrue hosted path was exercised only through the unit test with a fake client and fetch, not against a live GoTrue.
