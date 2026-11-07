@@ -141,30 +141,40 @@ encrypt/storage/legal_name/id_number/national/passport/bank/account/line_user/ei
 | properties | name, address_display (text); default_rental_mode (code); archived_at (time) |
 | units / rooms | label (text); base_rent_minor (money); rental_mode (units, code); archived_at (time) |
 
-**Masking at write.** Email → first character + `***@domain`; phone → `+886`, stars and last two digits. Text and
-reason (`app.b031_mask_text`): first width folding (a character whose NFKC form is one ASCII letter/digit/`@`/`+`
-becomes that form, so full-width ０-９ Ａ-Ｚ ＠ ＋ and circled digits are caught; Chinese punctuation is kept), then
-in order: emails; UUIDs; national ID / resident certificate numbers with optional separators (`A 123 456 789`,
-`A1234-56789`); token-like runs of 16+ `[A-Za-z0-9_+/=.-]` containing **both** a letter and a digit (snake_case
-reason codes such as `tenant_directory_contact_edit` and ordinary long words have no digit and are kept); any 10+
-digits joined by up to two separators (space, ideographic space, `-` `.` `(` `)` and full-width forms: bank
-accounts `822-12-345678-9`, cards `4111-1111-1111-1111`); Taiwan phone numbers (`+886` or leading `0`, 8+ digits,
-`(02) 2345-6789`). Matches become `••••••••••`; text is capped at 200 and reason at 500 characters.
-Money/number/date/time/bool/code must match a strict shape or are fully masked. Money is exact `numeric` JSON
-text; the reader formats it with `BigInt` (never a float). The read side runs the same rules in the same order
-(`maskDetailText`, defence in depth; write side authoritative) and then `maskAuditText`, accepts only partial-mask
-shapes for phone/email and drops unknown fields/kinds into `withheld`. A plain 9-digit run is not masked.
-The OFF page keeps the unchanged `maskAuditText`.
+**Masking at write.** Email → first character + `***@` + masked domain; phone → `+886`, stars and last two digits.
+Text and reason use one specification, implemented identically in `app.b031_normalize_text` + `app.b031_mask_text`
+(authoritative) and `normalizeDetailText` + `maskDetailText` (`audit-read.ts`, defence in depth), with parity
+tested over every reviewer probe:
+0. Cap at 1000 characters; a cut final non-CJK word is discarded so no partial number or token survives.
+1. Normalise before any rule: NFKC; remove format/zero-width characters and combining marks; dash/minus family →
+   `-`; every space kind and control whitespace → space; `。` → `.`; collapse spaces and trim.
+2. Any word containing `@`, a spaced `x @ y`, `(at)`/`[at]` forms → masked whole.
+3. UUIDs; token-like runs of `[A-Za-z0-9_+/=.-]`: 16+ with a letter and a digit, 6+ with 2+ letters and 4+ digits
+   (LINE ids, passports, IBANs), 20+ with 3+ upper- and 3+ lower-case letters (base64/JWT). Snake_case reason codes
+   and ordinary words have no digit and stay readable.
+4. One Latin letter glued to 7+ digits (national ID, ARC, passport).
+5. Number scan: digit groups joined by 1–3 separator characters (ASCII punctuation, space, `·` `・` `、` `‧`) form one
+   number, optionally led by `+` or `(`. A plain-space join needs both groups ≤4 digits unless the number starts with
+   `0` or `+`. 8+ digits → masked. ISO-like dates/times (`YYYY-MM-DD`, `YYYY/MM/DD`, optional `HH:MM[:SS]`) and
+   thousands-grouped amounts (`25,000`, `NT$1,250,000`) at a number's start are kept, and a join never continues into
+   a following date.
+Matches become `••••••••••`; text is capped at 200 and reason at 500 characters. Money/number/date/time/bool/code
+must match a strict shape or are fully masked. Money is exact `numeric` JSON text formatted with `BigInt`. The read
+side accepts only partial-mask shapes for phone/email and drops unknown fields/kinds into `withheld`. Known
+readable on purpose: a 7-digit partial number (`0912 345`). Accepted over-masking: 8+ digits joined by single spaces
+between short groups (`2026 11 06 12`), 10-digit contract numbers. The OFF page keeps the unchanged `maskAuditText`.
 
-**Capture never blocks business writes.** The capture body runs in a `BEGIN … EXCEPTION WHEN OTHERS` block: on any
-error the detail row is skipped and `RAISE WARNING 'b031 audit detail skipped: <SQLSTATE>'` (no values) is emitted;
-the insert uses `ON CONFLICT (audit_id) DO NOTHING`.
+**Capture never blocks business writes.** The flag check runs first and returns while OFF, so OFF updates open
+no subtransaction. Only the ON capture runs in a `BEGIN … EXCEPTION WHEN OTHERS` block: on any error the detail row
+is skipped and `RAISE WARNING 'b031 audit detail skipped: <SQLSTATE>'` (no values) is emitted. The insert uses
+`ON CONFLICT (audit_id) DO NOTHING`; each detail row also stores the audit row's `row_id` and `occurred_at`.
 
 **Read and role filtering (in the DB).** `app.b031_audit_detail_rows(p_org uuid, p_ids bigint[])` is the only
 reader: SECURITY DEFINER, `search_path = pg_catalog, pg_temp`, EXECUTE granted to `authenticated` only (no anon,
 PUBLIC or service_role). It returns zero rows unless `auth.uid()` is set, `app.active_org_id` equals `p_org`,
 `app.has_role(p_org, '{admin}')` (the existing `audit_access` model: admin only) and the flag is ON for `p_org`;
-rows are filtered by `org_id = p_org` and joined to their `audit_log` row. The table itself has RLS enabled and no
+rows are filtered by `org_id = p_org` and joined to their `audit_log` row on id, org, table, `row_id` and
+`occurred_at`, so a pre-existing detail row can never be attached to a different event. The table itself has RLS enabled and no
 grants, so cross-org and non-admin reads are impossible even with direct SQL as `authenticated`.
 
 **Viewer.** `loadAuditScreen` / `loadAuditHistory` call the reader once for a non-empty page (inside the same
@@ -199,12 +209,14 @@ Fixing it changes OFF SQL for those flows and is left as a follow-up.
 **Retention.** Detail rows follow their `audit_log` rows: append-only, no purge. No retention policy was introduced;
 CAP-P-21 values are unchanged. Whether masked detail needs its own retention window is a Ron/CEO decision.
 
-**Tests.** `src/server/b031-audit-detail.integration.test.ts` (8): ON production paths; masking of stored JSON,
+**Tests.** `src/server/b031-audit-detail.integration.test.ts` (14): ON production paths; masking of stored JSON,
 view, rendered HTML, console logs and URLs; DB-level role filtering via `tx()` as authenticated (manager,
 accountant, maintenance, tenant, owner, other-org admin, pin mismatch, cross-org ids, suspended admin, anon,
 service_role, direct table access); 10 OFF flag shapes with zero writes/reads; complete OFF SQL trace, presented
 result and rendered rows equal to the 1bba9f3 baseline (`src/server/fixtures/b031-audit-detail-off.json`);
-reason semantics; non-covered rows; append-only and exact BigInt display. Unit `src/server/b031-audit-detail.test.ts` (5).
+reason semantics; non-covered rows; append-only and exact BigInt display; write/read parity over every reviewer
+probe; M1 production write; ON-vs-OFF reason codes; forced capture failure and stale-id conflict; rv2 e2e render;
+OFF path ahead of the guard. Unit `src/server/b031-audit-detail.test.ts` (9).
 
 **Fix round 1 (independent Claude review of ff674a5: 2 MAJOR, 3 MINOR).** M1 width folding + separator-joined digit
 groups + spaced/full-width IDs on both sides; M2 token rule requires a letter and a digit, so fixed reason codes
@@ -212,3 +224,13 @@ and long names are no longer hidden (ON shows the same reason text as OFF); capt
 `ON CONFLICT DO NOTHING`; `i_audit_v_none` (尚無續約動作 / No renewal activity) and `i_audit_d_base_rent`
 (月租 / Monthly rent) aligned. Reviewer probes are regression tests: write/read parity over all probes, a production
 write with the M1 formats, ON-vs-OFF reason codes, forced capture failure and an id conflict.
+
+**Fix round 2 (independent Claude re-review of a14a463).** Separator enumeration replaced by the general
+specification above on both sides (normalise first, then rules; the read side no longer re-collapses after its
+rules): every leaking rv2 input (slash/underscore/middot/Unicode-dash/NBSP/zero-width/soft-hyphen/tab/comma/colon
+phones, slashed/dashed bank and card numbers, separated and letter-glued IDs, ARC, 9-digit and letter+8 passports,
+IBAN, LINE ids, JWT/base64 without digits, Unicode/full-width/ideographic-dot/spaced/(at) emails, `+886 (0)`,
+extensions, 8-digit landlines, 9-digit and post-office accounts, combining marks) is masked; dates, times, amounts
+and two separate amounts stay readable (N3). N2 reader matches id + org + table + row + time and a conflicting
+insert is skipped. N4 flag check before the guarded block. Probe table (72 reviewer inputs + 106 fixture inputs,
+parity 178/178) in `e2e-evidence/B-031/slice2-audit-detail.md`.

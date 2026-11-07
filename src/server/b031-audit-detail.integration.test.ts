@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Client, type QueryResult } from "pg";
 import { AuditRows } from "@/components/audit-log";
 import { makeT } from "@/i18n";
-import { AUDIT_DETAIL_SQL, loadAuditHistory, loadAuditScreen, maskDetailText, type AuditView } from "./audit-read";
+import { AUDIT_DETAIL_SQL, loadAuditHistory, loadAuditScreen, maskDetailText, normalizeDetailText, type AuditView } from "./audit-read";
 import { writeAudit } from "./audit";
 import { setMemberRole } from "./auth";
 import { KEPT_PROBES, OFF_FLOWS, SENSITIVE_PROBES, adminSession, insertOffFixture, offFlow, withoutCursors } from "./b031-audit-detail-fixture";
@@ -406,9 +406,11 @@ test("write-side and read-side masking agree on every reviewer probe (M1/M2)", a
   for (const probe of [...SENSITIVE_PROBES, ...KEPT_PROBES]) {
     for (const text of [probe, `備註 ${probe} 結束`]) {
       const stored = (await query<{ v: string }>(`SELECT app.b031_mask_text($1) AS v`, [text])).rows[0].v;
-      assert.equal(maskDetailText(text).text, stored, text);
-      if (KEPT_PROBES.includes(probe)) assert.equal(stored, text, `kept: ${text}`);
-      else assert.doesNotMatch(stored, /[0-9]{2}/, `masked: ${text} -> ${stored}`);
+      assert.equal(maskDetailText(text).text, stored, `parity: ${text}`);
+      const normalized = (await query<{ v: string }>(`SELECT app.b031_normalize_text($1) AS v`, [text])).rows[0].v;
+      assert.equal(normalizeDetailText(text), normalized, `normalise parity: ${text}`);
+      if (KEPT_PROBES.includes(probe)) assert.equal(stored, normalized, `kept: ${text}`);
+      else assert.doesNotMatch(stored, /[0-9]{3}/, `masked: ${text} -> ${stored}`);
     }
   }
 });
@@ -468,13 +470,80 @@ test("a failure inside detail capture never rolls back the business write (guard
   assert.equal(await detailCount(), before, "no detail row");
   assert.ok((await query(`SELECT 1 FROM audit_log WHERE table_name = 'org_members' AND new_row->>'title' = 'Guarded write'`)).rowCount === 1, "audit row kept");
 
-  // An existing detail row under the next audit id: ON CONFLICT DO NOTHING keeps the write.
+  // A stale detail row already holds the next audit id (same org, table and row, older time):
+  // ON CONFLICT DO NOTHING keeps the write, and the reader must not attach the stale detail.
+  const member = await memberId(USERS.accountant);
   const next = (await query<{ id: string }>(`SELECT (nextval(pg_get_serial_sequence('public.audit_log', 'id')) + 1)::text AS id`)).rows[0].id;
-  await query(`INSERT INTO app.b031_audit_details (audit_id, org_id, table_name, changes) VALUES ($1, $2, 'org_members', '[{"f":"title","k":"text","b":null,"a":"pre"}]')`, [next, ORG_ID]);
+  await query(
+    `INSERT INTO app.b031_audit_details (audit_id, org_id, table_name, row_id, audit_occurred_at, reason, changes)
+     VALUES ($1, $2, 'org_members', $3, '2020-01-01T00:00:00Z', 'stale-reason', '[{"f":"title","k":"text","b":null,"a":"stale-value"}]')`,
+    [next, ORG_ID, member],
+  );
   await tx(admin.userId, async (client) => {
     await client.query(`UPDATE org_members SET title = 'Conflict write' WHERE org_id = $1 AND user_id = $2`, [ORG_ID, USERS.accountant]);
   }, { orgId: ORG_ID });
   assert.equal((await query<{ id: string }>(`SELECT id::text FROM audit_log WHERE new_row->>'title' = 'Conflict write'`)).rows[0].id, next);
-  assert.equal((await query<{ a: string }>(`SELECT changes->0->>'a' AS a FROM app.b031_audit_details WHERE audit_id = $1`, [next])).rows[0].a, "pre");
+  assert.equal((await query<{ a: string }>(`SELECT changes->0->>'a' AS a FROM app.b031_audit_details WHERE audit_id = $1`, [next])).rows[0].a, "stale-value");
+  assert.equal((await gateway(USERS.admin, ORG_ID, ORG_ID, [next])).length, 0, "stale detail does not match the new event");
+  const history = await loadAuditHistory(admin, "org_members", member);
+  assert.equal(history.entries[0].detail, undefined, "newest event shows no stale detail");
+  assert.equal(JSON.stringify(history).includes("stale-"), false);
   await setFlag(OFF, {});
+});
+
+// ---- Fix round 2 (independent re-review) regressions ----
+
+test("rv2 e2e: every leaking reviewer value is stored and rendered masked; reasons stay readable", async () => {
+  await setFlag(ON);
+  const row = "10000000-0000-4000-8000-00000000abc1";
+  const values = [
+    "卡號 4111   1111   1111   1111",
+    "帳戶 822 - 12 - 345678 - 9",
+    "手機 0912–345–678",
+    "身分證 A–123–456–789",
+    "信箱 ｗａｎｇ＠ｇｍａｉｌ．ｃｏｍ",
+    "信箱 wang@gmail。com",
+    "手機 0912 345 678",
+    "護照 312345678",
+    ...SENSITIVE_PROBES.map((probe) => `備註 ${probe}`),
+  ];
+  for (const value of values) {
+    await query(
+      `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, reason, changed_cols, old_row, new_row)
+       VALUES ($1, $2, 'authenticated', 'leases', $3, 'update', $4, ARRAY['termination_reason'], '{"termination_reason":null}', jsonb_build_object('termination_reason', $4::text))`,
+      [ORG_ID, USERS.admin, row, value],
+    );
+  }
+  const stored = (await query<{ reason: string; a: string }>(
+    `SELECT d.reason, d.changes->0->>'a' AS a FROM app.b031_audit_details d WHERE d.row_id = $1 ORDER BY d.audit_id`, [row],
+  )).rows;
+  assert.equal(stored.length, values.length);
+  for (const [index, entry] of stored.entries()) {
+    assert.doesNotMatch(entry.reason, /[0-9]{3}|gmail|wang/, `stored reason: ${values[index]} -> ${entry.reason}`);
+    assert.equal(entry.a, entry.reason, "value and reason use the same masking");
+    assert.match(entry.reason, /^(卡號|帳戶|手機|身分證|信箱|護照|備註) /, "label text stays readable");
+  }
+  const history = { entries: [] as AuditView[] };
+  let cursor: string | undefined;
+  do {
+    const page = await loadAuditHistory(admin, "leases", row, cursor);
+    history.entries.push(...page.entries);
+    cursor = page.hasMore ? page.entries.at(-1)?.cursor : undefined;
+  } while (cursor);
+  assert.equal(history.entries.filter((entry) => entry.detail).length, values.length);
+  const html = render(history.entries);
+  for (const match of html.match(/(原因：[^<]*|提前結束原因[^<]*)/g) ?? []) {
+    assert.doesNotMatch(match, /[0-9０-９]{3}|gmail|ｇｍａｉｌ|wang/, match);
+  }
+  for (const raw of ["4111", "345678", "0912", "123", "312345678"]) assert.equal(html.includes(raw), false, raw);
+  await setFlag(OFF, {});
+});
+
+test("OFF updates of covered tables open no subtransaction in the capture trigger (N4)", async () => {
+  await setFlag(OFF, {});
+  const source = (await query<{ src: string }>(`SELECT prosrc AS src FROM pg_proc WHERE oid = 'app.b031_capture_audit_detail()'::regprocedure`)).rows[0].src;
+  const flag = source.indexOf("IF NOT app.b031_audit_detail_on(NEW.org_id) THEN RETURN NULL; END IF;");
+  const guard = source.indexOf("EXCEPTION WHEN OTHERS");
+  const block = source.lastIndexOf("BEGIN", guard);
+  assert.ok(flag > 0 && block > flag, "flag check returns before the guarded block opens");
 });

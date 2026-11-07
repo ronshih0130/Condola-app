@@ -5,7 +5,7 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AuditDetailBlock, AuditRows } from "@/components/audit-log";
 import { makeT } from "@/i18n";
-import { detailMoney, foldWidth, maskDetailText, presentDetail, type AuditView } from "./audit-read";
+import { detailMoney, maskDetailText, normalizeDetailText, presentDetail, type AuditView } from "./audit-read";
 import { KEPT_PROBES, SENSITIVE_PROBES } from "./b031-audit-detail-fixture";
 
 (globalThis as { React?: unknown }).React = React;
@@ -114,15 +114,25 @@ test("detail masking covers spaced, dashed, parenthesised and full-width Taiwan 
     for (const text of [probe, `備註 ${probe} 結束`]) {
       const result = maskDetailText(text);
       assert.equal(result.masked, true, text);
-      assert.doesNotMatch(result.text, /[0-9０-９]{2}/, `${text} -> ${result.text}`);
-      assert.equal(result.text.includes("gmail"), false, text);
+      // At most a two-digit fragment (an IBAN country check "GB82") may stay readable.
+      assert.doesNotMatch(result.text, /[0-9]{3}/, `${text} -> ${result.text}`);
+      assert.equal(/gmail|wang/.test(result.text), false, text);
     }
   }
 });
 
-test("reason codes, ordinary words and short numbers are never masked as tokens", () => {
-  for (const probe of KEPT_PROBES) assert.deepEqual(maskDetailText(probe), { text: probe, masked: false }, probe);
-  assert.equal(foldWidth("陳先生（屋主）Ａ１＠"), "陳先生（屋主）A1@");
+test("reason codes, dates, amounts, labels and addresses stay readable (nothing masked)", () => {
+  for (const probe of KEPT_PROBES) {
+    for (const text of [probe, `備註 ${probe} 結束`]) {
+      assert.deepEqual(maskDetailText(text), { text: normalizeDetailText(text), masked: false }, text);
+    }
+  }
+  // Normalisation: NFKC, format/zero-width and combining marks dropped, dash family to "-",
+  // every space kind to one space, "。" to ".", then collapse before any rule runs.
+  assert.equal(normalizeDetailText("\u00a0Ａ１\u200b２–３\u3000\t ４。"), "A12-3 4.");
+  assert.equal(normalizeDetailText("0\u03019"), "09");
+  const long = `${"字".repeat(995)}帳號0912345678`;
+  assert.equal(normalizeDetailText(long), `${"字".repeat(995)}帳號`, "a cut final non-CJK word is discarded, never half shown");
 });
 
 test("reviewer present.ts probe: no raw value survives presentDetail", () => {
@@ -145,7 +155,7 @@ test("reviewer present.ts probe: no raw value survives presentDetail", () => {
     assert.equal(packed.includes(raw), false, raw);
   }
   assert.match(view.reason, /^退押金至 /);
-  assert.deepEqual(view.changes[0].after, { text: "帳戶 ••••••••••" });
+  assert.deepEqual(view.changes[0].after, { text: "帳戶 •••••••••• ••••••••••" });
   assert.deepEqual(view.changes[1].after, { text: "3F ••••••••••" });
   assert.deepEqual(view.changes[3], { fieldKey: "i_audit_d_email", before: { text: "w***@gmail.com" }, after: { text: "••••••••••" } });
   assert.deepEqual(view.changes[4].after, { text: "••••••••••" });

@@ -21,6 +21,9 @@ CREATE TABLE app.b031_audit_details (
   audit_id bigint PRIMARY KEY,
   org_id uuid NOT NULL,
   table_name text NOT NULL CHECK (table_name IN ('leases', 'contacts', 'org_members', 'properties', 'units', 'rooms')),
+  -- Copied from the audit_log row; the reader requires all of them to match.
+  row_id text NOT NULL,
+  audit_occurred_at timestamptz NOT NULL,
   reason text CHECK (reason IS NULL OR length(reason) <= 500),
   changes jsonb NOT NULL CHECK (jsonb_typeof(changes) = 'array' AND jsonb_array_length(changes) BETWEEN 1 AND 40),
   withheld integer NOT NULL DEFAULT 0 CHECK (withheld >= 0),
@@ -50,43 +53,131 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
   )
 $$;
 
--- Width folding: a character whose NFKC form is one ASCII letter, digit, @ or + is
--- replaced by that form (full-width ０-９ Ａ-Ｚ ＠ ＋, circled digits, ...). Other
--- characters, including Chinese punctuation, are kept as written.
-CREATE FUNCTION app.b031_fold_width(p text) RETURNS text
-LANGUAGE sql IMMUTABLE SET search_path = pg_catalog, pg_temp AS $$
-  SELECT CASE WHEN p IS NULL THEN NULL ELSE coalesce((
-    SELECT string_agg(CASE WHEN s.n ~ '^[0-9A-Za-z@+]$' THEN s.n ELSE s.c END, '' ORDER BY s.i)
-      FROM (SELECT t.c, t.i, normalize(t.c, NFKC) AS n
-              FROM regexp_split_to_table(p, '') WITH ORDINALITY AS t(c, i)) s
-  ), '') END
+-- Detail text masking. One specification, implemented identically here (authoritative)
+-- and in maskDetailText (src/server/audit-read.ts, defence in depth):
+--  0. Cap: more than 1000 characters keeps the first 1000 and discards the cut final
+--     non-CJK word, so no partial number or token survives the cut.
+--  1. Normalise: NFKC; remove format/zero-width characters and combining marks; map the
+--     dash/minus family to '-', every space character and control whitespace to ' ',
+--     '。' to '.'; collapse spaces and trim.
+--  2. Any word containing '@', a spaced 'x @ y', and '(at)' / '[at]' forms: masked whole.
+--  3. UUIDs. Token-like runs of [A-Za-z0-9_+/=.-]: 16+ with a letter and a digit;
+--     6+ with 2+ letters and 4+ digits (LINE ids, passports, IBANs); 20+ with 3+
+--     upper- and 3+ lower-case letters (base64/JWT). Snake_case reason codes and
+--     ordinary words have no digit and stay readable.
+--  4. One Latin letter glued to 7+ digits (national ID, ARC, passport).
+--  5. Number scan: digit groups joined by 1-3 separator characters (ASCII punctuation,
+--     space, · ・ 、 ‧) form one number, optionally led by '+' or '('. A plain-space
+--     join needs both groups of at most 4 digits, unless the number starts with 0 or
+--     '+'. A number of 8+ digits is masked. A number that starts with an ISO-like date
+--     (YYYY-MM-DD, YYYY/MM/DD, optional HH:MM[:SS]) or a thousands-grouped amount
+--     (25,000 / 1,250,000.50) keeps that date or amount as written, and a join never
+--     continues into a following date.
+CREATE FUNCTION app.b031_normalize_text(p text) RETURNS text
+LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+  t text;
+BEGIN
+  IF p IS NULL THEN RETURN NULL; END IF;
+  t := p;
+  IF char_length(t) > 1000 THEN
+    t := regexp_replace(left(t, 1000), '[^ \t\n\u3000\u3400-\u9FFF\uF900-\uFAFF]+$', '');
+  END IF;
+  t := normalize(t, NFKC);
+  t := regexp_replace(t, '[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]', '', 'g');
+  t := regexp_replace(t, '[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]', '-', 'g');
+  t := regexp_replace(t, '[\u0009-\u000D\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]', ' ', 'g');
+  t := regexp_replace(t, '[\u3002\uFF0E\uFF61]', '.', 'g');
+  t := regexp_replace(t, ' {2,}', ' ', 'g');
+  RETURN btrim(t, ' ');
+END
 $$;
 
--- Free text, after width folding. Separators S = space, ideographic space, - . ( )
--- and their full-width forms; digit groups may be joined by up to two of them.
---   emails; UUIDs; national ID / resident certificate numbers (separators allowed);
---   token-like runs: 16+ of [A-Za-z0-9_+/=.-] containing both a letter and a digit
---   (snake_case reason codes and ordinary words have no digit and are kept);
---   any 10+ digits joined by separators (bank accounts, cards); then Taiwan phone
---   numbers (+886 or a leading 0, 8+ digits). Mirrored by maskDetailText in audit-read.ts.
 CREATE FUNCTION app.b031_mask_text(p text) RETURNS text
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, pg_temp AS $$
 DECLARE
   m constant text := '••••••••••';
-  sep constant text := '[- ().．（）－　]';
   tok constant text := '[A-Za-z0-9_+/=.-]';
+  edge constant text := '(^|[^A-Za-z0-9_+/=.-])';
+  seps constant text := '!"#$%&''()*+,-./:;<=>?@[\]^_`{|}~·・、‧ ';
+  digits constant text := '0123456789';
+  date_re constant text := '^((19|20)[0-9]{2}[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12][0-9]|3[01])( [0-9]{1,2}:[0-9]{2}(:[0-9]{2})?)?)(?![0-9]|[-/.][0-9])';
+  amount_re constant text := '^([0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?)(?![0-9]|,[0-9])';
   t text;
+  c text[];
+  n integer;
+  i integer;
+  j integer;
+  k integer;
+  sepn integer;
+  ns boolean;
+  glen integer;
+  prev integer;
+  total integer;
+  zero boolean;
+  plus boolean;
+  kept text;
+  out text[] := '{}';
 BEGIN
   IF p IS NULL THEN RETURN NULL; END IF;
-  t := app.b031_fold_width(p);
-  t := regexp_replace(t, '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', m, 'g');
+  t := app.b031_normalize_text(p);
+  t := regexp_replace(t, '[^ @]+ @ [^ @]+', m, 'g');
+  t := regexp_replace(t, '[^ @]*@[^ ]*', m, 'g');
+  t := regexp_replace(t, '[^ ]*[\[(]([Aa][Tt])[\])][^ ]*', m, 'g');
   t := regexp_replace(t, '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}', m, 'g');
-  t := regexp_replace(t, '(?<![A-Za-z])[A-Za-z]' || sep || '?[1289](' || sep || '?[0-9]){8}', m, 'g');
-  t := regexp_replace(t, '(?<![A-Za-z])[A-Za-z]{2}(' || sep || '?[0-9]){8}', m, 'g');
-  t := regexp_replace(t, '(^|[^A-Za-z0-9_+/=.-])(?=' || tok || '*[0-9])(?=' || tok || '*[A-Za-z])' || tok || '{16,}(?!' || tok || ')', '\1' || m, 'g');
-  t := regexp_replace(t, '(?<![0-9])[+(（]?[0-9](' || sep || '{0,2}[0-9]){9,}(?![0-9])', m, 'g');
-  t := regexp_replace(t, '(\+' || sep || '?886|(?<![0-9A-Za-z])\(?0)' || sep || '{0,2}[0-9](' || sep || '{0,2}[0-9]){6,9}(?![0-9])', m, 'g');
-  RETURN t;
+  t := regexp_replace(t, edge || '(?=' || tok || '*[0-9])(?=' || tok || '*[A-Za-z])' || tok || '{16,}(?!' || tok || ')', '\1' || m, 'g');
+  t := regexp_replace(t, edge || '(?=' || tok || '*[A-Za-z]' || tok || '*[A-Za-z])(?=' || tok || '*[0-9]' || tok || '*[0-9]' || tok || '*[0-9]' || tok || '*[0-9])' || tok || '{6,}(?!' || tok || ')', '\1' || m, 'g');
+  t := regexp_replace(t, edge || '(?=' || tok || '*[A-Z]' || tok || '*[A-Z]' || tok || '*[A-Z])(?=' || tok || '*[a-z]' || tok || '*[a-z]' || tok || '*[a-z])' || tok || '{20,}(?!' || tok || ')', '\1' || m, 'g');
+  t := regexp_replace(t, '[A-Za-z][0-9]{7,}', m, 'g');
+
+  c := regexp_split_to_array(t, '');
+  n := coalesce(array_length(c, 1), 0);
+  i := 1;
+  WHILE i <= n LOOP
+    IF position(c[i] IN digits) > 0 OR (c[i] IN ('+', '(') AND i < n AND position(c[i + 1] IN digits) > 0) THEN
+      plus := c[i] = '+';
+      j := CASE WHEN c[i] IN ('+', '(') THEN i + 1 ELSE i END;
+      kept := NULL;
+      IF j = i THEN
+        kept := substring(array_to_string(c[i:n], '') FROM date_re);
+        IF kept IS NULL THEN kept := substring(array_to_string(c[i:n], '') FROM amount_re); END IF;
+      END IF;
+      IF kept IS NOT NULL THEN
+        out := out || kept;
+        i := i + char_length(kept);
+        CONTINUE;
+      END IF;
+      zero := c[j] = '0';
+      glen := 0;
+      WHILE j <= n AND position(c[j] IN digits) > 0 LOOP glen := glen + 1; j := j + 1; END LOOP;
+      total := glen;
+      prev := glen;
+      LOOP
+        k := j;
+        sepn := 0;
+        ns := false;
+        WHILE k <= n AND sepn < 3 AND position(c[k] IN seps) > 0 LOOP
+          IF c[k] <> ' ' THEN ns := true; END IF;
+          sepn := sepn + 1;
+          k := k + 1;
+        END LOOP;
+        EXIT WHEN sepn = 0 OR k > n OR position(c[k] IN digits) = 0;
+        EXIT WHEN substring(array_to_string(c[k:n], '') FROM date_re) IS NOT NULL;
+        glen := 0;
+        WHILE k + glen <= n AND position(c[k + glen] IN digits) > 0 LOOP glen := glen + 1; END LOOP;
+        EXIT WHEN NOT ns AND NOT (prev <= 4 AND glen <= 4) AND NOT zero AND NOT plus;
+        total := total + glen;
+        prev := glen;
+        j := k + glen;
+      END LOOP;
+      IF total >= 8 THEN out := out || m; ELSE out := out || array_to_string(c[i:j - 1], ''); END IF;
+      i := j;
+    ELSE
+      out := out || c[i];
+      i := i + 1;
+    END IF;
+  END LOOP;
+  RETURN array_to_string(out, '');
 END
 $$;
 
@@ -112,12 +203,12 @@ BEGIN
     WHEN 'code' THEN
       RETURN CASE WHEN v ~ '^[a-z_]{1,40}$' THEN v ELSE '••••••••••' END;
     WHEN 'email' THEN
-      v := app.b031_fold_width(v);
+      v := app.b031_normalize_text(v);
       at_position := strpos(v, '@');
       IF at_position < 2 THEN RETURN '••••••••••'; END IF;
       RETURN left(v, 1) || '***@' || left(app.b031_mask_text(substr(v, at_position + 1)), 120);
     WHEN 'phone' THEN
-      v := regexp_replace(app.b031_fold_width(v), '[^0-9+]', '', 'g');
+      v := regexp_replace(app.b031_normalize_text(v), '[^0-9+]', '', 'g');
       IF length(v) < 6 THEN RETURN '••••••••••'; END IF;
       IF v ~ '^\+886[0-9]+$' THEN
         RETURN '+886' || repeat('*', length(v) - 6) || right(v, 2);
@@ -186,11 +277,12 @@ DECLARE
   changes jsonb := '[]'::jsonb;
   withheld integer := 0;
 BEGIN
+  IF NEW.old_row IS NULL OR NEW.new_row IS NULL OR NEW.changed_cols IS NULL THEN RETURN NULL; END IF;
+  -- OFF returns here, before the guarded block, so OFF writes open no subtransaction.
+  IF NOT app.b031_audit_detail_on(NEW.org_id) THEN RETURN NULL; END IF;
   -- Detail capture must never roll back the audited business write: any error
   -- skips the detail row only. The warning carries the SQLSTATE, never values.
   BEGIN
-    IF NEW.old_row IS NULL OR NEW.new_row IS NULL OR NEW.changed_cols IS NULL THEN RETURN NULL; END IF;
-    IF NOT app.b031_audit_detail_on(NEW.org_id) THEN RETURN NULL; END IF;
     FOREACH col IN ARRAY NEW.changed_cols LOOP
       CONTINUE WHEN col IN ('updated_at', 'created_at');
       kind := app.b031_audit_detail_kind(NEW.table_name, col);
@@ -222,8 +314,11 @@ BEGIN
       changes := changes || jsonb_build_array(entry);
     END LOOP;
     IF jsonb_array_length(changes) = 0 THEN RETURN NULL; END IF;
-    INSERT INTO app.b031_audit_details (audit_id, org_id, table_name, reason, changes, withheld)
-    VALUES (NEW.id, NEW.org_id, NEW.table_name, left(app.b031_mask_text(nullif(btrim(NEW.reason), '')), 500), changes, withheld)
+    -- A pre-existing row under this id is left alone; it cannot match this event's
+    -- org/table/row/time in the reader, so no older detail is attached to a new event.
+    INSERT INTO app.b031_audit_details (audit_id, org_id, table_name, row_id, audit_occurred_at, reason, changes, withheld)
+    VALUES (NEW.id, NEW.org_id, NEW.table_name, NEW.row_id, NEW.occurred_at,
+            left(app.b031_mask_text(nullif(btrim(NEW.reason), '')), 500), changes, withheld)
     ON CONFLICT (audit_id) DO NOTHING;
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'b031 audit detail skipped: %', SQLSTATE;
@@ -253,12 +348,13 @@ BEGIN
     SELECT d.audit_id::text, d.reason, d.changes, d.withheld
       FROM app.b031_audit_details d
       JOIN public.audit_log a ON a.id = d.audit_id AND a.org_id = d.org_id AND a.table_name = d.table_name
+                             AND a.row_id = d.row_id AND a.occurred_at = d.audit_occurred_at
      WHERE d.org_id = p_org AND d.audit_id = ANY (p_ids)
      ORDER BY d.audit_id;
 END
 $$;
 
-REVOKE ALL ON FUNCTION app.b031_audit_detail_on(uuid), app.b031_fold_width(text), app.b031_mask_text(text), app.b031_mask_value(text, jsonb),
+REVOKE ALL ON FUNCTION app.b031_audit_detail_on(uuid), app.b031_normalize_text(text), app.b031_mask_text(text), app.b031_mask_value(text, jsonb),
   app.b031_audit_detail_kind(text, text), app.b031_capture_audit_detail(), app.b031_audit_detail_rows(uuid, bigint[])
   FROM PUBLIC, anon, authenticated, service_role;
 -- tx() reads as authenticated with request.jwt.claim.sub and app.active_org_id set.

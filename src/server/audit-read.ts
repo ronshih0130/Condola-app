@@ -286,40 +286,102 @@ export function maskAuditText(value: string) {
 }
 
 /**
- * B-031 width folding, mirroring app.b031_fold_width: a character whose NFKC form is
- * one ASCII letter, digit, @ or + becomes that form. Chinese punctuation is kept.
+ * B-031 AUDIT_DETAIL text masking. Mirrors app.b031_normalize_text / app.b031_mask_text
+ * step for step (the SQL write side is authoritative; this is defence in depth). The
+ * specification is in the migration 20261107130000_b031_audit_detail.sql. Characters are
+ * counted as code points on both sides. Used only for detail values; the OFF page keeps
+ * maskAuditText unchanged.
  */
-export function foldWidth(value: string) {
-  return Array.from(value, (char) => {
-    const folded = char.normalize("NFKC");
-    return /^[0-9A-Za-z@+]$/.test(folded) ? folded : char;
-  }).join("");
+const CAP_TAIL = /[^ \t\n\u3000\u3400-\u9FFF\uF900-\uFAFF]+$/;
+const FORMAT_CHARS = /[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/g;
+const DASHES = /[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g;
+const SPACES = /[\u0009-\u000D\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/g;
+const DOTS = /[\u3002\uFF0E\uFF61]/g;
+
+export function normalizeDetailText(value: string) {
+  let text = value;
+  const points = Array.from(text);
+  if (points.length > 1000) text = points.slice(0, 1000).join("").replace(CAP_TAIL, "");
+  text = text.normalize("NFKC");
+  text = text.replace(FORMAT_CHARS, "").replace(DASHES, "-").replace(SPACES, " ").replace(DOTS, ".");
+  return text.replace(/ {2,}/g, " ").replace(/^ +| +$/g, "");
 }
 
-const SEP = "[- ().．（）－　]";
 const TOK = "[A-Za-z0-9_+/=.-]";
+const EDGE = "(^|[^A-Za-z0-9_+/=.-])";
 const DETAIL_RULES: [RegExp, string][] = [
-  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, MASK],
+  [/[^ @]+ @ [^ @]+/g, MASK],
+  [/[^ @]*@[^ ]*/g, MASK],
+  [/[^ ]*[[(]([Aa][Tt])[\])][^ ]*/g, MASK],
   [/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/g, MASK],
-  [new RegExp(`(?<![A-Za-z])[A-Za-z]${SEP}?[1289](${SEP}?[0-9]){8}`, "g"), MASK],
-  [new RegExp(`(?<![A-Za-z])[A-Za-z]{2}(${SEP}?[0-9]){8}`, "g"), MASK],
-  [new RegExp(`(^|[^A-Za-z0-9_+/=.-])(?=${TOK}*[0-9])(?=${TOK}*[A-Za-z])${TOK}{16,}(?!${TOK})`, "g"), `$1${MASK}`],
-  [new RegExp(`(?<![0-9])[+(（]?[0-9](${SEP}{0,2}[0-9]){9,}(?![0-9])`, "g"), MASK],
-  [new RegExp(`(\\+${SEP}?886|(?<![0-9A-Za-z])\\(?0)${SEP}{0,2}[0-9](${SEP}{0,2}[0-9]){6,9}(?![0-9])`, "g"), MASK],
+  [new RegExp(`${EDGE}(?=${TOK}*[0-9])(?=${TOK}*[A-Za-z])${TOK}{16,}(?!${TOK})`, "g"), `$1${MASK}`],
+  [new RegExp(`${EDGE}(?=${TOK}*[A-Za-z]${TOK}*[A-Za-z])(?=${TOK}*[0-9]${TOK}*[0-9]${TOK}*[0-9]${TOK}*[0-9])${TOK}{6,}(?!${TOK})`, "g"), `$1${MASK}`],
+  [new RegExp(`${EDGE}(?=${TOK}*[A-Z]${TOK}*[A-Z]${TOK}*[A-Z])(?=${TOK}*[a-z]${TOK}*[a-z]${TOK}*[a-z])${TOK}{20,}(?!${TOK})`, "g"), `$1${MASK}`],
+  [/[A-Za-z][0-9]{7,}/g, MASK],
 ];
+const SEPS = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~·・、‧ ";
+const DATE_AT = /^((19|20)[0-9]{2}[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12][0-9]|3[01])( [0-9]{1,2}:[0-9]{2}(:[0-9]{2})?)?)(?![0-9]|[-/.][0-9])/;
+const AMOUNT_AT = /^([0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?)(?![0-9]|,[0-9])/;
+const isDigit = (char: string | undefined) => char !== undefined && char >= "0" && char <= "9" && char.length === 1;
 
-/**
- * Detail text masking: the same rules, in the same order, as app.b031_mask_text
- * (the write side is authoritative; this is defence in depth), then maskAuditText.
- * Snake_case reason codes and ordinary words contain no digit and are never masked
- * as tokens. Used only for AUDIT_DETAIL values; the OFF page keeps maskAuditText.
- */
+/** Digit groups joined by 1-3 separators are one number; 8+ digits are masked. Dates and amounts are kept. */
+function maskNumbers(text: string) {
+  const c = Array.from(text);
+  const n = c.length;
+  const out: string[] = [];
+  let i = 0;
+  while (i < n) {
+    if (isDigit(c[i]) || ((c[i] === "+" || c[i] === "(") && isDigit(c[i + 1]))) {
+      const plus = c[i] === "+";
+      let j = c[i] === "+" || c[i] === "(" ? i + 1 : i;
+      if (j === i) {
+        const rest = c.slice(i).join("");
+        const kept = DATE_AT.exec(rest)?.[1] ?? AMOUNT_AT.exec(rest)?.[1];
+        if (kept) {
+          out.push(kept);
+          i += Array.from(kept).length;
+          continue;
+        }
+      }
+      const zero = c[j] === "0";
+      let glen = 0;
+      while (j < n && isDigit(c[j])) { glen += 1; j += 1; }
+      let total = glen;
+      let prev = glen;
+      for (;;) {
+        let k = j;
+        let sepn = 0;
+        let ns = false;
+        while (k < n && sepn < 3 && SEPS.includes(c[k])) {
+          if (c[k] !== " ") ns = true;
+          sepn += 1;
+          k += 1;
+        }
+        if (sepn === 0 || k >= n || !isDigit(c[k])) break;
+        if (DATE_AT.test(c.slice(k).join(""))) break;
+        glen = 0;
+        while (k + glen < n && isDigit(c[k + glen])) glen += 1;
+        if (!ns && !(prev <= 4 && glen <= 4) && !zero && !plus) break;
+        total += glen;
+        prev = glen;
+        j = k + glen;
+      }
+      out.push(total >= 8 ? MASK : c.slice(i, j).join(""));
+      i = j;
+    } else {
+      out.push(c[i]);
+      i += 1;
+    }
+  }
+  return out.join("");
+}
+
 export function maskDetailText(value: string) {
-  const original = foldWidth(value);
+  const original = normalizeDetailText(value);
   let text = original;
   for (const [pattern, replacement] of DETAIL_RULES) text = text.replace(pattern, replacement);
-  const rest = maskAuditText(text);
-  return { text: rest.text, masked: rest.masked || text !== original };
+  text = maskNumbers(text);
+  return { text, masked: text !== original };
 }
 
 export function encodeCursor(at: string, id: string) {
