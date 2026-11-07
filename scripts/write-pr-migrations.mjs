@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107133000_b031_upload_recovery.sql": {
+    addOnly: false,
+    reason: "Adds private upload batch/item tables with NOT NULL columns, CHECK and unique constraints, RLS, restricted SECURITY DEFINER gateways and a default-OFF upload recovery flag. Old code does not read or write them.",
+  },
   "supabase/migrations/20261107120000_b028_repair_context_integrity.sql": {
     addOnly: false,
     reason: "Drops and recreates the four B-013 session mutators (submit/decide/emergency/appointment) with (p_live, p_env) after p_org; bodies unchanged apart from a private actor helper binding the selected environment/live-org tuple and request principal, and a private photo helper requiring real owner-visible same-org/same-ticket photos. Adds a validated composite appointment->vendor-job (org_id, ticket_id, id) foreign key. Old callers of the dropped signatures fail. Same service_role grants; rollout defaults OFF.",

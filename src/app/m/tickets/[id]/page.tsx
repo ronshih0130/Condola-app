@@ -14,6 +14,7 @@ import { ticketDetail } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 import { loadVendorDispatch } from "@/server/vendor-repair";
+import { ticketPhotoRecovery } from "@/server/upload-recovery";
 import { ApprovalPanel } from "./approval-panel";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,7 @@ export default async function TicketDetailPage({
   const host = headerList.get("x-forwarded-host") || headerList.get("host") || "";
   const proto = headerList.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   const dispatch = await loadVendorDispatch(session, id, host ? `${proto}://${host}` : "");
+  const uploadRecovery = canWrite ? await ticketPhotoRecovery(session, id) : null;
   const ticket = detail.ticket;
   const currency = ticket.currency || ticket.property_currency;
   const readonly = t("i_repair_readonly_role");
@@ -167,6 +169,7 @@ export default async function TicketDetailPage({
             hiddenPhotoCount={detail.hiddenPhotoCount}
             allowInternal={canWrite}
             returnTo="staff"
+            uploadRecovery={uploadRecovery}
           />
         </div>
       </div>

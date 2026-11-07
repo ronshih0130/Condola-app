@@ -143,6 +143,15 @@ export async function inspectRepairObject(path: string) {
   return ensureJpegObject(path);
 }
 
+/** B-031 upload recovery: stored-object probe and magic bytes, same requests as confirm. */
+export async function repairObjectInfo(path: string) {
+  return objectInfo(path);
+}
+
+export async function repairObjectHeader(path: string) {
+  return readObjectHeader(path);
+}
+
 /** First bytes of the object. A range request plus cancel avoids reading the file. */
 async function readObjectHeader(path: string) {
   const cfg = storageConfig();
