@@ -6,6 +6,7 @@ import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { svc } from "./db";
 import { FlowError } from "./errors";
+import { produceNotificationEvent } from "./notification-event-producers";
 import { deleteHandoverObject, handoverBytes, handoverMeta, readHandoverObject, sealHandoverObject } from "./handover-storage";
 import type { Session } from "./types";
 
@@ -83,6 +84,7 @@ export async function publishHandover(session: Session, leaseId: string, phase: 
     if ((previous?.id ?? null) !== expectedVersion) throw new FlowError("errors.generic");
     const version = await createVersion(client, session, leaseId, recordId, previous, note);
     await writeAudit(session.orgId, session.userId, "handover_version_published", { lease_id: leaseId, record_id: recordId, version_id: version.id, phase }, client);
+    await produceNotificationEvent(client, session.orgId, "handover_version", version.id);
     await recheckSessionDeadline(client, session);
     return version;
   }));

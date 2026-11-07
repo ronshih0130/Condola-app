@@ -1,4 +1,5 @@
 import type { Client } from "pg";
+import { produceNotificationEvent } from "./notification-event-producers";
 import type { Session } from "./types";
 import { recordUsage, usageDedupeKey } from './usage-events';
 
@@ -96,4 +97,11 @@ export async function finalizePaymentCenter(client:Client,ticket:Ticket|null,sou
     });
   }
   await leave(client,state);
+}
+
+/** B-028 package 2: the committed payment result (confirmed/rejected/reversed) as a
+ * durable notification event for the payer, on the same financial transaction.
+ * Independent of the center ticket; OFF issues one read-only probe and writes nothing. */
+export async function producePaymentResultEvent(client:Client,session:Session,paymentId:string) {
+  return produceNotificationEvent(client,session.orgId,"payment",paymentId);
 }

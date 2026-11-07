@@ -6,6 +6,7 @@ import { maybe, one, query, tx, withClient } from "./db";
 import { FlowError, isDbTimeout } from "./errors";
 import { sameId } from "@/lib/portal-page";
 import { lockActive, nextFailure } from "./lockout";
+import { produceNotificationEvent } from "./notification-event-producers";
 import { publicSiteOrigin } from "./signup-gotrue";
 import { assertStaff, type Session } from "./types";
 
@@ -411,6 +412,7 @@ export async function issuePortalInvite(
           ],
         );
         await savePortalInviteSecret(client, row.id, token);
+        await produceNotificationEvent(client, session.orgId, "invitation", row.id);
         return {
           activated: false as const,
           reused: false as const,

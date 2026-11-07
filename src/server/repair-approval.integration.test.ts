@@ -13,6 +13,8 @@ let db: Client;
 let property: string, ticket: string, otherTicket: string, org2Ticket: string;
 let currency: string, minorUnit: number;
 let sessions: Record<string, string>;
+// B-028 package 4: each session id maps to its principal (svc() sets request.jwt.claim.sub).
+let users: Record<string, string>;
 const tables = [
   "b013_estimate_heads", "b013_estimate_versions", "b013_estimate_decisions",
   "b013_repair_emergencies", "b013_repair_appointments",
@@ -48,13 +50,15 @@ async function seed() {
   }
 }
 // Each test rolls back its history. Never disable triggers or purge immutable rows.
-async function asRole(sql: string, values: unknown[] = [], role = "service_role") {
+async function asRole(sql: string, values: unknown[] = [], role = "service_role", sub?: string | null) {
   assert.ok(["service_role", "anon", "authenticated"].includes(role));
   await db.query("SAVEPOINT b013_call");
   try {
+    if (sub !== undefined) await db.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [sub ?? ""]);
     await db.query(`SET LOCAL ROLE ${role}`);
     const result = await db.query(sql, values);
     await db.query("RESET ROLE");
+    if (sub !== undefined) await db.query("SELECT set_config('request.jwt.claim.sub','',true)");
     await db.query("SET CONSTRAINTS ALL IMMEDIATE");
     await db.query("SET CONSTRAINTS ALL DEFERRED");
     await db.query("RELEASE SAVEPOINT b013_call");
@@ -106,24 +110,35 @@ async function makeTicket(org: string, propertyId: string) {
   assert.equal(inserted.rowCount, 1, "seed must contain a maintenance ticket");
   return id;
 }
+// B-028 package 4: a real owner-visible ticket photo (attachment + private-bucket file).
+async function photo(ticketId = ticket, org = ORG_ID) {
+  const file = randomUUID(), attachment = randomUUID();
+  await db.query(`INSERT INTO public.files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,uploaded_by)
+    VALUES($1::uuid,$2::uuid,'ticket-photos-private','org/'||$2::uuid::text||'/tickets/'||$3::uuid::text||'/'||$1::uuid::text||'.jpg','fixture.jpg','image/jpeg',1024,$4)`,
+  [file, org, ticketId, USERS.admin]);
+  await db.query(`INSERT INTO public.ticket_attachments(id,org_id,ticket_id,file_id) VALUES($1,$2,$3,$4)`,
+    [attachment, org, ticketId, file]);
+  return attachment;
+}
 async function submit(options: {
   amount?: string; request?: string; expected?: string | null; ticketId?: string;
-  session?: string; org?: string; digest?: Buffer; currency?: string; scale?: number;
+  session?: string; org?: string; live?: string; digest?: Buffer; currency?: string; scale?: number;
 } = {}): Promise<Result> {
   const args = [
     options.ticketId ?? ticket, options.expected ?? null, options.amount ?? "500001",
     options.currency ?? currency, options.scale ?? minorUnit, "Replace damaged pipe", [],
   ];
+  const session = options.session ?? sessions.manager;
   const result = await asRole(`SELECT app.b013_submit_estimate(
-    $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::bigint,$7::text,$8::smallint,$9::text,$10::jsonb,$11::bytea) result`,
-  [options.org ?? ORG_ID, options.session ?? sessions.manager, options.request ?? randomUUID(),
-    ...args.slice(0, 6), JSON.stringify(args[6]), options.digest ?? hash(args)]);
+    $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::uuid,$7::uuid,$8::bigint,$9::text,$10::smallint,$11::text,$12::jsonb,$13::bytea) result`,
+  [options.org ?? ORG_ID, options.live ?? options.org ?? ORG_ID, "live", session, options.request ?? randomUUID(),
+    ...args.slice(0, 6), JSON.stringify(args[6]), options.digest ?? hash(args)], "service_role", users[session]);
   return result.rows[0].result;
 }
 async function decide(version: string, session = sessions.owner, request = randomUUID()): Promise<Result> {
   const result = await asRole(`SELECT app.b013_decide_estimate(
-    $1::uuid,$2::uuid,$3::uuid,$4::uuid,'approved',NULL,$5::bytea) result`,
-  [ORG_ID, session, request, version, hash([version, "approved", null])]);
+    $1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,'approved',NULL,$5::bytea) result`,
+  [ORG_ID, session, request, version, hash([version, "approved", null])], "service_role", users[session]);
   return result.rows[0].result;
 }
 async function pending() {
@@ -133,11 +148,12 @@ async function pending() {
   assert.ok(result.version_id);
   return result.version_id;
 }
-async function emergency(version: string, session: string, photos: unknown[] = [{ id: "fixture-photo" }]): Promise<Result> {
+async function emergency(version: string, session: string, refs?: unknown[]): Promise<Result> {
+  const photos = refs ?? [{ id: await photo() }];
   const args = [version, "water", "Synthetic emergency reason", photos];
   const result = await asRole(`SELECT app.b013_authorize_emergency(
-    $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::text,$6::text,$7::jsonb,$8::bytea) result`,
-  [ORG_ID, session, randomUUID(), ...args.slice(0, 3), JSON.stringify(photos), hash(args)]);
+    $1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,$5::text,$6::text,$7::jsonb,$8::bytea) result`,
+  [ORG_ID, session, randomUUID(), ...args.slice(0, 3), JSON.stringify(photos), hash(args)], "service_role", users[session]);
   return result.rows[0].result;
 }
 async function dispatch(version: string, org = ORG_ID): Promise<boolean> {
@@ -184,8 +200,10 @@ test.beforeEach(async () => {
   assert.ok(otherProperty, "seed must contain an ORG2 property");
   org2Ticket = await makeTicket(ORG2_ID, otherProperty.id);
   sessions = {};
+  users = {};
   for (const name of ["admin", "manager", "owner", "coastAdmin"] as const) {
     sessions[name] = randomUUID();
+    users[sessions[name]] = USERS[name];
     await db.query(`INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at)
       VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`,
     [sessions[name], USERS[name], randomBytes(32).toString("hex")]);
@@ -388,9 +406,9 @@ test("vendor_rejected_appointment_keeps_ticket_status_and_checks_job_ticket", as
   const good = await job(ticket), wrong = await job(otherTicket);
   async function appointment(jobId: string): Promise<Result> {
     return (await asRole(`SELECT app.b013_record_appointment(
-      $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'vendor_rejected',NULL,NULL,NULL,NULL,$6::bytea,'Unavailable') result`,
-    [ORG_ID, sessions.manager, randomUUID(), version, jobId, hash([version, jobId, "vendor_rejected"])]))
-      .rows[0].result;
+      $1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,$5::uuid,'vendor_rejected',NULL,NULL,NULL,NULL,$6::bytea,'Unavailable') result`,
+    [ORG_ID, sessions.manager, randomUUID(), version, jobId, hash([version, jobId, "vendor_rejected"])],
+    "service_role", users[sessions.manager])).rows[0].result;
   }
   assert.equal((await appointment(good)).status, "rejected_disabled");
   assert.equal((await db.query("SELECT count(*)::int n FROM app.b013_repair_appointments")).rows[0].n, 0);
@@ -498,11 +516,12 @@ test("company confirmation stays staff-only and rejection reasons are checked by
   for (const reason of ["x", "x".repeat(4000)]) {
     assert.equal((await vendorAppointment(f, { reason })).status, "recorded");
   }
-  const sql = `SELECT app.b013_record_appointment($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,
+  const sql = `SELECT app.b013_record_appointment($1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,$5::uuid,
     'company_confirmed',NULL,NULL,'2026-11-06T10:00:00Z','2026-11-06T11:00:00Z',$6::bytea) result`;
   const args = [ORG_ID, sessions.manager, randomUUID(), f.version, f.jobId, hash("confirmation")];
-  assert.equal((await asRole(sql, args)).rows[0].result.status, "recorded");
+  assert.equal((await asRole(sql, args, "service_role", users[sessions.manager])).rows[0].result.status, "recorded");
   for (const session of [sessions.owner, null]) {
-    await assert.rejects(asRole(sql, [ORG_ID, session, randomUUID(), f.version, f.jobId, hash("denied")]), { code: "42501" });
+    await assert.rejects(asRole(sql, [ORG_ID, session, randomUUID(), f.version, f.jobId, hash("denied")],
+      "service_role", session ? users[session] : null), { code: "42501" });
   }
 });

@@ -1,5 +1,6 @@
 import { svc } from "./db";
 import { captureScheduledReminders, type LocalCapture } from "./local-reminder-capture";
+import { produceNotificationEvent } from "./notification-event-producers";
 
 /** One injected instant is shared by discovery and all local event decisions.
  * This path never invokes a delivery provider. */
@@ -19,7 +20,11 @@ export async function runLocalRentReminders(at = new Date(), capture?: LocalCapt
   let queued=0, failed=0;
   for (const item of candidates) {
     try {
-      const result=await svc(null,async (c) => (await c.query<{id:string|null}>(`SELECT app.b010_schedule_rent($1,$2,$3)::text AS id`,[item.org_id,item.invoice_id,at.toISOString()])).rows[0].id);
+      const result=await svc(null,async (c) => {
+        const id=(await c.query<{id:string|null}>(`SELECT app.b010_schedule_rent($1,$2,$3)::text AS id`,[item.org_id,item.invoice_id,at.toISOString()])).rows[0].id;
+        if (id) await produceNotificationEvent(c,item.org_id,"b010_source_event",id);
+        return id;
+      });
       if (result) queued++;
     } catch { failed++; }
   }

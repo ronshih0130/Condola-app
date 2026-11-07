@@ -1,0 +1,6 @@
+# B-028 package 2 template capture: handover (zh-TW)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[handover_published -> tenant]
+Subject: 點交紀錄
+張雅文，松信住宅管理：入住點交已發布第 1 版，請至租客頁查看並回覆。

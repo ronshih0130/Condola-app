@@ -81,3 +81,135 @@ rewired in this package (their OFF paths stay byte-identical); LINE (B-033) cons
 token rejected; failure → retry; completed recipients never repeated); status rendering distinct with no
 delivered/sent claim; OFF matrix (absent/false/malformed global, missing allowlist, org false) ⇒ zero rows; cross-org
 denial; privilege catalog.
+
+## Package 2 — Event producers and template captures (Session 2, Claude L2, local only)
+
+Branch `feat/b-028-event-producers`, stacked on package 1. Flag `notification_events_v2` (platform setting
+`{"enabled":false,"allowed_org_ids":[]}` + `ops/flags.yaml`, default OFF; strict `enabled === true`, allowlist array
+containing the org, and org `feature_flags.notification_events_v2 === true`; missing/malformed is OFF).
+
+**Model (additive migration `20261107080000_b028_notification_event_producers.sql`).** Private, RLS-enabled, REVOKE ALL,
+statement-level immutable `app.b028_notification_events` (family, kind, `source_table/source_id` = versioned aggregate,
+`source_version`, `offset_key`, `source_row_table/source_row_id` = exact committed row, `template_version`, template
+`vars`) unique on `(org, source, version, offset)`, and `app.b028_notification_event_recipients` (persona
+staff/tenant/owner, `recipient_key`, composite `(org_id, contact_id|member_id)` FKs) unique on
+`(org, source, version, recipient, offset)`. Service-only SECURITY DEFINER gateways (search_path
+`pg_catalog,public,app,pg_temp`, EXECUTE only to `service_role`): `app.b028_produce_event(org, source_kind, source_row)`
+derives family/kind/version/offset/recipients from rows of that org only (returns NULL — no effect — when OFF, for a
+pinned different org, or for an ineligible/foreign source; a replay returns the existing event with no new rows), and
+writes one package-1 attempt per recipient through `app.b028_attempt_insert` (named outside the `b028_delivery_*` prefix so the package-1 privilege
+catalog test, which counts that prefix, passes unchanged) — the single internal, ungranted row
+write that `app.b028_delivery_enqueue` now also calls (redefined by CREATE OR REPLACE with its package-1 body unchanged
+apart from that call, NOWAIT admission first) — only when `notification_delivery_v2` is also ON and the family is not
+bill. **Producer admission is weaker than enqueue's and the fence moves to claim time (review r2 MAJOR):** the
+producer reads the delivery flag without locks, so a transaction that read ON may commit its attempt after OFF
+committed. Such an attempt stays inert while OFF (`b028_delivery_claim`/`b028_delivery_status` admission return
+nothing). Re-ON cannot dispatch it: triggers on `platform_settings` (key `notification_delivery_v2`) and
+`organizations.feature_flags` (the org trigger reads the settings row `FOR SHARE`, so a concurrent global/allowlist
+change cannot hide the transition; it fires only when the org's delivery key changes) append the org to private `app.b028_delivery_on_transitions` only when its *effective*
+control turns OFF→ON (nothing is written while it stays OFF), and `b028_delivery_claim` (redefined; identical apart
+from one sweep) first retires every queued or lease-expired `b028_event` attempt whose producer transaction started
+(event `admitted_at` = `now()`, never later than the snapshot that read the control — covers REPEATABLE READ callers)
+before the org's latest ON transition as terminal `failed`/`stale_admission`. Conservative by design: producer attempts still queued across any
+OFF period are retired, never sent late; package-1 attempts of other source kinds are untouched. The remaining
+predicate copies are the TS probe (a role-agnostic prefilter; the gateway re-checks authoritatively) and the
+lock-free `app.b028_events_flag`; `app.b028_event_message` returns
+template inputs (empty while OFF). Locking (review r1 MAJOR): flags are a plain snapshot read
+(`app.b028_events_flag`), no LOCK TABLE / row lock / NOWAIT and no function `lock_timeout`, so a concurrent settings
+write or org `FOR UPDATE` can never fail the business action with 55P03; FK key-share waits follow the business
+transaction's own policy. **Bills (review r1 BLOCKER):** recipient rows link 1:1 to the reminder's existing
+`b028_recipient_claims` (`claim_id`, unique, CHECKed for bill only) and get **no** package-1 attempt — the claim path
+keeps sole Email ownership, so each reminder recipient is one Email across both paths.
+
+**Producers (`src/server/notification-event-producers.ts`), each on the business transaction's own client, committing
+atomically with it:**
+
+| Family | Real operation | Source / version / offset | Intended recipients |
+|---|---|---|---|
+| invite | `issuePortalInvite` (new invitation) | invitation / `issued` / owner\|tenant | the invited contact (persona = invite kind) |
+| bill | `runLocalRentReminders` (`b010_schedule_rent`), `queueManualReminder` | `b010_source_events` / occurrence_key / `day:N` or `manual` | existing `b028_recipient_claims` (tenant contacts, staff members) |
+| payment | `confirmPayment`, `rejectPayment`, `reversePayment`, `recordPayment`, legacy `approveMatch`, B-009 `decideBankMatch` (`producePaymentResultEvent`) | payment / committed status / `result` | the payer tenant only (co-tenants excluded) |
+| handover | `publishHandover` | handover record / revision / phase | current tenant parties of the lease |
+| report | `recordStatementVersion` | owner statement / version_no / `version` | the statement's owner contact |
+| repair | `submitEstimate` (owner decision required), `authorizeEmergency` (outbox `emergency_owner_notice`), `decideEstimate` | ticket / `estimate:N`\|`emergency:N`\|`decision:N` / approval\|outbox kind\|decision | designated owner contact+principal; decision → submitting admin/manager |
+
+Not wired: handover attachment versions/replies,
+`b013_emit_reminder` (no TS caller), center source/recipient readers (center kinds unchanged). **Renewal is deferred**:
+the only renewal code here is the read-only comparison preview; no event is emitted from it. It needs the durable
+renewal operation on its own branch; the event `family`/`kind` CHECKs deliberately exclude renewal.
+
+**OFF contract.** Each hook issues exactly one read-only statement (tagged `/* b028:notification_events_v2 probe */`) and
+returns; no role switch, no write. The one existing exact-SQL mock (`owner-repair-decision/request-id.test.ts`) now
+answers that probe with OFF.
+
+**Templates.** EN/zh-TW rendering reuses existing copy (rent reminder body, center kind labels, invite strings,
+handover/report titles; repair labels are verbatim copies asserted equal to the repair decision copy so the guarded
+repair-approval import list is unchanged; invite subjects are new strings). Repair decision recipients use the
+admin/manager set of `app.b013_submit_estimate`'s submitter check — no SQL helper resolves another user's role
+(`app.has_role` reads `auth.uid()`). ON with an unexpected connection role throws (OFF unchanged). New bodies live in `src/i18n/lanes/notification-events.ts` and pass
+`copy:check` (屋主 never 房東; 繳款 wording; no 統一編號). Captures: `e2e-evidence/B-028/templates/<family>.<locale>.txt`
+(synthetic seed data; written by the integration test; nothing sent).
+
+**Tests.** `notification-event-families.integration.test.ts` (clone + `resetAndSeed`), per family: (1) baseline trace
+with hooks uninstalled (`__setNotificationProducersInstalledForTests(false)`, test-only), (2) OFF trace with
+`notification_delivery_v2` ON — statements equal the baseline after removing the probes, zero event/recipient/attempt
+rows, (3) ON: the real operation, then exactly one event per committed source with exact source/version/offset/row
+references, recipient keys equal to the intended set, producer calls inside the still-open business transaction that
+then commits, probe count = producer calls, replay → same event and no new rows, wrong org (ORG2 fully enabled) → NULL,
+six disabled controls → NULL and no new rows, one package-1 capture per recipient via `createCaptureAdapter`, second
+run captures nothing, zero `fetch` calls; bill: every claim captured exactly once and zero package-1 captures. Plus
+privilege/config catalog (incl. no NOWAIT/LOCK in the producer), renewal-deferred, a lock test (held settings write;
+held org `FOR UPDATE` for 2.5 s → no error, action succeeds after release) and a rollback test (failure injected after
+the producer → zero event/recipient/attempt rows and no handover version).
+`notification-event-templates.test.ts` (unit) renders every kind in both locales.
+
+## Package 4 — Inherited B-013 repair authorization/integrity (FALLBACK-SUBAGENT, local only)
+
+Branch `feat/b-028-repair-integrity`, stacked on package 2. Gap-plan item 4 / Reserves 1–3. No new table, column,
+flag or product behaviour; `repair_approvals` semantics unchanged. Non-additive migration (drops and recreates the four B-013 session mutators with the environment tuple; `addOnly:false`)
+`20261107120000_b028_repair_context_integrity.sql` (lock_timeout 5s, statement_timeout 60s, atomic).
+
+- **Reserve 1 — environment/principal binding.** Private SECURITY DEFINER `app.b028_repair_actor(p_org, p_live,
+  p_env, p_session)` (no EXECUTE for any API role) applies the exact B-021 reader tuple predicate (`p_env ∈
+  {live,sandbox}`; live org is `environment='live' AND live_org_id IS NULL`; live ⇒ `org = live`; sandbox ⇒
+  `org.live_org_id = live`), then the unchanged `app.b013_actor`, then requires `auth.uid()` (set by `svc()` from
+  `Session.userId`) to equal the session's user. `b013_submit_estimate`, `b013_decide_estimate`,
+  `b013_authorize_emergency` and `b013_record_appointment` are DROPped and recreated with `(p_org, p_live, p_env,
+  p_session, …)`: CREATE OR REPLACE cannot add parameters, and keeping the old overloads would leave an unbound path
+  (B-024 precedent). Bodies are identical apart from the actor call (start and final recheck) and the photo call;
+  grants, SECURITY DEFINER and `search_path` (`pg_catalog,app` for record_appointment) preserved. The tuple is a
+  function of the org, so replay identity is unchanged. `repair-approval.ts` passes
+  `[orgId, liveOrgId, environment, sessionId]` via `sessionContext()` (rejects non live/sandbox before I/O).
+  Readers, `b013_record_vendor_appointment` (token capability, no session), `b013_emit_reminder` and
+  `b013_dispatch_allowed` are unchanged.
+- **OFF.** The context check runs before replay and the flag check, as in the readers. A valid context with
+  `repair_approvals` OFF still records exactly one `rejected_disabled` command (documented exception, preserved and
+  re-asserted); an invalid context raises `42501` and writes nothing, ON or OFF.
+- **Reserve 2 — photos.** Private `app.b028_repair_photo_refs(p_org, p_ticket, p_refs, p_min)` keeps the existing
+  shape check, then requires every ref id to be a UUID naming a `ticket_attachments` row of the same org and ticket,
+  joined to a `files` row of the same org in `ticket-photos-private`, and `NOT is_internal`; rows are pinned
+  `FOR SHARE OF a, f`. Any failing ref rejects the whole command (`rejected_invalid`; no strip — no caller relies on
+  stripping). The schema has no revocation/deletion column: deleted = row absent; "revoked" is modelled as
+  `is_internal` (hidden from the owner who reads the refs). Readers still project `{id}` only.
+- **Reserve 3 — appointment/job.** The B-021 insert guard did not cover parent updates: a referenced job's
+  `ticket_id`/`org_id` could be reassigned (the test's negative control drops the new FK and the UPDATE succeeds).
+  Added `b028_appointment_job_scope_fkey`: `(org_id, ticket_id, repair_vendor_job_id) → repair_vendor_jobs(org_id,
+  ticket_id, id)` on the existing `b028_vendor_job_scope_unique` index, `NOT VALID` then `VALIDATE`. Reassignment now
+  fails `23503`; non-scope updates (revocation) still work.
+
+**Tests.** New `b028-repair-integrity.integration.test.ts` (registered in `test:rls`, 8 tests): valid live and sandbox
+contexts record all four mutators; 80 denials (4 mutators × live/sandbox × swapped env, unknown env, live-org mismatch,
+live = sandbox, wrong principal, missing principal, another user's session, no session, revoked, expired), each `42501`
+with full-row snapshots of all seven B-013 tables + repair audit unchanged; replay under a swapped/foreign context
+denied; OFF contract; photos (foreign ticket, foreign org, sandbox of the same live org, missing, deleted, internal,
+moved out of the private bucket, non-UUID, mixed) rejected for evidence and emergency with zero domain/outbox writes and
+only the `rejected_invalid` ledger rows; authorized refs accepted and readers never expose storage keys/URLs; wrong-org
+appointment insert/gateway and parent reassignment rejected with references preserved; catalog (old signatures gone,
+helpers private, FK validated); real TS wrapper denials (swapped env, live-org, userId mismatch) with zero writes.
+Negative control: with both helpers weakened to the old behaviour, 5/8 tests fail. Existing repair suites, the
+decision-route mock and the repair family test now pass the tuple/principal and use real photo rows instead of the
+synthetic ids `"photo"`, `"evidence"`, `"fixture-photo"`, `"synthetic-photo"`.
+
+**Open.** Readers still use `b013_actor` without the principal (`auth.uid()`) check (tuple already enforced); the
+photo `FOR SHARE` pin is not exercised under concurrency; hosted roles/`auth.uid()` behaviour unproven (staging is PE);
+Reserve 4 (T0 parent-FK lock timing) untouched.

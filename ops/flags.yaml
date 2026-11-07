@@ -449,3 +449,12 @@ flags:
     global_kill: "CUSTOM_ROLES_ORG_ALLOWLIST absent/malformed/without selected org disables runtime admission without SQL; admitted orgs additionally require platform_settings.custom_roles.enabled strict boolean true and valid allowed_org_ids containing selected org"
     org_override: "organizations.feature_flags.custom_roles must be strict boolean true; SQL gateways independently repeat and lock both durable gates"
     activation: "OFF; deployment admission list must be provisioned before durable opt-in and removed only after durable disable; local synthetic validation only"
+
+  notification_events_v2:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.notification_events_v2 requires strict boolean enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.notification_events_v2 must be strict boolean true"
+    activation: "local synthetic events and capture only; delivery attempts also require notification_delivery_v2; no real transport or hosted activation"

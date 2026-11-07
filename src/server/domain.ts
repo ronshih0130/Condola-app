@@ -29,7 +29,7 @@ import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type First
 import { billingPreviewsEnabled } from "./billing-preview-rules";
 import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
 import { decideConfirmation } from "./b010-proxy-confirm-rules";
-import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
+import { beginPaymentCenter, finalizePaymentCenter, producePaymentResultEvent } from "./payment-center-events";
 import { syncVacantOwnerExpense } from "./utility-expense";
 import { depositMinorForFrequency, depositPolicyState, resolveDepositPolicy, type DepositPolicy } from "./deposit-rules";
 import { depositCapSaveAllowed, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
@@ -2046,6 +2046,7 @@ export async function recordPayment(
     await allocateAndLedger(client, payment, session.userId, invoices);
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);
+    await producePaymentResultEvent(client,session,payment.id);
     if (enabled) {
       await client.query(`SELECT app.b010_payment_command_store($1,$2,$3,$4)`,[session.orgId,input.requestId,digest,payment.id]);
     }
@@ -2103,6 +2104,7 @@ export async function confirmPayment(session: Session, paymentId: string, option
     }
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);
+    await producePaymentResultEvent(client,session,payment.id);
     return {leaseId:payment.lease_id,enabled};
   }), requireOrgScope(session));
   if (!result.enabled) await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => queueDemoNotice(client,result.leaseId,"payment_confirmed")));
@@ -2127,6 +2129,7 @@ export async function rejectPayment(session: Session, paymentId: string, reason:
     if (updated.rowCount !== 1) throw new FlowError("errors.paymentState");
     const source=enabled ? await emitPaymentResult(client,paymentId,"payment_rejected") : null;
     await finalizePaymentCenter(client,center,source);
+    await producePaymentResultEvent(client,session,paymentId);
   }), requireOrgScope(session));
 }
 
@@ -2367,6 +2370,7 @@ export async function approveMatch(session: Session, suggestionId: string) {
       await allocateAndLedger(client, payment, session.userId, invoices);
       const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
       await finalizePaymentCenter(client,center,source);
+      await producePaymentResultEvent(client,session,payment.id);
     } else if (payment.status === "confirmed") {
       await client.query(`UPDATE payments SET bank_transaction_id = $2 WHERE id = $1`, [payment.id, suggestion.bank_transaction_id]);
     } else {
@@ -2780,6 +2784,7 @@ export async function reversePayment(session: Session, paymentId: string, reason
     await client.query(`UPDATE payments SET status='reversed' WHERE id=$1 AND org_id=$2`,[payment.id,session.orgId]);
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_reversed") : null;
     await finalizePaymentCenter(client,center,source);
+    await producePaymentResultEvent(client,session,payment.id);
   }),{orgId:session.orgId,environment:session.environment});
 }
 
