@@ -121,11 +121,11 @@
   },
   "src/app/api/vendor-job-completion/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
-    "sha256": "fb689bf610a99c3455cfcd55f2c2918c627e39ce8789aa6ae31c5d955abd1570"
+    "sha256": "93b0ee792b3461c19897efd5d1ac76e4b5b40da1695cd08c684f7a46ef381f2f"
   },
   "src/app/api/vendor-job-response/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
-    "sha256": "7dc484afb7c9cfe464076263bfab2759106bdcc4cbcb62edc4935aa2155d65b6"
+    "sha256": "536cc461639162d3be15323bb9f6fd751e0ba74c775500c32be478ff3f4dabdb"
   },
   "src/app/api/vendor-jobs/photos/confirm/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
