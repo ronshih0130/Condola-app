@@ -6,6 +6,7 @@ import ts from "typescript";
 import { createHash } from "node:crypto";
 import boundaries from "./b017-non-feature-boundaries.json";
 import permissions from "./b017-entry-permissions.json";
+import { PERMS } from "./perms";
 
 const walk = (dir: string): string[] => readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(dir,e.name)):[path.join(dir,e.name)]);
 const files=walk("src").filter(f=>/\.tsx?$/.test(f)&&! /\.(test|spec)\./.test(f));
@@ -33,9 +34,12 @@ const guardNames = new Set(['guardEffectiveSession','requireEffectivePerm','asse
 // remain separately inventoried. No arbitrary helper is excluded by name alone.
 const bootstrap = new Set(['src/server/session.ts#getSession','src/server/session.ts#readSession','src/server/session.ts#readSessionOn',
   'src/server/consent-gate.ts#requireCurrentConsent','src/server/consent-gate.ts#requireApiConsent']);
-type State = { keys:Set<string>; violations:string[]; db:boolean; guards:Set<string> };
+// `opaque`: a call written in a route file whose project target the scanner cannot traverse
+// (object-literal handler, class method, callback parameter, factory result). A route with one
+// needs a mapped guard (entry-permissions, verified above) or an inventoried classification.
+type State = { keys:Set<string>; violations:string[]; db:boolean; guards:Set<string>; opaque:string[] };
 function inspect(fn:ts.Node, expected?:string|null, resolve:(call:ts.CallExpression)=>ts.Node|undefined=declaration):State {
-  const state:State={keys:new Set(),violations:[],db:false,guards:new Set()};
+  const state:State={keys:new Set(),violations:[],db:false,guards:new Set(),opaque:[]};
   const active=new Set<ts.Node>();
   function visit(n:ts.Node,s:State) {
     if(ts.isFunctionLike(n) && n!==fn) return; // Definitions do not execute at declaration time.
@@ -78,6 +82,9 @@ function inspect(fn:ts.Node, expected?:string|null, resolve:(call:ts.CallExpress
         if(!s.keys.size || (expected!==undefined && !s.keys.has(String(expected))))s.violations.push(`${name}@${n.getSourceFile().fileName}:${n.getSourceFile().getLineAndCharacterOfPosition(n.getStart()).line+1}`);
         return;
       }
+      const traversable=!!target&&((ts.isFunctionDeclaration(target)&&!!target.body)||(ts.isVariableDeclaration(target)&&!!target.initializer&&(ts.isArrowFunction(target.initializer)||ts.isFunctionExpression(target.initializer))));
+      if(target && !traversable && !ts.isFunctionDeclaration(target) && !ts.isPropertySignature(target) && !ts.isMethodSignature(target) && /\/route\.tsx?$/.test(n.getSourceFile().fileName) && !/node_modules|\.d\.ts$/.test(target.getSourceFile().fileName))
+        s.opaque.push(`${name}@${n.getSourceFile().fileName}:${n.getSourceFile().getLineAndCharacterOfPosition(n.getStart()).line+1}`);
       if(target && !target.getSourceFile().fileName.includes('node_modules') && !active.has(target)) {
         if(ts.isFunctionDeclaration(target)&&target.body) {
           const [file,nm]=id.split('#');
@@ -136,6 +143,99 @@ test('B017 every server module, TS/TSX route, page, layout and inline server act
     }
   }
   assert.deepEqual(failures,[]);
+});
+
+// A route export the AST walk cannot follow (re-export, factory result, object-literal handler,
+// or a function that delegates to one) must carry a reviewed classification in the boundary
+// inventory, pinned by the hash of its exporting statement/function. Unlisted ones fail.
+const HTTP_METHODS = new Set(['GET','HEAD','POST','PUT','DELETE','PATCH','OPTIONS']);
+const ROUTE_CLASSES = new Set(['staff-guarded','portal-self-service','identity-establishment','bearer','webhook']);
+type RouteBoundary = { classification?: string; key?: string; reason: string; sha256: string };
+function routeExports(source: ts.SourceFile) {
+  const out: { name: string; node: ts.Node; fn?: ts.Node }[] = [];
+  for (const st of source.statements) {
+    const exported = ts.canHaveModifiers(st) && ts.getModifiers(st)?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
+    if (ts.isFunctionDeclaration(st) && exported && st.name && HTTP_METHODS.has(st.name.text)) out.push({ name: st.name.text, node: st, fn: st });
+    else if (ts.isVariableStatement(st) && exported) {
+      for (const d of st.declarationList.declarations) if (ts.isIdentifier(d.name) && HTTP_METHODS.has(d.name.text))
+        out.push({ name: d.name.text, node: st, fn: d.initializer && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) ? d.initializer : undefined });
+    } else if (ts.isExportDeclaration(st)) {
+      if (!st.exportClause) out.push({ name: '*', node: st });
+      else if (ts.isNamedExports(st.exportClause)) for (const e of st.exportClause.elements) if (HTTP_METHODS.has(e.name.text)) out.push({ name: e.name.text, node: st });
+    } else if (ts.isExportAssignment(st)) out.push({ name: 'default', node: st });
+  }
+  return out;
+}
+test('B017 every route export is scanned or carries an inventoried classification',()=>{
+  const failures:string[]=[], seen=new Set<string>();
+  for(const file of files.filter(f=>/\/route\.tsx?$/.test(f))) {
+    const source=program.getSourceFile(file)!;
+    for(const entry of routeExports(source)) {
+      const id=`${file}#${entry.name}`, listed=(boundaries as Record<string,RouteBoundary>)[id];
+      const opaque=entry.fn?inspect(entry.fn).opaque:[];
+      const classified=!!listed?.classification;
+      if(classified) {
+        seen.add(id);
+        if(!ROUTE_CLASSES.has(listed.classification!)) failures.push(`${id}: unknown classification ${listed.classification}`);
+        if(listed.classification==='staff-guarded' && !PERMS.some(p=>p[0]===listed.key)) failures.push(`${id}: staff-guarded needs a permission key`);
+        if(listed.classification!=='staff-guarded' && listed.key) failures.push(`${id}: only staff-guarded entries carry a key`);
+        if(!(listed.reason.length>10)) failures.push(`${id}: reason required`);
+        if(createHash("sha256").update(entry.node.getText()).digest("hex")!==listed.sha256) failures.push(`${id}: review changed route classification`);
+      } else if(!entry.fn) failures.push(`${id}: route export is not a function the scanner can classify; add a classification`);
+      else if(opaque.length && !(id in permissions)) failures.push(`${id}: delegates to an untraceable handler (${opaque.slice(0,2).join(', ')}); add a classification`);
+    }
+  }
+  for(const [id,b] of Object.entries(boundaries as Record<string,RouteBoundary>)) if(b.classification && !seen.has(id)) failures.push(`${id}: stale route classification`);
+  assert.deepEqual(failures,[]);
+});
+
+// Token-authenticated LINE handlers receive no Session, so the Session-parameter scan cannot see
+// them. Any LINE function that admits staff by native org role must also apply a B017 key.
+test('B017 LINE staff-role admission is paired with an effective-authority guard',()=>{
+  const failures:string[]=[];
+  const line=files.filter(f=>f.startsWith('src/server/line/')||f.startsWith('src/app/api/line/')||f.startsWith('src/app/(line)/'));
+  assert.ok(line.length>=17);
+  for(const file of line) for(const fn of nodes(program.getSourceFile(file)!).filter(n=>ts.isFunctionDeclaration(n)&&n.body)) {
+    const staff=nodes(fn).some(n=>(ts.isNoSubstitutionTemplateLiteral(n)||ts.isStringLiteral(n)||ts.isTemplateHead(n)||ts.isTemplateMiddle(n)||ts.isTemplateTail(n))
+      && /org_members[\s\S]*\brole\s+(IN|=|::)/i.test(n.text));
+    if(!staff) continue;
+    const guarded=nodes(fn).some(n=>ts.isCallExpression(n)&&['requireEffectivePerm','assertCustomAuthorityOn','withEffectiveAuthority','guardEffectiveSession'].includes(n.expression.getText())
+      && n.arguments.some(a=>ts.isStringLiteral(a)&&/^[a-z]+\.[a-z]+$/.test(a.text)));
+    if(!guarded) failures.push(`${idOf(fn)}: native staff role admits without a B017 key`);
+  }
+  assert.deepEqual(failures,[]);
+});
+
+test('R4 LINE staff unlink re-checks tenants.contact inside its transaction before writing',()=>{
+  assert.deepEqual((boundaries as Record<string,RouteBoundary>)['src/app/api/line/links/[id]/route.ts#DELETE']?.classification,'staff-guarded');
+  assert.equal((boundaries as Record<string,RouteBoundary>)['src/app/api/line/links/[id]/route.ts#DELETE']?.key,'tenants.contact');
+  const unlink=program.getSourceFile('src/server/line/login-link.ts')!.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='unlinkLine')!.getText();
+  const guard=unlink.indexOf('await requireEffectivePerm(c,');
+  assert.ok(guard>0 && unlink.slice(guard,unlink.indexOf('\n',guard)).includes('"tenants.contact"'));
+  assert.ok(unlink.indexOf('FOR UPDATE')<guard && guard<unlink.indexOf('UPDATE line_account_links'));
+  assert.ok(unlink.lastIndexOf('lineTransaction(',guard)>=0);
+});
+
+test('R4 merged readers and the resend settle re-check their key inside the transaction',()=>{
+  const body=(file:string,name:string)=>program.getSourceFile(file)!.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name)!.getText();
+  for(const [file,name,open,key] of [
+    ['src/server/recipient-channels.ts','recipientChannelPlan','tx(session.userId, async (client) => withEffectiveAuthority(client, session,','"tenants.contact"'],
+    ['src/server/vendor-document-invites.ts','vendorDocumentInvitesView','svc(session.userId, async (client) => withEffectiveAuthority(client, session,',"'tickets.update'"],
+    ['src/server/portal-resend.ts','portalResendControl','tx(session.userId, async client => withEffectiveAuthority(client, session,','"leases.edit"'],
+    ['src/server/portal-resend.ts','resendPortalInvite','const settle = (outcome: unknown) => tx(session.userId, async client => withEffectiveAuthority(client, session,','"leases.edit"'],
+  ]) { const text=body(file,name),at=text.indexOf(open); assert.ok(at>0,`${name}: in-transaction re-check`); assert.ok(text.slice(at+open.length).trimStart().startsWith(key),`${name}: key`); }
+});
+
+test('R4 upload-recovery batch transactions fence staff photo authority before business SQL',()=>{
+  const source=program.getSourceFile('src/server/upload-recovery.ts')!;
+  const body=(name:string)=>source.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name)!.getText();
+  const batch=body('batchTx'),fence=batch.indexOf('await assertCustomAuthorityOn(client, session, "tickets.update", true);');
+  assert.ok(batch.indexOf('withEffectiveAuthority(client, session, "tickets.update",')>0 && fence>0 && fence<batch.indexOf('return fn(client);'));
+  assert.match(body('assertActor'),/session\.customRole && !canTicketPhotos\(session\)/);
+  for(const name of ['ticketPhotoRecovery','prepareBatchPhoto','confirmBatchPhoto','submitBatchPhotos','discardBatchPhotos']) {
+    const text=body(name),guard=text.indexOf('session = await guardEffectiveSession(session, "tickets.update");');
+    assert.ok(guard>0 && guard<text.indexOf('assertActor('),name);
+  }
 });
 
 // Independent semantic oracle: changing both the implementation and its inventory

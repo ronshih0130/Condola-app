@@ -2,7 +2,8 @@ import type { Client } from "pg";
 import { maybe, one, query, tx } from "./db";
 import { FlowError } from "./errors";
 import { requireOrgScope } from "./org-guard";
-import { assertPerm } from "./perms";
+import { assertPerm, canTicketPhotos } from "./perms";
+import { assertCustomAuthorityOn, guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import {
   PHOTO_BUCKET,
   acceptPhotoObject,
@@ -33,6 +34,10 @@ import type { UploadItemState, UploadRecoveryDraft, UploadRecoveryView } from "@
  * server removes their reserved objects.
  *
  * Flag OFF: every entry point issues only the flag read and writes nothing.
+ *
+ * B-017 (restrict-only): staff need current `tickets.update` and ticket-photo authority
+ * (`canTicketPhotos`), checked at entry and again inside every batch transaction;
+ * tenants keep their native ticket RLS. Internal photos stay staff-only.
  */
 
 export type { UploadItemState, UploadRecoveryDraft, UploadRecoveryView };
@@ -64,8 +69,10 @@ export async function uploadRecoveryEnabled(orgId: string) {
 }
 
 function assertActor(session: Session, internal: boolean) {
-  if (session.kind === "staff") assertPerm(session, "tickets.update");
-  else if (session.kind !== "tenant" || internal) throw new FlowError("errors.forbidden");
+  if (session.kind === "staff") {
+    assertPerm(session, "tickets.update");
+    if (session.customRole && !canTicketPhotos(session)) throw new FlowError("errors.forbidden");
+  } else if (session.kind !== "tenant" || internal) throw new FlowError("errors.forbidden");
 }
 
 async function requireEnabled(session: Session) {
@@ -93,7 +100,12 @@ async function batchTx<T>(session: Session, fn: (client: Client) => Promise<T>):
     return await tx(session.userId, async (client) => {
       await client.query("SET LOCAL lock_timeout = '3s'");
       await client.query("SET LOCAL statement_timeout = '8s'");
-      return fn(client);
+      // B-017: current staff photo authority before the first business query and again
+      // before COMMIT (after every lock wait). Native OFF and tenant sessions: no-ops.
+      return withEffectiveAuthority(client, session, "tickets.update", async () => {
+        await assertCustomAuthorityOn(client, session, "tickets.update", true);
+        return fn(client);
+      });
     }, requireOrgScope(session));
   } catch (error) {
     const code = dbCode(error);
@@ -166,6 +178,7 @@ async function adoptStored(session: Session, ticketId: string, batchKey: string,
 export async function ticketPhotoRecovery(session: Session, ticketId: string, deps: UploadStorageDeps = {}): Promise<UploadRecoveryView> {
   if (!(await uploadRecoveryEnabled(session.orgId))) return null;
   try {
+    session = await guardEffectiveSession(session, "tickets.update");
     assertActor(session, false);
     if (!isUuid(ticketId)) return { draft: null };
     const read = () => batchTx(session, async (client) => {
@@ -218,6 +231,7 @@ export async function prepareBatchPhoto(
   deps: UploadStorageDeps = {},
 ): Promise<PrepareResult> {
   await requireEnabled(session);
+  session = await guardEffectiveSession(session, "tickets.update");
   assertActor(session, input.internal);
   requireKeys(input.ticketId, input.batchKey, input.clientKey);
   const meta = assertPhotoMeta(input);
@@ -256,6 +270,7 @@ export async function confirmBatchPhoto(
   deps: UploadStorageDeps = {},
 ): Promise<{ state: UploadItemState | "missing" }> {
   await requireEnabled(session);
+  session = await guardEffectiveSession(session, "tickets.update");
   assertActor(session, false);
   requireKeys(input.ticketId, input.batchKey, input.clientKey);
   const item = await batchTx(session, async (client) => {
@@ -279,6 +294,7 @@ export async function submitBatchPhotos(
   deps: UploadStorageDeps = {},
 ): Promise<{ attached: string[]; skipped: number }> {
   await requireEnabled(session);
+  session = await guardEffectiveSession(session, "tickets.update");
   assertActor(session, input.internal);
   requireKeys(input.ticketId, input.batchKey);
   const outcome = await batchTx(session, async (client) => {
@@ -333,6 +349,7 @@ export async function discardBatchPhotos(
   deps: UploadStorageDeps = {},
 ): Promise<{ removed: number; state: "open" | "closed" }> {
   await requireEnabled(session);
+  session = await guardEffectiveSession(session, "tickets.update");
   assertActor(session, false);
   requireKeys(input.ticketId, input.batchKey, ...(input.clientKey === undefined ? [] : [input.clientKey]));
   let paths: string[];

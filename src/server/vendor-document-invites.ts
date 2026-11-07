@@ -1,5 +1,5 @@
 import { many, maybe, svc } from './db';
-import { guardEffectiveSession } from './b017-custom-role-governance';
+import { guardEffectiveSession, withEffectiveAuthority } from './b017-custom-role-governance';
 import { requireOrgScope } from './org-guard';
 import { can } from './perms';
 import type { Session } from './types';
@@ -14,7 +14,8 @@ export async function vendorDocumentInvitesView(session: Session, ticketId: stri
   requireOrgScope(session);
   if (session.kind !== 'staff' || !can(session, 'tickets.update')) return null;
   session = await guardEffectiveSession(session, 'tickets.update');
-  return svc(session.userId, async (client) => {
+  // B-017: re-check effective authority inside the transaction, as other B-017 readers do.
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, 'tickets.update', async () => {
     if (!await vendorDocumentsEnabled(client, session.orgId)) return null;
     await authorizeVendorStaff(client, session);
     const ticket = await maybe<{ property_id: string; status: string; profile_id: string | null; vendor_name: string | null; live_job: boolean }>(client,
@@ -35,5 +36,5 @@ export async function vendorDocumentInvitesView(session: Session, ticketId: stri
        FROM vendor_document_grants WHERE org_id=$1 AND ticket_id=$2 ORDER BY created_at DESC,id`, [session.orgId, ticketId]);
     return { profileId: ticket.profile_id, vendorName: ticket.vendor_name,
       ready: ticket.status === 'closed' && ticket.live_job && !!ticket.profile_id, owners, invites };
-  });
+  }));
 }

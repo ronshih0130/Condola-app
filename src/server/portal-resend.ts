@@ -34,11 +34,12 @@ export async function resendPortalInvite(session: Session, input: Input, depende
   const timeout = dependencies.timeoutMs ?? 2000;
   const claim = () => tx(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => (await client.query<Claim>(
     `SELECT * FROM app.b005_resend_claim($1,$2,$3,$4)`, [scope.orgId, input.sourceId, input.requestId, timeout])).rows[0]), scope);
-  const settle = (outcome: unknown) => tx(session.userId, async client => {
+  // B-017: the settle write re-checks current authority before COMMIT, like the claim.
+  const settle = (outcome: unknown) => tx(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const safe = outcome === "captured" || outcome === "accepted" || outcome === "rejected" ? outcome : "unknown";
     const { rows } = await client.query<{ status: ResendStatus }>(`SELECT app.b005_resend_settle($1,$2,$3) AS status`, [scope.orgId, input.requestId, safe]);
     return simulatedResult(rows[0].status);
-  }, scope);
+  }), scope);
   let entry = await claim();
   if (entry.claimed) {
     const controller = new AbortController();
@@ -66,7 +67,7 @@ export async function resendPortalInvite(session: Session, input: Input, depende
 export async function portalResendControl(session: Session, contactId: string, kind: "owner" | "tenant", leaseId?: string) {
   if (session.kind !== "staff" || !["admin", "manager"].includes(session.role ?? "") || !can(session, "leases.edit")) return null;
   session = await guardEffectiveSession(session, "leases.edit");
-  return tx(session.userId, async client => {
+  return tx(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     if (!await portalResendEnabled(client, session.orgId)) return null;
     const { rows } = await client.query<{ id: string; company: string }>(
       `SELECT i.id,o.name AS company FROM invitations i JOIN organizations o ON o.id=i.org_id
@@ -74,5 +75,5 @@ export async function portalResendControl(session: Session, contactId: string, k
          AND ($3='owner' OR i.lease_id=$4) ORDER BY i.created_at DESC,i.id LIMIT 1`,
       [session.orgId, contactId, kind, leaseId ?? null]);
     return rows[0] ?? null;
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 }
