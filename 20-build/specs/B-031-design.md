@@ -9,7 +9,7 @@
 |---|---|---|---|
 | 1 | SESSION_HARDENING — credential epoch fencing every password-authenticated session / challenge path; token-free logs | `session_hardening` | in progress |
 | 2 | AUDIT_DETAIL — authorized before/after/reason audit detail with masking and role filtering | `audit_detail` | planned |
-| 3 | UPLOAD_RECOVERY — retry-safe uploads (no duplicates, successful parts kept) | `upload_recovery` | planned |
+| 3 | UPLOAD_RECOVERY — retry-safe uploads (no duplicates, successful parts kept) | `upload_recovery` | implemented (local) |
 
 Out of scope (all slices): legal/consent copy edits, production deletion, browser storage of secrets/session tokens,
 retention-policy changes needing Ron/legal decisions (CAP-P-21 regional retention values stay as already approved).
@@ -115,3 +115,58 @@ inside the 90–120 second margin and a late successful finish after reconciliat
 for an orphaned upstream write *after* reconciliation with no later finish callback. Before flag activation,
 Claude must resolve this with a provider-enforced commit deadline or additional provider-aware fencing.
 No such hosted-provider guarantee was added or remotely verified in this local-only round.
+
+## Slice 3 — UPLOAD_RECOVERY
+
+**Problem.** Repair-ticket photos upload one file per sign → PUT → confirm round trip, and the confirm attaches at
+once. A lost response after the PUT or after confirm makes the browser retry with a *new* signed path, so a file
+that already succeeded is stored (and possibly attached) twice; a mid-batch failure leaves the user unsure which
+photos made it. ID photos already use fixed per-slot rows (`id_upload_slots`, PK user+lease+slot) and are not changed.
+
+**Model (migration `20261107133000_b031_upload_recovery.sql`, additive).** `platform_settings.upload_recovery`
+`{"enabled":false,"allowed_org_ids":[]}`. Private `app.b031_upload_batches` (server id; unique
+`(org_id, owner_user_id, client_batch_key)`; FK `(org_id, ticket_id)` → `maintenance_tickets` ON DELETE CASCADE;
+draft field `internal`; `submitted_at`) and `app.b031_upload_items` (unique `(org_id, batch_id, client_key)`, unique
+`storage_path`, state `signed → uploaded → attached`, `attachment_id` set iff attached). Both tables: RLS on, no
+policies, ALL revoked from PUBLIC/anon/authenticated/service_role. Access only through SECURITY DEFINER gateways
+(`search_path = pg_catalog, pg_temp`) granted to `authenticated`: `open_batch`, `reserve`, `items_for`, `open_draft`,
+`mark_uploaded`, `lock_batch`, `mark_attached`, `close_batch`; internal helpers `own_batch` / `actor_ok` and the flag
+reader `upload_recovery_on` (service_role only) are not executable by API roles. Every gateway re-checks the strict
+flag, `auth.uid()`, the pinned `app.active_org_id`, ticket-in-org, and the existing actor rule (staff with
+admin/manager/maintenance via `app.has_role`, or a non-member tenant via `app.tenant_owns_ticket`; internal = staff
+only). Batches are always resolved by `(org, auth.uid(), client batch key)`, so another user's key never resolves.
+
+**Flow (flag ON).** The browser generates a random batch key per draft and a random client key per selected file
+(`crypto.randomUUID`, memory only; nothing in browser storage). `prepare` reserves (or replays) the key: a replay
+returns the original path/state; `uploaded`/`attached` → skip; object already in storage → `stored` (confirm, no PUT);
+otherwise sign the *same* path. `confirm` verifies size/type/magic bytes exactly like the existing confirm and marks
+`uploaded` (a rejected object under the caller's own unattached path is removed). Final `submit` locks the batch,
+inserts `files` + `ticket_attachments` for every uploaded item **through the caller's existing RLS** (same SQL as
+`attachRepairPhoto`; the 8-photo trigger and path trigger still apply), marks each attached and closes the batch, all in
+one transaction. A replay of a submitted batch returns the same ids and writes nothing; concurrent submits serialise on
+the batch row. Reserve counts attachments + open items of the batch against the 8-photo limit.
+Draft: the batch row keeps the `internal` field and the per-file states; the ticket page restores the caller's latest
+open draft (uploaded files stay uploaded; a `signed` file shows "choose again"). A failed submit rolls back and keeps
+the draft. UI: per-file status (waiting / uploading / uploaded / failed / added), "Retry failed files" re-sends only
+failed files under their original keys, then "Add N uploaded photos". EN + zh-TW copy in `src/i18n/upload-recovery.ts`.
+
+**Flows covered.** Staff ticket page (`/m/tickets/[id]`) and tenant repair page (`/t/repair`) photo upload through
+the new `/api/tickets/photos/batch` route. **Not covered:** vendor-link photos (`/api/vendor-jobs/photos/*`,
+token-auth, no user owner for the draft), handover upload, paper-lease/e-sign PDF, import, bank CSV (single-file
+forms) and ID photos (already slot-keyed; untouched, retention policy unchanged). Existing sign/confirm routes,
+`TicketPhotoUpload`, `attachRepairPhoto` and the ticket-photo read RLS are unchanged (no read widened).
+
+**Orphans.** If the PUT lands but the DB step is lost, the object stays in storage under a path recorded on a `signed`
+item and is never attached (no `files` row). A retry with the same key probes storage and adopts it (no second object).
+An abandoned draft leaves the object and the item row; no cleanup job was built (deleting storage objects and a
+retention window need a Ron decision). Unlike OFF, every such orphan is discoverable from `app.b031_upload_items`.
+
+**Flag OFF.** Pages call `ticketPhotoRecovery` (one flag read, returns null) and render the base `TicketPhotoUpload`
+element verbatim; the batch route answers 404 after one flag read; gateways refuse in SQL; zero writes. The existing
+confirm/detail SQL traces are identical OFF and ON (`src/server/fixtures/b031-upload-off-sql.json`).
+
+**Local validation (2026-11-06 PT, DB `condola_b031u`).** New integration file 7/7; unit 988/988 (incl. OFF render
+golden 3/3); typecheck PASS; lint 0 errors (15 existing warnings); copy 6/6; function-privilege gate PASS; existing
+repair 1/1, vendor-repair 4/4, tenant-payment-history 9/9, reminder-seed 2/2, B-031 slice 1 94/94, rls 8/8,
+helper-execute 2/2, function-org-guard 4/4. No browser run, remote storage or network. Evidence:
+`e2e-evidence/B-031/upload-recovery-checkpoint.md`.
