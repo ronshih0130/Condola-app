@@ -387,10 +387,10 @@ const grants = [
   { table: "id_document_objects", privileges: [], forced: false, hash: "d751713988987e9331980363e24189ce", why: "encrypted identity image bytes; service-only", policy: "no policies and no client ACL" },
   { table: "lease_signed_pdfs", privileges: ["SELECT", "INSERT", "DELETE"], forced: false, hash: "a55506695b086d27507d16baffe84cd9", why: "signed contractual bytes", policy: "member SELECT; scoped tenant SELECT; Admin/Manager INSERT/DELETE" },
   { table: "payee_account_numbers", privileges: [], forced: false, hash: "fbed9f776e88e9d3ab382ae4a0a0d8da", why: "unmasked payee bank account data", policy: "Admin policies exist but client ACL revoked; gateway only" },
-  { table: "audit_log", privileges: ["SELECT"], forced: false, hash: "a70678f6ca0de54cb79fdfee017ebeef", why: "company activity and sensitive row snapshots", policy: "Admin SELECT only" },
+  { table: "audit_log", privileges: ["SELECT"], forced: false, hash: "8422beb28ab9d3245ce51dd9496873cd", why: "company activity and sensitive row snapshots", policy: "Admin SELECT only + B-017 RESTRICTIVE b017_company_audit_floor" },
   { table: "consents", privileges: ["SELECT"], forced: false, hash: "e432e0ae23c6888ebaf23eab8f96c078", why: "user legal consent evidence", policy: "own-user SELECT; no client mutation" },
   { table: "platform_settings", privileges: ["SELECT"], forced: false, hash: "5b90ddfd20a8d3d42e3f934a87a84a10", why: "global control plane and rollout settings", policy: "authenticated SELECT intentionally global; no client mutation" },
-  { table: "files", privileges: ["SELECT", "INSERT", "UPDATE", "DELETE"], forced: false, hash: "b73f850f4ca982ac7a2ad8f62369df45", why: "private object paths and filenames", policy: "member CRUD (ticket-photo bucket SELECT only for tickets.update roles) + portal own/attached-photo policies; GAP-01 fixed" },
+  { table: "files", privileges: ["SELECT", "INSERT", "UPDATE", "DELETE"], forced: false, hash: "1977a118a0b8f61adf6517606b0615fb", why: "private object paths and filenames", policy: "member CRUD (ticket-photo bucket SELECT only for tickets.update roles) + portal own/attached-photo policies; GAP-01 fixed; + B-017 RESTRICTIVE b017_file_photo_floor" },
 ] as const;
 const supplementary = { table: "vendor_document_pdf_bytes", privileges: [], forced: true, hash: "d751713988987e9331980363e24189ce", why: "persisted vendor PDF bytes", policy: "service-only, forced RLS" } as const;
 const operations = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"];

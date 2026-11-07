@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { requireCurrentConsent } from "./consent-gate";
 
 import { cookies, headers } from "next/headers";
@@ -202,7 +204,7 @@ export async function actionCreateFirm(formData: FormData) {
 
 export async function actionRequestUpgrade(formData: FormData) {
   await requireCurrentConsent();
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), null);
   const tier = text(formData.get("tier")) === "pro" ? "pro" : "standard";
   try {
     const result = await requestUpgrade(session, tier, text(formData.get("partnerCode")));
@@ -222,7 +224,8 @@ async function requirePlatformAdmin() {
 
 export async function actionCreatePartnerCode(formData: FormData) {
   await requireCurrentConsent();
-  const session = await requirePlatformAdmin();
+  let session = await requirePlatformAdmin();
+  session = await guardEffectiveSession(session, null);
   const number = (name: string, fallback: number) => {
     const raw = text(formData.get(name));
     if (!raw) return fallback;
@@ -249,7 +252,8 @@ export async function actionCreatePartnerCode(formData: FormData) {
 
 export async function actionSetPriceOverride(formData: FormData) {
   await requireCurrentConsent();
-  const session = await requirePlatformAdmin();
+  let session = await requirePlatformAdmin();
+  session = await guardEffectiveSession(session, null);
   try {
     await setFirmOverride(session.userId, text(formData.get("orgId")), Number(text(formData.get("rate"))));
   } catch (error) {
@@ -260,7 +264,8 @@ export async function actionSetPriceOverride(formData: FormData) {
 
 export async function actionClearPriceOverride(formData: FormData) {
   await requireCurrentConsent();
-  const session = await requirePlatformAdmin();
+  let session = await requirePlatformAdmin();
+  session = await guardEffectiveSession(session, null);
   try {
     await clearFirmOverride(session.userId, text(formData.get("orgId")));
   } catch (error) {

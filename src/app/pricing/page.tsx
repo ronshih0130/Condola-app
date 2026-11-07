@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { upgradeGate } from "@/server/upgrade-gate";
 import { FREE_UNITS } from "@/server/billing";
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -23,7 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
-  const session = await readSession();
+  const session = await guardEffectiveSession(await readSession(), null);
   const staff = session?.kind === "staff" ? session : null;
   // Pricing and usage are live even while the navigation selects a sandbox.
   const gate = staff ? await upgradeGate({ ...staff, orgId: staff.liveOrgId, environment: "live", needsSandbox: false }, FREE_UNITS) : null;

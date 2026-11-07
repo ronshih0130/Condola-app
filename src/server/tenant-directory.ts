@@ -1,3 +1,6 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { customRolesAdmitted, customRolesEnabledOn, customAuthorityAllowsOn, requireEffectivePerm } from "./b017-custom-role-governance";
+import type { Client } from "pg";
 import { tx } from "./db";
 import { isUuid } from "./repair-rules";
 import { ilikePattern, LIST_PAGE_SIZE, parseListQuery, slicePage, textSearch } from "./list-search";
@@ -69,14 +72,27 @@ SELECT context.enabled,context.role,(SELECT count(*)::integer FROM eligible) AS 
  coalesce((SELECT jsonb_agg(to_jsonb(paged) ORDER BY name,contact_id) FROM paged),'[]'::jsonb) AS contacts
 FROM context`;
 
+async function directorySql(client: Client, session: Session, sql: string): Promise<{ sql: string; contact: boolean | null }> {
+  if (!session.customRole && (!customRolesAdmitted(session.orgId) || !await customRolesEnabledOn(client, session.orgId))) return { sql, contact: null };
+  await requireEffectivePerm(client, session, "props.view");
+  const contact = await customAuthorityAllowsOn(client, session, "tenants.contact");
+  // Filter contact searches in SQL, before pagination/counting; DTO masking alone leaks matches.
+  return { sql: contact ? sql : sql.replaceAll("context.role IN ('admin','manager')", "false"), contact };
+}
+
 export async function tenantDirectory(session:Session,raw?:{q?:string;page?:string|number;limit?:number}):Promise<DirectoryResult> {
+  session = await guardEffectiveSession(session, "props.view");
   if(session.kind!=="staff" || session.needsSandbox || ![session.orgId,session.liveOrgId,session.userId,session.sessionId].every(isUuid) || !["live","sandbox"].includes(session.environment)) return {state:"unavailable"};
   const {q,page}=parseListQuery(raw);
   const limit=Number.isInteger(raw?.limit) && (raw?.limit ?? 0)>0 ? Math.min(raw!.limit!,100) : LIST_PAGE_SIZE;
-  const payload=await tx(session.userId,async c=>(await c.query<DirectoryPayload>(DIRECTORY_SQL,[session.orgId,ilikePattern(q),session.sessionId,session.environment,session.liveOrgId,limit+1,(page-1)*limit])).rows[0],{orgId:session.orgId,environment:session.environment});
+  let contact: boolean | null = null;
+  const payload=await tx(session.userId,async c=>withEffectiveAuthority(c, session, "props.view", async () => {
+    const authority = await directorySql(c,session,DIRECTORY_SQL); contact = authority.contact;
+    return (await c.query<DirectoryPayload>(authority.sql,[session.orgId,ilikePattern(q),session.sessionId,session.environment,session.liveOrgId,limit+1,(page-1)*limit])).rows[0];
+  }),{orgId:session.orgId,environment:session.environment});
   if(!payload) return {state:"unavailable"};
   if(!payload.enabled) return {state:"disabled"};
-  return {state:"enabled",q,page,canViewContact:["admin","manager"].includes(payload.role),...slicePage(payload.contacts,limit,payload.total,page)};
+  return {state:"enabled",q,page,canViewContact:contact ?? ["admin","manager"].includes(payload.role),...slicePage(payload.contacts,limit,payload.total,page)};
 }
 
 
@@ -104,10 +120,15 @@ SELECT context.enabled,context.role,(SELECT count(*)::integer FROM history) AS t
 FROM context`;
 
 export async function tenantDirectoryHistory(session:Session,contactId:string,raw?:{page?:string|number}):Promise<DirectoryHistory> {
+  session = await guardEffectiveSession(session, "props.view");
   if(session.kind!=="staff" || session.needsSandbox || ![session.orgId,session.liveOrgId,session.userId,session.sessionId,contactId].every(isUuid) || !["live","sandbox"].includes(session.environment)) return {state:"unavailable"};
   const {page}=parseListQuery(raw);
-  const payload=await tx(session.userId,async c=>(await c.query<HistoryPayload>(HISTORY_SQL,[session.orgId,contactId,session.sessionId,session.environment,session.liveOrgId,LIST_PAGE_SIZE+1,(page-1)*LIST_PAGE_SIZE])).rows[0],{orgId:session.orgId,environment:session.environment});
+  let contact: boolean | null = null;
+  const payload=await tx(session.userId,async c=>withEffectiveAuthority(c, session, "props.view", async () => {
+    const authority = await directorySql(c,session,HISTORY_SQL); contact = authority.contact;
+    return (await c.query<HistoryPayload>(authority.sql,[session.orgId,contactId,session.sessionId,session.environment,session.liveOrgId,LIST_PAGE_SIZE+1,(page-1)*LIST_PAGE_SIZE])).rows[0];
+  }),{orgId:session.orgId,environment:session.environment});
   if(!payload) return {state:"unavailable"};
   if(!payload.enabled) return {state:"disabled"};
-  return {state:"enabled",contact:payload.contact,canViewContact:["admin","manager"].includes(payload.role),page,...slicePage(payload.leases,LIST_PAGE_SIZE,payload.total,page)};
+  return {state:"enabled",contact:payload.contact,canViewContact:contact ?? ["admin","manager"].includes(payload.role),page,...slicePage(payload.leases,LIST_PAGE_SIZE,payload.total,page)};
 }

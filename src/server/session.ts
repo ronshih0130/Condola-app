@@ -1,3 +1,4 @@
+import { resolveCustomRoleSession, resolveCustomRoleSessionOn } from "./b017-custom-role-governance";
 import { consentCoversCurrent, withMissingConsentFallback, type StoredConsent } from "./consent";
 import { createHash } from "node:crypto";
 import { cookies, headers } from "next/headers";
@@ -147,7 +148,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
         }
         return {
           seedSample,
-          session: {
+          session: await resolveCustomRoleSessionOn(client, {
             ...base,
             kind: "staff" as const,
             partnerConsent,
@@ -157,7 +158,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
             environment: resolved.environment,
             liveEnabled: resolved.liveEnabled,
             needsSandbox: resolved.needsSandbox,
-          },
+          }),
         };
       }
       return {
@@ -182,7 +183,7 @@ export async function completeSession(loaded: SessionLoad): Promise<Session | nu
     const opened = { ...session, orgId: sandboxId, environment: "sandbox" as const, needsSandbox: false };
     if (loaded.seedSample) await ensureSampleLoaded(opened);
     if (session.needsSandbox) await withClient((client) => correctRetiredSampleAddresses(client, sandboxId));
-    return opened;
+    return session.needsSandbox ? resolveCustomRoleSession(opened) : opened;
   }
   return session;
 }

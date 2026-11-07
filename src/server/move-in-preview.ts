@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { tx, maybe, many } from "./db";
 import { billingPreviewAuthorityOn } from "./billing-preview-authority";
 import { FlowError } from "./errors";
@@ -6,7 +7,8 @@ import type { Session } from "./types";
 
 /** The caller supplies the server-loaded session, never request-provided identity or scope. */
 export async function moveInPreview(session: Session, leaseId: string) {
-  return tx(session.userId, async client => {
+  session = await guardEffectiveSession(session, "leases.edit");
+  return tx(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     if (!(await billingPreviewAuthorityOn(client, session))) return null;
     const lease = await maybe<{ status:string; esign_status:string }>(client,
       `SELECT status::text, esign_status::text FROM leases WHERE id=$1 AND org_id=$2`, [leaseId, session.orgId]);
@@ -37,6 +39,6 @@ export async function moveInPreview(session: Session, leaseId: string) {
       lines: plan.lines.map(line => ({ type: line.type, description: line.type, amount: line.amount,
         allocation_id: line.allocationId, period_start: line.type === "rent" ? plan.calculation?.periodStart ?? null : null,
         period_end: line.type === "rent" ? plan.calculation?.periodEnd ?? null : null })), calculation: plan.calculation };
-  }, { orgId: session.orgId, environment: session.environment }, { isolation: "repeatable read", readOnly: true });
+  }), { orgId: session.orgId, environment: session.environment }, { isolation: "repeatable read", readOnly: true });
 }
 export type MoveInPreview = NonNullable<Awaited<ReturnType<typeof moveInPreview>>>;

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Client } from "pg";
 import { svc } from "./db";
+import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { FlowError } from "./errors";
 import { resolveVendorIdentity } from "./vendor-identity";
 import { planVendorAttribution } from "./vendor-attribution";
@@ -105,22 +106,24 @@ function staffScope(session: Session) {
 export async function inviteVendorAccount(session: Session, contactId: string, userId: string) {
   const scope = staffScope(session);
   assertIdentifiers(contactId, userId);
+  session = await guardEffectiveSession(session, "tickets.update");
   const token = newVendorToken();
-  return svc(session.userId, async client => {
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "tickets.update", async () => {
     const id = (await client.query<{ id: string | null }>("SELECT app.b026_invite_vendor_account($1,$2,$3,$4,$5,$6,$7) AS id",
       [scope.orgId, session.liveOrgId, scope.environment, session.sessionId, contactId, userId, hashVendorToken(token)])).rows[0].id;
     if (!id) return { status: "disabled" as const };
     await recordAudit(auditScope(session, scope), { table: "contacts", rowId: contactId, action: "insert",
       eventType: "vendor_account_invited", reason: "vendor_account_invited", newRow: { invitation_id: id, user_id: userId } }, client);
     return { status: "invited" as const, invitation: token };
-  });
+  }));
 }
 /** Revoke the old binding and invite its replacement; acceptance remains mandatory. */
 export async function rebindVendorAccount(session: Session, contactId: string, userId: string) {
   const scope = staffScope(session);
   assertIdentifiers(contactId, userId);
+  session = await guardEffectiveSession(session, "tickets.update");
   const token = newVendorToken();
-  return svc(session.userId, async client => {
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "tickets.update", async () => {
     const result = (await client.query<{ result: { status: "disabled" | "invited"; invitationId?: string; eventId?: string; previousUserId?: string } }>(
       "SELECT app.b026_rebind_vendor_account($1,$2,$3,$4,$5,$6,$7) AS result",
       [scope.orgId, session.liveOrgId, scope.environment, session.sessionId, contactId, userId, hashVendorToken(token)])).rows[0].result;
@@ -129,12 +132,13 @@ export async function rebindVendorAccount(session: Session, contactId: string, u
       eventType: "vendor_account_rebound", reason: "staff_rebind",
       newRow: { previous_user_id: result.previousUserId, user_id: userId, invitation_id: result.invitationId, event_id: result.eventId } }, client);
     return { status: "invited" as const, invitation: token };
-  });
+  }));
 }
 export async function correctVendorJobAccount(session: Session, jobId: string, userId: string | null) {
   const scope = staffScope(session);
   assertIdentifiers(jobId, ...(userId === null ? [] : [userId]));
-  return svc(session.userId, async client => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "tickets.update", async () => {
     const result = (await client.query<{ result: { status: string; eventId?: string } }>(
       "SELECT app.b026_correct_vendor_job($1,$2,$3,$4,$5,$6) AS result",
       [scope.orgId, session.liveOrgId, scope.environment, session.sessionId, jobId, userId])).rows[0].result;
@@ -143,13 +147,14 @@ export async function correctVendorJobAccount(session: Session, jobId: string, u
       reason: userId === null ? "staff_unlink" : "staff_correct", newRow: { event_id: result.eventId, user_id: userId },
     }, client);
     return result;
-  });
+  }));
 }
 
 export async function vendorAccountLinkEvents(session: Session, jobId: string) {
   const scope = staffScope(session);
   assertIdentifiers(jobId);
-  return svc(session.userId, async client => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "tickets.update", async () => {
     const result = (await client.query<{ result: { id: string; actorId: string; reason: string; previousUserId: string | null; userId: string | null; at: string }[] }>(
       "SELECT app.b026_vendor_link_events_for_staff($1,$2,$3,$4,$5) AS result",
       [scope.orgId, session.liveOrgId, scope.environment, session.sessionId, jobId])).rows[0].result;
@@ -157,7 +162,7 @@ export async function vendorAccountLinkEvents(session: Session, jobId: string) {
       action: "select", eventType: "vendor_account_link_history", reason: "vendor_account_link_history",
       newRow: { event_ids: result.map(event => event.id) } }, client);
     return result;
-  });
+  }));
 }
 
 /** Called only after password verification; this is routing, never account authorization. */

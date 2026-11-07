@@ -1,4 +1,5 @@
 import { maybe, tx } from "./db";
+import { guardEffectiveSession } from "./b017-custom-role-governance";
 import { requireOrgScope } from "./org-guard";
 import type { Session } from "./types";
 
@@ -13,6 +14,7 @@ export function tenantThreadCreateOn(global: unknown, flags: unknown, orgId: str
 
 export async function tenantThreadCreateEnabled(session: Session): Promise<boolean> {
   if (session.kind !== "tenant" || !uuid.test(session.orgId)) return false;
+  session = await guardEffectiveSession(session, null);
   try {
     return await tx(session.userId, async (client) => {
       const row = await maybe<{ global: unknown; flags: unknown }>(client,
@@ -26,6 +28,7 @@ export async function tenantThreadCreateEnabled(session: Session): Promise<boole
 export async function startTenantThread(session: Session, input: { leaseId: string; requestId: string; body: string }) {
   if (session.kind !== "tenant" || !uuid.test(input?.leaseId ?? "") || !uuid.test(input?.requestId ?? "") || typeof input.body !== "string") return { state: "unavailable" as const };
   if (!input.body.trim() || input.body.length > 4000) return { state: "invalid" as const };
+  session = await guardEffectiveSession(session, null);
   try {
     const threadId = await tx(session.userId, async (client) => (await client.query<{ id: string }>(
       `SELECT app.b019_start_tenant_thread($1,$2,$3)::text AS id`, [input.leaseId, input.requestId, input.body])).rows[0].id, requireOrgScope(session));

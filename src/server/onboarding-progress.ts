@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { withClient } from "./db";
@@ -86,6 +87,7 @@ SELECT (SELECT count(*)::int FROM props) AS properties,
  (SELECT total FROM team) AS team_total, (SELECT ready FROM team) AS team_ready, (SELECT pending FROM team) AS team_pending, (SELECT expired FROM team) AS team_expired`;
 
 export async function readOnboardingOn(client: Client, session: Session): Promise<OnboardingProgress | null> {
+  session = await guardEffectiveSession(session, null);
   await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
   try {
     const org = await authorized(client, session, false);
@@ -104,6 +106,7 @@ export async function readOnboardingOn(client: Client, session: Session): Promis
 }
 
 export async function saveOnboardingOn(client: Client, session: Session, choices: OnboardingChoices): Promise<boolean> {
+  session = await guardEffectiveSession(session, null);
   if (!choices || !["tenant", "owner", "team"].every((key) => typeof choices[key as OnboardingGroup] === "boolean")) return false;
   await client.query("BEGIN");
   try {

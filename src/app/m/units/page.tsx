@@ -22,8 +22,9 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
   const result = await searchSpaces(session, raw);
   const { rows, q, page, hasNext, total, from, to } = result;
   const summary = listSummary(t, result);
-  const qrUnits = await unitQrStaffUnits(session);
-  const editable = can(session.role, "props.edit");
+  // B-017: the QR control needs the issuing permission; a custom role without it gets no control.
+  const qrUnits = can(session, "leases.edit") ? await unitQrStaffUnits(session) : null;
+  const editable = can(session, "props.edit");
   const roomTypeKey: Record<string, string> = {
     whole_home: "i_whole_home",
     suite: "i_room_split",

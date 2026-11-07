@@ -1,4 +1,5 @@
 import { many, maybe, svc } from './db';
+import { guardEffectiveSession } from './b017-custom-role-governance';
 import { requireOrgScope } from './org-guard';
 import { can } from './perms';
 import type { Session } from './types';
@@ -11,7 +12,8 @@ import type { DocumentInviteView } from '@/lib/vendor-document-ui';
 /** Only safe metadata, never token hashes or buyer/company settlement data. */
 export async function vendorDocumentInvitesView(session: Session, ticketId: string): Promise<DocumentInviteView | null> {
   requireOrgScope(session);
-  if (session.kind !== 'staff' || !can(session.role, 'tickets.update')) return null;
+  if (session.kind !== 'staff' || !can(session, 'tickets.update')) return null;
+  session = await guardEffectiveSession(session, 'tickets.update');
   return svc(session.userId, async (client) => {
     if (!await vendorDocumentsEnabled(client, session.orgId)) return null;
     await authorizeVendorStaff(client, session);

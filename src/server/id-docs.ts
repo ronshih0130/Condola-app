@@ -1,3 +1,6 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
+import { can } from "./perms";
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { makeT, isLocale } from "@/i18n";
@@ -77,7 +80,7 @@ async function storeWatermarkedCopy(
 }
 
 export function canReviewId(session: Session) {
-  return session.kind === "staff" && (session.role === "admin" || session.role === "manager");
+  return session.kind === "staff" && (session.role === "admin" || session.role === "manager") && (!session.customRole || can(session, "leases.edit"));
 }
 
 /** Shown to the staff member after a view. The audit row stores ids, not this sentence. */
@@ -138,6 +141,7 @@ const CHECK_SQL = `SELECT l.id::text AS lease_id, c.id::text AS contact_id, c.di
       LIMIT 1`;
 
 export async function loadFirmNoticeContact(session: Session) {
+  session = await guardEffectiveSession(session, "leases.edit");
   // The tenant role cannot read the billing owner's profile. service_role
   // returns the same phone and email that submit hashes into the consent row.
   return svc(session.userId, (client) => firmNoticeContact(client, session.orgId));
@@ -175,10 +179,11 @@ async function firmNoticeContact(client: Client, orgId: string) {
 }
 
 export async function loadLeaseIdCheck(session: Session, leaseId: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "leases.edit");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const row = await maybe<CheckRow>(client, CHECK_SQL, [leaseId]);
     return row ? asCheck(row) : null;
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 /**
@@ -388,6 +393,7 @@ export async function submitTenantId(
   session: Session,
   input: { leaseId: string; docType: string; number: string; consent: boolean; photos: Record<string, { mime: string; bytes: Buffer }> },
 ) {
+  session = await guardEffectiveSession(session, "leases.edit");
   if (session.kind !== "tenant") throw new FlowError("errors.forbidden");
   if (!input.consent) throw new FlowError("errors.consentRequired");
   const docType = input.docType;
@@ -401,7 +407,7 @@ export async function submitTenantId(
     if (!photo) throw new FlowError("errors.idPhoto");
     return { slot, mime: photo.mime, bytes: photo.bytes };
   });
-  await svc(session.userId, async (client) => {
+  await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const party = await maybe<{ contact_id: string; org_id: string }>(
       client,
       `SELECT c.id::text AS contact_id, l.org_id::text
@@ -441,7 +447,7 @@ export async function submitTenantId(
       },
       client,
     );
-  });
+  }));
 }
 
 type LiveIdRow = { id: string; review_status: IdReviewStatus };
@@ -471,6 +477,7 @@ export async function storeIdPhoto(
   session: Session,
   input: { leaseId: string; slot: string; mime: string; bytes: Uint8Array },
 ) {
+  session = await guardEffectiveSession(session, "leases.edit");
   if (session.kind !== "tenant") throw new FlowError("errors.forbidden");
   if (!isIdSlot(input.slot)) throw new FlowError("errors.idPhoto");
   const prepared = acceptUploadBytes(input.bytes, input.mime);
@@ -485,7 +492,7 @@ export async function storeIdPhoto(
       (sniffed === "png" && declared !== "image/png");
     throw new FlowError(typeMismatch ? "errors.idPhotoType" : "errors.idPhoto");
   }
-  await svc(session.userId, async (client) => {
+  await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const party = await maybe<{ contact_id: string; org_id: string }>(
       client,
       `SELECT c.id::text AS contact_id, l.org_id::text
@@ -526,7 +533,7 @@ export async function storeIdPhoto(
       sha256: sha,
       ciphertext,
     });
-  });
+  }));
 }
 
 /**
@@ -534,9 +541,10 @@ export async function storeIdPhoto(
  * row stay; those are the committed document. A second call deletes nothing.
  */
 export async function abandonIdUpload(session: Session, leaseId: string) {
+  session = await guardEffectiveSession(session, "leases.edit");
   if (session.kind !== "tenant") throw new FlowError("errors.forbidden");
   if (!leaseId) return;
-  await svc(session.userId, async (client) => {
+  await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await client.query(
       `DELETE FROM id_document_objects AS o
         WHERE NOT EXISTS (
@@ -557,7 +565,7 @@ export async function abandonIdUpload(session: Session, leaseId: string) {
       session.userId,
       leaseId,
     ]);
-  });
+  }));
 }
 
 /** Copy staged photos onto one document row. A second call after success does not insert another. */
@@ -565,6 +573,7 @@ export async function finalizeTenantId(
   session: Session,
   input: { leaseId: string; docType: string; number: string; consent: boolean },
 ) {
+  session = await guardEffectiveSession(session, "leases.edit");
   try {
     await commitTenantId(session, input);
   } catch (error) {
@@ -815,10 +824,12 @@ async function notifyTenant(
 }
 
 export async function reviewIdCheck(session: Session, documentId: string, action: "checked" | "returned", reason?: string) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   const note = reason?.trim() ?? "";
   if (action === "returned" && !note) throw new FlowError("errors.required");
-  const reviewed = await svc(session.userId, async (client) => {
+  const reviewed = await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
+    await assertCustomAuthorityOn(client,session,"leases.edit");
     const doc = await maybe<{ id: string; org_id: string; contact_id: string; lease_id: string | null; locale: string }>(
       client,
       `SELECT d.id::text, d.org_id::text, d.contact_id::text, d.lease_id::text, c.locale
@@ -854,7 +865,7 @@ export async function reviewIdCheck(session: Session, documentId: string, action
       body,
     });
     return doc;
-  });
+  }));
   await writeAudit(session.orgId, session.userId, action === "checked" ? "id_document_checked" : "id_document_returned", {
     documentId,
     contactId: reviewed.contact_id,
@@ -945,6 +956,7 @@ async function issuePhotoUrlsForCaller(caller: PhotoCaller, documentId: string) 
 }
 
 export async function issuePhotoUrls(session: Session, documentId: string) {
+  session = await guardEffectiveSession(session, "leases.edit");
   assertPhotoViewer(session);
   return issuePhotoUrlsForCaller(
     {
@@ -1107,6 +1119,7 @@ export async function serveSignedPhoto(input: PhotoCaller & { documentId: string
 }
 
 export async function openSignedPhoto(session: Session, token: string) {
+  session = await guardEffectiveSession(session, "leases.edit");
   const parsed = readPhotoToken(token);
   if (!parsed || parsed.u !== session.userId) throw new FlowError("errors.forbidden");
   assertPhotoViewer(session);

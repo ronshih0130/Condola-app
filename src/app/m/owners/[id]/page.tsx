@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
@@ -24,7 +25,7 @@ export default async function EditOwnerPage({
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const query = await searchParams;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "props.edit");
   const t = makeT(session.locale);
   const [owner, properties] = await Promise.all([ownerEditor(session, id), listProperties(session)]);
   if (!owner) notFound();

@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { makeT } from "@/i18n";
@@ -9,14 +10,15 @@ import { readSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const session = await readSession();
-  if (!session || session.kind !== "staff" || !can(session.role, "reports.export")) {
+  let session = await readSession();
+  if (!session || session.kind !== "staff" || !can(session, "reports.export")) {
     return NextResponse.json({ error: "errors.forbidden" }, { status: 403 });
   }
   const blocked = await requireCurrentConsent(session, "api");
   if (blocked) return blocked;
   const url = new URL(request.url);
   try {
+    session = await guardEffectiveSession(session, "reports.export");
     const period = reportPeriod({
       mode: url.searchParams.get("mode") ?? undefined,
       month: url.searchParams.get("month") ?? undefined,
@@ -46,6 +48,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof FlowError && error.key === "errors.forbidden") return NextResponse.json({ error: error.key }, { status: 403 });
     if (error instanceof FlowError && error.key === "errors.reportRange") {
       return NextResponse.json({ error: error.key }, { status: 400 });
     }

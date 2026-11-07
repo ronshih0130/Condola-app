@@ -9,6 +9,7 @@ import { BrandImage } from "@/components/brand";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function TenantLayout({ children }: { children: React.React
   const session = await getSession();
   const v2 = await brandV2EnabledForOrg(session.orgId);
   if (session.kind !== "tenant") redirect("/m");
+  await guardEffectiveSession(session, null);
   const t = makeT(session.locale);
   const path = (await headers()).get("x-pathname") || "";
   await requireCurrentConsent(session, "page", path || "/t");

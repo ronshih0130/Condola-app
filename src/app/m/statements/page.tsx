@@ -25,14 +25,14 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const params = await searchParams;
   const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : taipeiToday().slice(0, 7);
   const [owners, statements, roster, properties] = await Promise.all([
-    listOwners(session),
+    !session.customRole || can(session, "props.view") ? listOwners(session) : Promise.resolve([]),
     listStatements(session),
     statementRoster(session, month),
-    listProperties(session),
+    !session.customRole || can(session, "props.view") ? listProperties(session) : Promise.resolve([]),
   ]);
-  const transferView = can(session.role, "month.close") ? await ownerTransferView(session) : null;
-  const canGenerate = can(session.role, "stmt.generate");
-  const canExpense = can(session.role, "exp.add");
+  const transferView = can(session, "month.close") ? await ownerTransferView(session) : null;
+  const canGenerate = can(session, "stmt.generate");
+  const canExpense = can(session, "exp.add");
   const roleLabel: Record<string, string> = {
     admin: "i_role_admin",
     manager: "i_role_manager",

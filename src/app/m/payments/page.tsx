@@ -17,8 +17,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const t = makeT(session.locale);
   const params = await searchParams;
   const rows = await listPayments(session);
-  const canAct = can(session.role, "pay.record");
-  const canReverse = can(session.role, "pay.reverse");
+  const canAct = can(session, "pay.record");
+  const canReverse = can(session, "pay.reverse");
   const roleLabel: Record<string, string> = {
     admin: "i_role_admin",
     manager: "i_role_manager",

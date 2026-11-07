@@ -1,4 +1,5 @@
 import { tx } from "./db";
+import { guardEffectiveSession } from "./b017-custom-role-governance";
 import { requireOrgScope } from "./org-guard";
 import { planChannels, type Channel, type Portal } from "./recipient-channels-rules";
 import type { Session } from "./types";
@@ -7,6 +8,7 @@ import type { Session } from "./types";
 /** `persona` is the event's intended recipient role (contacts can hold several). */
 export async function recipientChannelPlan(session: Session, contactId: string, persona: Portal, requested?: readonly Channel[]) {
   if (session.kind !== "staff") return null;
+  session = await guardEffectiveSession(session, "tenants.contact");
   return tx(session.userId, async (client) => {
     const row = (await client.query<{ portal: Portal | null; email_available: boolean; in_app_available: boolean; line_bound: boolean; line_friend: boolean }>(
       `SELECT * FROM app.prop06_recipient_channels($1,$2,$3)`, [session.orgId, contactId, persona])).rows[0];

@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { redirect } from "next/navigation";
 import { passConsentGate, consentNextPath } from "./consent-gate";
 import { roleHome } from "./perms";
@@ -16,7 +18,7 @@ export async function actionAcceptReconsent(formData: FormData) {
   }
   const identity = await readSignupIdentity();
   if (!identity) redirect("/login");
-  const session = await readSession();
+  const session = await guardEffectiveSession(await readSession(), null);
   const next = consentNextPath(text(formData.get("next")), session ? roleHome(session.kind, session.role) : "/signup/firm");
   if (session && (session.kind === "owner" || session.kind === "tenant")) {
     redirect(`/consent/portal?next=${encodeURIComponent(next)}`);
@@ -27,7 +29,7 @@ export async function actionAcceptReconsent(formData: FormData) {
 }
 
 export async function actionAcceptPortalConsent(formData: FormData) {
-  const session = await readSession();
+  const session = await guardEffectiveSession(await readSession(), null);
   if (!session) redirect("/login");
   const next = consentNextPath(text(formData.get("next")), roleHome(session.kind, session.role));
   if (session.kind !== "owner" && session.kind !== "tenant") {

@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -25,7 +26,7 @@ export default async function TeamPage({
   searchParams: Promise<{ error?: string; token?: string; invited?: string }>;
 }) {
   await requireCurrentConsent(undefined, "page");
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "team.manage");
   const invitesOpen = session.kind === "staff" && session.role === "admin" &&
     session.environment === "live" && teamInvitesAllowedForOrg(session.orgId);
   const legacyInvitesOpen = session.environment !== "live" && teamInvitesAllowedForOrg(session.orgId);

@@ -1,5 +1,6 @@
 import { admitVendorDocumentsOrgOn } from "./vendor-document-admission";
 import { tradeLineItems, type TradeLineInput } from "./vendor-document-trade-rules";
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, one, svc } from "./db";
@@ -479,7 +480,8 @@ export async function createVendorDocumentInvite(
   selection: VendorBuyerSelection,
   options?: { documentUi: true },
 ) {
-  return svc(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     if (options?.documentUi) await admitVendorDocumentsOrgOn(client, session.orgId);
     const access = await authorize(client, session, ticketId, vendorProfileId);
     if (access.ticket.status !== "closed") throw new Error("ticket_not_closed");
@@ -527,11 +529,12 @@ export async function createVendorDocumentInvite(
       client,
     );
     return { grantId: grant.id, url: `/v/documents/${token}` };
-  });
+  }));
 }
 
 export async function revokeVendorDocumentInvite(session: Session, grantId: string, options?: { documentUi: true }) {
-  return svc(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     if (options?.documentUi) await admitVendorDocumentsOrgOn(client, session.orgId);
     await authorizeVendorStaff(client, session);
     const grant = await maybe<Grant>(
@@ -556,7 +559,7 @@ export async function revokeVendorDocumentInvite(session: Session, grantId: stri
       { grantId },
       client,
     );
-  });
+  }));
 }
 
 /** Record the staff request without changing the vendor's document or bytes. */
@@ -565,10 +568,11 @@ export async function requestVendorDocumentCorrection(
   id: string,
   reason: string,
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   if (typeof reason !== "string" || !reason.trim()) {
     throw new Error("missing_correction_reason");
   }
-  return svc(session.userId, async (client) => {
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await authorizeVendorStaff(client, session);
     const initial = await persistedOn(client, id);
     if (initial.org_id !== session.orgId) notFound();
@@ -588,7 +592,7 @@ export async function requestVendorDocumentCorrection(
       client,
     );
     return { documentId: id, status: "requested" as const };
-  });
+  }));
 }
 
 export async function previewVendorDocument(ctx: VendorDocumentContext) {

@@ -7,13 +7,13 @@ import type { CalendarMode, Session } from "@/server/types";
 
 export function canDownloadLeasePdf(session: Session) {
   if (session.kind === "tenant") return true;
-  if (session.kind === "staff") return can(session.role, "props.view");
+  if (session.kind === "staff") return can(session, "props.view");
   return false;
 }
 
 export function canDownloadStatementPdf(session: Session) {
   if (session.kind === "owner") return true;
-  if (session.kind === "staff") return can(session.role, "stmt.view");
+  if (session.kind === "staff") return can(session, "stmt.view");
   return false;
 }
 

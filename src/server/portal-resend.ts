@@ -1,6 +1,8 @@
 import type { Client } from "pg";
 import { simulatedResult, type ResendResult, type ResendStatus } from "../lib/portal-resend-state";
 import { tx } from "./db";
+import { can } from "./perms";
+import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { portalResendMockTransport } from "./portal-resend-mock-transport";
 import type { Session } from "./types";
 
@@ -25,12 +27,13 @@ type Dependencies = { transport?: (signal: AbortSignal) => Promise<unknown>; tim
  * No process-local reservation or promise cache: replay works on another worker.
  */
 export async function resendPortalInvite(session: Session, input: Input, dependencies: Dependencies = {}): Promise<ResendResult> {
-  if (session.kind !== "staff" || !["admin", "manager"].includes(session.role ?? "")) return simulatedResult("unavailable");
+  if (session.kind !== "staff" || !["admin", "manager"].includes(session.role ?? "") || !can(session, "leases.edit")) return simulatedResult("unavailable");
+  session = await guardEffectiveSession(session, "leases.edit");
   if (![session.orgId, session.userId, input?.sourceId, input?.requestId].every(value => typeof value === "string" && uuid.test(value))) return simulatedResult("conflict");
   const scope = { orgId: session.orgId.toLowerCase(), environment: session.environment };
   const timeout = dependencies.timeoutMs ?? 2000;
-  const claim = () => tx(session.userId, async client => (await client.query<Claim>(
-    `SELECT * FROM app.b005_resend_claim($1,$2,$3,$4)`, [scope.orgId, input.sourceId, input.requestId, timeout])).rows[0], scope);
+  const claim = () => tx(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => (await client.query<Claim>(
+    `SELECT * FROM app.b005_resend_claim($1,$2,$3,$4)`, [scope.orgId, input.sourceId, input.requestId, timeout])).rows[0]), scope);
   const settle = (outcome: unknown) => tx(session.userId, async client => {
     const safe = outcome === "captured" || outcome === "accepted" || outcome === "rejected" ? outcome : "unknown";
     const { rows } = await client.query<{ status: ResendStatus }>(`SELECT app.b005_resend_settle($1,$2,$3) AS status`, [scope.orgId, input.requestId, safe]);
@@ -61,7 +64,8 @@ export async function resendPortalInvite(session: Session, input: Input, depende
 
 /** Read-only page adapter. Flag OFF returns before reading any invitation. */
 export async function portalResendControl(session: Session, contactId: string, kind: "owner" | "tenant", leaseId?: string) {
-  if (session.kind !== "staff" || !["admin", "manager"].includes(session.role ?? "")) return null;
+  if (session.kind !== "staff" || !["admin", "manager"].includes(session.role ?? "") || !can(session, "leases.edit")) return null;
+  session = await guardEffectiveSession(session, "leases.edit");
   return tx(session.userId, async client => {
     if (!await portalResendEnabled(client, session.orgId)) return null;
     const { rows } = await client.query<{ id: string; company: string }>(

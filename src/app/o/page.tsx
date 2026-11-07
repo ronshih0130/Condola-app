@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { NotificationCenterEntry } from "@/components/notification-center-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function OwnerHomePage() {
   await requireCurrentConsent(undefined, "page");
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), null);
   const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const [rows, privacy] = await Promise.all([ownerHome(session), ownerPrivacy(session.orgId)]);

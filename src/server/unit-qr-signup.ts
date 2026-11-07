@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import type { Client } from "pg";
 import { recordAudit } from "./audit-write";
 import { consentCoversCurrent, readConsent } from "./consent";
@@ -39,7 +40,8 @@ function staffScope(session: Session) {
 export async function unitQrStaffUnits(session: Session) {
   const scope = staffScope(session);
   if (!scope || !key()) return null;
-  return svc(session.userId, async client => {
+  session = await guardEffectiveSession(session, "leases.edit");
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const allowed = (await client.query(`SELECT app.b005_unit_qr_staff($1,$2,$3) AS ok`,
       [session.orgId, session.userId, session.sessionId])).rows[0]?.ok;
     if (allowed !== true) return null;
@@ -47,31 +49,33 @@ export async function unitQrStaffUnits(session: Session) {
       `SELECT u.id::text,p.name || ' / ' || u.label AS label FROM units u
        JOIN properties p ON p.id=u.property_id AND p.org_id=u.org_id
        WHERE u.org_id=$1 AND u.archived_at IS NULL AND p.archived_at IS NULL ORDER BY p.name,u.label,u.id`, [session.orgId])).rows;
-  });
+  }));
 }
 export async function issueUnitQr(session: Session, unitId: string, origin: string) {
   const scope = staffScope(session);
   if (!scope || !uuid.test(unitId)) return null;
   const token = newUnitQrToken();
   if (!token) return null;
-  return svc(session.userId, async client => {
+  session = await guardEffectiveSession(session, "leases.edit");
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const id = (await client.query<{ id: string | null }>(`SELECT app.b005_unit_qr_issue($1,$2,$3,$4,$5)::text AS id`,
       [session.orgId, unitId, session.userId, session.sessionId, unitQrHash(token)])).rows[0]?.id;
     if (!id) return null;
     await recordAudit({ orgId: session.orgId, actorUserId: session.userId, actorRole: session.role! },
       { table: "b005_unit_qr_contexts", rowId: id, action: "insert", eventType: "unit_qr_issued", newRow: { state: "issued" } }, client);
     return { id, url: `${portalInviteOrigin(origin)}/signup/unit-qr#t=${token}`, expiresIn: UNIT_QR_SECONDS };
-  });
+  }));
 }
 export async function revokeUnitQr(session: Session, id: string) {
   if (!staffScope(session) || !uuid.test(id)) return false;
-  return svc(session.userId, async client => {
+  session = await guardEffectiveSession(session, "leases.edit");
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const ok = (await client.query(`SELECT app.b005_unit_qr_revoke($1,$2,$3,$4) AS ok`,
       [session.orgId, id, session.userId, session.sessionId])).rows[0]?.ok === true;
     if (ok) await recordAudit({ orgId: session.orgId, actorUserId: session.userId, actorRole: session.role! },
       { table: "b005_unit_qr_contexts", rowId: id, action: "update", eventType: "unit_qr_revoked", newRow: { state: "revoked" } }, client);
     return ok;
-  });
+  }));
 }
 export async function scanUnitQr(token: string, ip: string | null) {
   if (!verifyUnitQrToken(token)) return null;

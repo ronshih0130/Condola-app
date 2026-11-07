@@ -1,3 +1,6 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
+import { can } from "./perms";
 import { createHash, randomUUID } from 'node:crypto';
 import type { Client } from 'pg';
 import { tx, svcOn } from './db';
@@ -51,31 +54,34 @@ async function occurrence(client: Client, orgId: string, leaseId: string, start:
 export async function readMonthlyRentHistory(
   session: Session, input: { leaseId: string; month: string },
 ): Promise<IssuanceResult | null> {
+  session = await guardEffectiveSession(session, "stmt.view");
   let period: ReturnType<typeof monthlyBounds>;
   try { period = monthlyBounds(input.month); } catch (error) {
     if (error instanceof TypeError) return { status: 'rejected_invalid' };
     throw error;
   }
-  if (session.kind !== 'staff' || !['admin', 'accountant'].includes(session.role ?? ''))
+  if (session.kind !== 'staff' || (session.customRole ? !can(session, 'stmt.view') : !['admin', 'accountant'].includes(session.role ?? '')))
     return { status: 'rejected_disabled' };
   if (!isUuid(input.leaseId)) return { status: 'rejected_invalid' };
-  return tx(session.userId, async client => {
+  return tx(session.userId, async client => withEffectiveAuthority(client, session, "stmt.view", async () => {
+    await assertCustomAuthorityOn(client, session, "stmt.view");
     if (!(await billingPreviewsEnabled(client, session.orgId))) return { status: 'rejected_disabled' };
     if (!(await leaseVisible(client, session.orgId, input.leaseId))) return null;
     return receipts(client, session, async service => {
       const row = await occurrence(service, session.orgId, input.leaseId, period.start);
       return row ? result(row, 'already_issued') : null;
     });
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 }
 
 export async function writeMonthlyRent(session: Session, input: Input): Promise<IssuanceResult> {
+  session = await guardEffectiveSession(session, "stmt.generate");
   let period: ReturnType<typeof monthlyBounds>;
   try { period = monthlyBounds(input.month); } catch (error) {
     if (error instanceof TypeError) return { status: 'rejected_invalid' };
     throw error;
   }
-  if (session.kind !== 'staff' || !['admin', 'accountant'].includes(session.role ?? ''))
+  if (session.kind !== 'staff' || !can(session, 'stmt.generate'))
     return { status: 'rejected_disabled' };
   if (!isUuid(input.leaseId) || !isUuid(input.requestId) || !/^[0-9a-f]{64}$/.test(input.expectedDigest))
     return { status: 'rejected_invalid' };
@@ -84,7 +90,7 @@ export async function writeMonthlyRent(session: Session, input: Input): Promise<
     version: VERSION, orgId: session.orgId, environment: session.environment,
     leaseId, month, expectedDigest,
   })).digest('hex');
-  return tx(session.userId, async client => {
+  return tx(session.userId, async client => withEffectiveAuthority(client, session, "stmt.generate", async () => {
     if (!(await billingPreviewsEnabled(client, session.orgId)) ||
         !(await monthlyRentPostingEnabled(client, session.orgId))) return { status: 'rejected_disabled' };
     // Serialize both request reuse across leases and issuance for this lease.
@@ -93,6 +99,7 @@ export async function writeMonthlyRent(session: Session, input: Input): Promise<
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
       [session.orgId, `monthly-rent:${leaseId}`]);
     if (!(await leaseVisible(client, session.orgId, leaseId))) return { status: 'unsupported' };
+    await assertCustomAuthorityOn(client, session, "stmt.generate");
     const replay = await receipts(client, session, async service => (
       await service.query<Receipt & { intent_digest: string; result_kind: 'created' | 'already_issued' }>(
         `SELECT o.id::text,o.original_invoice_id::text AS invoice_id,o.plan_digest,o.amount_minor::text,
@@ -184,5 +191,5 @@ export async function writeMonthlyRent(session: Session, input: Input): Promise<
           session.userId, invoiceId, rentLineId, ledgerTransactionId, JSON.stringify(snapshot)]);
       return command(service, { id, invoice_id: invoiceId, plan_digest: p.digest, amount_minor: p.amountMinor }, 'created');
     });
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 }

@@ -35,7 +35,7 @@ test("issue-link action rejects every non-admin session before issuing or readin
     let consentChecks = 0;
     const run = new AsyncFunction(
       "input", "readSession", "teamInvitesAllowedForOrg", "resendInvite",
-      "portalInviteOrigin", "requestOrigin", "teamLinkFailure", "requireCurrentConsent", body,
+      "portalInviteOrigin", "requestOrigin", "teamLinkFailure", "requireCurrentConsent", "guardEffectiveSession", body,
     );
     const result = await run(
       { invitationId: "test" }, async () => {
@@ -45,7 +45,7 @@ test("issue-link action rejects every non-admin session before issuing or readin
       unexpected, unexpected, unexpected, async () => {
         consentChecks++;
         return null;
-      },
+      }, async (value: unknown) => value,
     );
     assert.equal(consentChecks, 1);
     assert.deepEqual(result, { ok: false, error: "errors.forbidden" });

@@ -1,3 +1,4 @@
+import { guardEffectiveSession, requireEffectivePerm } from "./b017-custom-role-governance";
 import { createHash, randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
@@ -30,7 +31,8 @@ import { assertSeatAvailableOn, lockSeatOrganization } from "./seats";
 import { assertTeamInvitesAllowed, teamInvitesAllowedForOrg } from "./team-invites";
 
 export { hashInviteToken } from "./portal-invite";
-import { assertPerm } from "./perms";
+import { changeCustomRoleMember } from "./b017-custom-role-governance";
+import { assertPerm, can, PERMS } from "./perms";
 import { appCookieOptions } from "./public-origin";
 import { privacyFromSettings, type OwnerPrivacy } from "./privacy";
 import { backupCodes, acceptSecondFactor, otpauthUrl, randomBase32 } from "./totp";
@@ -697,20 +699,23 @@ async function assertLastAdmin(orgId: string, userId: string, nextRole: OrgRole 
 }
 
 function assertTeamAdmin(session: Session) {
-  if (session.kind !== "staff" || session.role !== "admin") throw new FlowError("errors.forbidden");
+  if (session.kind !== "staff" || session.role !== "admin" || (session.customRole && !can(session, "team.manage"))) throw new FlowError("errors.forbidden");
 }
 
 export async function inviteMember(session: Session, input: { email: string; name: string; role: string }) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertTeamAdmin(session);
   assertTeamInvitesAllowed(session.orgId);
   const email = normalizeEmail(input.email);
   if (!email) throw new FlowError("errors.email");
   if (!TEAM_ROLES.has(input.role as OrgRole)) throw new FlowError("errors.required");
   const role = input.role as OrgRole;
+  if (session.customRole && PERMS.some(([key]) => can(role, key) && !can(session, key))) throw new FlowError("errors.forbidden");
   const token = newToken();
   const issued = await withClient(async (client) => {
     await client.query("BEGIN");
     try {
+      if (session.customRole) await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [session.userId]);
       const organization = await lockSeatOrganization(client, session.orgId);
       if (session.environment !== "live" || organization.environment !== "live") {
         throw new FlowError("errors.teamInvitesSoon");
@@ -732,6 +737,7 @@ export async function inviteMember(session: Session, input: { email: string; nam
          RETURNING id::text, expires_at`,
         [session.orgId, role, email, sha256(token), INVITE_DAYS, session.userId],
       );
+      await requireEffectivePerm(client, session, "team.manage");
       await client.query("COMMIT");
       return inserted.rows[0];
     } catch (error) {
@@ -746,12 +752,14 @@ export async function inviteMember(session: Session, input: { email: string; nam
 }
 
 export async function resendInvite(session: Session, invitationId: string) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertTeamAdmin(session);
   assertTeamInvitesAllowed(session.orgId);
   const token = newToken();
   const issued = await withClient(async (client) => {
     await client.query("BEGIN");
     try {
+      if (session.customRole) await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [session.userId]);
       const organization = await lockSeatOrganization(client, session.orgId);
       if (session.environment !== "live" || organization.environment !== "live") {
         throw new FlowError("errors.teamInvitesSoon");
@@ -771,11 +779,13 @@ export async function resendInvite(session: Session, invitationId: string) {
       if (!row || row.kind !== "team_member" || row.status !== "pending" || !row.unexpired) {
         throw new FlowError("errors.teamInviteUnavailable");
       }
+      if (session.customRole && PERMS.some(([key]) => can(row.role, key) && !can(session, key))) throw new FlowError("errors.forbidden");
       const updated = await client.query<{ expires_at: Date }>(
         `UPDATE invitations SET code_hash = $2, expires_at = now() + make_interval(days => $3)
           WHERE id::text = $1 RETURNING expires_at`,
         [invitationId, sha256(token), INVITE_DAYS],
       );
+      await requireEffectivePerm(client, session, "team.manage");
       await client.query("COMMIT");
       return { email: row.email, role: row.role, expiresAt: updated.rows[0].expires_at.toISOString() };
     } catch (error) {
@@ -790,6 +800,7 @@ export async function resendInvite(session: Session, invitationId: string) {
 }
 
 export async function revokeInvite(session: Session, invitationId: string) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertTeamAdmin(session);
   const updated = await query(
     `UPDATE invitations SET status = 'revoked' WHERE id = $1 AND org_id = $2 AND kind = 'team_member' AND status = 'pending'`,
@@ -800,8 +811,13 @@ export async function revokeInvite(session: Session, invitationId: string) {
 }
 
 export async function setMemberRole(session: Session, memberId: string, role: OrgRole) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertPerm(session, "team.manage");
   if (!TEAM_ROLES.has(role)) throw new FlowError("errors.required");
+  if (await changeCustomRoleMember(session, memberId, { role })) {
+    await writeAudit(session.orgId, session.userId, "role_change", { memberId, role });
+    return;
+  }
   const member = await query<{ user_id: string; role: OrgRole; is_billing_owner: boolean }>(
     `SELECT user_id::text, role::text, is_billing_owner FROM org_members WHERE id = $1 AND org_id = $2 AND status = 'active'`,
     [memberId, session.orgId],
@@ -816,8 +832,13 @@ export async function setMemberRole(session: Session, memberId: string, role: Or
 }
 
 export async function setMemberActive(session: Session, memberId: string, active: boolean, confirmed = false) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertPerm(session, "team.manage");
   if (!active && !confirmed) throw new FlowError("errors.confirm");
+  if (await changeCustomRoleMember(session, memberId, { active })) {
+    await writeAudit(session.orgId, session.userId, active ? "reactivate" : "deactivate", { memberId });
+    return;
+  }
   const member = await query<{ user_id: string; role: OrgRole }>(
     `SELECT user_id::text, role::text FROM org_members WHERE id = $1 AND org_id = $2`,
     [memberId, session.orgId],
@@ -848,6 +869,7 @@ export async function setMemberActive(session: Session, memberId: string, active
           [memberId, session.orgId],
         );
       }
+      await requireEffectivePerm(client, session, "team.manage");
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
@@ -1478,9 +1500,11 @@ export async function disableMfa(session: Session) {
 }
 
 export async function setRequireMfa(session: Session, required: boolean) {
+  session = await guardEffectiveSession(session, "settings.edit");
   assertPerm(session, "settings.edit");
   const { tx } = await import("./db");
   await tx(session.userId, async (client) => {
+    await requireEffectivePerm(client, session, "settings.edit");
     await client.query(
       `UPDATE organizations
           SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{require_2fa}', to_jsonb($2::boolean), true)
@@ -1500,9 +1524,11 @@ export async function ownerPrivacy(orgId: string): Promise<OwnerPrivacy & { name
 }
 
 export async function setOwnerPrivacy(session: Session, input: OwnerPrivacy) {
+  session = await guardEffectiveSession(session, "settings.edit");
   assertPerm(session, "settings.edit");
   const { tx } = await import("./db");
   await tx(session.userId, async (client) => {
+    await requireEffectivePerm(client, session, "settings.edit");
     await client.query(
       `UPDATE organizations
           SET settings = jsonb_set(

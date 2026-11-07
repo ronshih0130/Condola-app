@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { svc, tx } from './db';
+import { guardEffectiveSession } from './b017-custom-role-governance';
 import { FlowError } from './errors';
 import { requireOrgScope } from './org-guard';
 import type { Session } from './types';
@@ -14,6 +15,7 @@ function reader(session: Session) {
 export type UsageSummary = { dimension: UsageDimension; quantity: string; events: string; source_event_ids: string[] };
 export async function readUsageSummary(session: Session, from: string, to: string): Promise<UsageSummary[]> {
   const scope = reader(session);
+  session = await guardEffectiveSession(session, null);
   const start = usagePeriodInstant(from), end = usagePeriodInstant(to);
   if (start === null || end === null || start >= end) throw new FlowError('errors.forbidden');
   return tx(session.userId, async client => (await client.query<UsageSummary>(
@@ -21,10 +23,12 @@ export async function readUsageSummary(session: Session, from: string, to: strin
   )).rows, scope, { readOnly: true });
 }
 export async function readSubscriptionPlan(session: Session) {
+  const scope = reader(session);
+  session = await guardEffectiveSession(session, null);
   return tx(session.userId, async client => {
     const plan = (await client.query<{ plan: PlanPresentation }>('SELECT app.b030_plan_presentation($1) AS plan', [session.orgId])).rows[0].plan;
     return { ...plan, pricingLabel: usageSubscriptionCopy(session.locale).pricingNotConfigured };
-  }, reader(session), { readOnly: true });
+  }, scope, { readOnly: true });
 }
 
 export type MockEventResult = 'off' | 'applied' | 'duplicate';

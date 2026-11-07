@@ -1,3 +1,6 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
+import { can } from "./perms";
 import type { Client } from "pg";
 import { billingPreviewsEnabled, monthlyRentPostingEnabled } from "./billing-preview-rules";
 import { svcOn, tx } from "./db";
@@ -45,9 +48,10 @@ export async function recordPeriodDueComponent(
     component: PeriodDueComponentLine;
   },
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
+  session = await guardEffectiveSession(session, "stmt.generate");
   if (
     session.kind !== "staff" ||
-    !["admin", "accountant"].includes(session.role ?? "")
+    !can(session, "stmt.generate")
   ) {
     return { ok: false, reason: "forbidden" };
   }
@@ -74,7 +78,7 @@ export async function recordPeriodDueComponent(
     return { ok: false, reason: "invalid" };
   }
 
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "stmt.generate", async () => {
     if (
       !(await billingPreviewsEnabled(client, session.orgId)) ||
       !(await monthlyRentPostingEnabled(client, session.orgId))
@@ -90,6 +94,7 @@ export async function recordPeriodDueComponent(
       return { ok: false as const, reason: "not_found" };
     }
 
+    await assertCustomAuthorityOn(client, session, "stmt.generate");
     await privileged(client, session, async (serviceClient) => {
       await serviceClient.query(
         `INSERT INTO app.tenant_period_due_components
@@ -106,5 +111,5 @@ export async function recordPeriodDueComponent(
       );
     });
     return { ok: true as const };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }

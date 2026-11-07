@@ -98,7 +98,7 @@ test("team invite guards use the session or invitation org at every entry point"
   }
   const domain = source("./domain.ts");
   const teammate = domain.slice(domain.indexOf("export async function inviteTeammate("));
-  before(teammate, 'assertStaff(session, ["admin"])', "assertTeamInvitesAllowed(session.orgId)");
+  before(teammate, 'assertStaff(session, ["admin"], "team.manage")', "assertTeamInvitesAllowed(session.orgId)");
   before(teammate, "assertTeamInvitesAllowed(session.orgId)", "await tx(");
 
   const teamPage = source("../app/m/team/page.tsx");

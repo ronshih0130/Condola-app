@@ -1,4 +1,7 @@
 import { recordStoredFileUsage, withUsageTransaction } from './usage-events';
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn, customAuthorityAllowsOn } from "./b017-custom-role-governance";
+import { can } from "./perms";
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "./db";
@@ -12,7 +15,9 @@ import type { Session } from "./types";
 
 const fail = () => new Error("Bank matching unavailable");
 async function authorize(client: Client, session: Session, write: boolean): Promise<boolean> {
-  if (session.kind !== "staff" || !["admin","accountant"].includes(session.role ?? "") || session.needsSandbox) return false;
+  if (session.kind !== "staff" || !can(session,"bank.reconcile") || session.needsSandbox) return false;
+  if (!await customAuthorityAllowsOn(client,session,"bank.reconcile")) return false;
+  if (write) await assertCustomAuthorityOn(client,session,"bank.reconcile");
   if (write) await client.query("LOCK TABLE public.platform_settings IN SHARE MODE");
   const result = await client.query(`SELECT 1 FROM organizations o
     JOIN org_members m ON m.org_id=CASE WHEN o.environment='sandbox' THEN o.live_org_id ELSE o.id END AND m.user_id=$2 AND m.status='active' AND m.role IN ('admin','accountant')
@@ -34,6 +39,7 @@ async function operation<T>(session: Session, write: boolean, fn: (client: Clien
   });
 }
 export async function bankBoard(session: Session) {
+  session = await guardEffectiveSession(session, "bank.reconcile");
   return operation(session,false,async (client) => {
     const accounts = await client.query<{id:string;nickname:string;currency:string}>(`SELECT id::text,nickname,currency FROM bank_accounts WHERE org_id=$1 AND archived_at IS NULL ORDER BY created_at,id`,[session.orgId]);
     const lines = await client.query<{id:string;date:string;amount:string;currency:string;last5:string|null;description:string|null;status:string;account:string;account_property:string|null;overlap:boolean}>(
@@ -49,7 +55,8 @@ export async function bankBoard(session: Session) {
 
 /** Distinguish an unavailable enabled gateway from the legacy OFF screen. */
 export async function bankMatchingEnabled(session: Session): Promise<boolean> {
-  if (session.kind !== "staff" || !["admin","accountant"].includes(session.role ?? "")) throw fail();
+  session = await guardEffectiveSession(session, "bank.reconcile");
+  if (session.kind !== "staff" || !can(session,"bank.reconcile")) throw fail();
   return withClient(async (client) => {
     const result = await client.query<{enabled:boolean}>(`SELECT EXISTS (SELECT 1 FROM organizations o JOIN platform_settings p ON p.key='bank_matching'
       WHERE o.id=$1 AND o.environment::text=$2 AND o.feature_flags->'bank_matching'='true'::jsonb AND p.value->'enabled'='true'::jsonb
@@ -59,6 +66,7 @@ export async function bankMatchingEnabled(session: Session): Promise<boolean> {
 }
 
 export async function importBankFile(session: Session, accountId: string, bytes: Uint8Array, encoding: "utf-8" | "big5", dateFormat: "iso" | "roc" = "iso") {
+  session = await guardEffectiveSession(session, "bank.reconcile");
   if (bytes.length > 1_000_000 || !["utf-8","big5"].includes(encoding) || !["iso","roc"].includes(dateFormat)) throw fail();
   let rows: ReturnType<typeof parseBankCsv>;
   try { rows = parseBankCsv(new TextDecoder(encoding,{fatal:true}).decode(bytes),dateFormat); } catch { throw fail(); }
@@ -94,6 +102,7 @@ export async function importBankFile(session: Session, accountId: string, bytes:
 }
 
 export async function decideBankMatch(session: Session, input: {bankId:string;paymentId?:string;suggestionId?:string;decision:"match"|"reject";reason:unknown;requestId?:string}) {
+  session = await guardEffectiveSession(session, "bank.reconcile");
   const reason = bankMatchReasonCode(input.reason);
   if (!reason || !["match","reject"].includes(input.decision)) throw fail();
   let requestId = input.requestId;

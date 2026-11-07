@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107020000_b017_custom_role_governance.sql": {
+    addOnly: false,
+    reason: "B017 private role authority, immutable revisions, receipts, gated governance/member triggers and restrictive photo/audit RLS. Hosted compatibility remains unproved.",
+  },
   "supabase/migrations/20261106140000_b020_tenant_account.sql": {
     addOnly: true,
     reason: "Seeds default-OFF tenant_account_settings; adds private app.b020_data_requests (one open request per kind) and tenant-scoped SECURITY DEFINER session list/revoke and data-request RPCs deriving user/org from auth.uid() and the pin; no existing-table change.",

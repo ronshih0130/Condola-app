@@ -16,7 +16,7 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   if (session.kind === "owner") redirect("/o");
   const path = (await headers()).get("x-pathname") || "";
   await requireCurrentConsent(session, "page", path || "/m");
-  const denied = noPermHref(path, session.role);
+  const denied = noPermHref(path, session);
   if (denied) redirect(denied);
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);

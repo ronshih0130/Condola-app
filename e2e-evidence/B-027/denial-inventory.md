@@ -6,25 +6,25 @@ Real loaders, HTTP handlers, session cookies, authorization and PostgreSQL RLS a
 
 | Surface | File:line | Role | Expected | Test name |
 |---|---|---|---|---|
-| /m/properties/[id] loader | src/server/queries.ts:291 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/properties/[id] loader |
-| /m/leases/[id] loader | src/server/queries.ts:647 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/leases/[id] loader |
-| /m/tenants/[id] loader | src/server/queries.ts:1865 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tenants/[id] loader |
-| /m/statements/[id] loader | src/server/queries.ts:1023 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/statements/[id] loader |
-| /m/tickets/[id] loader | src/server/queries.ts:1176 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tickets/[id] loader |
-| signed PDF bytes reader | src/server/queries.ts:760 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: signed PDF bytes reader |
-| lease PDF API | src/app/api/pdf/leases/[id]/route.ts:10 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: lease PDF API |
-| statement PDF API | src/app/api/pdf/statements/[id]/route.ts:10 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: statement PDF API |
-| signed PDF download | src/app/m/leases/[id]/signed/route.ts:7 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: signed PDF download |
+| /m/properties/[id] loader | src/server/queries.ts:324 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/properties/[id] loader |
+| /m/leases/[id] loader | src/server/queries.ts:694 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/leases/[id] loader |
+| /m/tenants/[id] loader | src/server/queries.ts:1971 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tenants/[id] loader |
+| /m/statements/[id] loader | src/server/queries.ts:1086 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/statements/[id] loader |
+| /m/tickets/[id] loader | src/server/queries.ts:1250 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tickets/[id] loader |
+| signed PDF bytes reader | src/server/queries.ts:809 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: signed PDF bytes reader |
+| lease PDF API | src/app/api/pdf/leases/[id]/route.ts:11 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: lease PDF API |
+| statement PDF API | src/app/api/pdf/statements/[id]/route.ts:11 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: statement PDF API |
+| signed PDF download | src/app/m/leases/[id]/signed/route.ts:8 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: signed PDF download |
 | ticket photo redirect/bytes | src/app/api/tickets/photos/[id]/route.ts:7 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: ticket photo redirect/bytes |
-| repair photo metadata + URL + byte route | src/server/repairs.ts:481 | Accountant / foreign staff; own Admin/Manager | forbidden/null/404; no storage call; own filename and bytes | B027 Accountant photo readers deny metadata URLs and bytes |
+| repair photo metadata + URL + byte route | src/server/repairs.ts:500 | Accountant / foreign staff; own Admin/Manager | forbidden/null/404; no storage call; own filename and bytes | B027 Accountant photo readers deny metadata URLs and bytes |
 | company audit screen/history + direct RLS | src/server/audit-read.ts:737 | Manager / Accountant / Staff=maintenance / foreign Admin; own Admin | empty entries; own Admin sees fixture | B027 company audit excludes every non-Admin role |
-| ID document URL and decrypted bytes readers | src/server/id-docs.ts:1019 | foreign staff / Accountant; own Admin/Manager | forbidden/null; own watermarked image bytes | B027 ID document bytes and URLs are scoped |
-| ID document photo API | src/app/api/id-documents/photo/route.ts:45 | foreign staff / Accountant; own Admin/Manager | 404 empty; own 200 image bytes | B027 HTTP ID photo reauthorizes known document and signed token |
-| vendor persisted document bytes | src/server/vendor-receipt.ts:790 | foreign staff / Accountant; own Admin/Manager | notFound/forbidden; own exact PDF bytes and hash | B027 vendor document reader denies foreign org and Accountant |
+| ID document URL and decrypted bytes readers | src/server/id-docs.ts:1031 | foreign staff / Accountant; own Admin/Manager | forbidden/null; own watermarked image bytes | B027 ID document bytes and URLs are scoped |
+| ID document photo API | src/app/api/id-documents/photo/route.ts:47 | foreign staff / Accountant; own Admin/Manager | 404 empty; own 200 image bytes | B027 HTTP ID photo reauthorizes known document and signed token |
+| vendor persisted document bytes | src/server/vendor-receipt.ts:857 | foreign staff / Accountant; own Admin/Manager | notFound/forbidden; own exact PDF bytes and hash | B027 vendor document reader denies foreign org and Accountant |
 | direct photo file metadata and legacy attachment bytes | src/server/b027-denial-inventory.integration.test.ts:238 | foreign staff; own Admin/Manager | zero rows; same fixture exact filename/path/bytes | B027 direct photo data remains isolated across organizations |
 | direct files metadata via authenticated RLS | src/server/b027-denial-inventory.integration.test.ts:251 | Accountant; own Admin positive control | zero filename/path rows (GAP-01 fixed by 20261106232000) | B027 GAP-01 Accountant must not read ticket photo file metadata |
 | direct ticket attachment bytes via authenticated RLS | src/server/b027-denial-inventory.integration.test.ts:346 | Accountant; foreign staff and own Admin controls | zero bytes rows (GAP-02 fixed by 20261106232000) | B027 GAP-02 Accountant must not read legacy ticket attachment bytes |
-| /m/tickets/[id] photo metadata loader | src/server/queries.ts:1176 | Accountant; own Admin positive control | empty photos (no filenames/paths/ids), count only (GAP-03 fixed) | B027 GAP-03 Accountant ticket loader must not return photo metadata |
+| /m/tickets/[id] photo metadata loader | src/server/queries.ts:1250 | Accountant; own Admin positive control | empty photos (no filenames/paths/ids), count only (GAP-03 fixed) | B027 GAP-03 Accountant ticket loader must not return photo metadata |
 | public.id_document_objects catalog | src/server/b027-denial-inventory.integration.test.ts:387 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE false | B027 grants: public.id_document_objects |
 | public.lease_signed_pdfs catalog | src/server/b027-denial-inventory.integration.test.ts:388 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT/INSERT/DELETE; RLS ON; FORCE false | B027 grants: public.lease_signed_pdfs |
 | public.payee_account_numbers catalog | src/server/b027-denial-inventory.integration.test.ts:389 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE false | B027 grants: public.payee_account_numbers |
@@ -43,10 +43,10 @@ All seven tables are in `public`. Each checks effective table and every column p
 | public.id_document_objects | encrypted identity image bytes; service-only | none; anon none | no policies and no client ACL | false |
 | public.lease_signed_pdfs | signed contractual bytes | SELECT, INSERT, DELETE; anon none | member SELECT; scoped tenant SELECT; Admin/Manager INSERT/DELETE | false |
 | public.payee_account_numbers | unmasked payee bank account data | none; anon none | Admin policies exist but client ACL revoked; gateway only | false |
-| public.audit_log | company activity and sensitive row snapshots | SELECT; anon none | Admin SELECT only | false |
+| public.audit_log | company activity and sensitive row snapshots | SELECT; anon none | Admin SELECT only + B-017 RESTRICTIVE b017_company_audit_floor | false |
 | public.consents | user legal consent evidence | SELECT; anon none | own-user SELECT; no client mutation | false |
 | public.platform_settings | global control plane and rollout settings | SELECT; anon none | authenticated SELECT intentionally global; no client mutation | false |
-| public.files | private object paths and filenames | SELECT, INSERT, UPDATE, DELETE; anon none | member CRUD (ticket-photo bucket SELECT only for tickets.update roles) + portal own/attached-photo policies; GAP-01 fixed | false |
+| public.files | private object paths and filenames | SELECT, INSERT, UPDATE, DELETE; anon none | member CRUD (ticket-photo bucket SELECT only for tickets.update roles) + portal own/attached-photo policies; GAP-01 fixed; + B-017 RESTRICTIVE b017_file_photo_floor | false |
 
 These seven existing migrations enable RLS but do not FORCE it. The test pins that fact rather than claiming owner isolation. Supplemental `vendor_document_pdf_bytes` asserts ENABLE + FORCE and no client grants, exercising the forced expectation where the migration requires it. Service roles and table owners remain trusted. `platform_settings` reads are intentionally global; they are not an org-denial surface. Files' Accountant ticket-photo metadata exposure (GAP-01) is closed by 20261106232000.
 
@@ -93,6 +93,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/line/session/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/vendor-job/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/webhook/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/mock-subscription/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/monthly-rent-issue/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/notification-center/mark/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/notification-center/vendor-mark/route.ts:1 | Enumerated only; outside representative selection |
@@ -104,12 +105,16 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/pdf/leases/[id]/route.ts:1 | HTTP handler executed above |
 | src/app/api/pdf/statements/[id]/route.ts:1 | HTTP handler executed above |
 | src/app/api/reset-flash/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/signup/unit-qr/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/tenant-directory/edit/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/tickets/photos/[id]/route.ts:1 | HTTP handler executed above |
 | src/app/api/tickets/photos/confirm/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/tickets/photos/sign/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-account-staff/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-account/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-documents/pdf/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-documents/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-documents/scan/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-estimate/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-job-completion/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-job-response/route.ts:1 | Enumerated only; outside representative selection |
@@ -120,6 +125,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/m/leases/[id]/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/m/leases/[id]/signed/route.ts:1 | HTTP handler executed above |
 | src/app/m/reports/export/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/signup/unit-qr/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/t/history/[leaseId]/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/t/lease/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |
 

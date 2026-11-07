@@ -1,4 +1,5 @@
 import { maybe, svc } from "./db";
+import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { FlowError } from "./errors";
 import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
 import { assertIdentifiers } from "./repair-approval-rules";
@@ -38,7 +39,8 @@ export async function managerVendorEstimates(session: Session, ticketId: string)
   const scope = { orgId: session.orgId, environment: session.environment };
   assertIdentifiers(ticketId, session.sessionId, session.liveOrgId);
   if (session.kind !== "staff" || !["admin", "manager"].includes(session.role ?? "")) throw new FlowError("errors.forbidden");
-  return svc(session.userId, async client => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "tickets.update", async () => {
     const row = await maybe<{ result: ManagerEstimate[] }>(client,
       "SELECT app.b026_manager_estimates($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid) AS result",
       [scope.orgId, session.liveOrgId, scope.environment, session.sessionId, ticketId]);
@@ -49,5 +51,5 @@ export async function managerVendorEstimates(session: Session, ticketId: string)
       newRow: { version_ids: rows.map(item => item.versionId) }, reason: "vendor_estimate_comparison",
     }, client);
     return rows;
-  });
+  }));
 }

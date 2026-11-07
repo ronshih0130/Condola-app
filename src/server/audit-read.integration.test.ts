@@ -212,7 +212,11 @@ test("keyset plans seek an index and do not sort", async () => {
       const explained = await client.query<{ "QUERY PLAN": string }>(`EXPLAIN ${built.sql}`, built.params);
       return explained.rows.map((row) => row["QUERY PLAN"]).join("\n");
     });
-    assert.match(plan, new RegExp(item.index), plan);
+    // The added restrictive policy can make the planner prefer the org keyset
+    // over a more selective composite index on this small fixture. Both must
+    // seek the cursor in index order; do not prescribe a cost-based choice.
+    assert.match(plan, new RegExp(`${item.index}|audit_log_org_keyset_idx`), plan);
+    assert.match(plan, /Index Cond:.*ROW\(occurred_at, id\)/, plan);
     assert.doesNotMatch(plan, /Sort/);
     assert.doesNotMatch(plan, /Seq Scan on audit_log/);
   }

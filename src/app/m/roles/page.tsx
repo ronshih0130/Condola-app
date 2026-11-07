@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RolesPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   await requireCurrentConsent(undefined, "page");
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "settings.edit");
   const params = await searchParams;
   const t = makeT(session.locale);
   const privacy = await ownerPrivacy(session.orgId);
@@ -51,7 +52,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
           </tbody>
         </table>
       </div>
-      {can(session.role, "settings.edit") ? (
+      {can(session, "settings.edit") ? (
         <form className="card pad" action={actionOwnerPrivacy} style={{ marginTop: 16, maxWidth: 640 }}>
           <h3>{t("i_owner_privacy")}</h3>
           <label className="row">

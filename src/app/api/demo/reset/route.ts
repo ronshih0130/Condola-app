@@ -1,3 +1,5 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+import { can } from "@/server/perms";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -8,8 +10,8 @@ import { readSession } from "@/server/session";
 
 export async function POST() {
   if (!demoModeEnabled()) return new NextResponse(null, { status: 404 });
-  const session = await readSession();
-  if (!session || session.kind !== "staff" || session.role !== "admin") {
+  const session = await guardEffectiveSession(await readSession(), "settings.edit");
+  if (!session || (session.customRole && !can(session, "settings.edit")) || session.kind !== "staff" || session.role !== "admin") {
     return new NextResponse(null, { status: 404 });
   }
   const blocked = await requireCurrentConsent(session, "api");

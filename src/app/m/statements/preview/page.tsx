@@ -53,7 +53,7 @@ export default async function StatementPreviewPage({
             <p>{exceptions.residual}: {statementSignedMoney(preview.payments.reduce((sum,p) => sum+p.unallocated+p.allocations.reduce((subtotal,a) => subtotal+a.residual,0),0),preview.currency,session.locale)}</p>
             <h3>{copy.partial}</h3><ul>{preview.payments.flatMap((p) => p.allocations.flatMap((a) => a.lines.map((line) => <li key={`${a.id}:${line.id}`}>{line.description} · {copy.service}: {line.service_period ?? copy.pending} · {copy.quantity}: {line.quantity} · {copy.unit}: {line.unit_amount_minor} · {copy.amount}: {statementSignedMoney(line.amount_minor,preview.currency,session.locale)}</li>)))}</ul>
           </div> : <p className="small">{t("i_preview_pending")}</p>}
-          {can(session.role,"stmt.generate") ? <PreviewGenerateForm ownerId={row.owner_id} month={month} label={t("s_705a524")} fingerprint={preview?.fingerprint} /> : null}
+          {can(session,"stmt.generate") ? <PreviewGenerateForm ownerId={row.owner_id} month={month} label={t("s_705a524")} fingerprint={preview?.fingerprint} /> : null}
         </div>
       </div>
     </>

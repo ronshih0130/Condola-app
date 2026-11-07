@@ -1,4 +1,5 @@
 import { query, svc, tx } from "./db";
+import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { recordAudit } from "./audit-write";
 import { FlowError } from "./errors";
 import { requireOrgScope } from "./org-guard";
@@ -53,7 +54,8 @@ export async function changePartnerOverride(session: Session, command: PartnerCo
   assertStaff(session, ["admin"]);
   if (session.needsSandbox) throw new FlowError("errors.forbidden");
   const scope = requireOrgScope(session);
-  return svc(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, null);
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, null, async () => {
     await client.query(`SELECT set_config('app.active_org_id',$1,true), set_config('app.env',$2,true)`,
       [session.orgId, session.environment]);
     const result = await client.query<{ result: PartnerOverride | null }>(
@@ -67,5 +69,5 @@ export async function changePartnerOverride(session: Session, command: PartnerCo
         newRow: { kind: changed.kind, revision: changed.revision, unit_limit: changed.unitLimit,
           starts_at: changed.startsAt, expires_at: changed.expiresAt, revoked: changed.revoked } }, client);
     return changed;
-  });
+  }));
 }

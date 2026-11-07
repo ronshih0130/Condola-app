@@ -1,5 +1,6 @@
 import type { Client } from "pg";
 import { tx } from "./db";
+import { guardEffectiveSession } from "./b017-custom-role-governance";
 import { requireOrgScope } from "./org-guard";
 import type { Session } from "./types";
 import { idSignGateFlagOn, resolveIdSignGate, signingRequiresIdentity } from "./id-sign-gate-rules";
@@ -16,6 +17,7 @@ export async function identityRequiredForSigning(client: Client, orgId: string):
 
 /** Same policy for page rendering (e.g. the tenant ID banner). Flag OFF ⇒ true (unchanged). */
 export async function identityRequiredForSigningFor(session: Session): Promise<boolean> {
+  session = await guardEffectiveSession(session, null);
   try { return await tx(session.userId, (client) => identityRequiredForSigning(client, session.orgId), requireOrgScope(session)); }
   catch { return true; }
 }

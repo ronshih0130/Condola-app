@@ -1,4 +1,6 @@
 import { recordUsage, usageDedupeKey } from './usage-events';
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
 import { createHash } from "node:crypto";
 import type { Session } from "./types";
 import { svc } from "./db";
@@ -22,12 +24,14 @@ export function renderLocalReminder(row: Claimed): LocalReminder {
 }
 
 export async function captureManualReminders(session: Session, leaseId: string, eventId: string, capture: LocalCapture = () => {}) {
+  session = await guardEffectiveSession(session, "tenants.contact");
   if (session.kind !== "staff" || !["admin","manager"].includes(session.role ?? "") || session.needsSandbox) throw new Error("Reminder unavailable");
   let completed=0;
   const processed:string[]=[];
   // A bound makes a large recipient list resumable rather than an unbounded request.
   for (let n=0;n<100;n++) {
-    const outcome=await svc(session.userId,async (c) => {
+    const outcome=await svc(session.userId,async (c) => withEffectiveAuthority(c, session, "tenants.contact", async () => {
+    await assertCustomAuthorityOn(c, session, "tenants.contact");
       const args=[session.orgId,session.liveOrgId,session.environment,session.sessionId,leaseId,eventId];
       const row=(await c.query<Claimed>(`SELECT * FROM app.b028_claim_manual($1,$2,$3,$4,$5,$6,$7)`,[...args,processed])).rows[0];
       if (!row) return {state:"empty" as const};
@@ -41,7 +45,7 @@ export async function captureManualReminders(session: Session, leaseId: string, 
       if (digest) await recordUsage(c, { orgId: session.orgId, dimension: 'notifications', quantity: BigInt(1), occurredAt: new Date(),
         sourceTable: 'b028_recipient_claims', sourceId: row.claim_id, dedupeKey: usageDedupeKey('notifications', 'b028_recipient_claims', row.claim_id) });
       return {state:digest ? "captured" as const : "failed" as const, claimId:row.claim_id};
-    });
+    }));
     if (outcome.state === "empty") break;
     processed.push(outcome.claimId);
     if (outcome.state === "captured") completed++;
