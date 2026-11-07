@@ -14,6 +14,18 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106230000_b025_legacy_zero_history_seal.sql": {
+    addOnly: false,
+    reason: "Replaces the service-only legacy seal gateway so zero-history legacy business profiles read their seal from the live profile under the same grant/flag admission; versioned profiles are unchanged. No table, column, grant widening or flag activation.",
+  },
+  "supabase/migrations/20261106170000_b025_vendor_document_integrity.sql": {
+    addOnly: false,
+    reason: "Adds private immutable paper-scan siblings with RLS and service-only grant-scoped gateways; adds snapshot-reference guards without backfill or flag activation. Existing profile versions and PDF snapshots are reused.",
+  },
+  "supabase/migrations/20261106050000_b025_vendor_document_gate.sql": {
+    addOnly: false,
+    reason: "Adds private append-only vendor received marks, service-only grant-scoped gateways, a default-OFF flag and a receipt INSERT trigger enforcing full payment when enabled (changes legacy insert admission only while ON); no override, backfill or hosted activation.",
+  },
   "supabase/migrations/20261106060000_b001_id_sign_gate_flag.sql": {
     addOnly: true,
     reason: "Seeds the default-OFF platform setting id_sign_gate_v2 for the two-level ID switches (B-001 / PROP-US-v03-01); no table, function or grant change; flag OFF keeps the existing ID hard gate.",

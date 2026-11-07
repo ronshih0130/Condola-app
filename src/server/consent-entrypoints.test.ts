@@ -49,6 +49,7 @@ const openPages: Record<string, Record<string, string>> = {
   "app/v/[token]/estimate/page.tsx": { default: "B-026 scoped vendor token and flag gateway, no user session" },
   "app/v/[token]/page.tsx": { default: "Vendor link token authentication, no user session" },
   "app/v/[token]/notifications/page.tsx": { default: "Exact vendor job token gateway, no human user session" },
+  "app/v/documents/[token]/page.tsx": { default: "B-025 vendor document grant token, no human user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
   "api/line/vendor-job/route.ts": { GET: "B-035 browser-bound single-job claim and strict LINE gates; no account session", POST: "B-035 same-origin CSRF and original locked vendor job capability; no account session" },
@@ -84,6 +85,9 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/vendor-jobs/photos/confirm/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-job-response/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-job-completion/route.ts": { POST: "Vendor link token authentication, no user session" },
+  "api/vendor-documents/route.ts": { POST: "B-025 vendor document grant token, no user session" },
+  "api/vendor-documents/pdf/route.ts": { POST: "B-025 vendor document grant token, no user session" },
+  "api/vendor-documents/scan/route.ts": { POST: "B-025 vendor document grant token, no user session" },
   "api/notification-center/vendor-mark/route.ts": { POST: "Exact vendor job token gateway, no human user session" },
   "api/reset-flash/route.ts": { POST: "Recovery feedback cookie" },
   "api/version/route.ts": { GET: "Public version" },

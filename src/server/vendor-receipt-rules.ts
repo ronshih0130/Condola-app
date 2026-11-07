@@ -3,6 +3,7 @@ import {
   type VendorReceiptErrors,
   type VendorReceiptLocale,
 } from "../i18n/lanes/vendor-receipt";
+import { isTradeLine, tradeLineItems, tradeTotal, type TradeLineItem } from "./vendor-document-trade-rules";
 import type { JobTypeLineItem } from "./job-types-rules";
 
 export type VendorDocumentKind = "receipt" | "completion_statement";
@@ -165,14 +166,23 @@ export function toChineseUppercaseAmount(amount: number): string {
 }
 
 export function validateDocumentTotals(
-  items: readonly JobTypeLineItem[],
+  items: readonly (JobTypeLineItem | TradeLineItem)[],
   totalMinor: number,
   ticketActualCostMinor: number,
 ): number {
   if (!validMoney(totalMinor) || items.length === 0) fail("invalidLineItems");
 
+  if (items.some(isTradeLine)) {
+    if (!items.every(isTradeLine)) fail("invalidLineItems");
+    const exact = tradeLineItems(items);
+    if (exact.some((row, i) => row.amount_minor !== items[i].amount_minor)) fail("invalidLineItems");
+    const sum = tradeTotal(exact);
+    if (sum !== BigInt(totalMinor)) fail("invalidLineItems");
+    if (!validMoney(ticketActualCostMinor) || sum !== BigInt(ticketActualCostMinor)) fail("totalMismatchWithTicketCost");
+    return totalMinor;
+  }
   let sum = 0;
-  for (const item of items) {
+  for (const item of items as readonly JobTypeLineItem[]) {
     if (
       !nonEmpty(item.name) ||
       !nonEmpty(item.unit) ||
@@ -206,7 +216,7 @@ export interface VendorDocument {
   readonly seq: number;
   readonly doc_no: string;
   readonly buyer: BuyerSnapshot;
-  readonly items: readonly JobTypeLineItem[];
+  readonly items: readonly (JobTypeLineItem | TradeLineItem)[];
   readonly total_minor: number;
   readonly uppercase_total: string;
   readonly title: string;
@@ -219,6 +229,8 @@ export interface VendorDocument {
 }
 
 export interface IssueVendorDocumentInput {
+  /** Explicit completion statements are allowed; receipts still require qualification. */
+  kind?: VendorDocumentKind;
   id: string;
   vendor_profile_id: string;
   ticket_id: string;
@@ -226,7 +238,7 @@ export interface IssueVendorDocumentInput {
   vendor: ReceiptVendor;
   seq: number;
   buyer: BuyerInput;
-  items: readonly JobTypeLineItem[];
+  items: readonly (JobTypeLineItem | TradeLineItem)[];
   total_minor: number;
   ticket_actual_cost_minor: number;
   locale?: VendorReceiptLocale;
@@ -240,7 +252,9 @@ export function issueVendorDocument(input: IssueVendorDocumentInput): VendorDocu
   ) {
     fail("invalidDocumentCode");
   }
-  const kind = decideDocumentKind(input.vendor);
+  const eligibleKind = decideDocumentKind(input.vendor);
+  if (input.kind === "receipt" && eligibleKind !== "receipt") fail("invalidDocumentCode");
+  const kind = input.kind ?? eligibleKind;
   const docNo = formatDocumentNo(input.vendor_code, input.seq, kind);
   const buyer = validateBuyer(input.buyer);
   validateDocumentTotals(input.items, input.total_minor, input.ticket_actual_cost_minor);
@@ -265,7 +279,7 @@ export function issueVendorDocument(input: IssueVendorDocumentInput): VendorDocu
     seq: input.seq,
     doc_no: docNo,
     buyer,
-    items: input.items.map((item) => ({
+    items: input.items.map((item) => isTradeLine(item) ? { ...item } : ({
       ...item,
       unit_price_minor: Math.round(item.amount_minor / item.quantity),
     })),

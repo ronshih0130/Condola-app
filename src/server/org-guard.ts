@@ -3,7 +3,7 @@ import { tx, type TxScope } from "./db";
 import { FlowError } from "./errors";
 import type { Session } from "./types";
 
-export function requireOrgScope(session: Session): TxScope {
+export function requireOrgScope(session: Pick<Session, "orgId" | "environment">): TxScope {
   if (
     typeof session.orgId !== "string" ||
     !session.orgId.trim() ||
