@@ -1,0 +1,63 @@
+{
+  "lane": "B-023 slice 3 (owner account: own sessions, own profile, notification preferences)",
+  "flag": "owner_portal_extensions (strict, reused from slice 1)",
+  "base": "feat/b-023-owner-account-preferences on c4bdc28 (uncommitted worktree)",
+  "migration": "supabase/migrations/20261107116000_b023_owner_account_preferences.sql",
+  "db": "local disposable PostgreSQL 16 (127.0.0.1:55432/condola_b023s3): stub + all migrations + db:reset; each integration file run alone with --test-concurrency=1",
+  "results": {
+    "typecheck": "PASS",
+    "lint": "PASS (0 errors; remaining warnings are pre-existing, none in changed files)",
+    "copy:check": "PASS 6/6",
+    "test:unit": "PASS 996/996 (device-summary unit test moved to SQL/integration; includes owner-account, owner-nav, lease-rules migration list, write-pr-migrations)",
+    "src/server/b023-owner-account-preferences.integration.test.ts": "PASS 8/8 (review r1: legacy /m/account revoke actions denied for owner/tenant, replay after recent-auth window, SQL device summary)",
+    "src/server/b023-owner-portal-access.integration.test.ts (slice 1)": "PASS 6/6",
+    "src/server/b023-owner-replies-messages.integration.test.ts (slice 2)": "PASS 9/9",
+    "src/server/b022-owner-replies.integration.test.ts": "PASS 11/11",
+    "src/server/b014-owner-net-ledger.integration.test.ts": "PASS 12/12",
+    "src/server/owner-home.integration.test.ts": "PASS 1/1",
+    "src/server/owner-transfers.integration.test.ts": "PASS 1/1",
+    "src/server/property-owner.integration.test.ts": "PASS 1/1",
+    "src/server/repair-owner-policy.integration.test.ts": "PASS 16/16",
+    "src/server/repair-owner-default.integration.test.ts": "PASS 18/18",
+    "src/server/repair-owner-override.integration.test.ts": "PASS 19/19",
+    "src/server/session-identity.integration.test.ts": "PASS 1/1",
+    "src/server/reminder-seed.integration.test.ts": "PASS 2/2 (seed wipe includes the four new tables; schema-absence probe unaffected: new FKs reference only organizations/contacts/auth.users)",
+    "scripts/check-function-privileges.sh": "PASS (anon execute zero; allowlist matches)",
+    "scripts/write-pr-migrations.mjs": "PASS (copies 20261107116000 as addOnly)",
+    "src/server/consent-entrypoints.test.ts": "PASS 4/4 (actionRevokeSession/actionRevokeOthers stay classified 'Terminate sessions')",
+    "src/server/auth.integration.test.ts": "PASS 18/18",
+    "src/server/team-invite-link.integration.test.ts": "PASS 15/15",
+    "B-027 inventory": "not present in this worktree"
+  },
+  "off_cases": [
+    "platform_settings row absent",
+    "enabled false (org flag true)",
+    "enabled \"true\" (string)",
+    "allowed_org_ids not an array",
+    "global value not an object",
+    "org not in allowed_org_ids",
+    "org flag false",
+    "org flag \"true\" (string)",
+    "org flag absent"
+  ],
+  "asserted_per_off_case": {
+    "GET /o/account": "ownerAccountView returns null => notFound() 404",
+    "server actions (revoke session, save profile, set preference)": "{state:'unavailable'}",
+    "nav": "no /o/account entry; OFF markup identical (owner-nav.test.ts)",
+    "app.b023_* gateways called by app code": "none (Client.query spy)",
+    "direct RPC as owner": "42501 for all six slice-3 gateways",
+    "B-023 slice-3 tables, auth_sessions, contacts, audit_log": "unchanged (zero writes)"
+  },
+  "tap": [
+    "integration-b023-owner-account-preferences.tap",
+    "unit-owner-account.tap"
+  ],
+  "review_r1": {
+    "MAJOR auth-actions bypass": "fixed: actionRevokeSession/actionRevokeOthers return with no effect unless session.kind==='staff'; integration test (owner, tenant, fixture owner cookies => zero revocations, zero audit; staff positive control) mutation-checked",
+    "MAJOR prefs copy over-promise": "fixed: zh-TW/en say the choice is saved and applies once delivery supports it; wiring recorded as open item in design doc",
+    "MINOR button label": "fixed: 讓該裝置登出 / Sign out that device",
+    "MINOR session scope copy": "added: signing out a device ends that device's whole Condola session (all roles/companies)",
+    "MINOR replay order": "fixed: request-id lookup before current/reauth_required",
+    "MINOR raw user agent": "fixed: app.b023s3_device summary in SQL; gateway returns device only"
+  }
+}

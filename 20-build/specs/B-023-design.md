@@ -62,7 +62,7 @@ No lifecycle replies, messaging, profile/security/session or notification-prefer
 ## 能力 ID
 
 - Covered: CAP-O-10 / OWN-07–08 lifecycle replies (owner text reply to B-012 renewal-intent / non-renewal / early-termination notices; owner, tenant and company responses kept separate); CAP-O-11 company messaging (one owner ↔ company thread per property per owner, text only).
-- Not built (slice 3): profile / security / sessions, notification preferences. Also not built: staff inbox listing of owner threads, notifications on new owner messages, attachments, settlement replies (OWN-09).
+- Slice 3 (below) covers profile / security / sessions and notification preferences. Not built: staff inbox listing of owner threads, notifications on new owner messages, attachments, settlement replies (OWN-09).
 
 ## Done means
 
@@ -100,3 +100,58 @@ With `owner_portal_extensions` ON (and `lease_renewal` ON for lifecycle items), 
 - **Edited marker.** The owner gateway returns `edited` = `edited_at` set, or (owner's own message) body no longer matches the digest recorded at send; shown as 已編輯 / Edited.
 - **Volume cap.** At most 30 owner messages per thread per rolling 24 h (counted from `public.messages`, incl. soft-deleted); further posts return `rate_limited` with zero writes and zh-TW/en copy.
 - Tests: integration now 9 (staff admin/manager see threads + replies; accountant/maintenance/other org/owner/tenant/anon denied; foreign lease denied; inbox lease query unchanged; gone/edited/cap; OFF matrix covers both staff readers).
+
+---
+
+# Slice 3：屋主帳號（登入裝置、聯絡資料、通知設定）
+
+> Author: Claude FALLBACK-SUBAGENT implementer (Codex unavailable), 2026-11-06 PT. Branch `feat/b-023-owner-account-preferences` on slice 2 @ c4bdc28. Same flag `owner_portal_extensions` (default OFF). Migration `20261107116000_b023_owner_account_preferences.sql` (additive; slice-1/2 migrations untouched).
+
+## 能力 ID
+
+- Covered: owner profile / security / sessions and owner notification preferences (spec scope "profile/security/sessions and notification preferences"; acceptance "Given session/preference edits, when submitted, then ownership and recent-auth controls apply").
+- Deferred: owner password change / credential epoch (B-031 #71, other stack); staff permissions; privacy/terms/consent text.
+
+## Done means
+
+With the flag ON, an owner opens `/o/account` (nav 帳號 / Account) and sees (1) 聯絡資料: display name, notification/contact language and preferred contact method of their own owner contact, editable; email and phone shown read-only; (2) 通知設定: 報修進度通知 and 屋主報表寄送通知, each ON by default, toggled per owner (copy says the choice is saved and applies once delivery supports it); (3) 登入裝置: their own live login sessions (browser · OS summary computed in SQL, signed-in and last-used time, 這台裝置 marker; no IP, no raw user agent), with 讓該裝置登出 on each other device (copy states this ends that device's whole Condola session, all roles/companies) when the current session signed in within the last 15 minutes. Flag OFF: `/o/account` 404, no nav entry, actions `unavailable`, zero writes.
+
+## Reuse decisions
+
+- **Sessions = `public.auth_sessions`** (user-level). `app.b023_owner_sessions(org, session)` returns only a device summary (`app.b023s3_device`, never the stored user agent) for `auth.uid()`'s live rows (`revoked_at IS NULL AND expires_at > now`); the caller's `session` must be its own live row (a borrowed id ⇒ 42501). `app.b023_revoke_owner_session(org, session, target, request)` revokes exactly one other own session (`revoked_at = clock_timestamp()`), like the existing staff `revokeSession`; another user's session id ⇒ 42501 without being read or locked; target = current ⇒ `current` (normal sign-out ends the current session). Ledger `app.b023_owner_session_revocations` (request-id idempotency, looked up before the `current`/`reauth_required` checks so a retried completed revoke is `replayed`) + one `audit_log` row (`owner_session_revoked`, no IP).
+- **Legacy staff actions closed to portal sessions (review r1).** The pre-existing `/m/account` server actions `actionRevokeSession` / `actionRevokeOthers` (`src/server/auth-actions.ts`) now return with no effect unless `session.kind === "staff"`, so an owner or tenant session cannot bypass the owner recent-auth by calling them by action id. Staff behaviour is unchanged.
+- **Recent-auth.** No re-authentication mechanism exists on this base (staff `/m/account` revokes without one). Fallback per brief: revoke requires the current session's `auth_sessions.created_at` (set only at sign-in; never re-issued on activity) within the last **15 minutes** (`app.b023s3_recent`). Older ⇒ `reauth_required`, zero writes; the page hides revoke buttons and explains "sign out and sign in again". Profile and preference edits do not change contact channels, so they need ownership + live session only.
+- **Profile = own `public.contacts` row** (slice-1 `b023_owner_contact` binding). Editable: `display_name` (1–100, trimmed, no control chars), `locale` (`zh-TW|en`), `preferred_channel` (NULL = company default, `in_app`, or `email`/`sms`/`line` only when the contact has that address). Email/phone read-only: no verification flow exists for contact-channel changes. No new personal-data fields; no ID/tax numbers. Optimistic `version` (md5 over editable fields + `updated_at`) ⇒ `stale`; equal values ⇒ `unchanged`; ledger `app.b023_owner_profile_revisions` (request-id idempotency). The existing `contacts` audit trigger records the change. Same precedent as B-022 `b022_set_receipt_title` (owner edits a field of their own contact).
+- **Preferences = tenant-reminder-preference pattern** (`app.b010_tenant_due_preferences`: default-true row, definer get/set, audit row on change). Additive `app.b023_owner_notification_preferences(org, owner_contact, category, enabled)`; no row = ON. Categories = owner notifications that exist on this base: `repair_updates` (B-028 center `vendor_job_assigned`, owner persona) and `statement_reports` (B-014 report delivery). Ledger `app.b023_owner_preference_requests`; audit `owner_notification_preference_changed`.
+- **Delivery wiring pending.** No existing owner delivery consults preferences (B-028 has no granted producer; B-014 delivery is a mock adapter). `app.b023_owner_notification_enabled(org, contact, category)` (private, not granted) is the helper for future producers: true unless the flag is ON and the owner opted out, so defaults and flag-OFF keep current behaviour. Wiring belongs to the B-028 producer stack.
+- **POST convention = slice 2**: Next server actions (`owner-account-actions.ts`), `requireCurrentConsent()` first, client keeps one request id per intended change and reuses it on retry.
+
+## Writes, idempotency, locks
+
+States: revoke `revoked | replayed | conflict | current | reauth_required | gone`; profile `recorded | replayed | unchanged | stale | invalid | conflict`; preference `recorded | replayed | unchanged | conflict | invalid`. Every denial (flag OFF, staff, tenant, other org, revoked/expired/borrowed session, foreign id) raises 42501 with zero writes. Lock order: owner_portal_extensions row SHARE → organization SHARE (`b023_flag_locked`) → owner contact (SHARE; profile FOR UPDATE) → (revoke) both own session rows in id order FOR UPDATE → request advisory lock → (preference) per-category advisory lock. New tables: RLS on, REVOKE ALL from PUBLIC/anon/authenticated/service_role; ledgers immutable (55000); all functions `SECURITY DEFINER SET search_path = pg_catalog, public, app, pg_temp`, REVOKEd, only the six gateways granted to `authenticated`.
+
+## 驗證方式
+
+`src/server/b023-owner-account-preferences.integration.test.ts` (8 tests after review r1): own live sessions only (revoked/expired/other users excluded; no IP; no raw user agent; SQL device summary; field allowlist; borrowed session id 42501); revoke never another user's session (unavailable + raw 42501) or the current one (`current`), staff/tenant denied, zero writes; one other own session revoked + one ledger + one audit row; replay/conflict/gone write nothing; ledger immutable; recent-auth (1 h-old and 16-min-old current session ⇒ `reauth_required`, zero writes; 14-min ⇒ allowed; revoked/expired current ⇒ unavailable; a completed revoke retried after the window ⇒ `replayed`); legacy `/m/account` revoke actions called with owner/tenant cookies ⇒ zero revocations and zero audit rows, staff positive control unchanged (mutation-checked: removing the guard fails the test); profile ownership (other owner's contact byte-identical; channels limited to addresses; invalid/unchanged/stale/replay/conflict; staff/tenant/cross-org/borrowed session/foreign org ⇒ unavailable/42501; email untouched); preference defaults ON, per-owner isolation, replay/conflict/unchanged/invalid, producer helper incl. flag-OFF ⇒ true; private helpers/tables unreachable by API roles; OFF matrix (9 cases) ⇒ null/unavailable, no `app.b023_` call, raw RPC 42501 for all six gateways, zero writes. Unit `src/server/owner-account.test.ts` (display-name bounds, pre-DB denial, copy keys/banned words, migration grant/revoke shape) + `owner-nav.test.ts`. Evidence: `e2e/results/B-023/{integration-b023-owner-account-preferences.tap, unit-owner-account.tap, slice3-gates.json}`.
+
+## Assumptions / open items
+
+1. 15-minute recent-auth window from session creation is a fallback until a real re-authentication flow exists (CEO may choose another window or require password/OTP re-entry, likely with B-031).
+2. Owner display-name edits change `contacts.display_name`, which staff also see (B-022 receipt-title precedent). `profiles.display_name` (user-level login name) is unchanged.
+3. `preferred_channel` and `locale` are stored on the contact; no existing delivery path reads `preferred_channel` today.
+4. **Open item — delivery wiring.** Preferences are stored only; nothing consumes `app.b023_owner_notification_enabled` yet. Wiring is pending in the B-028 center producers (`vendor_job_assigned`, owner persona) and the B-014 report delivery path (`statement_reports`), both on other stacks. Owner copy therefore promises only that the choice is saved and applies once delivery supports it. Turning the flag OFF makes the helper return "send" again (current behaviour), while stored choices are retained for re-enable.
+5. Revoking a session ends the local `auth_sessions` row only, matching the existing staff single-session revoke (hosted GoTrue `end_auth_sessions` is used only by sign-out-all).
+6. Owner password change / credential epoch: deferred to B-031 (#71).
+
+---
+
+# B-023 overall acceptance coverage
+
+| Spec acceptance | Slice | Evidence |
+|---|---|---|
+| Given owner/property authorization, when listing files/repairs, then only authorized current/history content appears. | 1 | `b023-owner-portal-access.integration.test.ts` (exact id sets per owner A–G, gap/re-acquisition/successor clipping, exclusive end, cross-org/staff/foreign ids ⇒ 404) |
+| Given a lifecycle reply, when saved, then tenant/company responses remain separate. | 2 | `b023-owner-replies-messages.integration.test.ts` (B-012 tables and tenant/staff views byte-identical after owner reply; owner sees only own replies; staff reads owner replies separately) |
+| Given view/download, when audited, then no consent/confirmation is inferred. | 1 (+2) | consent/signature/confirmation/read snapshot unchanged around open/download (slice 1) and replies/messages (slice 2); one access row per request |
+| Given session/preference edits, when submitted, then ownership and recent-auth controls apply. | 3 | `b023-owner-account-preferences.integration.test.ts` (own sessions only, never another user's or current session, 15-min recent-auth with zero writes when stale, own contact only, per-owner preferences, idempotent replay) |
+| Each route/API/file, multi-property isolation and account cases under `e2e/results/B-023/` | 1–3 | `/o/files`, `/o/files/<id>`, `/o/repairs`, `/o/repairs/<id>`, `/o/lifecycle`, `/o/lifecycle/<id>`, `/o/messages`, `/o/messages/<propertyId>`, `/o/account` + staff readers; OFF matrices in all three integration files; TAP + gates JSON per slice |
+| Out of scope respected (staff permissions, automatic consent, protected text) | 1–3 | no staff permission/policy changes; no consent writes; no privacy/terms text edits; owner password change deferred to B-031 |

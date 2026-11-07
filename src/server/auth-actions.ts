@@ -592,6 +592,9 @@ export async function actionOwnerPrivacy(formData: FormData) {
 
 export async function actionRevokeSession(formData: FormData) {
   const session = await getSession();
+  // Staff /m/account only. Owner/tenant sessions get no effect here; owners sign out
+  // another device through /o/account (B-023, recent-auth enforced in SQL).
+  if (session.kind !== "staff") return;
   const id = text(formData.get("sessionId"));
   await revokeSession(session.userId, id);
   if (id === session.sessionId) {
@@ -604,6 +607,8 @@ export async function actionRevokeSession(formData: FormData) {
 
 export async function actionRevokeOthers() {
   const session = await getSession();
+  // Staff /m/account only (see actionRevokeSession).
+  if (session.kind !== "staff") return;
   await revokeOtherSessions(session.userId, session.sessionId);
   redirect("/m/account?saved=1");
 }
