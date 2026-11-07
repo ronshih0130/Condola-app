@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106060000_b001_id_sign_gate_flag.sql": {
+    addOnly: true,
+    reason: "Seeds the default-OFF platform setting id_sign_gate_v2 for the two-level ID switches (B-001 / PROP-US-v03-01); no table, function or grant change; flag OFF keeps the existing ID hard gate.",
+  },
   "supabase/migrations/20261107100000_b038_line_repair_pushes.sql": {
     addOnly: false,
     reason: "Additive private repair-push intent/cursor tables with CHECK constraints, RLS and full privilege revokes, service-only definer gateways and a default-OFF line_repair_push setting. Reads committed repair/approval rows only; no trigger, backfill or change to existing repair functions. Privilege revokes require Class B review.",
