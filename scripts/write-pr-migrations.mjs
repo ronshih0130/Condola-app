@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106080000_prop04_consent_records.sql": {
+    addOnly: true,
+    reason: "Adds an authenticated-only SECURITY DEFINER reader of own consent evidence with pinned org/environment scope; no existing-table, writer, flag or backfill changes.",
+  },
   "supabase/migrations/20261107060000_b005_unit_qr_signup.sql": {
     addOnly: false,
     reason: "New private unit QR contexts and pending applicants, constraints, RLS and service-only SECURITY DEFINER gateways with revoked direct access. Default OFF; no existing identity or lease entitlement changes.",
