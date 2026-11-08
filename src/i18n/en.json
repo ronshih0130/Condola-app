@@ -1878,6 +1878,12 @@
  "i_vendor_confirm": "Confirm and add it to the owner's expenses",
  "i_vendor_confirmed": "Added to the owner's expenses",
  "i_vendor_page_title": "Repair job",
+ "i_vendor_line_continue": "Continue in LINE",
+ "i_vendor_line_hint": "LINE opens only this repair job.",
+ "i_vendor_line_failed": "LINE is unavailable right now. Keep using this page.",
+ "line_dispatch_assigned": "Condola: You have a new repair job. Open this link to view it: {link}",
+ "line_dispatch_rescheduled": "Condola: Your repair job arrangement was updated. Open this link for the latest details: {link}",
+ "line_dispatch_cancelled": "Condola: The repair job you received earlier was cancelled, and its link no longer works. Contact the management company with any questions.",
  "i_vendor_address": "Address",
  "i_vendor_issue": "Issue",
  "i_vendor_done": "The repair is done",
@@ -2259,5 +2265,6 @@
  "i_repair_photo_choose": "Choose photos",
   "im_region_unavailable": "This organization’s import region is unavailable or unsupported. Ask an administrator to check country, jurisdiction, currency and timezone settings; no rows were imported.",
   "im_region_conflict": "This property’s region settings differ from the organization’s supported import profile. Check the property settings before importing.",
-  "im_xlsx_epoch": "This workbook uses an unsupported date system. Save a copy using the 1900 date system, or use CSV with YYYY-MM-DD dates, then preview again."
+  "im_xlsx_epoch": "This workbook uses an unsupported date system. Save a copy using the 1900 date system, or use CSV with YYYY-MM-DD dates, then preview again.",
+ "i_custom_role_native_ceiling": "Custom roles can only restrict the member’s native role. Remove permissions outside that role before assigning."
 }

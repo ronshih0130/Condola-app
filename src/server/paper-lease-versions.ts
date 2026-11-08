@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { many, tx } from "./db";
 import { FlowError } from "./errors";
 import {
@@ -40,6 +41,7 @@ export async function preparePaperLeaseVersion(
   reason: unknown,
   killSwitch: boolean = paperLeaseVersionsGlobalEnabled(process.env.PAPER_LEASE_VERSIONS_ENABLED),
 ): Promise<PreparedVersion> {
+  session = await guardEffectiveSession(session, "leases.edit");
   if (!(await paperLeaseVersionsEnabled(client, session.orgId, killSwitch))) return { enabled: false };
   if (session.kind !== "staff" || !["admin", "manager"].includes(session.role ?? "")) {
     throw new FlowError("errors.notFound");
@@ -93,6 +95,7 @@ export async function insertPaperLeaseVersion(
     version: Extract<PreparedVersion, { enabled: true }>;
   },
 ) {
+  session = await guardEffectiveSession(session, "leases.edit");
   const rows = await many<{ id: string }>(
     client,
     `INSERT INTO lease_signed_pdfs
@@ -126,8 +129,9 @@ export async function listPaperLeaseVersions(
   session: Session,
   leaseId: string,
 ): Promise<PaperLeaseVersion[] | null> {
+  session = await guardEffectiveSession(session, "leases.edit");
   if (!paperLeaseVersionsGlobalEnabled(process.env.PAPER_LEASE_VERSIONS_ENABLED) || session.kind !== "staff") return null;
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     if (!(await paperLeaseVersionsEnabled(client, session.orgId))) return null;
     return many<PaperLeaseVersion>(
       client,
@@ -157,14 +161,15 @@ export async function listPaperLeaseVersions(
         ORDER BY current DESC, created_at DESC, id DESC`,
       [session.orgId, leaseId],
     );
-  }, { orgId: session.orgId });
+  }), { orgId: session.orgId });
 }
 
 export async function paperLeaseVersionPdf(session: Session, leaseId: string, pdfId: string) {
+  session = await guardEffectiveSession(session, "leases.edit");
   if (!paperLeaseVersionsGlobalEnabled(process.env.PAPER_LEASE_VERSIONS_ENABLED) || session.kind !== "staff") return null;
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuid.test(leaseId) || !uuid.test(pdfId)) return null;
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     if (!(await paperLeaseVersionsEnabled(client, session.orgId))) return null;
     const rows = await many<{ content: Buffer; file_name: string }>(
       client,
@@ -175,5 +180,5 @@ export async function paperLeaseVersionPdf(session: Session, leaseId: string, pd
       [session.orgId, leaseId, pdfId],
     );
     return rows[0] ?? null;
-  }, { orgId: session.orgId });
+  }), { orgId: session.orgId });
 }

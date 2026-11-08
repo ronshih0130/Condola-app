@@ -16,9 +16,11 @@ const program = ts.createProgram(paths, {
   baseUrl: resolve("."), paths: { "@/*": ["src/*"] },
 });
 const checker = program.getTypeChecker();
+// actionResendPortalInvite in server/portal-resend-actions.ts uses the default guarded classification.
 // Staff exports in server/vendor-link-actions.ts use the default guarded classification.
 // vendor-onboarding.ts and vendor-receipt.ts are services, not entrypoints.
 const openActions: Record<string, Record<string, string>> = {
+  "server/unit-qr-actions.ts": { actionAbandonUnitQr: "Clears only the caller browser continuation; no data or entitlement change", actionCompleteUnitQr: "Existing signup identity; completeUnitQr checks verified email and current consent without a staff or portal entitlement" },
   "server/auth-actions.ts": {
     actionSignIn: "Establish identity", actionLineLogin: "Establish identity",
     actionSecondFactor: "Complete authentication", actionForgot: "Recover identity",
@@ -45,13 +47,39 @@ const openActions: Record<string, Record<string, string>> = {
   },
 };
 const openPages: Record<string, Record<string, string>> = {
+  "app/vendor-account/page.tsx": { default: "Public shell only; account API validates auth cookie and current consent before all data and mutations" },
+  "app/v/[token]/estimate/page.tsx": { default: "B-026 scoped vendor token and flag gateway, no user session" },
   "app/v/[token]/page.tsx": { default: "Vendor link token authentication, no user session" },
   "app/v/[token]/notifications/page.tsx": { default: "Exact vendor job token gateway, no human user session" },
+  "app/v/documents/[token]/page.tsx": { default: "B-025 vendor document grant token, no human user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
+  "api/line/vendor-job/route.ts": { GET: "B-035 browser-bound single-job claim and strict LINE gates; no account session", POST: "B-035 same-origin CSRF and original locked vendor job capability; no account session" },
+  "(line)/v/liff/job/route.ts": { GET: "B-035 browser-bound single-job claim; no human account authority" },
+  "api/line/portal/route.ts": { POST: "B-036 preference selection only; existing session, server role/company, portal flags and CSRF; current consent checked before returning portal next" },
+  "api/line/reauth/route.ts": { POST: "B-033 explicit password/MFA step-up only; session-bound evidence, portal gates, browser proof and same-origin CSRF; never writes legal consent" },
+  "api/line/flows/route.ts": { POST: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "api/line/session/route.ts": { POST: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "api/line/bind/route.ts": { POST: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "api/line/invites/accept/route.ts": { POST: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "api/line/login/start/route.ts": { GET: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "api/line/login/callback/route.ts": { GET: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "api/line/links/route.ts": { GET: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "api/line/links/[id]/route.ts": { DELETE: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "api/line/identity/route.ts": { DELETE: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
+  "(line)/t/liff/route.ts": { GET: "Public B-033 bootstrap outside protected layouts; strict OFF 404 with Email link; read-only configuration" },
+  "(line)/v/liff/route.ts": { GET: "Public B-033 bootstrap outside protected layouts; strict OFF 404 with Email link; read-only configuration", POST: "B-035 same-origin job-entry browser proof; strict vendor LINE gates, token only in the body, no database writes or account session" },
+  "(line)/o/liff/route.ts": { GET: "Public B-033 bootstrap outside protected layouts; strict OFF 404 with Email link; read-only configuration" },
+  "api/line/webhook/route.ts": { POST: "B-033 raw-body HMAC signature and selected-OA/org flag gate; provider webhook has no human session" },
+  "api/vendor-account-staff/route.ts": { GET: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope", POST: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope" },
+  "api/vendor-account/route.ts": { GET: "Account cookie identity plus current consent via authorizeVendorAccountRequest; no persona or session writes", POST: "Account cookie identity plus current consent via authorizeVendorAccountRequest; strict same-origin mutation" },
+  "api/vendor-estimate/route.ts": { POST: "B-026 scoped vendor token and flag gateway, no user session" },
+  "signup/unit-qr/route.ts": { GET: "Static isolated fragment scrub and POST exchange; no account data" },
+  "api/signup/unit-qr/route.ts": { POST: "Signed short-lived context exchange only; no identity or data access; signup retains consent and verification" },
   "api/auth/enter/route.ts": { GET: "Authentication continuation checks consent" },
   "api/auth/sign-out/route.ts": { POST: "Always permit leaving" },
   "api/cron/reminders/route.ts": { POST: "Cron secret, no human identity" },
+  "api/mock-subscription/route.ts": { POST: "Loopback-only signed local mock provider fixture; environment switch and HMAC, no human identity" },
   "api/cron/purge-id-documents/route.ts": { POST: "Retention must continue" },
   "api/demo/locale/route.ts": { GET: "Public preference" },
   "api/demo/mode/route.ts": { GET: "Removed, always 404" },
@@ -62,6 +90,9 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/vendor-jobs/photos/confirm/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-job-response/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-job-completion/route.ts": { POST: "Vendor link token authentication, no user session" },
+  "api/vendor-documents/route.ts": { POST: "B-025 vendor document grant token, no user session" },
+  "api/vendor-documents/pdf/route.ts": { POST: "B-025 vendor document grant token, no user session" },
+  "api/vendor-documents/scan/route.ts": { POST: "B-025 vendor document grant token, no user session" },
   "api/notification-center/vendor-mark/route.ts": { POST: "Exact vendor job token gateway, no human user session" },
   "api/reset-flash/route.ts": { POST: "Recovery feedback cookie" },
   "api/version/route.ts": { GET: "Public version" },
@@ -156,7 +187,7 @@ function guarded(body: ts.Node, route: boolean, label: string, typeChecker = che
     assert.equal(priorCalls.length, 0, label + ": side effect before guard");
   }
   else {
-    const safe = new Set(["readSession", "getSession", "demoModeEnabled", "can",
+    const safe = new Set(["readSession", "getSession", "guardEffectiveSession", "demoModeEnabled", "can",
       "NextResponse.json", "redirect", "UUID.test", "teamInviteAllowlistConfigured", "teamInvitesAllowedForOrg"]);
     for (const call of priorCalls) {
       assert.ok(safe.has(call.expression.getText()), label + ": call before guard: " + call.expression.getText());
@@ -164,7 +195,7 @@ function guarded(body: ts.Node, route: boolean, label: string, typeChecker = che
     for (const node of all) {
       if (ts.isAwaitExpression(node) && node.getStart() < guard.parent.getStart()) {
         assert.ok(ts.isCallExpression(node.expression)
-          ? ["readSession", "getSession"].includes(node.expression.expression.getText())
+          ? ["readSession", "getSession", "guardEffectiveSession"].includes(node.expression.expression.getText())
           : node.expression.getText() === "context.params", label + ": await before guard");
       }
     }

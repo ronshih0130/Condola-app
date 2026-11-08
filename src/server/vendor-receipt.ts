@@ -1,10 +1,12 @@
+import { admitVendorDocumentsOrgOn } from "./vendor-document-admission";
+import { tradeLineItems, type TradeLineInput } from "./vendor-document-trade-rules";
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, one, svc } from "./db";
 import { FlowError } from "./errors";
 import { deriveTicketDocumentItems, type JobTypeLineItem } from "./job-types-rules";
 import { authorizeVendorStaff } from "./vendor-onboarding";
-import { PHOTO_BUCKET } from "./repair-rules";
 import { downloadRepairObject } from "./ticket-photos";
 import type { Session } from "./types";
 import { validateSealImageHeader } from "./vendor-onboarding-rules";
@@ -17,6 +19,7 @@ import {
   type BuyerSnapshot,
   type IssueVendorDocumentInput,
   type VendorDocument,
+  type VendorDocumentKind,
 } from "./vendor-receipt-rules";
 import {
   loadVendorPdfFont,
@@ -33,12 +36,14 @@ export type VendorBuyerSelection =
   | { kind: "owner"; contactId: string };
 
 export interface VendorDocumentContext {
+  kind?: VendorDocumentKind;
   actor: VendorDocumentActor;
   ticketId: string;
   vendorProfileId: string;
   /** Required for staff preview; token callers use the confirmed selection. */
   buyer?: VendorBuyerSelection;
   items: readonly JobTypeLineItem[];
+  tradeItems?: readonly TradeLineInput[];
   totalMinor: number;
   documentDate: string;
   /** Supply from the existing bundled font or a trusted asset binding. */
@@ -57,6 +62,7 @@ interface Grant {
 interface Ticket {
   id: string;
   ticket_number: string;
+  title: string;
   org_id: string;
   property_id: string;
   assigned_vendor_contact_id: string | null;
@@ -112,7 +118,7 @@ function validKey(key: string) {
 async function ticketOn(client: Client, orgId: string, ticketId: string) {
   const ticket = await maybe<Ticket>(
     client,
-    `SELECT t.id::text, t.ticket_number::text, t.org_id::text, t.property_id::text,
+    `SELECT t.id::text, t.ticket_number::text, t.title, t.org_id::text, t.property_id::text,
             t.assigned_vendor_contact_id::text, t.final_cost_minor::text,
             t.status::text, t.type_fields, p.address_display AS work_address
        FROM maintenance_tickets t
@@ -124,7 +130,7 @@ async function ticketOn(client: Client, orgId: string, ticketId: string) {
   return ticket;
 }
 
-async function grantOn(client: Client, token: string) {
+export async function vendorDocumentGrantOn(client: Client, token: string) {
   if (!/^[A-Za-z0-9_-]{32,256}$/.test(token)) notFound();
   const grant = await maybe<Grant>(
     client,
@@ -145,7 +151,7 @@ async function authorize(
   profileId: string,
   purpose: "issuance" | "issued_document" = "issuance",
 ): Promise<Access> {
-  const grant = typeof actor === "string" ? await grantOn(client, actor) : null;
+  const grant = typeof actor === "string" ? await vendorDocumentGrantOn(client, actor) : null;
   let orgId: string;
   let userId: string | null;
   if (typeof actor === "string") {
@@ -181,6 +187,22 @@ async function authorize(
     notFound();
   }
 
+  const version = await maybe<VendorPdfIssuer>(client,
+    `SELECT display_name,business_name,representative_name,tax_id,phone_e164,address
+       FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 AND version=$3`,
+    [orgId, profile.id, profile.current_version]);
+  // Profiles created before B-025 slice 2 (or by older writers) may have no
+  // version row: keep the legacy behaviour and use the live profile columns.
+  // Versioned profiles render from their snapshot (BLK-MAC-15).
+  if (version) Object.assign(profile, version);
+  else {
+    // A profile WITH version history but no current row is inconsistent: fail closed.
+    const history = await maybe<{ one: number }>(client,
+      `SELECT 1 AS one FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 LIMIT 1`,
+      [orgId, profile.id]);
+    if (history) notFound();
+  }
+
   if (grant) {
     // Document grants have their own expiry and explicit revocation. Losing
     // collaboration access does not remove access to the issuer's documents.
@@ -208,6 +230,12 @@ async function authorize(
     profile,
     buyerSelection: grant?.buyer_selection,
   };
+}
+
+/** Reuses document capability validation and lock order for token-only surfaces. */
+export async function resolveVendorDocumentToken(client: Client, token: string) {
+  const grant = await vendorDocumentGrantOn(client, token);
+  return authorize(client, token, grant.ticket_id, grant.vendor_profile_id, "issued_document");
 }
 
 async function buyerOn(
@@ -292,6 +320,7 @@ async function issueInput(
   if (!Number.isSafeInteger(actual)) throw new Error("invalid_ticket_cost");
   return {
     id,
+    kind: ctx.kind,
     vendor_profile_id: profile.id,
     ticket_id: access.ticket.id,
     vendor_code: profile.vendor_code,
@@ -302,7 +331,7 @@ async function issueInput(
     },
     seq,
     buyer: buyer as BuyerInput,
-    items: deriveTicketDocumentItems(ctx.items, access.ticket.type_fields),
+    items: ctx.tradeItems ? tradeLineItems(ctx.tradeItems) : deriveTicketDocumentItems(ctx.items, access.ticket.type_fields),
     total_minor: ctx.totalMinor,
     ticket_actual_cost_minor: actual,
     locale: "zh-TW",
@@ -316,17 +345,28 @@ async function fontOn(ctx: VendorDocumentContext) {
   return loadVendorPdfFont(origin);
 }
 
-async function sealOn(client: Client, access: Access) {
+export async function vendorProfileSealOn(client: Client, access: Access) {
   if (access.profile.kind !== "business") return undefined;
-  const file = await maybe<{ storage_path: string }>(
-    client,
-    `SELECT storage_path FROM files
-      WHERE id = $1 AND org_id = $2 AND storage_bucket = $3
-        AND size_bytes BETWEEN 1 AND 5242880
-      FOR SHARE`,
-    [access.profile.seal_file_id, access.orgId, PHOTO_BUCKET],
-  );
-  if (!file) throw new Error("missing_seal_image");
+  // This loader carries server storage credentials for legacy seal objects too.
+  // Never let a member-role SQL client turn it into a storage proxy.
+  const caller = await one<{ allowed: boolean }>(client, "SELECT current_user='service_role' AS allowed");
+  if (!caller.allowed) throw new FlowError("errors.forbidden");
+  const version = await maybe<{ snapshot: { seal?: { id: string; sha256: string } } }>(client,
+    `SELECT snapshot FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 AND version=$3`,
+    [access.orgId, access.profile.id, access.profile.current_version]);
+  if (version?.snapshot.seal) {
+    const stored = await one<{ bytes: Buffer; mime_type: string; sha256: string }>(client,
+      "SELECT * FROM app.b025_read_profile_seal($1,$2,$3,$4)",
+      [access.orgId, access.grantId, access.profile.id, access.profile.current_version]);
+    const bytes = new Uint8Array(stored.bytes);
+    const checked = validateSealImageHeader(bytes);
+    if (!checked.ok || checked.mimeType !== stored.mime_type || await sha256(bytes) !== stored.sha256
+      || stored.sha256 !== version.snapshot.seal.sha256) throw new Error("invalid_seal_file");
+    return { bytes, mimeType: checked.mimeType };
+  }
+  const file = await one<{ storage_path: string }>(client,
+    "SELECT app.b025_legacy_seal_path($1,$2,$3,$4) AS storage_path",
+    [access.orgId, access.grantId, access.profile.id, access.profile.current_version]);
   const bytes = await downloadRepairObject(file.storage_path);
   const checked = validateSealImageHeader(bytes);
   if (!checked.ok) throw new Error(checked.error);
@@ -357,7 +397,7 @@ async function renderOn(
       workAddress: access.ticket.work_address!,
       ticketNumber: access.ticket.ticket_number,
       preview,
-      seal: await sealOn(client, access),
+      seal: document.apply_receipt_seal ? await vendorProfileSealOn(client, access) : undefined,
     },
     await fontOn(ctx),
   );
@@ -438,8 +478,11 @@ export async function createVendorDocumentInvite(
   ticketId: string,
   vendorProfileId: string,
   selection: VendorBuyerSelection,
+  options?: { documentUi: true },
 ) {
-  return svc(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
+    if (options?.documentUi) await admitVendorDocumentsOrgOn(client, session.orgId);
     const access = await authorize(client, session, ticketId, vendorProfileId);
     if (access.ticket.status !== "closed") throw new Error("ticket_not_closed");
     await buyerOn(client, access, selection);
@@ -486,11 +529,13 @@ export async function createVendorDocumentInvite(
       client,
     );
     return { grantId: grant.id, url: `/v/documents/${token}` };
-  });
+  }));
 }
 
-export async function revokeVendorDocumentInvite(session: Session, grantId: string) {
-  return svc(session.userId, async (client) => {
+export async function revokeVendorDocumentInvite(session: Session, grantId: string, options?: { documentUi: true }) {
+  session = await guardEffectiveSession(session, "tickets.update");
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
+    if (options?.documentUi) await admitVendorDocumentsOrgOn(client, session.orgId);
     await authorizeVendorStaff(client, session);
     const grant = await maybe<Grant>(
       client,
@@ -514,7 +559,7 @@ export async function revokeVendorDocumentInvite(session: Session, grantId: stri
       { grantId },
       client,
     );
-  });
+  }));
 }
 
 /** Record the staff request without changing the vendor's document or bytes. */
@@ -523,10 +568,11 @@ export async function requestVendorDocumentCorrection(
   id: string,
   reason: string,
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   if (typeof reason !== "string" || !reason.trim()) {
     throw new Error("missing_correction_reason");
   }
-  return svc(session.userId, async (client) => {
+  return svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await authorizeVendorStaff(client, session);
     const initial = await persistedOn(client, id);
     if (initial.org_id !== session.orgId) notFound();
@@ -546,25 +592,35 @@ export async function requestVendorDocumentCorrection(
       client,
     );
     return { documentId: id, status: "requested" as const };
-  });
+  }));
 }
 
 export async function previewVendorDocument(ctx: VendorDocumentContext) {
-  return svc(typeof ctx.actor === "string" ? null : ctx.actor.userId, async (client) => {
-    const access = await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
-    const input = await issueInput(client, access, ctx, "preview", 1);
-    const checked = applyIssueRules(input);
-    const document = { ...checked, doc_no: "", seq: 0 };
-    const time = await one<{ issued_at: string }>(
-      client,
-      `SELECT clock_timestamp()::text AS issued_at`,
-    );
-    const pdf = await renderOn(client, access, ctx, document, time.issued_at, true);
-    return { document, bytes: pdf.bytes, sha256: pdf.sha256 };
-  });
+  return svc(typeof ctx.actor === "string" ? null : ctx.actor.userId,
+    (client) => previewVendorDocumentOn(client, ctx));
 }
 
-async function issueOn(
+async function admitTradeOn(client: Client, ctx: VendorDocumentContext) {
+  if (!ctx.tradeItems) return;
+  const orgId = typeof ctx.actor === "string" ? (await vendorDocumentGrantOn(client, ctx.actor)).org_id : ctx.actor.orgId;
+  await admitVendorDocumentsOrgOn(client, orgId);
+}
+
+export async function previewVendorDocumentOn(client: Client, ctx: VendorDocumentContext) {
+  await admitTradeOn(client, ctx);
+  const access = await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
+  const input = await issueInput(client, access, ctx, "preview", 1);
+  const checked = applyIssueRules(input);
+  const document = { ...checked, doc_no: "", seq: 0 };
+  const time = await one<{ issued_at: string }>(
+    client,
+    `SELECT clock_timestamp()::text AS issued_at`,
+  );
+  const pdf = await renderOn(client, access, ctx, document, time.issued_at, true);
+  return { document, bytes: pdf.bytes, sha256: pdf.sha256 };
+}
+
+export async function issueVendorDocumentOn(
   client: Client,
   ctx: VendorDocumentContext,
   key: string,
@@ -572,6 +628,7 @@ async function issueOn(
 ): Promise<StoredVendorDocument> {
   requireVendorToken(ctx.actor);
   validKey(key);
+  await admitTradeOn(client, ctx);
   // Reissue corrects an existing issuer's document. Only fresh issuance
   // derives authority from the ticket's current assignment.
   const access = sourceId
@@ -590,9 +647,10 @@ async function issueOn(
     ticket_id: string;
     vendor_profile_id: string;
     reissued_from: string | null;
+    kind: VendorDocumentKind;
   }>(
     client,
-    `SELECT id::text,ticket_id::text,vendor_profile_id::text,reissued_from::text
+    `SELECT id::text,ticket_id::text,vendor_profile_id::text,reissued_from::text,kind
        FROM vendor_documents WHERE org_id = $1 AND idempotency_key = $2`,
     [access.orgId, key],
   );
@@ -600,7 +658,8 @@ async function issueOn(
     if (
       existing.ticket_id !== ctx.ticketId ||
       existing.vendor_profile_id !== ctx.vendorProfileId ||
-      existing.reissued_from !== (sourceId ?? null)
+      existing.reissued_from !== (sourceId ?? null) ||
+      (ctx.kind !== undefined && existing.kind !== ctx.kind)
     ) {
       throw new Error("idempotency_key_conflict");
     }
@@ -611,8 +670,8 @@ async function issueOn(
     client,
     `SELECT id::text FROM vendor_documents
       WHERE org_id = $1 AND ticket_id = $2 AND vendor_profile_id = $3
-        AND status = 'issued'`,
-    [access.orgId, ctx.ticketId, ctx.vendorProfileId],
+        AND status = 'issued' AND ($4::text IS NULL OR kind=$4)`,
+    [access.orgId, ctx.ticketId, ctx.vendorProfileId, ctx.kind ?? null],
   );
   if (active) throw new Error("document_already_issued");
 
@@ -627,6 +686,7 @@ async function issueOn(
       notFound();
     }
     source = resultOf(prior).document;
+    if (ctx.kind !== undefined && source.kind !== ctx.kind) throw new Error("invalid_reissue_source");
     if (source.status !== "voided") throw new Error("invalid_reissue_source");
     const replacement = await maybe<{ id: string }>(
       client,
@@ -638,8 +698,9 @@ async function issueOn(
     const prior = await maybe<{ id: string }>(
       client,
       `SELECT id::text FROM vendor_documents
-        WHERE org_id = $1 AND ticket_id = $2 AND vendor_profile_id = $3`,
-      [access.orgId, ctx.ticketId, ctx.vendorProfileId],
+        WHERE org_id = $1 AND ticket_id = $2 AND vendor_profile_id = $3
+          AND ($4::text IS NULL OR kind=$4)`,
+      [access.orgId, ctx.ticketId, ctx.vendorProfileId, ctx.kind ?? null],
     );
     if (prior) throw new Error("reissue_required");
   }
@@ -660,12 +721,19 @@ async function issueOn(
   const input = await issueInput(client, access, ctx, id, seq);
   const document = source ? applyReissueRules(source, input) : applyIssueRules(input);
   const pdf = await renderOn(client, access, ctx, document, allocation.issued_at, false);
-  const version = await one<{ id: string }>(
+  const current = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM vendor_profile_versions
       WHERE org_id = $1 AND vendor_profile_id = $2 AND version = $3`,
     [access.orgId, access.profile.id, access.profile.current_version],
   );
+  // BLK-MAC-15: a legacy profile with no version history issues with a NULL
+  // snapshot reference (the PDF snapshot below still freezes the issuer). Any
+  // history without the current row is inconsistent and fails closed.
+  if (!current && await maybe<{ one: number }>(client,
+    `SELECT 1 AS one FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 LIMIT 1`,
+    [access.orgId, access.profile.id])) notFound();
+  const version = { id: current?.id ?? null };
   await client.query(
     `INSERT INTO vendor_documents
        (id,org_id,vendor_profile_id,vendor_profile_version_id,ticket_id,
@@ -738,44 +806,43 @@ export async function issueVendorDocument(
   options: { idempotencyKey: string },
 ) {
   requireVendorToken(ctx.actor);
-  return svc(null, (client) => issueOn(client, ctx, options.idempotencyKey));
+  return svc(null, (client) => issueVendorDocumentOn(client, ctx, options.idempotencyKey));
 }
 
-export async function voidVendorDocument(
-  actor: VendorDocumentActor,
-  id: string,
-  reason: string,
-) {
+export async function voidVendorDocument(actor: VendorDocumentActor, id: string, reason: string) {
   requireVendorToken(actor);
-  return svc(null, async (client) => {
-    const initial = await persistedOn(client, id);
-    const access = await authorizeDocument(client, actor, initial);
-    const current = resultOf(await persistedOn(client, id));
-    const clock = await one<{ now: string }>(
-      client,
-      `SELECT clock_timestamp()::text AS now`,
-    );
-    const document = applyVoidRules(current.document, reason, clock.now);
-    await client.query(
-      `UPDATE vendor_documents
-          SET status = 'voided',voided_at = $2,void_reason = $3
-        WHERE id = $1 AND org_id = $4 AND status = 'issued'`,
-      [id, document.voided_at, document.void_reason, access.orgId],
-    );
-    await writeAudit(
-      access.orgId,
-      access.userId,
-      "vendor_document_void",
-      {
-        documentId: id,
-        grantId: access.grantId,
-        actorKind: "document_token",
-        reason: document.void_reason,
-      },
-      client,
-    );
-    return { ...current, document };
-  });
+  return svc(null, (client) => voidVendorDocumentOn(client, actor, id, reason));
+}
+
+export async function voidVendorDocumentOn(client: Client, actor: VendorDocumentActor, id: string, reason: string) {
+  requireVendorToken(actor);
+  const initial = await persistedOn(client, id);
+  const access = await authorizeDocument(client, actor, initial);
+  const current = resultOf(await persistedOn(client, id));
+  const clock = await one<{ now: string }>(
+    client,
+    `SELECT clock_timestamp()::text AS now`,
+  );
+  const document = applyVoidRules(current.document, reason, clock.now);
+  await client.query(
+    `UPDATE vendor_documents
+        SET status = 'voided',voided_at = $2,void_reason = $3
+      WHERE id = $1 AND org_id = $4 AND status = 'issued'`,
+    [id, document.voided_at, document.void_reason, access.orgId],
+  );
+  await writeAudit(
+    access.orgId,
+    access.userId,
+    "vendor_document_void",
+    {
+      documentId: id,
+      grantId: access.grantId,
+      actorKind: "document_token",
+      reason: document.void_reason,
+    },
+    client,
+  );
+  return { ...current, document };
 }
 
 export async function reissueVendorDocument(
@@ -784,23 +851,26 @@ export async function reissueVendorDocument(
   options: { idempotencyKey: string },
 ) {
   requireVendorToken(ctx.actor);
-  return svc(null, (client) => issueOn(client, ctx, options.idempotencyKey, sourceId));
+  return svc(null, (client) => issueVendorDocumentOn(client, ctx, options.idempotencyKey, sourceId));
 }
 
 export async function readVendorDocumentPdf(actor: VendorDocumentActor, id: string) {
-  return svc(typeof actor === "string" ? null : actor.userId, async (client) => {
-    const initial = await persistedOn(client, id);
-    const access = await authorizeDocument(client, actor, initial);
-    const row = await one<{ bytes: Buffer }>(
-      client,
-      `SELECT bytes FROM vendor_document_pdf_bytes
-        WHERE document_id = $1 AND org_id = $2`,
-      [id, access.orgId],
-    );
-    const stored = resultOf(await persistedOn(client, id));
-    if ((await sha256(row.bytes)) !== stored.sha256) {
-      throw new Error("vendor_document_integrity_failure");
-    }
-    return { ...stored, bytes: new Uint8Array(row.bytes) };
-  });
+  return svc(typeof actor === "string" ? null : actor.userId,
+    (client) => readVendorDocumentPdfOn(client, actor, id));
+}
+
+export async function readVendorDocumentPdfOn(client: Client, actor: VendorDocumentActor, id: string) {
+  const initial = await persistedOn(client, id);
+  const access = await authorizeDocument(client, actor, initial);
+  const row = await one<{ bytes: Buffer }>(
+    client,
+    `SELECT bytes FROM vendor_document_pdf_bytes
+      WHERE document_id = $1 AND org_id = $2`,
+    [id, access.orgId],
+  );
+  const stored = resultOf(await persistedOn(client, id));
+  if ((await sha256(row.bytes)) !== stored.sha256) {
+    throw new Error("vendor_document_integrity_failure");
+  }
+  return { ...stored, bytes: new Uint8Array(row.bytes) };
 }

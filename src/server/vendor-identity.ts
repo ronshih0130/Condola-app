@@ -34,6 +34,8 @@ export async function resolveVendorIdentity(
 ): Promise<VendorIdentityResolution | null> {
   if (!vendorTokenAcceptable(ctx.token)) return null;
   const tokenHash = hashVendorToken(ctx.token);
+  // Core sha256(bytea), fully qualified: no dependency on pgcrypto's digest() being on
+  // the connection search_path (PROP-01b r2 item B ON-condition).
   const result = await sql.query<{
     id: string;
     org_id: string;
@@ -48,7 +50,7 @@ export async function resolveVendorIdentity(
        FROM repair_vendor_secrets s
        JOIN repair_vendor_jobs j ON j.id = s.job_id
        JOIN maintenance_tickets t ON t.id = j.ticket_id AND t.org_id = j.org_id
-      WHERE encode(digest(trim(both from s.token), 'sha256'), 'hex') = $1
+      WHERE pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(trim(both from s.token), 'UTF8')), 'hex') = $1
         AND j.token_hash = $1
       LIMIT 1`,
     [tokenHash],

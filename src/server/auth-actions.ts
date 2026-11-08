@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { requireCurrentConsent } from "./consent-gate";
 
 import { cookies, headers } from "next/headers";
@@ -96,14 +98,15 @@ export async function actionSignIn(formData: FormData) {
   const email = normalizeEmail(text(formData.get("email"))) || text(formData.get("email")).trim();
   const result = await signIn(text(formData.get("email")), text(formData.get("password")), formData.get("remember") === "on", await meta());
   const jar = await cookies();
-  const nextQuery = next ? `&next=${encodeURIComponent(next)}` : "";
+  const accountNext = "destination" in result && result.destination === "vendor" ? "/vendor-account" : next;
+  const nextQuery = accountNext ? `&next=${encodeURIComponent(accountNext)}` : "";
   if (result.ok) {
     const cookie = sessionCookie(result.token, result.remember);
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
     clearStoredEnvChoice(jar);
     jar.delete(PORTAL_ROLE_COOKIE);
-    redirect(sessionEntryPath(result.destination === "firm" ? "/signup/firm" : next || "/auth/continue"));
+    redirect(sessionEntryPath(result.destination === "firm" ? "/signup/firm" : result.destination === "vendor" ? "/vendor-account" : next || "/auth/continue"));
   }
   if ("step" in result) {
     const cookie = challengeCookie(result.challengeId);
@@ -196,7 +199,7 @@ export async function actionReset(formData: FormData) {
 export async function actionEmailPrefs(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), null);
     await saveMemberEmailPrefs(session, {
       leaseExpiry: formData.get("leaseExpiry") === "on",
       rentOverdue: formData.get("rentOverdue") === "on",
@@ -210,7 +213,7 @@ export async function actionEmailPrefs(formData: FormData) {
 export async function actionOrgMail(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "settings.edit");
     await saveOrgMailSettings(session, {
       tenantLease: formData.get("tenantLease") === "on",
       tenantOverdue: formData.get("tenantOverdue") === "on",
@@ -229,7 +232,7 @@ export async function actionAccept(formData: FormData) {
   if (invite.kind === "team_member") {
     return { ok: false as const, error: "errors.teamInviteUnavailable" };
   }
-  const current = await readSession();
+  const current = await guardEffectiveSession(await readSession(), null);
   const result = await acceptInvite(
     token,
     text(formData.get("name")),
@@ -283,7 +286,7 @@ export async function actionDescribeTeamJoin(token: string) {
     if (invite.kind !== "team_member" || invite.state !== "ready") {
       return { ok: false as const, error: "errors.teamInviteUnavailable" };
     }
-    const current = await readSession();
+    const current = await guardEffectiveSession(await readSession(), null);
     if (current && normalizeEmail(current.email) !== normalizeEmail(invite.email)) {
       return { ok: false as const, error: "account" };
     }
@@ -311,7 +314,7 @@ export async function actionAcceptTeamJoin(input: {
   }
   const description = await actionDescribeTeamJoin(input.token);
   if (!description.ok) return description;
-  const current = await readSession();
+  const current = await guardEffectiveSession(await readSession(), null);
   let result: Awaited<ReturnType<typeof acceptInvite>>;
   try {
     result = await acceptInvite(
@@ -354,7 +357,7 @@ export async function actionAcceptTeamJoin(input: {
 export async function actionIssueTeamInviteLink(input: { invitationId: string }) {
   await requireCurrentConsent();
   try {
-    const session = await readSession();
+    const session = await guardEffectiveSession(await readSession(), "team.manage");
     if (!session || session.kind !== "staff" || session.role !== "admin") {
       return { ok: false as const, error: "errors.forbidden" };
     }
@@ -376,7 +379,7 @@ export async function actionIssueTeamInviteLink(input: { invitationId: string })
 export async function actionCreateTeamInviteLink(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await readSession();
+    const session = await guardEffectiveSession(await readSession(), "team.manage");
     if (!session || session.kind !== "staff" || session.role !== "admin") {
       return { ok: false as const, error: "errors.forbidden" };
     }
@@ -408,7 +411,7 @@ export async function actionIssuePortalInvite(input: {
 }) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     const kind = input.kind === "owner" || input.kind === "tenant" ? input.kind : "";
     if (!kind || !input.contactId || !input.pageId) return { ok: false as const, error: "errors.required" };
     const path = (await headers()).get("x-pathname") || "";
@@ -454,7 +457,7 @@ export async function actionInvite(formData: FormData) {
   await requireCurrentConsent();
   const back = "/m/team";
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "team.manage");
     assertTeamInvitesAllowed(session.orgId);
     const invited = await inviteMember(session, {
       email: text(formData.get("email")),
@@ -472,7 +475,7 @@ export async function actionResendInvite(formData: FormData) {
   await requireCurrentConsent();
   const back = "/m/team";
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "team.manage");
     assertTeamInvitesAllowed(session.orgId);
     const invited = await resendInvite(session, text(formData.get("invitationId")));
     redirect(demoModeEnabled() ? `${back}?invited=1&token=${encodeURIComponent(invited.token)}` : `${back}?invited=1`);
@@ -484,7 +487,7 @@ export async function actionResendInvite(formData: FormData) {
 export async function actionRevokeInvite(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "team.manage");
     await revokeInvite(session, text(formData.get("invitationId")));
     redirect("/m/team");
   } catch (error) {
@@ -495,7 +498,7 @@ export async function actionRevokeInvite(formData: FormData) {
 export async function actionMemberRole(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "team.manage");
     await setMemberRole(session, text(formData.get("memberId")), text(formData.get("role")) as OrgRole);
     redirect("/m/team");
   } catch (error) {
@@ -506,7 +509,7 @@ export async function actionMemberRole(formData: FormData) {
 export async function actionMemberActive(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "team.manage");
     const active = text(formData.get("active")) === "1";
     await setMemberActive(session, text(formData.get("memberId")), active, text(formData.get("confirm")) === "yes");
     redirect("/m/team");
@@ -518,7 +521,7 @@ export async function actionMemberActive(formData: FormData) {
 export async function actionChangePassword(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), null);
     await changePassword(session, text(formData.get("current")), text(formData.get("password")), text(formData.get("confirm")));
     redirect("/m/account?saved=1");
   } catch (error) {
@@ -529,7 +532,7 @@ export async function actionChangePassword(formData: FormData) {
 export async function actionBeginMfa() {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), null);
     const started = await beginMfa(session);
     const jar = await cookies();
     const cookie = challengeCookie(started.challengeId);
@@ -543,7 +546,7 @@ export async function actionBeginMfa() {
 export async function actionConfirmMfa(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), null);
     const jar = await cookies();
     const codes = await confirmMfa(session, jar.get(CHALLENGE_COOKIE)?.value ?? "", text(formData.get("code")));
     jar.delete(CHALLENGE_COOKIE);
@@ -557,7 +560,7 @@ export async function actionConfirmMfa(formData: FormData) {
 export async function actionDisableMfa() {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), null);
     await disableMfa(session);
     redirect("/m/account?saved=1");
   } catch (error) {
@@ -568,7 +571,7 @@ export async function actionDisableMfa() {
 export async function actionRequireMfa(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "settings.edit");
     await setRequireMfa(session, formData.get("require") === "on");
     redirect("/m/account?saved=1");
   } catch (error) {
@@ -579,7 +582,7 @@ export async function actionRequireMfa(formData: FormData) {
 export async function actionOwnerPrivacy(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "settings.edit");
     await setOwnerPrivacy(session, {
       showName: formData.get("showName") === "on",
       showPhone: formData.get("showPhone") === "on",
@@ -591,7 +594,7 @@ export async function actionOwnerPrivacy(formData: FormData) {
 }
 
 export async function actionRevokeSession(formData: FormData) {
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), null);
   const id = text(formData.get("sessionId"));
   await revokeSession(session.userId, id);
   if (id === session.sessionId) {
@@ -603,7 +606,7 @@ export async function actionRevokeSession(formData: FormData) {
 }
 
 export async function actionRevokeOthers() {
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), null);
   await revokeOtherSessions(session.userId, session.sessionId);
   redirect("/m/account?saved=1");
 }
@@ -614,7 +617,7 @@ export async function actionClearBackup() {
 }
 
 export async function actionSignOut() {
-  const session = await readSession();
+  const session = await guardEffectiveSession(await readSession(), null);
   const jar = await cookies();
   clearAuthCookies(jar);
   if (session) {
@@ -642,7 +645,7 @@ function expenseFields(formData: FormData) {
 export async function actionAddExpense(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "exp.add");
     await addExpense(session, {
       propertyId: text(formData.get("propertyId")),
       description: text(formData.get("description")),
@@ -658,7 +661,7 @@ export async function actionAddExpense(formData: FormData) {
 export async function actionCreateExpense(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "exp.add");
     const created = await createExpense(session, expenseFields(formData));
     redirect(`/m/expenses/${created.expenseId}?saved=1`);
   } catch (error) {
@@ -670,7 +673,7 @@ export async function actionUpdateExpense(formData: FormData) {
   await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "exp.add");
     await updateExpense(session, id, expenseFields(formData));
     redirect(`/m/expenses/${id}?saved=1`);
   } catch (error) {
@@ -682,7 +685,7 @@ export async function actionApproveExpense(formData: FormData) {
   await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "exp.add");
     await approveExpense(session, id);
     redirect(`/m/expenses/${id}?approved=1`);
   } catch (error) {
@@ -694,7 +697,7 @@ export async function actionVoidExpense(formData: FormData) {
   await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "exp.add");
     await voidExpense(session, id, text(formData.get("reason")));
     redirect(`/m/expenses/${id}?voided=1`);
   } catch (error) {
@@ -705,7 +708,7 @@ export async function actionVoidExpense(formData: FormData) {
 export async function actionReversePayment(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "pay.reverse");
     await reversePayment(session, text(formData.get("paymentId")), text(formData.get("reason")));
     redirect("/m/payments?saved=1");
   } catch (error) {
@@ -716,7 +719,7 @@ export async function actionReversePayment(formData: FormData) {
 export async function actionCloseMonth(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "month.close");
     await closeMonth(session, text(formData.get("month")), text(formData.get("note")));
     redirect("/m/close?saved=1");
   } catch (error) {

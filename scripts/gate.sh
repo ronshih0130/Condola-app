@@ -225,23 +225,6 @@ if [ -f ops/flags.yaml ]; then
   run_step flag-expiry node <<'NODE' || :
 const fs = require('fs');
 function fail(message) { throw new Error(message); }
-function ptTime(value, label) {
-  if (typeof value !== 'string') fail(`${label}: quoted PT timestamp required`);
-  const m = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})([+-]\d{2}:\d{2}) PT \(America\/Los_Angeles\)$/);
-  if (!m) fail(`${label}: explicit offset and PT (America/Los_Angeles) required`);
-  const epoch = Date.parse(m[1] + 'T' + m[2] + m[3]);
-  if (!Number.isFinite(epoch)) fail(`${label}: invalid timestamp`);
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hourCycle: 'h23'
-  }).formatToParts(new Date(epoch));
-  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
-  const local = `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
-  if (local !== m[1] + 'T' + m[2]) fail(`${label}: date or Los Angeles offset is wrong`);
-  return epoch;
-}
 try {
   const input = fs.readFileSync('ops/flags.yaml', 'utf8');
   let parse;
@@ -268,25 +251,10 @@ try {
   } else {
     fail('flags must be a mapping or list');
   }
-  const names = new Set();
-  const now = Date.now();
-  for (const [name, flag] of entries) {
-    if (typeof name !== 'string' || !name.trim() || names.has(name))
-      fail('Flag names must be nonempty and unique');
-    names.add(name);
-    if (!flag || typeof flag !== 'object' || Array.isArray(flag) ||
-        typeof flag.owner !== 'string' || !flag.owner.trim())
-      fail(`${name}: owner required`);
-    if (flag.expires_at !== undefined && flag.expires !== undefined)
-      fail(`${name}: use only one expiry field`);
-    const expires = ptTime(flag.expires_at ?? flag.expires, `${name} expiry`);
-    if (expires <= now) fail(`${name}: expired`);
-    if (flag.stable_ga_at !== undefined) {
-      const ga = ptTime(flag.stable_ga_at, `${name} stable GA`);
-      if (ga > now) fail(`${name}: stable GA cannot be in the future`);
-      if (now >= ga + 14 * 86400000) fail(`${name}: remove flag after 14 days of stable GA`);
-    }
-  }
+  const { evaluateFlags } = require(require('path').resolve('scripts/flag-expiry-policy.cjs'));
+  const { failures, warnings } = evaluateFlags(entries, Date.now());
+  for (const w of warnings) console.warn(`WARNING ${w}`);
+  if (failures.length) fail(failures.join('\n'));
   console.log(`Validated ${entries.length} flag records.`);
 } catch (e) {
   console.error(e.message);

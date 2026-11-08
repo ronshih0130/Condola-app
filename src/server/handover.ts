@@ -1,8 +1,12 @@
+import { recordHandoverAttachmentUsage } from './usage-events';
+import { effectiveReadOptions, guardEffectiveSession, withEffectiveAuthority, withEffectiveReadAuthority, customAuthorityAllowsOn } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { svc } from "./db";
 import { FlowError } from "./errors";
+import { produceNotificationEvent } from "./notification-event-producers";
 import { deleteHandoverObject, handoverBytes, handoverMeta, readHandoverObject, sealHandoverObject } from "./handover-storage";
 import type { Session } from "./types";
 
@@ -16,7 +20,10 @@ function noteValue(value: string, max: number) { const note = value.trim(); if (
  * Write lock order: rollout setting, org, session, relationship, lease, record/version.
  * The caller must provide the Session produced by getSession/readSessionOn, never form data.
  */
-async function authorize(client: Client, session: Session, leaseId: string, write: boolean) {
+async function authorize(client: Client, session: Session, leaseId: string, write: boolean, snapshot = false) {
+  if (snapshot) {
+    if (!await customAuthorityAllowsOn(client, session, "leases.edit")) throw new FlowError("errors.forbidden");
+  } else await assertCustomAuthorityOn(client, session, write ? "leases.edit" : "props.view");
   validId(leaseId);
   if (session.needsSandbox || !["staff", "tenant"].includes(session.kind)) throw new FlowError("errors.notFound");
   if (session.kind === "tenant" && session.leaseId !== leaseId) throw new FlowError("errors.notFound");
@@ -67,8 +74,9 @@ async function createVersion(client: Client, session: Session, leaseId: string, 
   return v;
 }
 export async function publishHandover(session: Session, leaseId: string, phase: string, note: string, expectedVersion: string | null) {
+  session = await guardEffectiveSession(session, "leases.edit");
   phaseValue(phase); note = noteValue(note, 4000); if (session.kind !== "staff") throw new FlowError("errors.forbidden");
-  return svc(session.userId, async client => {
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await authorize(client, session, leaseId, true);
     const recordId = await lockRecord(client, session.orgId, leaseId, phase, true);
     await recheckSessionDeadline(client, session);
@@ -76,14 +84,16 @@ export async function publishHandover(session: Session, leaseId: string, phase: 
     if ((previous?.id ?? null) !== expectedVersion) throw new FlowError("errors.generic");
     const version = await createVersion(client, session, leaseId, recordId, previous, note);
     await writeAudit(session.orgId, session.userId, "handover_version_published", { lease_id: leaseId, record_id: recordId, version_id: version.id, phase }, client);
+    await produceNotificationEvent(client, session.orgId, "handover_version", version.id);
     await recheckSessionDeadline(client, session);
     return version;
-  });
+  }));
 }
 export async function replyHandover(session: Session, leaseId: string, versionId: string, response: string, note: string, requestId: string) {
+  session = await guardEffectiveSession(session, "leases.edit");
   validId(versionId); validId(requestId); note = noteValue(note, 2000);
   if (response !== "confirm" && response !== "disagree") throw new FlowError("errors.required");
-  return svc(session.userId, async client => {
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await authorize(client, session, leaseId, true);
     const target = (await client.query<{ record_id: string; phase: Phase }>(`SELECT v.record_id,r.phase FROM app.handover_versions v JOIN app.handover_records r ON r.id=v.record_id WHERE v.id=$1 AND v.org_id=$2 AND v.lease_id=$3`, [versionId, session.orgId, leaseId])).rows[0];
     if (!target) throw new FlowError("errors.notFound");
@@ -99,11 +109,12 @@ export async function replyHandover(session: Session, leaseId: string, versionId
     await writeAudit(session.orgId, session.userId, "handover_replied", { lease_id: leaseId, version_id: versionId, reply_id: row.id, response }, client);
     await recheckSessionDeadline(client, session);
     return row.id;
-  });
+  }));
 }
 export async function readHandover(session: Session, leaseId: string) {
-  return svc(session.userId, async client => {
-    await authorize(client, session, leaseId, true);
+  session = await guardEffectiveSession(session, "leases.edit");
+  return svc(session.userId, async client => withEffectiveReadAuthority(client, session, "leases.edit", async () => {
+    await authorize(client, session, leaseId, !session.customRole, !!session.customRole);
     const records = await client.query(`SELECT r.id,r.phase,v.id AS version_id,v.revision,v.note,v.created_at,nullif(btrim(p.display_name),'') AS author_name
       FROM app.handover_records r JOIN app.handover_versions v ON v.record_id=r.id LEFT JOIN public.profiles p ON p.id=v.created_by
       WHERE r.org_id=$1 AND r.lease_id=$2 ORDER BY r.phase,v.revision DESC`, [session.orgId, leaseId]);
@@ -112,12 +123,13 @@ export async function readHandover(session: Session, leaseId: string) {
     const intents = await client.query(`SELECT id,version_id,file_name,mime,size_bytes,status,expires_at,(session_id=$4 AND status='pending' AND expires_at>clock_timestamp()) AS can_resume FROM app.handover_upload_intents WHERE org_id=$1 AND lease_id=$2 AND actor_id=$3 AND status IN ('pending','discarded','attached') ORDER BY created_at DESC`, [session.orgId, leaseId, session.userId, session.sessionId]);
     await recheckSessionDeadline(client, session);
     return { versions: records.rows, attachments: attachments.rows, replies: replies.rows, intents: intents.rows };
-  });
+  }), effectiveReadOptions(session));
 }
 
 export async function prepareHandoverUpload(session: Session, leaseId: string, versionId: string, input: { fileName: string; mime: string; size: number }) {
+  session = await guardEffectiveSession(session, "leases.edit");
   validId(versionId); const meta = handoverMeta(input.fileName, input.mime, input.size);
-  const intent = await svc(session.userId, async client => {
+  const intent = await svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await authorize(client, session, leaseId, true);
     const row = (await client.query<{ record_id: string; phase: Phase }>(`SELECT v.record_id,r.phase FROM app.handover_versions v JOIN app.handover_records r ON r.id=v.record_id WHERE v.id=$1 AND v.org_id=$2 AND v.lease_id=$3`, [versionId, session.orgId, leaseId])).rows[0];
     if (!row) throw new FlowError("errors.notFound");
@@ -134,14 +146,15 @@ export async function prepareHandoverUpload(session: Session, leaseId: string, v
     await writeAudit(session.orgId, session.userId, "handover_upload_started", { lease_id: leaseId, version_id: versionId, intent_id: id }, client);
     await recheckSessionDeadline(client, session);
     return { id, path };
-  });
+  }));
   return { intentId: intent.id, mime: meta.mime };
 }
 /** The app, not the browser, writes the temporary object. The intent lock
  * prevents an upload from recreating an object after discard. */
 export async function uploadHandoverBytes(session: Session, leaseId: string, intentId: string, bytes: Uint8Array) {
+  session = await guardEffectiveSession(session, "leases.edit");
   validId(intentId);
-  return svc(session.userId, async client => {
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await authorize(client, session, leaseId, true);
     const prelim = (await client.query<{ phase: Phase }>(`SELECT r.phase FROM app.handover_upload_intents i JOIN app.handover_versions v ON v.id=i.version_id JOIN app.handover_records r ON r.id=v.record_id WHERE i.id=$1 AND i.org_id=$2 AND i.lease_id=$3 AND i.actor_id=$4 AND i.session_id=$5`, [intentId, session.orgId, leaseId, session.userId, session.sessionId])).rows[0];
     if (!prelim) throw new FlowError("errors.notFound");
@@ -156,11 +169,12 @@ export async function uploadHandoverBytes(session: Session, leaseId: string, int
     await recheckDeadline(client, session, intentId);
     await writeAudit(session.orgId, session.userId, "handover_upload_stored", { lease_id: leaseId, intent_id: intentId, sha256: sha }, client);
     await recheckSessionDeadline(client, session);
-  });
+  }));
 }
 export async function finalizeHandoverUpload(session: Session, leaseId: string, intentId: string) {
+  session = await guardEffectiveSession(session, "leases.edit");
   validId(intentId);
-  return svc(session.userId, async client => {
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await authorize(client, session, leaseId, true);
     const prelim = (await client.query<{ phase: Phase }>(`SELECT r.phase FROM app.handover_upload_intents i JOIN app.handover_versions v ON v.id=i.version_id JOIN app.handover_records r ON r.id=v.record_id WHERE i.id=$1 AND i.org_id=$2 AND i.lease_id=$3 AND i.actor_id=$4 AND i.session_id=$5`, [intentId, session.orgId, leaseId, session.userId, session.sessionId])).rows[0];
     if (!prelim) throw new FlowError("errors.notFound");
@@ -173,6 +187,7 @@ export async function finalizeHandoverUpload(session: Session, leaseId: string, 
       const result = (await client.query<{ id: string }>(`SELECT id FROM app.handover_attachments WHERE intent_id=$1`, [intentId])).rows[0];
       await recheckSessionDeadline(client, session);
       if (!result) throw new FlowError("errors.generic");
+      await recordHandoverAttachmentUsage(client, session.orgId, result.id);
       return result;
     }
     if (intent.status !== "pending" || !intent.usable) throw new FlowError("errors.notFound");
@@ -189,12 +204,14 @@ export async function finalizeHandoverUpload(session: Session, leaseId: string, 
     await client.query(`UPDATE app.handover_upload_intents SET status='attached' WHERE id=$1`, [intent.id]);
     await writeAudit(session.orgId, session.userId, "handover_attachment_published", { lease_id: leaseId, version_id: version.id, attachment_id: attachment.id, sha256: sha }, client);
     await recheckSessionDeadline(client, session);
+    await recordHandoverAttachmentUsage(client, session.orgId, attachment.id);
     return attachment;
-  });
+  }));
 }
 export async function discardHandoverUpload(session: Session, leaseId: string, intentId: string) {
+  session = await guardEffectiveSession(session, "leases.edit");
   validId(intentId);
-  return svc(session.userId, async client => {
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await authorize(client, session, leaseId, true);
     const prelim = (await client.query<{ phase: Phase }>(`SELECT r.phase FROM app.handover_upload_intents i JOIN app.handover_versions v ON v.id=i.version_id JOIN app.handover_records r ON r.id=v.record_id WHERE i.id=$1 AND i.org_id=$2 AND i.lease_id=$3 AND i.actor_id=$4`, [intentId, session.orgId, leaseId, session.userId])).rows[0];
     if (!prelim) throw new FlowError("errors.notFound");
@@ -212,11 +229,12 @@ export async function discardHandoverUpload(session: Session, leaseId: string, i
     if (intent.status !== "attached") await client.query(`UPDATE app.handover_upload_intents SET status='discarded' WHERE id=$1`, [intentId]);
     await writeAudit(session.orgId, session.userId, "handover_upload_discarded", { lease_id: leaseId, intent_id: intentId }, client);
     await recheckSessionDeadline(client, session);
-  });
+  }));
 }
 export async function downloadHandoverAttachment(session: Session, leaseId: string, attachmentId: string) {
+  session = await guardEffectiveSession(session, "leases.edit");
   validId(attachmentId);
-  return svc(session.userId, async client => {
+  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await authorize(client, session, leaseId, true);
     const row = (await client.query<{ storage_path: string; mime: string; size_bytes: number; sha256: string; file_name: string }>(`SELECT storage_path,mime,size_bytes,sha256,file_name FROM app.handover_attachments WHERE id=$1 AND org_id=$2 AND lease_id=$3`, [attachmentId, session.orgId, leaseId])).rows[0];
     if (!row) throw new FlowError("errors.notFound");
@@ -227,5 +245,5 @@ export async function downloadHandoverAttachment(session: Session, leaseId: stri
     await writeAudit(session.orgId, session.userId, "handover_attachment_read", { lease_id: leaseId, attachment_id: attachmentId }, client);
     await recheckSessionDeadline(client, session);
     return { bytes, mime: row.mime, fileName: row.file_name };
-  });
+  }));
 }

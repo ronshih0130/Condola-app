@@ -253,8 +253,11 @@ test("ID purge dry-run, protected rows, bucket guard, missing objects, and rerun
         )
       ).rows[0]?.data;
     };
+    // PROP-05 audits platform_settings changes; this test toggles ID_PURGE_ENABLED
+    // itself, so those control-plane rows are excluded from the purge-audit checks
+    // (PROP-05's own tests cover settings auditing).
     const auditRows = async () =>
-      (await client.query(`SELECT * FROM audit_log ORDER BY id`)).rows;
+      (await client.query(`SELECT * FROM audit_log WHERE table_name IS DISTINCT FROM 'platform_settings' ORDER BY id`)).rows;
     const accessRows = async () =>
       (await client.query(`SELECT * FROM identity_document_access_log ORDER BY id`)).rows;
 

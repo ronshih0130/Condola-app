@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -11,7 +12,7 @@ function safeNext(value: string | null) {
 }
 
 export async function GET(request: Request) {
-  const session = await readSession();
+  const session = await guardEffectiveSession(await readSession(), null);
   if (!session || session.kind !== "staff") redirect("/login");
   const blocked = await requireCurrentConsent(session, "api");
   if (blocked) return blocked;

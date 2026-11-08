@@ -1,3 +1,4 @@
+import { guardEffectiveSession, requireEffectivePerm } from "./b017-custom-role-governance";
 import { createHash, randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
@@ -30,7 +31,8 @@ import { assertSeatAvailableOn, lockSeatOrganization } from "./seats";
 import { assertTeamInvitesAllowed, teamInvitesAllowedForOrg } from "./team-invites";
 
 export { hashInviteToken } from "./portal-invite";
-import { assertPerm } from "./perms";
+import { changeCustomRoleMember } from "./b017-custom-role-governance";
+import { assertPerm, can, PERMS } from "./perms";
 import { appCookieOptions } from "./public-origin";
 import { privacyFromSettings, type OwnerPrivacy } from "./privacy";
 import { backupCodes, acceptSecondFactor, otpauthUrl, randomBase32 } from "./totp";
@@ -46,9 +48,9 @@ const INVITE_DAYS = 7;
 export type RequestMeta = { ua: string | null; ip: string | null };
 
 export type SignInResult =
-  | { ok: true; token: string; remember: boolean; destination?: "firm" }
+  | { ok: true; token: string; remember: boolean; destination?: "firm" | "vendor" }
   | { ok: false; error: "invalid" | "locked" | "disabled" | "unconfirmed" | "unavailable" }
-  | { ok: false; step: "2fa" | "enroll"; challengeId: string; secret?: string; otpauth?: string };
+  | { ok: false; step: "2fa" | "enroll"; challengeId: string; secret?: string; otpauth?: string; destination?: "vendor" };
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -231,11 +233,17 @@ async function accessState(userId: string) {
   const suspended = members.rows.some((row) => row.status === "suspended");
   if (activeMember) return "active" as const;
   if (suspended) return "disabled" as const;
-  const portal = await query(
-    `SELECT 1 FROM contacts WHERE user_id = $1 AND archived_at IS NULL AND (is_tenant OR is_owner) LIMIT 1`,
+  // Reuse the existing access lookup: OFF adds no connection/transaction and
+  // never references a B-026 function (including before its migration exists).
+  const portal = await query<{ portal: boolean; vendor_enabled: boolean }>(
+    `SELECT EXISTS(SELECT 1 FROM contacts WHERE user_id = $1 AND archived_at IS NULL AND (is_tenant OR is_owner)) AS portal,
+            coalesce((SELECT value->'enabled'='true'::jsonb AND jsonb_typeof(value->'allowed_org_ids')='array'
+                      AND jsonb_array_length(CASE WHEN jsonb_typeof(value->'allowed_org_ids')='array'
+                        THEN value->'allowed_org_ids' ELSE '[]'::jsonb END)>0
+                      FROM platform_settings WHERE key='vendor_account'),false) AS vendor_enabled`,
     [userId],
   );
-  return portal.rows[0] ? ("portal" as const) : ("none" as const);
+  return portal.rows[0]?.portal ? "portal" as const : portal.rows[0]?.vendor_enabled ? "vendor_candidate" as const : "none" as const;
 }
 
 async function firmRequiresMfa(userId: string) {
@@ -256,14 +264,19 @@ async function mfaRow(userId: string) {
   return row.rows[0] ?? null;
 }
 
-export async function createSession(userId: string, remember: boolean, meta: RequestMeta) {
+/** Existing cookie session insertion, optionally participating in an invitation transaction. */
+export async function createSessionOn(client: Pick<Client, "query">, userId: string, remember: boolean, meta: RequestMeta) {
   const token = newToken();
-  const hours = remember ? 24 * 30 : 12;
-  await query(
+  await client.query(
     `INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip, expires_at)
      VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))`,
-    [userId, sha256(token), meta.ua?.slice(0, 300) ?? null, meta.ip, hours],
+    [userId, sha256(token), meta.ua?.slice(0, 300) ?? null, meta.ip, remember ? 24 * 30 : 12],
   );
+  return token;
+}
+
+export async function createSession(userId: string, remember: boolean, meta: RequestMeta) {
+  const token = await withClient(client => createSessionOn(client, userId, remember, meta));
   await writeAudit(await primaryOrg(userId), userId, "sign_in", { remember });
   return token;
 }
@@ -301,9 +314,11 @@ export async function signIn(emailRaw: string, password: string, remember: boole
 }
 
 async function continueSignIn(userId: string, email: string, remember: boolean, meta: RequestMeta): Promise<SignInResult> {
-  const access = await accessState(userId);
+  const state = await accessState(userId);
+  const access = state === "vendor_candidate" ? "none" : state;
   if (access === "disabled") return { ok: false, error: "disabled" };
-  if (access === "none") {
+  const vendor = state === "vendor_candidate" && await (await import("./vendor-accounts")).vendorAccountLoginAccess(userId);
+  if (access === "none" && !vendor) {
     const row = await query<{ email: string; email_confirmed_at: Date | null }>(
       `SELECT email, email_confirmed_at FROM auth.users WHERE id = $1`,
       [userId],
@@ -322,7 +337,7 @@ async function continueSignIn(userId: string, email: string, remember: boolean, 
   const factor = await mfaRow(userId);
   if (factor?.enabled && factor.totp_secret) {
     const challengeId = await openChallenge(userId, "2fa", remember);
-    return { ok: false, step: "2fa", challengeId };
+    return { ok: false, step: "2fa", challengeId, ...(vendor ? { destination: "vendor" as const } : {}) };
   }
   if (await firmRequiresMfa(userId)) {
     const secret = randomBase32();
@@ -337,7 +352,7 @@ async function continueSignIn(userId: string, email: string, remember: boolean, 
     };
   }
   const token = await createSession(userId, remember, meta);
-  return { ok: true, token, remember };
+  return { ok: true, token, remember, ...(vendor ? { destination: "vendor" as const } : {}) };
 }
 
 /** Demo LINE Login: signs in the linked member. Does not call LINE. */
@@ -684,20 +699,23 @@ async function assertLastAdmin(orgId: string, userId: string, nextRole: OrgRole 
 }
 
 function assertTeamAdmin(session: Session) {
-  if (session.kind !== "staff" || session.role !== "admin") throw new FlowError("errors.forbidden");
+  if (session.kind !== "staff" || session.role !== "admin" || (session.customRole && !can(session, "team.manage"))) throw new FlowError("errors.forbidden");
 }
 
 export async function inviteMember(session: Session, input: { email: string; name: string; role: string }) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertTeamAdmin(session);
   assertTeamInvitesAllowed(session.orgId);
   const email = normalizeEmail(input.email);
   if (!email) throw new FlowError("errors.email");
   if (!TEAM_ROLES.has(input.role as OrgRole)) throw new FlowError("errors.required");
   const role = input.role as OrgRole;
+  if (session.customRole && PERMS.some(([key]) => can(role, key) && !can(session, key))) throw new FlowError("errors.forbidden");
   const token = newToken();
   const issued = await withClient(async (client) => {
     await client.query("BEGIN");
     try {
+      if (session.customRole) await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [session.userId]);
       const organization = await lockSeatOrganization(client, session.orgId);
       if (session.environment !== "live" || organization.environment !== "live") {
         throw new FlowError("errors.teamInvitesSoon");
@@ -719,6 +737,7 @@ export async function inviteMember(session: Session, input: { email: string; nam
          RETURNING id::text, expires_at`,
         [session.orgId, role, email, sha256(token), INVITE_DAYS, session.userId],
       );
+      await requireEffectivePerm(client, session, "team.manage");
       await client.query("COMMIT");
       return inserted.rows[0];
     } catch (error) {
@@ -733,12 +752,14 @@ export async function inviteMember(session: Session, input: { email: string; nam
 }
 
 export async function resendInvite(session: Session, invitationId: string) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertTeamAdmin(session);
   assertTeamInvitesAllowed(session.orgId);
   const token = newToken();
   const issued = await withClient(async (client) => {
     await client.query("BEGIN");
     try {
+      if (session.customRole) await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [session.userId]);
       const organization = await lockSeatOrganization(client, session.orgId);
       if (session.environment !== "live" || organization.environment !== "live") {
         throw new FlowError("errors.teamInvitesSoon");
@@ -758,11 +779,13 @@ export async function resendInvite(session: Session, invitationId: string) {
       if (!row || row.kind !== "team_member" || row.status !== "pending" || !row.unexpired) {
         throw new FlowError("errors.teamInviteUnavailable");
       }
+      if (session.customRole && PERMS.some(([key]) => can(row.role, key) && !can(session, key))) throw new FlowError("errors.forbidden");
       const updated = await client.query<{ expires_at: Date }>(
         `UPDATE invitations SET code_hash = $2, expires_at = now() + make_interval(days => $3)
           WHERE id::text = $1 RETURNING expires_at`,
         [invitationId, sha256(token), INVITE_DAYS],
       );
+      await requireEffectivePerm(client, session, "team.manage");
       await client.query("COMMIT");
       return { email: row.email, role: row.role, expiresAt: updated.rows[0].expires_at.toISOString() };
     } catch (error) {
@@ -777,6 +800,7 @@ export async function resendInvite(session: Session, invitationId: string) {
 }
 
 export async function revokeInvite(session: Session, invitationId: string) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertTeamAdmin(session);
   const updated = await query(
     `UPDATE invitations SET status = 'revoked' WHERE id = $1 AND org_id = $2 AND kind = 'team_member' AND status = 'pending'`,
@@ -787,8 +811,13 @@ export async function revokeInvite(session: Session, invitationId: string) {
 }
 
 export async function setMemberRole(session: Session, memberId: string, role: OrgRole) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertPerm(session, "team.manage");
   if (!TEAM_ROLES.has(role)) throw new FlowError("errors.required");
+  if (await changeCustomRoleMember(session, memberId, { role })) {
+    await writeAudit(session.orgId, session.userId, "role_change", { memberId, role });
+    return;
+  }
   const member = await query<{ user_id: string; role: OrgRole; is_billing_owner: boolean }>(
     `SELECT user_id::text, role::text, is_billing_owner FROM org_members WHERE id = $1 AND org_id = $2 AND status = 'active'`,
     [memberId, session.orgId],
@@ -803,8 +832,13 @@ export async function setMemberRole(session: Session, memberId: string, role: Or
 }
 
 export async function setMemberActive(session: Session, memberId: string, active: boolean, confirmed = false) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertPerm(session, "team.manage");
   if (!active && !confirmed) throw new FlowError("errors.confirm");
+  if (await changeCustomRoleMember(session, memberId, { active })) {
+    await writeAudit(session.orgId, session.userId, active ? "reactivate" : "deactivate", { memberId });
+    return;
+  }
   const member = await query<{ user_id: string; role: OrgRole }>(
     `SELECT user_id::text, role::text FROM org_members WHERE id = $1 AND org_id = $2`,
     [memberId, session.orgId],
@@ -835,6 +869,7 @@ export async function setMemberActive(session: Session, memberId: string, active
           [memberId, session.orgId],
         );
       }
+      await requireEffectivePerm(client, session, "team.manage");
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
@@ -942,16 +977,22 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
 
 /** Hosted team logins must be provisioned by GoTrue, including identities and tokens. */
 export async function upsertInvitedUser(client: Client, email: string, name: string, password: string) {
-  const existing = await client.query<{ id: string; has_password: boolean; matches: boolean }>(
+  const existing = await client.query<{ id: string; has_password: boolean; matches: boolean; claimed?: boolean }>(
     `SELECT id::text,
             (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password,
-            (encrypted_password IS NOT NULL AND encrypted_password = crypt($2, encrypted_password)) AS matches
-       FROM auth.users WHERE lower(email) = lower($1)`,
+            (encrypted_password IS NOT NULL AND encrypted_password = crypt($2, encrypted_password)) AS matches,
+            (EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = u.id)
+              OR EXISTS (SELECT 1 FROM org_members m WHERE m.user_id = u.id)) AS claimed
+       FROM auth.users u WHERE lower(email) = lower($1)`,
     [email, password],
   );
   const account = existing.rows[0];
   // Like portal acceptance, never replace an established password.
   if (account?.has_password && !account.matches) return null;
+  // The admin holds the raw link, so it proves nothing about an existing login.
+  // A login without a password that already serves a contact or a firm is
+  // someone else's account waiting for its own invite; never give it a password here.
+  if (account && !account.has_password && account.claimed) return null;
 
   let id = account?.id ?? "";
   const url = supabaseUrl();
@@ -1019,7 +1060,7 @@ function portalBindError(error: unknown) {
 }
 
 /** Create the login and set its password inside one savepoint so a taken email rolls both back. */
-async function provisionAcceptedLogin(
+export async function provisionAcceptedLogin(
   client: Client,
   input: { email: string; name: string; phone: string | null; password: string },
 ) {
@@ -1107,6 +1148,14 @@ async function acceptPortalInvite(
     await notePortalReject(token, meta.ip);
     return { ok: false as const, error: "auth" as const, kind };
   }
+  // Staff choose the contact email and hold the raw link, so the link proves
+  // nothing about an existing login. A login without a password may get its
+  // first password only from an invite issued for that same login.
+  if (existing && !existing.has_password && existing.id !== row.user_id) {
+    await notePortalReject(token, meta.ip);
+    return { ok: false as const, error: "auth" as const, kind };
+  }
+  const passwordVerified = Boolean(existing?.has_password && existing.matches);
 
   let saved: { userId: string } | { conflict: true } | null = null;
   try {
@@ -1136,7 +1185,23 @@ async function acceptPortalInvite(
             return { conflict: true as const };
           }
           userId = created;
-        } else if (!existing?.has_password) {
+        } else if (!passwordVerified) {
+          // Lock the login and recheck it here: a password set since the lookup, or one
+          // the lookup never saw (no account matched the shown email), is never replaced.
+          const login = await client.query<{ has_password: boolean }>(
+            `SELECT (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password
+               FROM auth.users WHERE id = $1 FOR UPDATE`,
+            [userId],
+          );
+          // Without its password, a login that already serves another contact is not rewritten or rebound.
+          const elsewhere = await client.query(
+            `SELECT 1 FROM contacts WHERE user_id = $1 AND id <> $2 LIMIT 1 FOR SHARE`,
+            [userId, row.contact_id],
+          );
+          if (!login.rows[0] || login.rows[0].has_password || elsewhere.rows[0]) {
+            await client.query("ROLLBACK");
+            return { conflict: true as const };
+          }
           await client.query(
             `UPDATE auth.users
                 SET email = $2,
@@ -1465,9 +1530,11 @@ export async function disableMfa(session: Session) {
 }
 
 export async function setRequireMfa(session: Session, required: boolean) {
+  session = await guardEffectiveSession(session, "settings.edit");
   assertPerm(session, "settings.edit");
   const { tx } = await import("./db");
   await tx(session.userId, async (client) => {
+    await requireEffectivePerm(client, session, "settings.edit");
     await client.query(
       `UPDATE organizations
           SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{require_2fa}', to_jsonb($2::boolean), true)
@@ -1487,9 +1554,11 @@ export async function ownerPrivacy(orgId: string): Promise<OwnerPrivacy & { name
 }
 
 export async function setOwnerPrivacy(session: Session, input: OwnerPrivacy) {
+  session = await guardEffectiveSession(session, "settings.edit");
   assertPerm(session, "settings.edit");
   const { tx } = await import("./db");
   await tx(session.userId, async (client) => {
+    await requireEffectivePerm(client, session, "settings.edit");
     await client.query(
       `UPDATE organizations
           SET settings = jsonb_set(

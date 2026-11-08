@@ -13,18 +13,23 @@ let db: Client;
 let ticket: string, otherTicket: string, org2Ticket: string, property: string, otherProperty: string;
 let currency: string, scale: number;
 let sessions: Record<string, string>;
+// B-028 package 4: session id -> principal, and one real owner-visible photo per fixture ticket.
+let users: Record<string, string>;
+let photoOf: Record<string, string>;
 const readers = ["b013_owner_pending", "b013_owner_history", "b013_manager_view"] as const;
 const tables = ["b013_estimate_heads", "b013_estimate_versions", "b013_estimate_decisions",
   "b013_repair_emergencies", "b013_repair_appointments", "b013_repair_commands", "b013_repair_event_outbox"];
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest();
 
-async function asRole(sql: string, values: unknown[] = [], role = "service_role") {
+async function asRole(sql: string, values: unknown[] = [], role = "service_role", sub?: string | null) {
   assert.ok(["service_role", "anon", "authenticated"].includes(role));
   await db.query("SAVEPOINT b021_call");
   try {
+    if (sub !== undefined) await db.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [sub ?? ""]);
     await db.query("SET LOCAL ROLE " + role);
     const result = await db.query(sql, values);
     await db.query("RESET ROLE");
+    if (sub !== undefined) await db.query("SELECT set_config('request.jwt.claim.sub','',true)");
     await db.query("SET CONSTRAINTS ALL IMMEDIATE");
     await db.query("SET CONSTRAINTS ALL DEFERRED");
     await db.query("RELEASE SAVEPOINT b021_call");
@@ -67,19 +72,29 @@ async function copyFixture(table: "properties" | "contacts" | "property_owners",
     + ",to_jsonb(s)||$2::jsonb) r WHERE s.id=$1", [id, JSON.stringify(patch)]);
   assert.equal(result.rowCount, 1);
 }
+async function photo(ticketId: string) {
+  const file = randomUUID(), attachment = randomUUID();
+  await db.query("INSERT INTO public.files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,uploaded_by)"
+    + " VALUES($1::uuid,$2::uuid,'ticket-photos-private','org/'||$2::uuid::text||'/tickets/'||$3::uuid::text||'/'||$1::uuid::text||'.jpg','fixture.jpg','image/jpeg',1024,$4)",
+  [file, ORG_ID, ticketId, USERS.admin]);
+  await db.query("INSERT INTO public.ticket_attachments(id,org_id,ticket_id,file_id) VALUES($1,$2,$3,$4)",
+    [attachment, ORG_ID, ticketId, file]);
+  return attachment;
+}
 async function submit(ticketId = ticket, expected: string | null = null, amount = "500001") {
   const result = (await asRole("SELECT app.b013_submit_estimate("
-    + "$1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::bigint,$7::text,$8::smallint,$9::text,$10::jsonb,$11::bytea) r",
+    + "$1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::bigint,$7::text,$8::smallint,$9::text,$10::jsonb,$11::bytea) r",
     [ORG_ID, sessions.manager, randomUUID(), ticketId, expected, amount, currency, scale, "Repair pipe",
-      JSON.stringify([{ id: "evidence", private: "strip-me" }]), hash([ticketId, expected, amount])])).rows[0].r;
+      JSON.stringify([{ id: photoOf[ticketId], private: "strip-me" }]), hash([ticketId, expected, amount])],
+    "service_role", users[sessions.manager])).rows[0].r;
   assert.equal(result.status, "recorded");
   assert.ok(result.version_id);
   return result.version_id as string;
 }
 // Call the SQL decision gateway on the fixture transaction connection.
 async function decideEstimate(version: string, session = sessions.owner, request = randomUUID(), reason: string | null = null) {
-  return (await asRole("SELECT app.b013_decide_estimate($1::uuid,$2::uuid,$3::uuid,$4::uuid,'approved',$5::text,$6::bytea) r",
-    [ORG_ID, session, request, version, reason, hash([version, "approved", reason])])).rows[0].r;
+  return (await asRole("SELECT app.b013_decide_estimate($1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,'approved',$5::text,$6::bytea) r",
+    [ORG_ID, session, request, version, reason, hash([version, "approved", reason])], "service_role", users[session])).rows[0].r;
 }
 async function read(name: (typeof readers)[number], session = sessions.owner, ticketId = ticket,
   org = ORG_ID, live = ORG_ID, env = "live") {
@@ -140,9 +155,12 @@ test.beforeEach(async () => {
   const p2 = (await db.query("SELECT id FROM public.properties WHERE org_id=$1 ORDER BY id LIMIT 1", [ORG2_ID])).rows[0];
   assert.ok(p2);
   org2Ticket = await makeTicket(ORG2_ID, p2.id);
+  photoOf = { [ticket]: await photo(ticket), [otherTicket]: await photo(otherTicket) };
   sessions = {};
+  users = {};
   for (const name of ["admin", "manager", "owner", "coastAdmin"] as const) {
     sessions[name] = randomUUID();
+    users[sessions[name]] = USERS[name];
     await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at)"
       + " VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')",
       [sessions[name], USERS[name], randomBytes(32).toString("hex")]);
@@ -160,7 +178,7 @@ test("owner_pending_scoped", async () => {
   const rows = await read("b013_owner_pending");
   assert.deepEqual(rows.map(row => row.version_id), [current]);
   assert.equal(rows[0].property_id, property);
-  assert.deepEqual(rows[0].evidence_snapshot, [{ id: "evidence" }]);
+  assert.deepEqual(rows[0].evidence_snapshot, [{ id: photoOf[ticket] }]);
   assert.deepEqual(await read("b013_owner_pending", sessions.manager), []);
 });
 test("property_isolation", async () => {
@@ -253,18 +271,19 @@ test("SQL decision replay preserves one decision row", async () => {
 test("emergency_visibility", async () => {
   const version = await submit();
   const result = (await asRole("SELECT app.b013_authorize_emergency("
-    + "$1::uuid,$2::uuid,$3::uuid,$4::uuid,'water','Urgent pipe repair',$5::jsonb,$6::bytea) r",
+    + "$1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,'water','Urgent pipe repair',$5::jsonb,$6::bytea) r",
     [ORG_ID, sessions.admin, randomUUID(), version,
-      JSON.stringify([{ id: "photo", storage_key: "secret", url: "private" }]), hash([version])])).rows[0].r;
+      JSON.stringify([{ id: photoOf[ticket], storage_key: "secret", url: "private" }]), hash([version])],
+    "service_role", users[sessions.admin])).rows[0].r;
   assert.equal(result.status, "recorded");
   for (const [name, session] of [["b013_owner_history", sessions.owner], ["b013_manager_view", sessions.manager]] as const) {
     const row = (await read(name, session))[0];
     assert.equal(row.emergency_category, "water");
     assert.equal(row.emergency_reason, "Urgent pipe repair");
-    assert.deepEqual(row.emergency_photo_refs, [{ id: "photo" }]);
+    assert.deepEqual(row.emergency_photo_refs, [{ id: photoOf[ticket] }]);
     assert.ok(row.emergency_notice_intent_at);
     assert.equal(row.decision, null);
-    assert.doesNotMatch(JSON.stringify(row), /storage_key|secret|private|delivered|sent_at/);
+    assert.doesNotMatch(JSON.stringify(row), /storage_key|storage_path|ticket-photos|secret|private|delivered|sent_at|\.jpg/);
   }
   assert.equal((await read("b013_owner_pending"))[0].has_emergency, true);
 });

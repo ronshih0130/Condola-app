@@ -1,6 +1,8 @@
+import { recordUsage, usageDedupeKey } from '../usage-events';
 import type { Client } from "pg";
 import { svc } from "../db";
 import { leaseIdentityReady } from "../id-docs";
+import { identityRequiredForSigning } from "../id-sign-gate";
 import { FlowError } from "../errors";
 import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "../move-in-invoice";
 import { lockSigningCase, lockSigningLeaseForCreate, type SigningActor } from "./lock";
@@ -366,6 +368,9 @@ export class EsignRepo {
       await this.save(client, caseId, state, after, input.finalPdfBytes);
       const completed = after.versions.find((item) => item.id === input.versionId);
       if (v?.status !== "completed" && completed?.status === "completed") {
+        await recordUsage(client, { orgId: actor.orgId, dimension: 'signatures', quantity: BigInt(1), occurredAt: completed.completedAt!,
+          sourceTable: 'esign_versions', sourceId: input.versionId,
+          dedupeKey: usageDedupeKey('signatures', 'esign_versions', input.versionId, completed.finalDigest) });
         const result = await client.query<FirstPeriodLeaseSource & { id: string; status: string; esign_status: string; created_by: string }>(
           `SELECT l.id::text, l.status::text, l.esign_status::text, l.first_period_basis,
                   l.rent_amount_minor::text, l.currency, l.start_date::text, l.end_date::text,
@@ -376,7 +381,7 @@ export class EsignRepo {
         requireValue(lease, "Signing lease unavailable");
         if (["draft", "pending_signature"].includes(lease.status) && lease.esign_status !== "imported") {
           validateFirstPeriodSource(lease, true);
-          if (!(await leaseIdentityReady(client as Client, lease.id))) throw new FlowError("errors.idDocRequired");
+          if (await identityRequiredForSigning(client as Client, actor.orgId) && !(await leaseIdentityReady(client as Client, lease.id))) throw new FlowError("errors.idDocRequired");
           await client.query(`UPDATE leases SET status='active', esign_status='fully_signed', signed_at=now() WHERE id=$1 AND org_id=$2`, [lease.id, actor.orgId]);
           await ensureThread(client as Client, lease.id);
           const invoiceId = await issueMoveInInvoice(client as Client, lease.id, actor.userId);

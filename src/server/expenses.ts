@@ -1,3 +1,5 @@
+import { recordStoredFileUsage } from './usage-events';
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { maybe, many, one, tx } from "./db";
@@ -233,6 +235,7 @@ async function insertReceipt(client: Client, session: Session, name: string) {
      VALUES ($1, 'receipts', $2, $3, 'text/plain', $4, $5) RETURNING id::text`,
     [session.orgId, `demo/${randomUUID()}.txt`, name, Buffer.byteLength(name), session.userId],
   );
+  await recordStoredFileUsage(client, session.orgId, file.id);
   return file.id;
 }
 
@@ -317,9 +320,10 @@ function mapRow(row: Omit<ExpenseListRow, "included" | "incurred_on"> & { incurr
 }
 
 export async function expenseFormOptions(session: Session, expenseId?: string) {
+  session = await guardEffectiveSession(session, "exp.add");
   assertPerm(session, "exp.add");
   if (expenseId !== undefined && !UUID.test(expenseId)) throw new FlowError("errors.notFound");
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "exp.add", async () => {
     const stored = expenseId ? await maybe<{ property_id: string; unit_id: string | null }>(client,
       `SELECT property_id::text, unit_id::text FROM expenses WHERE org_id = $1 AND id = $2`, [session.orgId, expenseId]) : null;
     if (expenseId && !stored) throw new FlowError("errors.notFound");
@@ -346,18 +350,19 @@ export async function expenseFormOptions(session: Session, expenseId?: string) {
       [session.orgId],
     );
     return { properties, units, vendors };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function listExpenses(
   session: Session,
   filters: { propertyId?: string; unitId?: string; status?: string } = {},
 ) {
+  session = await guardEffectiveSession(session, "exp.add");
   assertPerm(session, "exp.add");
   const propertyId = filters.propertyId && UUID.test(filters.propertyId) ? filters.propertyId : null;
   const unitId = filters.unitId && UUID.test(filters.unitId) ? filters.unitId : null;
   const status = (EXPENSE_STATUSES as readonly string[]).includes(filters.status ?? "") ? filters.status : null;
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "exp.add", async () => {
     const rows = await many<Omit<ExpenseListRow, "included">>(
       client,
       `${LIST_SQL}
@@ -369,13 +374,14 @@ export async function listExpenses(
       [session.orgId, propertyId, unitId, status],
     );
     return rows.map((row) => mapRow(row));
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function getExpense(session: Session, expenseId: string): Promise<ExpenseDetail | null> {
+  session = await guardEffectiveSession(session, "exp.add");
   assertPerm(session, "exp.add");
   if (!UUID.test(expenseId)) return null;
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "exp.add", async () => {
     const row = await maybe<Omit<ExpenseListRow, "included">>(
       client,
       `${LIST_SQL} WHERE e.org_id = $1 AND e.id = $2`,
@@ -389,13 +395,14 @@ export async function getExpense(session: Session, expenseId: string): Promise<E
       on_issued: await onIssuedStatement(client, session.orgId, expenseId),
       month_closed: monthIsClosed(mapped.incurred_on, closed),
     };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function createExpense(session: Session, input: ExpenseDraft) {
+  session = await guardEffectiveSession(session, "exp.add");
   assertPerm(session, "exp.add");
   const fields = normalizeExpense(input);
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "exp.add", async () => {
     await setReason(client, "expense_create");
     const property = await loadProperty(client, session.orgId, fields.propertyId);
     const unitId = await loadUnit(client, session.orgId, fields.propertyId, fields.unitId);
@@ -436,7 +443,7 @@ export async function createExpense(session: Session, input: ExpenseDraft) {
       amount: fields.amount,
     });
     return { expenseId: expense.id, incurred };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 type StoredExpense = {
@@ -468,9 +475,10 @@ async function loadStored(client: Client, orgId: string, expenseId: string) {
 }
 
 export async function updateExpense(session: Session, expenseId: string, input: ExpenseDraft) {
+  session = await guardEffectiveSession(session, "exp.add");
   assertPerm(session, "exp.add");
   if (!UUID.test(expenseId)) throw new FlowError("errors.notFound");
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "exp.add", async () => {
     const current = await loadStored(client, session.orgId, expenseId);
     if (current.status === "void") throw new FlowError("errors.expenseVoid");
     const fields = normalizeExpense(input, current.category);
@@ -540,15 +548,16 @@ export async function updateExpense(session: Session, expenseId: string, input: 
       });
     }
     return { expenseId };
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 }
 
 export async function voidExpense(session: Session, expenseId: string, reason: string) {
+  session = await guardEffectiveSession(session, "exp.add");
   assertPerm(session, "exp.add");
   const note = reason.trim();
   if (!UUID.test(expenseId)) throw new FlowError("errors.notFound");
   if (!note) throw new FlowError("errors.required");
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "exp.add", async () => {
     const current = await loadStored(client, session.orgId, expenseId);
     if (current.status === "void") throw new FlowError("errors.expenseVoid");
     if (await onIssuedStatement(client, session.orgId, expenseId)) throw new FlowError("errors.expenseLocked");
@@ -569,7 +578,7 @@ export async function voidExpense(session: Session, expenseId: string, reason: s
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.expenseVoid");
     await releaseRepairLink(client, session.orgId, expenseId, current.ticket_id);
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 }
 
 /** Drop this row's repair link and point the ticket at another open expense, if that column exists. */
@@ -617,6 +626,7 @@ export async function insertPostedRepairExpense(
     incurredOn: string;
   },
 ) {
+  session = await guardEffectiveSession(session, "exp.add");
   if (!Number.isInteger(input.amountCents) || input.amountCents <= 0 || input.amountCents > MAX_EXPENSE_CENTS) {
     throw new FlowError("errors.expenseAmount");
   }
@@ -667,9 +677,10 @@ export async function insertPostedRepairExpense(
  * ticket_id is left as the repair recorded it.
  */
 export async function approveExpense(session: Session, expenseId: string) {
+  session = await guardEffectiveSession(session, "exp.add");
   assertPerm(session, "exp.add");
   if (!UUID.test(expenseId)) throw new FlowError("errors.notFound");
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "exp.add", async () => {
     const current = await loadStored(client, session.orgId, expenseId);
     if (current.status === "void") throw new FlowError("errors.expenseVoid");
     if (!expenseCanBeApproved(current.status)) throw new FlowError("errors.expenseState");
@@ -695,7 +706,7 @@ export async function approveExpense(session: Session, expenseId: string) {
       });
     }
     return { expenseId, ticketId: current.ticket_id };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 /** Statements shortcut: receipt required, category repair, date is the first open day. */
@@ -703,6 +714,7 @@ export async function addExpense(
   session: Session,
   input: { propertyId: string; description: string; amountText: string; receiptName: string },
 ) {
+  session = await guardEffectiveSession(session, "exp.add");
   assertPerm(session, "exp.add");
   const description = input.description.trim();
   const receiptName = input.receiptName.trim();

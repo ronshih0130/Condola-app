@@ -1,3 +1,5 @@
+import { recordUsage, usageDedupeKey } from './usage-events';
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
@@ -81,6 +83,7 @@ export async function readImportBody(request: Request): Promise<{ mode: "dry" | 
 
 /** Validated JSON only. File bytes stay in the browser. */
 export async function dryRunImport(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportResult> {
+  session = await guardEffectiveSession(session, "props.edit");
   const started = performance.now();
   let counted = 0;
   try {
@@ -89,14 +92,14 @@ export async function dryRunImport(session: Session, input: { fileName: string; 
     counted = rows.length;
     const fileName = cleanName(input.fileName);
     if (!rows.length) return totalsFromPlans([], fileName, true);
-    return await tx(session.userId, async (client) => {
+    return await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
       const region = await loadImportRegion(client, session.orgId);
       const parsed = validateImportRows(rows, undefined, region);
       await relaxStatementTimeout(client);
       const index = await loadIndex(client, session.orgId, parsed);
       await checkTargetRegions(client, session.orgId, parsed, index, region);
       return totalsFromPlans(planRows(parsed, index), fileName, true);
-    }, scope(session));
+    }), scope(session));
   } finally {
     logImportTiming("dry", counted, started);
   }
@@ -107,6 +110,7 @@ export async function dryRunImport(session: Session, input: { fileName: string; 
  * already exist, so the preview does not mark them ready to insert.
  */
 export async function previewImport(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportIssue[]> {
+  session = await guardEffectiveSession(session, "props.edit");
   const started = performance.now();
   let counted = 0;
   try {
@@ -114,14 +118,14 @@ export async function previewImport(session: Session, input: { fileName: string;
     const rows = coerceImportRows(input.rows, IMPORT_PREVIEW_BATCH);
     counted = rows.length;
     if (!rows.length) return [];
-    return await tx(session.userId, async (client) => {
+    return await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
       const region = await loadImportRegion(client, session.orgId);
       const parsed = validateImportRows(rows, undefined, region);
       await relaxStatementTimeout(client);
       const index = await loadIndex(client, session.orgId, parsed);
       await checkTargetRegions(client, session.orgId, parsed, index, region);
       return previewIssues(planRows(parsed, index));
-    }, scope(session));
+    }), scope(session));
   } finally {
     logImportTiming("preview", counted, started);
   }
@@ -147,6 +151,7 @@ export async function commitImportBatch(
   input: { fileName: string; rows: unknown },
   onProgress?: ImportProgress,
 ): Promise<ImportResult> {
+  session = await guardEffectiveSession(session, "props.edit");
   const started = performance.now();
   let counted = 0;
   try {
@@ -161,7 +166,7 @@ export async function commitImportBatch(
       reported = done;
       onProgress?.(done, total);
     };
-    const result = await tx(session.userId, async (client) => {
+    const result = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
       const region = await loadImportRegion(client, session.orgId);
       const parsed = validateImportRows(rows, undefined, region);
       if (!parsed.length) return { totals: totalsFromPlans([], fileName, false), saved: false };
@@ -192,7 +197,7 @@ export async function commitImportBatch(
       }
       await assertCurrentArchiveCaller(client,session);
       return { totals, saved: !rejected };
-    }, scope(session));
+    }), scope(session));
     if (result.saved) {
       try {
         await writeAudit(session.orgId, session.userId, "import_batch", {
@@ -646,6 +651,8 @@ async function insertUnits(client: Client, session: Session, plans: RowPlan[]) {
       rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.notes ?? "" : "")),
     ],
   );
+  for (const plan of rows) await recordUsage(client, { orgId: session.orgId, dimension: 'units', quantity: BigInt(1), occurredAt: new Date(),
+    sourceTable: 'units', sourceId: plan.unitId!, dedupeKey: usageDedupeKey('units', 'units', plan.unitId!) });
 }
 
 async function insertRooms(client: Client, session: Session, plans: RowPlan[]) {

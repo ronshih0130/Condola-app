@@ -1,3 +1,5 @@
+import { unitQrStaffUnits } from "@/server/unit-qr-signup";
+import { unitQrCopy } from "@/i18n/lanes/unit-qr";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { archiveCopy } from "@/i18n/record-archive";
@@ -20,7 +22,9 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
   const result = await searchSpaces(session, raw);
   const { rows, q, page, hasNext, total, from, to } = result;
   const summary = listSummary(t, result);
-  const editable = can(session.role, "props.edit");
+  // B-017: the QR control needs the issuing permission; a custom role without it gets no control.
+  const qrUnits = can(session, "leases.edit") ? await unitQrStaffUnits(session) : null;
+  const editable = can(session, "props.edit");
   const roomTypeKey: Record<string, string> = {
     whole_home: "i_whole_home",
     suite: "i_room_split",
@@ -33,7 +37,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
       <PageHeader
         title={t("i_units_title")}
         actions={
-          <><Link className="btn" href="/m/archive">{archiveCopy(session.locale).entry}</Link>{editable ? (
+          <>{qrUnits ? <Link className="btn" href="/m/units/qr">{unitQrCopy(session.locale).title}</Link> : null}<Link className="btn" href="/m/archive">{archiveCopy(session.locale).entry}</Link>{editable ? (
             <Link className="btn pri" href="/m/units/new" data-testid="new-space">
               + {t("i_space_new")}
             </Link>

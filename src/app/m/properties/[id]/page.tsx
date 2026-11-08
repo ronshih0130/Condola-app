@@ -42,7 +42,7 @@ export default async function PropertyPage({
         actions={
           <>
             <ArchiveEntry refValue={{kind:"property",id}} locale={session.locale} />
-            {!archived && can(session.role, "props.edit") ? (
+            {!archived && can(session, "props.edit") ? (
               <Link className="btn" href={`/m/properties/${id}/edit`} data-testid="edit-property">
                 {t("i_edit")}
               </Link>
@@ -99,7 +99,7 @@ export default async function PropertyPage({
         <div className="card pad">
           <h3>{t("i_owner")}</h3>
           <p>
-            {detail.owner && can(session.role, "props.edit") ? (
+            {detail.owner && can(session, "props.edit") ? (
               <Link href={`/m/owners/${detail.owner.contact_id}`}>{displaySampleName(detail.owner.name)}</Link>
             ) : (
               detail.owner ? displaySampleName(detail.owner.name) : null

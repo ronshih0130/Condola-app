@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { query } from "./db";
 import { FlowError } from "./errors";
 import { normalizeEmail } from "./auth";
@@ -25,6 +26,7 @@ export async function memberEmailPrefs(orgId: string, userId: string) {
 }
 
 export async function saveMemberEmailPrefs(session: Session, input: { leaseExpiry: boolean; rentOverdue: boolean }) {
+  session = await guardEffectiveSession(session, "settings.edit");
   if (session.kind !== "staff" || (session.role !== "admin" && session.role !== "manager")) {
     throw new FlowError("errors.forbidden");
   }
@@ -65,6 +67,7 @@ export async function saveOrgMailSettings(
   session: Session,
   input: { tenantLease: boolean; tenantOverdue: boolean; contactEmail: string; contactPhone: string },
 ) {
+  session = await guardEffectiveSession(session, "settings.edit");
   assertPerm(session, "settings.edit");
   const email = input.contactEmail.trim() ? normalizeEmail(input.contactEmail) : null;
   if (input.contactEmail.trim() && !email) throw new FlowError("errors.email");

@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
 import { decideEstimate } from "@/server/repair-approval";
@@ -11,7 +12,7 @@ const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
 export async function POST(request: Request) {
   const denied = await requireCurrentConsent(undefined, "api");
   if (denied) return denied;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "tickets.update");
   if (session.kind !== "owner") return new Response(null, { status: 403, headers });
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return new Response(null, { status: 403, headers });
@@ -39,9 +40,13 @@ export async function POST(request: Request) {
     const result = await decideEstimate(session, { ...input, requestId: input.requestId });
     return Response.json(result, { headers });
   } catch (error) {
-    const code = (error as { code?: string }).code;
+    // Gateway errors arrive as FlowError with the PostgreSQL code on `cause`.
+    const code = (error as { code?: string }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
     if (code === "40001") return Response.json({ status: "rejected_conflict" }, { status: 409, headers });
     if (code === "42501") return new Response(null, { status: 403, headers });
+    // S3 BLK-MAC-24: a bounded lock/statement timeout is retryable with the same requestId.
+    if (code === "55P03" || code === "57014") return Response.json({ status: "busy" }, { headers });
     throw error;
   }
 }

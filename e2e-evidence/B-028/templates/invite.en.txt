@@ -1,0 +1,6 @@
+# B-028 package 2 template capture: invite (en)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[invite_issued -> tenant]
+Subject: Your tenant portal invitation
+李愛玲, "松信住宅管理" invites you to view your lease and record rent payments. Expires 2026-11-14. Open the link your property manager shared with you.

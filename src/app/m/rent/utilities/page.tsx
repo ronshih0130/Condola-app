@@ -69,7 +69,7 @@ export default async function UtilityPostingPage({
   const runPage = Number(params.runPage ?? "1");
   const board = await listUtilityBoard(session, period.start, period.end, Number.isInteger(page) ? page : 1, undefined, Number.isInteger(runPage) ? runPage : 1, params.historyUnit);
   const detail = params.run ? await utilityRunDetail(session, params.run) : null;
-  const canPost = can(session.role, "leases.edit");
+  const canPost = can(session, "leases.edit");
   const units = new Map<string, { id: string; propertyId: string; label: string; currency: string; rate: string; spaces: typeof board.spaces }>();
   for (const space of board.spaces) {
     const current = units.get(space.unit_id) ?? {

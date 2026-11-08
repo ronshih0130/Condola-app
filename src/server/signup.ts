@@ -21,7 +21,10 @@ import { signupConsentMetadata, signupRequestBody, type SignupConsentMetadata } 
 import { createSignupLink, deliverSignupMail, gateSignupMail } from "./signup-mail";
 import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl, signupMailVia } from "./signup-gotrue";
 
+import { bindUnitQrOn, readUnitQrContext } from "./unit-qr-signup";
+
 const VERIFY_HOURS = 24;
+class UnitQrContextUnavailableError extends Error {}
 
 /** GoTrue's default JWT lifetime. supabase/config.toml sets the same value for local Auth. */
 export const GOTRUE_JWT_EXPIRY_SECONDS = 3600;
@@ -233,11 +236,13 @@ export async function startSignup(input: {
   origin: string;
   meta: RequestMeta;
   consent?: boolean;
+  unitQrHandle?: string;
 }): Promise<
-  | { ok: true; status: "verify"; email: string; devToken: string | null; mail?: SignupMailFlag }
-  | { ok: true; status: "firm"; token: string }
+  | { ok: true; status: "verify"; email: string; devToken: string | null; mail?: SignupMailFlag; unitQrBound?: true }
+  | { ok: true; status: "firm"; token: string; unitQrBound?: true }
   | { ok: false; error: SignupError }
 > {
+  if (input.unitQrHandle && !await readUnitQrContext(input.unitQrHandle)) return { ok: false, error: "required" };
   if (input.consent !== true) return { ok: false, error: "consent" };
   const acceptedAt = new Date();
   const metadata = signupConsentMetadata(acceptedAt);
@@ -261,6 +266,9 @@ export async function startSignup(input: {
     const { existing, matches, code } = looked;
     if (existing.has_firm || existing.email_confirmed_at) {
       if (existing.email_confirmed_at && matches && !existing.has_firm) {
+        if (input.unitQrHandle && !await inTx((client) => bindUnitQrOn(client, input.unitQrHandle!, existing.id))) {
+          return { ok: false, error: "required" };
+        }
         await inTx((client) =>
           client.query(
             `INSERT INTO signup_drafts (user_id, partner_code) VALUES ($1, $2)
@@ -270,7 +278,7 @@ export async function startSignup(input: {
         );
         await writeConsent(existing.id, "signup", acceptedAt);
         const token = await createSession(existing.id, true, input.meta);
-        return { ok: true, status: "firm", token };
+        return { ok: true, status: "firm", token, ...(input.unitQrHandle ? { unitQrBound: true as const } : {}) };
       }
       return { ok: false, error: "duplicate" };
     }
@@ -280,8 +288,12 @@ export async function startSignup(input: {
     // page, so knowing an unconfirmed email cannot stamp this account. That person's
     // own first login hits the re-consent gate.
     if (matches) await writeConsent(existing.id, "signup", acceptedAt);
-    const token = await inTx((client) => finishUnconfirmed(client, existing.id, email, code));
-    return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
+    const token = await inTx(async (client) => {
+      if (matches && input.unitQrHandle && !await bindUnitQrOn(client, input.unitQrHandle, existing.id)) return null;
+      return finishUnconfirmed(client, existing.id, email, code);
+    });
+    if (token === null) return { ok: false, error: "required" };
+    return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null, ...(matches && input.unitQrHandle ? { unitQrBound: true as const } : {}) };
   }
 
   const auth = supabaseAuth();
@@ -328,26 +340,28 @@ export async function startSignup(input: {
       );
       userId = inserted.rows[0].id;
     }
-    const token = await finishUnconfirmed(client, userId, email, looked.code);
-    return token;
+    if (input.unitQrHandle && !await bindUnitQrOn(client, input.unitQrHandle, userId)) throw new UnitQrContextUnavailableError();
+    return finishUnconfirmed(client, userId, email, looked.code);
   }).catch((error: unknown) => {
+    if (error instanceof UnitQrContextUnavailableError) return "qr-unavailable" as const;
     const code = typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
     if (code === "23505") return "duplicate" as const;
     throw error;
   });
+  if (saved === "qr-unavailable") return { ok: false, error: "required" };
   if (saved === "duplicate") return { ok: false, error: "duplicate" };
   if (!userId) return { ok: false, error: "required" };
   await writeConsent(userId, "signup", acceptedAt);
   if (confirmed) {
     await markConfirmed(userId, email);
     const token = await createSession(userId, true, input.meta);
-    return { ok: true, status: "firm", token };
+    return { ok: true, status: "firm", token, ...(input.unitQrHandle ? { unitQrBound: true as const } : {}) };
   }
   if (hashedToken) {
     const delivered = await deliverSignupMail(email, hashedToken, input.origin);
     if (!delivered) mail = "failed";
   }
-  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null, ...(mail ? { mail } : {}) };
+  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null, ...(mail ? { mail } : {}), ...(input.unitQrHandle ? { unitQrBound: true as const } : {}) };
 }
 
 export async function resendSignup(emailRaw: string, origin: string, ip?: string | null) {

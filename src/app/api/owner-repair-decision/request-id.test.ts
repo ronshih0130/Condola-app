@@ -6,6 +6,7 @@ import nextHeaders from "next/headers";
 import { Client } from "pg";
 import { buildStoredConsent } from "@/server/consent";
 import { ORG_ID, USERS } from "@/server/ids";
+import { NOTIFICATION_EVENTS_PROBE } from "@/server/notification-event-producers";
 import { parseRequestId } from "./request-id";
 import { POST } from "./route";
 
@@ -56,7 +57,8 @@ test("HTTP lost-response retry replays one committed decision", async (t) => {
   const decisions: { version_id: string; id: string }[] = [];
   const pending = new Map<Client, { key: string; command: Command } | null>();
   const calls: unknown[][] = [];
-  let commits = 0;
+  const probes: unknown[][] = [];
+  let commits = 0, bounds = 0;
   t.mock.method(nextHeaders, "cookies", async () => ({
     get: (name: string) => name === "condola_session" ? { value: "unit-session" } : undefined,
   }));
@@ -81,16 +83,32 @@ test("HTTP lost-response retry replays one committed decision", async (t) => {
       return { rows: [] };
     }
     if (sql.includes("set_config(") || sql === "SET LOCAL ROLE service_role") return { rows: [] };
+    // S3 BLK-MAC-24: the producer and COMMIT after a recorded call run under a bounded lock wait.
+    if (sql === "SET LOCAL lock_timeout = '3s'") {
+      assert.ok(pending.has(this), "lock bound is set inside the open transaction");
+      bounds++;
+      return { rows: [] };
+    }
+    // B-028 notification_events_v2 OFF: one read-only probe inside the open decision
+    // transaction, right after its gateway call, then nothing else.
+    if (sql.startsWith(NOTIFICATION_EVENTS_PROBE)) {
+      assert.ok(pending.has(this), "probe runs inside the open transaction");
+      assert.equal(probes.length, calls.length - 1, "exactly one probe per recorded decision call");
+      assert.equal(bounds, calls.length, "the lock bound precedes the producer probe");
+      probes.push(values);
+      return { rows: [{ enabled: false, role: "service_role", owner: false }] };
+    }
     if (sql.includes("app.b013_decide_estimate(")) {
       assert.ok(pending.has(this), "gateway must run inside a transaction");
-      assert.deepEqual(values.slice(0, 6), [
-        ORG_ID, sessionId, payload.requestId, versionId, "approved", null,
+      // B-028 package 4: org, live org and environment precede the session.
+      assert.deepEqual(values.slice(0, 8), [
+        ORG_ID, ORG_ID, "live", sessionId, payload.requestId, versionId, "approved", null,
       ]);
       calls.push(values);
       // Model B-013 request-key replay at the database boundary. Different
       // request keys can insert independently; row count is not hardcoded.
-      const key = JSON.stringify([values[0], USERS.owner, values[2]]);
-      const signature = JSON.stringify([values[3], values[4], values[5], values[6]]);
+      const key = JSON.stringify([values[0], USERS.owner, values[4]]);
+      const signature = JSON.stringify([values[5], values[6], values[7], values[8]]);
       const previous = committed.get(key);
       if (previous) {
         assert.equal(signature, previous.signature);
@@ -144,4 +162,5 @@ test("HTTP lost-response retry replays one committed decision", async (t) => {
   assert.equal(commits, 2);
   assert.equal(committed.size, 1);
   assert.equal(decisions.filter(row => row.version_id === versionId).length, 1);
+  assert.deepEqual(probes, [[ORG_ID], [ORG_ID]], "one OFF probe per POST");
 });

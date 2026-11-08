@@ -1,7 +1,9 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner } from "@/components/ui";
-import { actionMessage } from "@/server/actions";
+import { actionMessage, actionStartTenantThread } from "@/server/actions";
+import { randomUUID } from "node:crypto";
+import { tenantThreadCreateEnabled } from "@/server/tenant-thread";
 import { threadMessages } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";
@@ -15,6 +17,7 @@ export default async function TenantMessagesPage({ searchParams }: { searchParam
   const params = await searchParams;
   if (!lease) return <p>{t("i_empty")}</p>;
   const messages = lease.thread_id ? await threadMessages(session, lease.thread_id) : [];
+  const canStart = !lease.thread_id && await tenantThreadCreateEnabled(session);
   return (
     <div>
       <h2>{t("i_rich_msg")}</h2>
@@ -30,6 +33,15 @@ export default async function TenantMessagesPage({ searchParams }: { searchParam
           <input type="hidden" name="threadId" value={lease.thread_id} />
           <input type="hidden" name="returnTo" value="tenant" />
           <textarea className="inp" name="body" rows={3} placeholder={t("i_message")} />
+          <button className="btn pri" type="submit" style={{ marginTop: 8 }}>
+            {t("i_send")}
+          </button>
+        </form>
+      ) : canStart ? (
+        <form action={actionStartTenantThread} data-testid="tenant-thread-start">
+          <input type="hidden" name="leaseId" value={lease.lease_id} />
+          <input type="hidden" name="requestId" value={randomUUID()} />
+          <textarea className="inp" name="body" rows={3} placeholder={t("i_message")} maxLength={4000} required />
           <button className="btn pri" type="submit" style={{ marginTop: 8 }}>
             {t("i_send")}
           </button>

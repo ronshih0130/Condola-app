@@ -8,7 +8,7 @@ const controls = readFileSync(new URL("./vendor-job-controls.tsx", import.meta.u
 test("resolver only runs after the existing invalid-job return", () => {
   const loaded = source.indexOf("const job = await loadVendorJob(token);");
   const rejected = source.indexOf('if (!job || job.vendorLink?.capability === "invalid")');
-  const resolved = source.indexOf("const vendorState = await resolveVendorJobState(token);");
+  const resolved = source.indexOf("const vendorState = ");
   assert.ok(loaded >= 0 && rejected > loaded && resolved > rejected);
   assert.match(source.slice(rejected, resolved), /return \([\s\S]*?data-testid="vendor-closed"[\s\S]*?\n  \}/);
 });
@@ -87,4 +87,22 @@ test("forms retain the server requestId and versionId across HTTP retries", () =
   assert.equal((controls.match(/\{ requestId, versionId, token,/g) ?? []).length, 2);
   assert.doesNotMatch(controls, /randomUUID|name="requestId"/);
   assert.match(controls, /body: JSON\.stringify\(payload\)/);
+});
+
+
+test("enhanced read-only or unapproved views never resolve mutation controls", () => {
+  const expression = source.match(/const vendorState = ([\s\S]*?);/);
+  assert.ok(expression);
+  const resolve = new Function("job", "resolveVendorJobState", "token",
+    `return (${expression[1].replace("await ", "")});`);
+  let calls = 0;
+  const resolver = () => { calls++; return { locked: false }; };
+  for (const capability of ["read_only", "invalid"]) {
+    assert.equal(resolve({ vendorLink: { sharingApproved: true, capability } }, resolver, "fixture"), null);
+  }
+  assert.equal(resolve({ vendorLink: { sharingApproved: false, capability: "write" } }, resolver, "fixture"), null);
+  assert.equal(calls, 0);
+  resolve({}, resolver, "fixture");
+  resolve({ vendorLink: { sharingApproved: true, capability: "write" } }, resolver, "fixture");
+  assert.equal(calls, 2);
 });

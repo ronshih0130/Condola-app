@@ -93,8 +93,14 @@ async function resolvePortalOrg(
           ORDER BY c.org_id`,
     [userId],
   );
+  // Company choice is a preference among actual contacts, never a grant.
+  const preferred = contact.rows.find(row => row.org_id === ctx.preferredOrg
+    && ((ctx.path === "/o" || ctx.path.startsWith("/o/")) ? row.is_owner
+      : (ctx.path === "/t" || ctx.path.startsWith("/t/")) ? row.is_tenant
+      : ctx.portalCookie === "owner" ? row.is_owner : row.is_tenant));
+  const candidates = preferred ? [preferred] : contact.rows;
   const picked = pickPortalOrg(
-    contact.rows.map((row) => ({
+    candidates.map((row) => ({
       row,
       isOwner: row.is_owner,
       isTenant: row.is_tenant,
@@ -108,7 +114,8 @@ async function resolvePortalOrg(
   let orgId = portal.org_id;
   let environment: OrgEnvironment = portal.environment === "sandbox" ? "sandbox" : "live";
   let liveOrgId = portal.live_org_id;
-  if (ctx.leaseId) {
+  if (ctx.leaseId && !(ctx.path === "/o" || ctx.path.startsWith("/o/"))
+    && !(ctx.portalCookie === "owner" && !ctx.path.startsWith("/t"))) {
     const leaseOrg = await sql.query<{ org_id: string; environment: OrgEnvironment; live_org_id: string }>(
       `SELECT l.org_id::text, o.environment::text AS environment, coalesce(o.live_org_id::text, l.org_id::text) AS live_org_id
              FROM leases l
@@ -129,8 +136,8 @@ async function resolvePortalOrg(
   const kind = resolvePortalKind({
     path: ctx.path,
     cookie: ctx.portalCookie,
-    isOwner: contact.rows.some((row) => row.is_owner),
-    isTenant: contact.rows.some((row) => row.is_tenant),
+    isOwner: portal.is_owner,
+    isTenant: portal.is_tenant,
     latest,
   });
   if (!kind) return null;

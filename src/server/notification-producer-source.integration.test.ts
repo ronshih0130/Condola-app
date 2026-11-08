@@ -471,7 +471,7 @@ test('typed sources enforce scope, payer snapshot, immutability and application-
     assert.deepEqual(acl,{denied:true,trusted:true});
     const functions=(await c.query<{denied:boolean;trusted:boolean}>(`SELECT bool_and(NOT has_function_privilege(r.rolname,p.oid,'EXECUTE')) denied,
       bool_and(o.rolname NOT IN ('anon','authenticated','service_role')) trusted FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-      JOIN pg_roles o ON o.oid=p.proowner CROSS JOIN pg_roles r WHERE n.nspname='app' AND p.proname LIKE 'b017_%'
+      JOIN pg_roles o ON o.oid=p.proowner CROSS JOIN pg_roles r WHERE n.nspname='app' AND p.proname IN ('b017_center_insert','b017_occurrence_commit_valid','b017_occurrence_key_lock','b017_occurrence_valid','b017_old_source_delete','b017_old_source_insert','b017_old_source_record','b017_resolution_admit','b017_resolution_valid','b017_resolve','b017_resolve_history','b017_resolve_key','b017_resolve_neutral') -- this producer's own functions; B-017 custom-role governance shares the b017_ prefix
       AND r.rolname IN ('anon','authenticated','service_role')`)).rows[0];
     assert.deepEqual(functions,{denied:true,trusted:true});
   } finally { await c.end(); }

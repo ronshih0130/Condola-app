@@ -1,9 +1,11 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 /**
  * B-013 shared state; B-021 flag-gated production readers and owner decisions.
  */
 import { createHash } from "node:crypto";
 import { maybe, svc, withClient } from "./db";
 import { FlowError } from "./errors";
+import { produceNotificationEvent, type NotificationSourceKind } from "./notification-event-producers";
 import {
   assertAppointment,
   assertDecision,
@@ -19,6 +21,7 @@ import {
 } from "./repair-approval-rules";
 import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
 import type { Session } from "./types";
+import { assertEnhancedVendorMutation } from "./vendor-repair";
 
 export type ApprovalResult = { status: string; [key: string]: unknown };
 
@@ -40,18 +43,41 @@ function payloadHash(session: Session, operation: string, payload: unknown): Buf
 }
 
 /** Flags and current authorization are checked atomically inside each gateway. */
-function run<T>(
+async function run<T>(
   session: Session,
   sql: string,
   params: unknown[],
   parse: (value: unknown) => T,
+  notify?: (result: T) => [NotificationSourceKind, unknown] | null,
 ): Promise<T> {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertIdentifiers(session.userId, session.orgId, session.sessionId);
   return svc(session.userId, async (client) => {
     const row = await maybe<{ r: unknown }>(client, sql, params);
     if (!row) throw new FlowError("errors.notFound");
-    return parse(row.r);
+    const result = parse(row.r);
+    // B-028 package 2: the recorded repair source as a durable event on this transaction.
+    const source = notify?.(result);
+    if (source && typeof source[1] === "string") {
+      // S3 BLK-MAC-24: the mutator's lock_timeout is function-scoped; bound the
+      // producer and the COMMIT that follow it the same way (55P03 on timeout).
+      await client.query("SET LOCAL lock_timeout = '3s'");
+      await produceNotificationEvent(client, session.orgId, source[0], source[1]);
+    }
+    return result;
   });
+}
+const recorded = (kind: NotificationSourceKind, key: string) => (result: ApprovalResult): [NotificationSourceKind, unknown] | null =>
+  result.status === "recorded" ? [kind, result[key]] : null;
+
+/**
+ * B-028 package 4: session mutators bind the same selected environment / live-org
+ * tuple as the readers; the gateway re-validates it and the request principal.
+ */
+function sessionContext(session: Session): [string, string, string, string] {
+  assertIdentifiers(session.liveOrgId);
+  if (!["live", "sandbox"].includes(session.environment)) throw new FlowError("errors.forbidden");
+  return [session.orgId, session.liveOrgId, session.environment, session.sessionId];
 }
 
 export type SubmitEstimateInput = {
@@ -79,11 +105,11 @@ export function submitEstimate(session: Session, input: SubmitEstimateInput): Pr
     evidence: input.evidence,
   };
   return run(session,
-    "SELECT app.b013_submit_estimate($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::bigint,$7::text,$8::smallint,$9::text,$10::jsonb,$11::bytea) AS r",
-    [session.orgId, session.sessionId, input.requestId, payload.ticketId, payload.expectedHeadId,
+    "SELECT app.b013_submit_estimate($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::uuid,$7::uuid,$8::bigint,$9::text,$10::smallint,$11::text,$12::jsonb,$13::bytea) AS r",
+    [...sessionContext(session), input.requestId, payload.ticketId, payload.expectedHeadId,
       payload.amountMinor, payload.currency, payload.minorUnit, payload.workScope,
       stableJson(payload.evidence), payloadHash(session, "submit", payload)],
-    jsonResult);
+    jsonResult, (result) => (result.requires_owner_decision === true ? recorded("repair_estimate_version", "version_id")(result) : null));
 }
 
 export type DecideEstimateInput = {
@@ -102,10 +128,10 @@ export function decideEstimate(session: Session, input: DecideEstimateInput): Pr
     reason: input.reason == null ? null : input.reason.trim(),
   };
   return run(session,
-    "SELECT app.b013_decide_estimate($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::text,$6::text,$7::bytea) AS r",
-    [session.orgId, session.sessionId, input.requestId, payload.versionId, payload.decision,
+    "SELECT app.b013_decide_estimate($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::uuid,$7::text,$8::text,$9::bytea) AS r",
+    [...sessionContext(session), input.requestId, payload.versionId, payload.decision,
       payload.reason, payloadHash(session, "decision", payload)],
-    jsonResult);
+    jsonResult, recorded("repair_decision", "decision_id"));
 }
 
 export type AuthorizeEmergencyInput = {
@@ -131,10 +157,10 @@ export function authorizeEmergency(session: Session, input: AuthorizeEmergencyIn
     photos: input.photos,
   };
   return run(session,
-    "SELECT app.b013_authorize_emergency($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::text,$6::text,$7::jsonb,$8::bytea) AS r",
-    [session.orgId, session.sessionId, input.requestId, payload.versionId, payload.category,
+    "SELECT app.b013_authorize_emergency($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::uuid,$7::text,$8::text,$9::jsonb,$10::bytea) AS r",
+    [...sessionContext(session), input.requestId, payload.versionId, payload.category,
       payload.reason, stableJson(payload.photos), payloadHash(session, "emergency", payload)],
-    jsonResult);
+    jsonResult, recorded("repair_outbox", "event_id"));
 }
 
 export type RecordAppointmentInput = AppointmentTimes & {
@@ -157,15 +183,16 @@ export function recordAppointment(session: Session, input: RecordAppointmentInpu
     ...(input.reason == null ? {} : { reason: input.reason.trim() }),
   };
   return run(session,
-    "SELECT app.b013_record_appointment($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::text,$7::timestamptz,$8::timestamptz,$9::timestamptz,$10::timestamptz,$11::bytea,$12::text) AS r",
-    [session.orgId, session.sessionId, input.requestId, payload.versionId, payload.vendorJobId,
+    "SELECT app.b013_record_appointment($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::uuid,$7::uuid,$8::text,$9::timestamptz,$10::timestamptz,$11::timestamptz,$12::timestamptz,$13::bytea,$14::text) AS r",
+    [...sessionContext(session), input.requestId, payload.versionId, payload.vendorJobId,
       payload.eventKind, payload.proposedStart, payload.proposedEnd, payload.confirmedStart,
       payload.confirmedEnd, payloadHash(session, "appointment", payload), payload.reason ?? null],
     jsonResult);
 }
 
 export type VendorAppointmentInput = RecordAppointmentInput & { orgId: string };
-export type VendorAppointmentCredential = { token: string } | { tokenHash: string };
+/** Trusted server policy from the existing organization flag read, never request JSON. */
+export type VendorAppointmentCredential = ({ token: string } | { tokenHash: string }) & { enhanced: boolean };
 
 /** Server-only capability caller. The gateway validates every supplied scope ID. */
 export function recordVendorAppointment(
@@ -198,6 +225,7 @@ export function recordVendorAppointment(
     operation: "appointment", principal: "vendor", payload,
   }), "utf8").digest();
   return svc(null, async (client) => {
+    await assertEnhancedVendorMutation(client, payload.orgId, payload.vendorJobId, tokenHash, credential.enhanced, input.requestId);
     const row = await maybe<{ r: unknown }>(client,
       "SELECT app.b013_record_vendor_appointment($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::text,$7::timestamptz,$8::timestamptz,$9::timestamptz,$10::timestamptz,$11::text,$12::bytea) AS r",
       [payload.orgId, payload.vendorJobId, tokenHash, input.requestId, payload.versionId,
@@ -293,15 +321,26 @@ export function managerApprovalView(session: Session, input: { ticketId: string 
 
 /** Rendering hint only. Gateways independently recheck the registered control. */
 export async function repairApprovalsEnabled(orgId: string): Promise<boolean> {
+  return (await repairApprovalPanelPolicy(orgId)).approvals;
+}
+
+export async function repairApprovalPanelPolicy(orgId: string, includeVendorEstimates = false) {
   assertIdentifiers(orgId);
   return withClient(async (client) => {
-    const row = await maybe<{ enabled: boolean }>(client,
+    const row = await maybe<{ enabled: boolean; estimates?: boolean }>(client,
       "SELECT coalesce((SELECT o.feature_flags->'repair_approvals'='true'::jsonb"
       + " AND f.value->'enabled'='true'::jsonb"
       + " AND jsonb_typeof(f.value->'allowed_org_ids')='array'"
       + " AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)"
       + " FROM public.organizations o CROSS JOIN public.platform_settings f"
-      + " WHERE o.id=$1::uuid AND f.key='repair_approvals'),false) AS enabled", [orgId]);
-    return row?.enabled === true;
+      + " WHERE o.id=$1::uuid AND f.key='repair_approvals'),false) AS enabled"
+      + (includeVendorEstimates ? ", coalesce((SELECT o.feature_flags->'vendor_estimates'='true'::jsonb"
+        + " AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array'"
+        + " AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)"
+        + " AND coalesce(o.feature_flags->>'vendor_dispatch','') IS DISTINCT FROM 'false'"
+        + " AND (o.environment='sandbox' OR o.plan_tier='beta')"
+        + " FROM public.organizations o CROSS JOIN public.platform_settings f"
+        + " WHERE o.id=$1::uuid AND f.key='vendor_estimates'),false) AS estimates" : ""), [orgId]);
+    return { approvals: row?.enabled === true, estimates: row?.enabled === true && row?.estimates === true };
   });
 }

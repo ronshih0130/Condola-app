@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { withoutIdentityFields } from "@/lib/idv";
@@ -5,7 +6,7 @@ import { listProperties } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export async function GET() {
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "data.export");
   if (session.kind !== "staff") return NextResponse.json({ error: "errors.forbidden" }, { status: 403 });
   const blocked = await requireCurrentConsent(session, "api");
   if (blocked) return blocked;

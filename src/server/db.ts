@@ -2,6 +2,7 @@ import { Client, type QueryResultRow } from "pg";
 import { finishAfterResponse } from "./after-response";
 import { logServerError, mapDbError } from "./errors";
 import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
+import { withUsageTransaction } from "./usage-events";
 
 function closedSocket(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
@@ -222,7 +223,7 @@ export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, 
         if (firm) await pinOrg(client, firm.orgId, firm.environment);
       }
       await client.query("SET LOCAL ROLE authenticated");
-      const result = await fn(client);
+      const result = await withUsageTransaction(client, () => fn(client));
       await client.query("COMMIT");
       return result;
     } catch (error) {
@@ -246,9 +247,9 @@ async function rollBack(client: Client, error: unknown): Promise<never> {
  * that those flows are server-side. Callers must authorize first.
  */
 /** service_role transaction on a connection the caller already holds. */
-export async function svcOn<T>(client: Client, userId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
+export async function svcOn<T>(client: Client, userId: string | null, fn: (client: Client) => Promise<T>, options?: { isolation?: "repeatable read"; readOnly?: boolean }): Promise<T> {
   try {
-    await client.query("BEGIN");
+    await client.query(options?.readOnly ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN");
     if (userId) {
       await client.query(
         `SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'service_role', true)`,
@@ -258,7 +259,7 @@ export async function svcOn<T>(client: Client, userId: string | null, fn: (clien
       await client.query(`SELECT set_config('request.jwt.claim.role', 'service_role', true)`);
     }
     await client.query("SET LOCAL ROLE service_role");
-    const result = await fn(client);
+    const result = await withUsageTransaction(client, () => fn(client));
     await client.query("COMMIT");
     return result;
   } catch (error) {
@@ -266,6 +267,6 @@ export async function svcOn<T>(client: Client, userId: string | null, fn: (clien
   }
 }
 
-export async function svc<T>(userId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
-  return withClient((client) => svcOn(client, userId, fn));
+export async function svc<T>(userId: string | null, fn: (client: Client) => Promise<T>, options?: { isolation?: "repeatable read"; readOnly?: boolean }): Promise<T> {
+  return withClient((client) => svcOn(client, userId, fn, options));
 }

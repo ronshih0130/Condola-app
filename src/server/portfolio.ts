@@ -1,3 +1,5 @@
+import { recordUsage, usageDedupeKey } from './usage-events';
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { typedAddressDisplay } from "@/property-address";
 import { maybe, one, tx } from "./db";
 import { FlowError } from "./errors";
@@ -378,11 +380,12 @@ export async function createOwner(
   session: Session,
   input: { name: string; email: string; phone: string; propertyIds: string[] },
 ) {
+  session = await guardEffectiveSession(session, "props.edit");
   assertPerm(session, "props.edit");
   const email = cleanEmail(input.email);
   if (!input.name.trim() || !email) throw new FlowError("errors.required");
   const phone = cleanPhone(input.phone);
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     const taken = await maybe<{ id: string }>(
       client,
       `SELECT id::text FROM contacts WHERE org_id = $1 AND email = $2 AND archived_at IS NULL`,
@@ -397,7 +400,7 @@ export async function createOwner(
     );
     await syncOwnerProperties(client, session.orgId, contact.id, input.propertyIds);
     return contact.id;
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function updateOwner(
@@ -405,11 +408,12 @@ export async function updateOwner(
   ownerId: string,
   input: { name: string; email: string; phone: string; propertyIds: string[] },
 ) {
+  session = await guardEffectiveSession(session, "props.edit");
   assertPerm(session, "props.edit");
   const email = cleanEmail(input.email);
   if (!input.name.trim() || !email) throw new FlowError("errors.required");
   const phone = cleanPhone(input.phone);
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     const owner = await maybe<{ id: string }>(
       client,
       `SELECT id::text FROM contacts WHERE id = $1 AND org_id = $2 AND is_owner AND archived_at IS NULL`,
@@ -430,7 +434,7 @@ export async function updateOwner(
       [ownerId, session.orgId, input.name.trim(), email, phone],
     );
     await syncOwnerProperties(client, session.orgId, ownerId, input.propertyIds);
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export type PropertyElectricityInput = {
@@ -572,9 +576,10 @@ export async function updateProperty(
     electricity: PropertyElectricityInput;
   },
 ) {
+  session = await guardEffectiveSession(session, "props.edit");
   assertPerm(session, "props.edit");
   if (!input.name.trim() || !input.street.trim() || !input.ownerContactId) throw new FlowError("errors.required");
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     const target = await lockArchiveAncestry(client, session.orgId, {kind:"property",id:propertyId}, true);
     await assertCurrentArchiveCaller(client,session);
     if (target.propertyArchived) throw new FlowError("errors.notFound");
@@ -609,7 +614,7 @@ export async function updateProperty(
     );
     await savePropertyElectricity(client, session, propertyId, property.currency.trim(), input.electricity);
     await assertCurrentArchiveCaller(client,session);
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export type SpaceInput = {
@@ -713,6 +718,8 @@ async function unitForFloor(client: Client, orgId: string, propertyId: string, f
        VALUES ($1, $2, $3, $3, $4, $5, $6) RETURNING id::text`,
       [orgId, propertyId, floor, kind === "room" ? "by_room" : "whole_unit", areaUnit, key],
     );
+    await recordUsage(client, { orgId, dimension: 'units', quantity: BigInt(1), occurredAt: new Date(),
+      sourceTable: 'units', sourceId: created.id, dedupeKey: usageDedupeKey('units', 'units', created.id) });
     return { id: created.id, areaUnit, created: true };
   }
   const ancestry = await admitActiveArchiveAncestry(client, orgId, {kind:"unit",id:existing.id});
@@ -729,9 +736,10 @@ async function unitForFloor(client: Client, orgId: string, propertyId: string, f
 }
 
 export async function createSpace(session: Session, input: SpaceInput) {
+  session = await guardEffectiveSession(session, "props.edit");
   assertPerm(session, "props.edit");
   const write = spaceWrite(input);
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     await admitActiveArchiveAncestry(client, session.orgId, {kind:"property",id:input.propertyId});
     await assertCurrentArchiveCaller(client,session);
     await ensureOwner(client, session.orgId, input.propertyId, input.ownerContactId);
@@ -792,13 +800,14 @@ export async function createSpace(session: Session, input: SpaceInput) {
     );
     await assertCurrentArchiveCaller(client,session);
     return { kind: "room" as const, id: room.id };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function updateSpace(session: Session, kind: SpaceKind, spaceId: string, input: SpaceInput) {
+  session = await guardEffectiveSession(session, "props.edit");
   assertPerm(session, "props.edit");
   const write = spaceWrite({ ...input, kind });
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     const moveTarget = kind === "room" ? await admitRoomMove(client, session.orgId, spaceId, write.floor) : undefined;
     if (kind !== "room") await admitActiveArchiveAncestry(client, session.orgId, {kind:"unit",id:spaceId});
     await assertCurrentArchiveCaller(client,session);
@@ -878,7 +887,7 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
       ],
     );
     await assertCurrentArchiveCaller(client,session);
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 async function upsertTerms(
@@ -957,9 +966,10 @@ async function applySpaceColumns(
 
 /** Load a portfolio CSV into the caller's firm. Reuses a building or 屋主 with the same name or email. */
 export async function seedPortfolio(session: Session, csv: string) {
+  session = await guardEffectiveSession(session, "props.edit");
   assertPerm(session, "props.edit");
   const plan = parsePortfolioCsv(csv);
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     const names=plan.properties.map(p=>p.name);
     const findProperties=async()=> (await client.query<{id:string}>(`SELECT id::text FROM properties WHERE org_id=$1 AND name=ANY($2::text[]) AND archived_at IS NULL ORDER BY id`,[session.orgId,names])).rows.map(r=>r.id);
     const initial=await findProperties();
@@ -1061,6 +1071,6 @@ export async function seedPortfolio(session: Session, csv: string) {
       }
     }
     await assertCurrentArchiveCaller(client,session);
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
   return plan;
 }

@@ -1,4 +1,6 @@
 "use server";
+
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { revalidatePath } from "next/cache";
 import { requireCurrentConsent } from "./consent-gate";
 import { CenterBusyError, centerSessionItems, centerVendorItems } from "./notification-center";
@@ -7,7 +9,7 @@ import type { MarkState } from "@/components/notification-mark-form";
 
 export async function markCenterRead(_state:MarkState,form:FormData):Promise<MarkState> {
   await requireCurrentConsent();
-  const session=await getSession();
+  const session=await guardEffectiveSession(await getSession(), null);
   const id=form.get("recipientId");
   if (typeof id!=="string") throw new Error("Notification unavailable");
   try {

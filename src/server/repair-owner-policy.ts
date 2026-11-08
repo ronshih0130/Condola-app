@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import {withClient} from './db';
 import {isUuid} from './repair-rules';
 import type {Session} from './types';
@@ -47,6 +48,7 @@ export function closeOwnerRepairDefault(session:Session,propertyId:string,reques
 
 export type OwnerRepairPolicyView={state:'disabled'|'unavailable'|'busy'|'recovery_only'}|{state:'enabled';propertyId:string;ownershipId:string;currency:string;minorUnit:number;defaultMinor:string|null;defaultSource:string;overrideMinor:string|null;effectiveMinor:string|null;effectiveSource:string;verified:boolean;snapshot:string};
 export async function ownerRepairPolicyView(session:Session,propertyId:string):Promise<OwnerRepairPolicyView>{
+  session = await guardEffectiveSession(session, "tickets.update");
  if(!scopeValid(session,propertyId))return{state:'unavailable'};
  try{return await withClient(async client=>{
   try{
@@ -63,6 +65,7 @@ export async function ownerRepairPolicyView(session:Session,propertyId:string):P
 
 /** Informational link hint only; every destination/command reauthorizes under pins. */
 export async function ownerRepairPolicyEntryIds(session:Session,properties:string[]):Promise<string[]>{
+  session = await guardEffectiveSession(session, "tickets.update");
  if(session.kind!=='owner'||session.needsSandbox||![session.orgId,session.liveOrgId,session.sessionId,session.userId,...properties].every(isUuid)||!['live','sandbox'].includes(session.environment))return[];
  if(!properties.length)return[];
  return await withClient(async client=>{

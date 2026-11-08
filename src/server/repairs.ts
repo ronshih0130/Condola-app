@@ -1,9 +1,12 @@
+import { recordStoredFileUsage } from './usage-events';
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { maybe, one, svc, tx } from "./db";
 import { FlowError } from "./errors";
 import { taipeiToday } from "./money";
-import { can, assertPerm } from "./perms";
+import { can, canTicketPhotos, assertPerm } from "./perms";
 import { admitTicketArchiveAncestry } from "./record-archive-admission";
 import { assertCurrentArchiveCaller } from "./record-archive-caller";
 import {
@@ -128,6 +131,7 @@ async function insertTimeline(
 }
 
 export async function saveRepairRecord(session: Session, ticketId: string, input: RepairInput) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertPerm(session, "tickets.update");
   assertTicketStatus(input.status);
   assertCostBearer(input.costBearer || "undecided");
@@ -139,9 +143,9 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
   const completedOn = completionDate(input.status, requestedCompleted, taipeiToday());
   datesInOrder(scheduledOn, completedOn);
   const note = input.note.trim() || null;
-  if (input.postExpense && !can(session.role, "exp.add")) throw new FlowError("errors.forbidden");
+  if (input.postExpense && !can(session, "exp.add")) throw new FlowError("errors.forbidden");
 
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     const prior = await maybe<{ status:string; scheduled_on:string|null; vendor_name:string|null }>(client,
       `SELECT status::text, scheduled_on::text, vendor_name FROM maintenance_tickets WHERE id=$1 AND org_id=$2`,[ticketId,session.orgId]);
     if (!prior) throw new FlowError("errors.notFound");
@@ -150,6 +154,8 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
     if (admitted) await admitTicketArchiveAncestry(client,session.orgId,ticketId);
     if (admitted) await assertCurrentArchiveCaller(client,session);
     const ticket = await loadTicket(client, ticketId, session.orgId);
+    await assertCustomAuthorityOn(client, session, "tickets.update");
+    if (input.postExpense) await assertCustomAuthorityOn(client, session, "exp.add");
     if (admitted) await assertCurrentArchiveCaller(client,session);
     if (!ticket) throw new FlowError("errors.notFound");
     if (!admitted && operative(ticket)) throw new FlowError("errors.notFound");
@@ -177,7 +183,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
       post: input.postExpense,
       finalMinor: finalCost,
       expenseId: existingExpense,
-      canPost: can(session.role, "exp.add"),
+      canPost: can(session, "exp.add"),
     });
 
     const matchedVendor = vendorName
@@ -306,16 +312,18 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
       session.orgId,
     ]);
     if(admitted)await assertCurrentArchiveCaller(client,session);
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function addTicketComment(session: Session, ticketId: string, body: string, internal: boolean) {
+  session = await guardEffectiveSession(session, "tickets.update");
   const note = body.trim();
   if (!note) throw new FlowError("errors.required");
   if (internal && session.kind !== "staff") throw new FlowError("errors.forbidden");
   assertTicketActor(session);
   if (!isUuid(ticketId)) throw new FlowError("errors.notFound");
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
+    await assertCustomAuthorityOn(client, session, "tickets.update");
     const ticket = await maybe<{ id: string; org_id: string }>(
       client,
       `SELECT id::text, org_id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
@@ -331,13 +339,16 @@ export async function addTicketComment(session: Session, ticketId: string, body:
       statusFrom: null,
       statusTo: null,
     });
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function findRepairPhoto(session: Session, ticketId: string, path: string) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertTicketActor(session);
+  if (session.customRole && session.kind === "staff" && !canTicketPhotos(session)) throw new FlowError("errors.forbidden");
   if (!isUuid(ticketId)) return null;
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
+    await assertCustomAuthorityOn(client, session, "tickets.update", true);
     const ticket = await maybe<{ id: string; org_id: string }>(
       client,
       `SELECT id::text, org_id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
@@ -353,21 +364,23 @@ export async function findRepairPhoto(session: Session, ticketId: string, path: 
       [ticket.id, path, PHOTO_BUCKET],
     );
     return existing?.id ?? null;
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function repairPhotoTarget(session: Session, ticketId: string) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertTicketActor(session);
+  if (session.customRole && session.kind === "staff" && !canTicketPhotos(session)) throw new FlowError("errors.forbidden");
   if (!isUuid(ticketId)) return null;
   return tx(session.userId, async (client) =>
-    maybe<{ org_id: string; count: string }>(
+    withEffectiveAuthority(client, session, "tickets.update", async () => { await assertCustomAuthorityOn(client, session, "tickets.update", true); return maybe<{ org_id: string; count: string }>(
       client,
       `SELECT t.org_id::text,
               (SELECT count(*)::text FROM ticket_attachments a WHERE a.ticket_id = t.id) AS count
          FROM maintenance_tickets t
         WHERE t.id = $1 AND t.org_id = $2`,
       [ticketId, session.orgId],
-    ), requireOrgScope(session),
+    ); }), requireOrgScope(session),
   );
 }
 
@@ -389,7 +402,9 @@ export async function attachRepairPhoto(
     header: Uint8Array;
   },
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertTicketActor(session);
+  if (session.customRole && session.kind === "staff" && !canTicketPhotos(session)) throw new FlowError("errors.forbidden");
   if (input.internal && session.kind !== "staff") throw new FlowError("errors.forbidden");
   const meta = assertPhotoMeta(input);
   const accepted = acceptPhotoObject({ size: input.size, mime: input.storedMime, header: input.header }, meta.mime);
@@ -397,7 +412,8 @@ export async function attachRepairPhoto(
   const fileId = photoFileId(input.path);
   if (!fileId) throw new FlowError("errors.forbidden");
 
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
+    await assertCustomAuthorityOn(client, session, "tickets.update", true);
     const ticket = await maybe<{ id: string; org_id: string }>(
       client,
       `SELECT id::text, org_id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
@@ -434,8 +450,9 @@ export async function attachRepairPhoto(
        VALUES ($1,$2,$3,$4) RETURNING id::text`,
       [ticket.org_id, ticket.id, fileId, session.kind === "staff" && input.internal],
     );
+    await recordStoredFileUsage(client, ticket.org_id, fileId);
     return attachment.id;
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export function newPhotoFileId() {
@@ -447,18 +464,20 @@ export function newPhotoFileId() {
  * Any later status tells them to contact the management company.
  */
 export async function cancelTenantRepair(session: Session, ticketId: string) {
+  session = await guardEffectiveSession(session, "tickets.update");
   if (session.kind !== "tenant") throw new FlowError("errors.forbidden");
   if (!isUuid(ticketId)) throw new FlowError("errors.notFound");
-  const visible = await tx(session.userId, (client) =>
-    maybe<{ status: string }>(
+  const visible = await tx(session.userId, async (client) =>
+    withEffectiveAuthority(client, session, "tickets.update", async () => { await assertCustomAuthorityOn(client, session, "tickets.update"); return maybe<{ status: string }>(
       client,
       `SELECT status::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
       [ticketId, session.orgId],
-    ), requireOrgScope(session),
+    ); }), requireOrgScope(session),
   );
   if (!visible) throw new FlowError("errors.notFound");
   if (!tenantCancelAllowed(visible.status)) throw new FlowError("errors.repairCancelLocked");
-  await svc(session.userId, async (client) => {
+  await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
+    await assertCustomAuthorityOn(client, session, "tickets.update");
     await client.query(
       `SELECT id FROM maintenance_tickets WHERE id = $1 AND org_id = $2 FOR UPDATE`,
       [ticketId, session.orgId],
@@ -474,21 +493,23 @@ export async function cancelTenantRepair(session: Session, ticketId: string) {
        VALUES ($1,$2,$3,'open'::ticket_status,'cancelled'::ticket_status)`,
       [session.orgId, ticketId, session.userId],
     );
-  });
+  }));
 }
 
 /** The stored photo, if this session is allowed to see the attachment. */
 export async function readRepairPhoto(session: Session, attachmentId: string) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertTicketActor(session);
+  if (session.customRole && session.kind === "staff" && !canTicketPhotos(session)) throw new FlowError("errors.forbidden");
   if (!isUuid(attachmentId)) return null;
   return tx(session.userId, async (client) =>
-    maybe<{ name: string; mime: string | null; path: string; ticket_id: string }>(
+    withEffectiveAuthority(client, session, "tickets.update", async () => { await assertCustomAuthorityOn(client, session, "tickets.update", true); return maybe<{ name: string; mime: string | null; path: string; ticket_id: string }>(
       client,
       `SELECT f.file_name AS name, f.mime_type AS mime, f.storage_path AS path, a.ticket_id::text
          FROM ticket_attachments a
          JOIN files f ON f.id = a.file_id
         WHERE a.id = $1 AND a.org_id = $2`,
       [attachmentId, session.orgId],
-    ), requireOrgScope(session),
+    ); }), requireOrgScope(session),
   );
 }

@@ -1,3 +1,6 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
+import { FlowError } from "./errors";
 import { withClient } from './db';
 import { isUuid } from './repair-rules';
 import type { Session } from './types';
@@ -19,6 +22,7 @@ async function run(session:Session,contactId:string,requestId:string,mode:Mode,i
  if(session.kind!=='staff' || session.needsSandbox || ![session.userId,session.orgId,session.liveOrgId,session.sessionId,contactId,requestId].every(isUuid) || !['live','sandbox'].includes(session.environment))return {status:'unavailable'};
  if(mode==='edit' && (!intent || [intent.expected,intent.name,intent.email,intent.phone].some(v=>typeof v!=='string' || v.length>1024)))return {status:'unavailable'};
  try {
+  session = await guardEffectiveSession(session, "tenants.contact");
   return await withClient(async client=>{
    try {
     await client.query('BEGIN');
@@ -26,6 +30,7 @@ async function run(session:Session,contactId:string,requestId:string,mode:Mode,i
     await client.query(`SET LOCAL lock_timeout='500ms'`);
     await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','service_role',true),set_config('app.active_org_id',$2,true),set_config('app.env',$3,true)`,[session.userId,session.orgId,session.environment]);
     await client.query('SET LOCAL ROLE service_role');
+    await assertCustomAuthorityOn(client,session,"tenants.contact");
     const scope=[session.orgId,session.liveOrgId,session.environment,session.sessionId,contactId,requestId];
     if(mode==='edit') {
      await client.query(`SELECT app.b015_edit_contact($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[...scope,intent!.expected,intent!.name,intent!.email,intent!.phone]);
@@ -46,7 +51,7 @@ async function run(session:Session,contactId:string,requestId:string,mode:Mode,i
   });
  } catch(error) {
   const code=(error as {code?:string})?.code;
-  if(code==='42501')return {status:'unavailable'};
+  if(code==='42501' || (error instanceof FlowError && error.key==='errors.forbidden'))return {status:'unavailable'};
   if(code==='55P03' || code==='57014')return {status:'busy'};
   if(code==='23514' && (error as {constraint?:string})?.constraint==='b015_request_identity')return {status:'request_mismatch'};
   // A transport failure cannot establish whether COMMIT reached PostgreSQL.
@@ -60,11 +65,13 @@ export function closeDirectoryEdit(session:Session,contactId:string,requestId:st
 
 export type DirectoryEditView = {state:'disabled'|'unavailable'|'busy'|'recovery_only'} | {state:'enabled';contactId:string;name:string;email:string|null;phone:string|null;expected:string;isOwner:boolean;isVendor:boolean};
 export async function directoryContactEditView(session:Session,contactId:string):Promise<DirectoryEditView>{
+  session = await guardEffectiveSession(session, "tenants.contact");
  if(session.kind!=='staff' || session.needsSandbox || ![session.userId,session.orgId,session.liveOrgId,session.sessionId,contactId].every(isUuid) || !['live','sandbox'].includes(session.environment))return {state:'unavailable'};
  try{return await withClient(async client=>{
   try{
    await client.query('BEGIN');await client.query(`SET LOCAL statement_timeout='5s'`);await client.query(`SET LOCAL lock_timeout='500ms'`);
    await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','service_role',true),set_config('app.active_org_id',$2,true),set_config('app.env',$3,true)`,[session.userId,session.orgId,session.environment]);await client.query('SET LOCAL ROLE service_role');
+    await assertCustomAuthorityOn(client,session,"tenants.contact");
    const view=(await client.query<{view:DirectoryEditView}>(`SELECT app.b015_edit_view($1,$2,$3,$4,$5) view`,[session.orgId,session.liveOrgId,session.environment,session.sessionId,contactId])).rows[0]?.view;
    await client.query('COMMIT');
    if(view?.state==='disabled' || view?.state==='unavailable' || view?.state==='recovery_only')return view;

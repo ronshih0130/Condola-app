@@ -1,3 +1,4 @@
+import { assertCustomRoleAdmission } from "./b017-admission";
 import { appCookieOptions } from "./public-origin";
 import type { OrgRole } from "./types";
 
@@ -91,8 +92,11 @@ export async function resolveStaffOrg(
   preferredOrg: string | null,
   cookie: OrgEnvironment | null,
 ): Promise<FirmContext | null> {
-  const live = await sql.query<{ org_id: string; role: OrgRole; live_enabled: boolean; has_live_data: boolean }>(
+  const live = await sql.query<{ org_id: string; role: OrgRole; live_enabled: boolean; has_live_data: boolean; custom_roles_enabled: boolean }>(
     `SELECT m.org_id::text, m.role::text AS role,
+            coalesce(o.feature_flags->'custom_roles'='true'::jsonb AND
+              (SELECT value->'enabled'='true'::jsonb AND value->'allowed_org_ids' @> jsonb_build_array(o.id::text)
+               FROM platform_settings WHERE key='custom_roles'),false) AS custom_roles_enabled,
             NOT coalesce((SELECT value = 'true'::jsonb FROM platform_settings WHERE key = 'go_live_lock'), false) AS live_enabled,
             (
               o.live_started_at IS NOT NULL
@@ -108,6 +112,7 @@ export async function resolveStaffOrg(
   );
   const member = live.rows[0];
   if (!member) return null;
+  assertCustomRoleAdmission(member.org_id, member.custom_roles_enabled === true);
   const liveEnabled = Boolean(member.live_enabled);
   const environment = resolveStaffEnvironment({
     cookie,

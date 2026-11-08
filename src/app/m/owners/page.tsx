@@ -14,7 +14,7 @@ export default async function OwnersPage() {
   const session = await getSession();
   const t = makeT(session.locale);
   const rows = await listOwnerDirectory(session);
-  const editable = can(session.role, "props.edit");
+  const editable = can(session, "props.edit");
   return (
     <>
       <PageHeader

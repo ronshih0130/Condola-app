@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import {
@@ -32,7 +33,7 @@ const handlers: Record<string, Handler> = {
   simulateTenantSignature: (session, body) => simulateTenantSignature(session, String(body.leaseId ?? "")),
   signLease: (session, body) => signLease(session, body as never),
   recordPayment: (session, body) => recordPayment(session, body as never),
-  confirmPayment: (session, body) => confirmPayment(session, String(body.paymentId ?? "")),
+  confirmPayment: (session, body) => confirmPayment(session, String(body.paymentId ?? ""), {proxyOwnerConfirmed: body.proxyOwnerConfirmed === (true as never), source:"api"}),
   rejectPayment: (session, body) => rejectPayment(session, String(body.paymentId ?? ""), String(body.reason ?? "")),
   importBankCsv: (session, body) => importBankCsv(session, String(body.csv ?? "")),
   approveMatch: (session, body) => approveMatch(session, String(body.suggestionId ?? "")),
@@ -53,13 +54,21 @@ export async function POST(request: Request, context: { params: Promise<{ action
     if (action === "inviteTeammate" && !teamInviteAllowlistConfigured()) {
       return NextResponse.json({ ok: false, error: "errors.teamInvitesSoon" }, { status: 400 });
     }
-    const session = await readSession();
+    let session = await readSession();
     if (action === "inviteTeammate" && !teamInvitesAllowedForOrg(session?.orgId)) {
       return NextResponse.json({ ok: false, error: "errors.teamInvitesSoon" }, { status: 400 });
     }
     if (!session) return NextResponse.json({ ok: false, error: "errors.forbidden" }, { status: 401 });
     const blocked = await requireCurrentConsent(session, "api");
     if (blocked) return blocked;
+    const permissions: Record<string, import("@/server/perms").PermKey> = {
+      createProperty:"props.edit", createLease:"leases.edit", updateLease:"leases.edit",
+      simulateTenantSignature:"leases.edit", signLease:"leases.edit", recordPayment:"pay.record",
+      confirmPayment:"pay.record", rejectPayment:"pay.record", importBankCsv:"bank.reconcile",
+      approveMatch:"bank.reconcile", generateStatement:"stmt.generate", createTicket:"tickets.update",
+      updateTicket:"tickets.update", postMessage:"messages.send", inviteTeammate:"team.manage", setOwnerPhoneVisibility:"settings.edit",
+    };
+    session = await guardEffectiveSession(session, permissions[action] ?? null);
     const body = (await request.json()) as Record<string, never>;
     const result = await handler(session, body);
     return NextResponse.json({ ok: true, result });

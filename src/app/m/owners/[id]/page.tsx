@@ -1,7 +1,9 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { OwnerForm } from "@/components/owner-form";
+import { PortalResendEntry } from "@/components/portal-resend-entry";
 import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionUpdateOwner } from "@/server/actions";
@@ -23,7 +25,7 @@ export default async function EditOwnerPage({
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const query = await searchParams;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "props.edit");
   const t = makeT(session.locale);
   const [owner, properties] = await Promise.all([ownerEditor(session, id), listProperties(session)]);
   if (!owner) notFound();
@@ -37,6 +39,7 @@ export default async function EditOwnerPage({
         {session.role === "admin" || session.role === "manager" ? (
           <PortalInviteButton key={owner.id} kind="owner" contactId={owner.id} activated={activated} />
         ) : null}
+        <PortalResendEntry session={session} kind="owner" contactId={owner.id} />
         <OwnerForm
           key={owner.id}
           t={t}

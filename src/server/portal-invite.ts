@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { createHash, randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
@@ -5,6 +6,7 @@ import { maybe, one, query, tx, withClient } from "./db";
 import { FlowError, isDbTimeout } from "./errors";
 import { sameId } from "@/lib/portal-page";
 import { lockActive, nextFailure } from "./lockout";
+import { produceNotificationEvent } from "./notification-event-producers";
 import { publicSiteOrigin } from "./signup-gotrue";
 import { assertStaff, type Session } from "./types";
 
@@ -302,7 +304,8 @@ export async function issuePortalInvite(
   input: { kind: "owner" | "tenant"; contactId: string; pageId: string; leaseId?: string; rotate?: boolean },
   requestOrigin: string,
 ) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   if (!input.contactId || !input.pageId) throw new FlowError("errors.required");
   if (input.kind === "tenant" && !input.leaseId) throw new FlowError("errors.required");
   // Reject before any lock or revoke. A stale page must not touch another contact.
@@ -310,7 +313,7 @@ export async function issuePortalInvite(
   if (input.kind === "tenant" && !sameId(input.pageId, input.leaseId || "")) throw new FlowError("errors.portalMismatch");
   const issued = await tx(
     session.userId,
-    async (client) => {
+    async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
       try {
         // One pending invite per contact. The lock is only for this contact.
         // A global secret purge here scanned invitations and held the lock for
@@ -409,6 +412,7 @@ export async function issuePortalInvite(
           ],
         );
         await savePortalInviteSecret(client, row.id, token);
+        await produceNotificationEvent(client, session.orgId, "invitation", row.id);
         return {
           activated: false as const,
           reused: false as const,
@@ -423,7 +427,7 @@ export async function issuePortalInvite(
         if (isDbTimeout(error)) throw new FlowError("errors.portalTimeout");
         throw error;
       }
-    },
+    }),
     { orgId: session.orgId, environment: session.environment },
   );
   if (issued.activated) return { activated: true as const, contactId: issued.contactId };

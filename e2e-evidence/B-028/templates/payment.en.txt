@@ -1,0 +1,14 @@
+# B-028 package 2 template capture: payment (en)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[payment_confirmed -> tenant]
+Subject: Payment record confirmed
+張雅文, 松信住宅管理: Payment record confirmed for NT$1. View your payment history in the tenant portal.
+
+[payment_rejected -> tenant]
+Subject: Payment report returned
+張雅文, 松信住宅管理: Payment report returned for NT$1. View your payment history in the tenant portal.
+
+[payment_reversed -> tenant]
+Subject: Payment record reversed
+張雅文, 松信住宅管理: Payment record reversed for NT$1. View your payment history in the tenant portal.

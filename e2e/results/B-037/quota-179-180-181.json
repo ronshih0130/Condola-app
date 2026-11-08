@@ -1,0 +1,32 @@
+{
+ "179": {
+  "claim": "sent",
+  "reason": null,
+  "pushes": 1,
+  "counter": {
+   "pushed_count": 180,
+   "reserved_count": 0
+  },
+  "emailsForRecipient": 1
+ },
+ "180": {
+  "claim": "fallback",
+  "reason": "line_quota",
+  "pushes": 0,
+  "counter": {
+   "pushed_count": 180,
+   "reserved_count": 0
+  },
+  "emailsForRecipient": 1
+ },
+ "181": {
+  "claim": "fallback",
+  "reason": "line_quota",
+  "pushes": 0,
+  "counter": {
+   "pushed_count": 181,
+   "reserved_count": 0
+  },
+  "emailsForRecipient": 1
+ }
+}

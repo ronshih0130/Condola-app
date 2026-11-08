@@ -559,9 +559,18 @@ test("RepairPhotos shows the English permission notice for accountants", () => {
   assert.equal(html.includes("<img"), false);
 });
 
+test("RepairPhotos shows the permission notice from a server-withheld count with no photo metadata", () => {
+  const t = makeT("en");
+  const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos: [], canView: false, hiddenCount: 2, t }));
+  assert.ok(html.includes("No permission to view photos"));
+  assert.equal(html.includes("<img"), false);
+  assert.equal(html.includes("/api/tickets/photos/"), false);
+});
+
 test("repair page wires photo permissions and thread delegates photo rendering", () => {
   const page = readFileSync(new URL("../app/m/tickets/[id]/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /canViewPhotos=\{can\(session\.role, "tickets\.update"\)\}/);
+  assert.match(page, /canViewPhotos=\{canTicketPhotos\(session\)\}/);
+  assert.match(page, /canUpload=\{canTicketPhotos\(session\)\}/);
 
   const thread = readFileSync(new URL("../components/repair-thread.tsx", import.meta.url), "utf8");
   assert.ok(thread.includes("<RepairPhotos"));

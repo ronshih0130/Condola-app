@@ -1,0 +1,14 @@
+# B-028 package 2 template capture: repair (en)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[repair_approval_requested -> owner]
+Subject: Repair decisions
+陳建宏, 松信住宅管理: a repair estimate (NT$6,000) needs your decision. Review it in the owner portal.
+
+[repair_emergency_notice -> owner]
+Subject: Emergency exception
+陳建宏, 松信住宅管理: the management team used an emergency exception for a water issue and arranged the repair. Review it in the owner portal.
+
+[repair_decision_recorded -> staff]
+Subject: Repair decisions
+林雅婷, 松信住宅管理: the owner recorded a decision on estimate version 2 (Approved). View the repair ticket.

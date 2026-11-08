@@ -1,10 +1,11 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { decideBankMatch, importBankFile } from "@/server/bank-matching";
 import { readSession } from "@/server/session";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-  const session = await readSession();
+  const session = await guardEffectiveSession(await readSession(), "bank.reconcile");
   if (!session) return NextResponse.json({ok:false},{status:401});
   const blocked = await requireCurrentConsent(session,"api");
   if (blocked) return blocked;

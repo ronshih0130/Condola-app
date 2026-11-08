@@ -1,3 +1,5 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { requireEffectivePerm } from "./b017-custom-role-governance";
 import type { Client } from "pg";
 import { admitActiveArchiveAncestry, admitArchiveBatch, lockArchiveAncestry } from "./record-archive-admission";
 import { assertCurrentArchiveCaller } from "./record-archive-caller";
@@ -110,11 +112,12 @@ export async function listUtilityBoard(
   runPage = 1,
   historyUnit?: string,
 ) {
+  session = await guardEffectiveSession(session, "stmt.view");
   assertPeriod(periodStart, periodEnd);
   if (!Number.isSafeInteger(runPage) || runPage < 1 || runPage > 100000 || (historyUnit !== undefined && !isUuid(historyUnit))) throw new FlowError("errors.notFound");
   const safePage = Number.isInteger(page) && page > 0 ? page : 1;
   const safeSize = Number.isInteger(pageSize) && pageSize > 0 && pageSize <= BOARD_PAGE ? pageSize : BOARD_PAGE;
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "stmt.view", async () => {
     const spaces = await many<{
       unit_id: string;
       property_id: string;
@@ -206,11 +209,12 @@ export async function listUtilityBoard(
       page: safePage,
       hasMore,
     };
-  }, scope(session));
+  }), scope(session));
 }
 
 export async function utilityRunDetail(session: Session, runId: string) {
-  return tx(session.userId, async (client) => loadRun(client, session.orgId, runId), scope(session));
+  session = await guardEffectiveSession(session, "stmt.view");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "stmt.view", async () => loadRun(client, session.orgId, runId)), scope(session));
 }
 
 async function loadRun(client: Client, orgId: string, runId: string) {
@@ -314,7 +318,8 @@ async function loadRun(client: Client, orgId: string, runId: string) {
 }
 
 export async function prepareUtilityRun(session: Session, input: UtilityRunInput) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   assertPeriod(input.periodStart, input.periodEnd);
   const rateMajor = normalizeRateMajor(input.rateMajor);
   if (!input.unitId || rateMajor == null) throw new FlowError("errors.amount", { field: "i_rate" });
@@ -337,7 +342,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     throw new FlowError("errors.amount", { field: "i_bill_total" });
   }
 
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     // A posted run may be corrected using its exact stored unit, period and
     // active main meter. This is financial continuation, not a new run.
     await assertCurrentArchiveCaller(client, session);
@@ -372,7 +377,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     if(archivedCorrection && prior){
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`,[`utility-post:${prior.id}`]);
       await assertCurrentArchiveCaller(client,session);
-      const locked=await maybe<{id:string}>(client,`SELECT id::text FROM utility_allocation_runs WHERE org_id=$1 AND id=$2 AND status='posted' AND currency=$3 AND unit_id=$4 FOR UPDATE`,[session.orgId,prior.id,unit.currency,unit.id]);
+        const locked=await maybe<{id:string}>(client,`SELECT id::text FROM utility_allocation_runs WHERE org_id=$1 AND id=$2 AND status='posted' AND currency=$3 AND unit_id=$4 FOR UPDATE`,[session.orgId,prior.id,unit.currency,unit.id]);
       if(!locked)throw new FlowError('errors.notFound');
     }
     if(prior){const same=await maybe<{id:string}>(client,`SELECT ur.id::text FROM utility_allocation_runs ur JOIN meters m ON m.org_id=ur.org_id AND m.id=ur.meter_id WHERE ur.org_id=$1 AND ur.id=$2 AND ur.unit_id=$3 AND ur.meter_id=$4 AND ur.period_start=$5::date AND ur.period_end=$6::date AND ur.status IN ('posted','pending_repost') AND m.unit_id=$3 AND m.utility='electricity' AND m.room_id IS NULL AND m.archived_at IS NULL`,[session.orgId,prior.id,unit.id,prior.meter_id,input.periodStart,input.periodEnd]);if(!same)throw new FlowError('errors.notFound');
@@ -382,6 +387,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
         if(!shape||shape.n===0||shape.moved||(unit.rental_mode==='whole_unit'&&shape.room_lines>0)||(unit.rental_mode==='by_room'&&shape.whole_lines>0))throw new FlowError('errors.notFound');
       }
     }
+    await requireEffectivePerm(client, session, "leases.edit");
     const spaces = await loadSpaces(client, unit, prior?.id, archivedCorrection);
     if (unit.rental_mode === 'by_room' && JSON.stringify(spaces.map(s=>s.space_id).sort()) !== JSON.stringify(rooms.map(r=>r.id).sort())) throw new FlowError("errors.notFound");
     const occupants = archivedCorrection && prior
@@ -715,7 +721,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     await writeShares(client, session.orgId, runId, shares, ratePerUnit, totalMinor);
     await assertCurrentArchiveCaller(client, session);
     return { runId };
-  }, scope(session));
+  }), scope(session));
 }
 
 type PostedLine = {
@@ -753,9 +759,10 @@ const POSTED_LINE_SQL = `SELECT l.id::text, l.lease_id::text, l.amount_minor::te
        LEFT JOIN lease_parties lp ON lp.lease_id = l.lease_id AND lp.role = 'primary'`;
 
 export async function confirmUtilityRun(session: Session, runId: string) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   if (!runId) throw new FlowError("errors.required");
-  const posted = await tx(session.userId, async (client) => {
+  const posted = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`utility-post:${runId}`]);
     const run = await maybe<{ id: string; status: string; utility_bill_id: string | null }>(
       client,
@@ -763,6 +770,7 @@ export async function confirmUtilityRun(session: Session, runId: string) {
          FROM utility_allocation_runs WHERE id = $1 AND org_id = $2 FOR UPDATE`,
       [runId, session.orgId],
     );
+    await requireEffectivePerm(client, session, "leases.edit");
     if (!run) throw new FlowError("errors.notFound");
     if (run.status === "void") throw new FlowError("errors.utilityState");
     if (!run.utility_bill_id) throw new FlowError("errors.amount", { field: "i_usage" });
@@ -879,15 +887,15 @@ export async function confirmUtilityRun(session: Session, runId: string) {
       ]);
     }
     return { runId, changed, reversed };
-  }, scope(session));
+  }), scope(session));
   const visible = await tx(
     session.userId,
     async (client) =>
-      maybe<{ status: string }>(
+      withEffectiveAuthority(client, session, "leases.edit", async () => maybe<{ status: string }>(
         client,
         `SELECT status::text FROM utility_allocation_runs WHERE id = $1 AND org_id = $2`,
         [runId, session.orgId],
-      ),
+      )),
     scope(session),
   );
   if (visible?.status !== "posted") throw new FlowError("errors.generic");
@@ -895,16 +903,18 @@ export async function confirmUtilityRun(session: Session, runId: string) {
 }
 
 export async function voidUtilityRun(session: Session, runId: string, reason: string) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   const note = reason.trim();
   if (!runId || !note) throw new FlowError("errors.required");
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`utility-post:${runId}`]);
     const run = await maybe<{ id: string; status: string }>(
       client,
       `SELECT id::text, status::text FROM utility_allocation_runs WHERE id = $1 AND org_id = $2 FOR UPDATE`,
       [runId, session.orgId],
     );
+    await requireEffectivePerm(client, session, "leases.edit");
     if (!run) throw new FlowError("errors.notFound");
     if (run.status === "void") return { runId, reversed: 0 };
     await client.query(`SELECT set_config('app.change_reason', '作廢電費登記', true)`);
@@ -955,7 +965,7 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
       JSON.stringify({ runId, reversed: lines.length }),
     ]);
     return { runId, reversed: lines.length };
-  }, scope(session));
+  }), scope(session));
 }
 
 async function runInputs(client: Client, runId: string) {

@@ -8,7 +8,9 @@ import { brandV2Enabled } from "@/server/brand-v2";
 import { loadVendorJob } from "@/server/vendor-repair";
 import { resolveVendorJobState } from "@/server/vendor-job";
 import { requestPrefs } from "@/server/session";
+import { vendorLineEntryEnabled } from "@/server/line/vendor-entry";
 import { VendorJobControls } from "./vendor-job-controls";
+import { VendorLineEntry } from "./vendor-line-entry";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +35,13 @@ export default async function VendorJobPage({
       </div>
     );
   }
-  const vendorState = await resolveVendorJobState(token);
+  const vendorState = job.vendorLink && (!job.vendorLink.sharingApproved || job.vendorLink.capability !== "write")
+    ? null : await resolveVendorJobState(token);
+  // B-035: only while every strict vendor LINE gate is ON. OFF keeps the original child slot, so even useId output is unchanged.
+  const showLine = await vendorLineEntryEnabled(token);
+  const lineEntry = showLine
+    ? <VendorLineEntry token={token} copy={{ label: t("i_vendor_line_continue"), hint: t("i_vendor_line_hint"), failed: t("i_vendor_line_failed") }} />
+    : null;
   const photoMessages = {
     size: t("i_photo_size"),
     type: t("i_photo_type"),
@@ -90,10 +98,10 @@ export default async function VendorJobPage({
   }
   function renderVendorJobControls() {
     if (vendorState === null) return null;
+    if (job!.vendorLink && (!job!.vendorLink.sharingApproved || job!.vendorLink.capability !== "write")) return null;
     if (vendorState.locked) {
       return <p data-testid="vendor-pending-approval">{t("i_vendor_pending_owner_approval")}</p>;
     }
-    if (job!.vendorLink && (!job!.vendorLink.sharingApproved || job!.vendorLink.capability !== "write")) return null;
     return (
       <VendorJobControls key={vendorState.requestId}
         copy={{ reported: t("i_vendor_reported_awaiting_company"), unavailable: t("i_generic") }}>
@@ -154,7 +162,8 @@ export default async function VendorJobPage({
         locale={prefs.locale}
       >
         <ErrorBanner t={t} error={query.error} />
-        <VendorNotificationCenterEntry token={token} locale={prefs.locale} />
+        {lineEntry ? <><VendorNotificationCenterEntry token={token} locale={prefs.locale} />{lineEntry}</>
+          : <VendorNotificationCenterEntry token={token} locale={prefs.locale} />}
         {(vendorState === null || !vendorState.locked) && job.vendorLink.sharingApproved && job.vendorLink.capability === "write" ? renderReportControls(true) : null}
         {renderVendorJobControls()}
       </VendorLinkDetails>
@@ -163,7 +172,8 @@ export default async function VendorJobPage({
   return (
     <div className="card pad" data-testid="vendor-job" data-v2-page={v2 ? "v-job" : undefined} style={{ maxWidth: 560, margin: "24px auto" }}>
       <h1>{t("i_vendor_page_title")}</h1>
-      <VendorNotificationCenterEntry token={token} locale={prefs.locale} />
+      {lineEntry ? <><VendorNotificationCenterEntry token={token} locale={prefs.locale} />{lineEntry}</>
+        : <VendorNotificationCenterEntry token={token} locale={prefs.locale} />}
       <ErrorBanner t={t} error={query.error} />
       <p className="f">{t("i_vendor_address")}</p>
       <p data-testid="vendor-address">{job.address}</p>

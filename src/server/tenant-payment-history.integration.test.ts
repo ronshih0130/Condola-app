@@ -49,12 +49,12 @@ async function controls(c:Client):Promise<Controls>{
 }
 function validateSeed(v:Controls) {
  if(v.orgs.length!==2||!same(v.orgs.map(x=>x.id).sort(),[ORG_ID,ORG2_ID].sort())||v.orgs.some(x=>x.environment!=='live'||x.live_org_id!==null||!same(x.flags,seedFlags)))throw Error('Unexpected seed organizations or flags');
- const allow=new Set([...v.registry,'deposit_settlement','go_live_lock','id_documents.max_retention_days_after_close','id_documents.org_retention_locked']);
+ const allow=new Set([...v.registry,'deposit_settlement','go_live_lock','id_documents.max_retention_days_after_close','id_documents.org_retention_locked','partner_consent_approved_agreements']);
  if(v.settings.some(x=>!allow.has(x.key))||v.settings.some(x=>x.key===targetKey))throw Error('Unknown setting or B018 already present');
  for(const row of v.settings.filter(x=>v.registry.includes(x.key)))if(!same(row.value,{enabled:false,allowed_org_ids:[]}))throw Error('Unexpected registry flag');
  const settlement=v.settings.filter(x=>x.key==='deposit_settlement');
  if(settlement.length!==1||!same(settlement[0].value,{enabled:false,allowed_org_ids:[]}))throw Error('Unexpected B011 settlement flag');
- for(const [key,value] of [['go_live_lock',false],['id_documents.max_retention_days_after_close',90],['id_documents.org_retention_locked',true]] as const){const found=v.settings.filter(x=>x.key===key);if(found.length!==1||!same(found[0].value,value))throw Error('Protective control mismatch');}
+ for(const [key,value] of [['go_live_lock',false],['id_documents.max_retention_days_after_close',90],['id_documents.org_retention_locked',true],['partner_consent_approved_agreements',{}]] as const){const found=v.settings.filter(x=>x.key===key);if(found.length!==1||!same(found[0].value,value))throw Error('Protective control mismatch');}
 }
 function validateFinal(before:Controls,after:Controls){
  if(before.database!==after.database||!same(before.registry,after.registry)||after.orgs.length!==2)throw Error('Child identity or registry changed');
@@ -166,6 +166,18 @@ test('signed credit stays visible, offsets open debt and never offers a negative
  await invoice(f.p,f.lease);const offset=await tenantPaymentHistory(a.s,f.lease,{view:'current'});assert.equal(offset.state,'ready');if(offset.state!=='ready')throw Error('Unavailable');assert.equal(offset.bill.state,'due');assert.equal(offset.bill.balanceMinor,80000);assert.equal(offset.lease.canReport,true);
 });
 
+test('FR-Q6-01: monthly total due = rent + utilities − 代墊 credit, sourced per invoice line and equal to the bill balance',async()=>{
+ const a=await tenant(),f=await fixture(a.contact);await enable();
+ const number=`FRQ6-${randomUUID().slice(0,8)}`;
+ const inv=(await query<{id:string}>(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,period_start,period_end,status) VALUES($1,$2,$3,$4,'TWD','2090-04-05','2090-04-01','2090-04-30','open') RETURNING id::text`,[ORG_ID,f.p,f.lease,number])).rows[0].id;
+ for (const [line,kind,amount,description] of [[1,'rent',100000,'Synthetic rent'],[2,'utility',8500,'電費'],[3,'credit',-3000,'代墊修繕抵扣']] as const)
+  await query(`INSERT INTO invoice_lines(org_id,invoice_id,line_no,charge_type,description,unit_amount_minor,amount_minor) VALUES($1,$2,$3,$4,$5,$6::numeric,$6::bigint)`,[ORG_ID,inv,line,kind,description,amount]);
+ const ready=await tenantPaymentHistory(a.s,f.lease,{view:'current'});assert.equal(ready.state,'ready');if(ready.state!=='ready')throw Error('Unavailable');
+ const april=ready.monthlyDue.find(p=>p.periodYm==='2090-04');assert.ok(april);
+ assert.equal(april.grossMinor,'108500');assert.equal(april.offsetMinor,'3000');assert.equal(april.paidMinor,'0');assert.equal(april.dueMinor,'105500');assert.equal(april.carryMinor,'0');
+ assert.deepEqual(april.components.map(c=>[c.key,c.amountMinor,c.source.invoiceNumber,c.source.lineNo]),[['rent','100000',number,1],['utility','8500',number,2],['offset','-3000',number,3]]);
+ assert.equal(ready.monthlyDue.reduce((sum,p)=>sum+BigInt(p.dueMinor)-BigInt(p.carryMinor),BigInt(0)).toString(),String(ready.bill.balanceMinor));
+});
 
 test('normal paid utility correction produces signed credit and preserves tenant report history',async()=>{
  const period=currentUtilityPeriod(),a=await tenant(),f=await fixture(a.contact,ORG_ID,period);await enable();

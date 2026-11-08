@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { createLease, type LeaseInput } from "./domain";
 import { normalizePhone } from "./lease-rules";
 import { addCalendarMonths, monthBounds, taipeiToday } from "./money";
@@ -67,5 +68,6 @@ export function leaseInputFromForm(formData: FormData): LeaseInput {
 
 /** The lease wizard's server action calls this, then the database. */
 export async function createLeaseFromForm(session: Session, formData: FormData) {
+  session = await guardEffectiveSession(session, "leases.edit");
   return createLease(session, leaseInputFromForm(formData));
 }

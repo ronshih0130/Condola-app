@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { many, tx } from "./db";
 import { FlowError } from "./errors";
 import { monthBounds, taipeiToday } from "./money";
@@ -92,8 +93,9 @@ function uuidOrNull(value: string | undefined) {
 }
 
 export async function reportFilterOptions(session: Session) {
+  session = await guardEffectiveSession(session, "reports.export");
   assertPerm(session, "reports.export");
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "reports.export", async () => {
     const properties = await many<Choice>(
       client,
       `SELECT id::text, name, CASE WHEN archived_at IS NULL THEN 'active' ELSE 'archived' END AS "archiveState" FROM properties WHERE org_id = $1 ORDER BY name`,
@@ -107,17 +109,18 @@ export async function reportFilterOptions(session: Session) {
       [session.orgId],
     );
     return { properties, owners };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function loadIncomeExpense(
   session: Session,
   input: { start: string; end: string; propertyId?: string; ownerId?: string },
 ) {
+  session = await guardEffectiveSession(session, "reports.export");
   assertPerm(session, "reports.export");
   const propertyId = uuidOrNull(input.propertyId);
   const ownerId = uuidOrNull(input.ownerId);
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "reports.export", async () => {
     const rows = await many<ReportRow>(
       client,
       `SELECT property_id::text, property_name, owner_name, btrim(currency) AS currency,
@@ -127,5 +130,5 @@ export async function loadIncomeExpense(
       [session.orgId, propertyId, ownerId, input.start, input.end],
     );
     return rows;
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }

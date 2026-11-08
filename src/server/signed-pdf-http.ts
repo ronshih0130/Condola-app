@@ -1,3 +1,4 @@
+import { can } from "./perms";
 import { consentCoversCurrent } from "./consent";
 import { consentRequiredResponse } from "./consent-gate";
 import type { OrgRole, Session } from "./types";
@@ -18,7 +19,7 @@ export function signedPdfLoginRedirect() {
 }
 
 export function staffRoleMayDownloadSignedPdf(session: Session): boolean {
-  return session.kind === "staff" && !!session.role && (STAFF_SIGNED_PDF_ROLES as readonly string[]).includes(session.role);
+  return session.kind === "staff" && !!session.role && (STAFF_SIGNED_PDF_ROLES as readonly string[]).includes(session.role) && (!session.customRole || can(session, "props.view"));
 }
 
 type FileBytes = { content: Uint8Array; file_name: string };

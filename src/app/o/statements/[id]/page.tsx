@@ -9,6 +9,12 @@ import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { maskTenantNames } from "@/server/privacy";
 import { statementDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
+import { OwnerNetLedgerPanel } from "@/components/owner-net-ledger-panel";
+import { ownerNetLedgerView } from "@/server/owner-net-ledger";
+import { ledgerPanelView } from "@/server/owner-net-ledger-presentation";
+import { OwnerReportReplies } from "@/components/owner-report-replies";
+import { ownerTransferHistory, reportRepliesView } from "@/server/owner-finance-replies";
+import { repliesPanelView } from "@/server/owner-finance-replies-presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +34,9 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
     description: line.description && !privacy.showName ? maskTenantNames(line.description, names, hidden) : line.description,
   }));
   const row = detail.statement;
+  const ledger = await ownerNetLedgerView(session, id);
+  const [transfers, replies] = await Promise.all([ownerTransferHistory(session, id), reportRepliesView(session, id)]);
+  const versionNumbers = new Map((ledger?.versions ?? []).map((v) => [v.id, v.version_no]));
   return (
     <div>
       <p>
@@ -51,6 +60,8 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
         lines={lines}
         note={<p className="small">{t("i_actor")}</p>}
       />
+      {ledger && <OwnerNetLedgerPanel view={ledgerPanelView(ledger, { statementId: id, locale: session.locale })} locale={session.locale} negativeLabel={t("owner_owes")} />}
+      {(transfers || replies) && <OwnerReportReplies view={repliesPanelView({ statementId: id, locale: session.locale, transfers, replies, versionNumbers, displayedVersionId: ledger ? ledger.latest?.id ?? null : undefined })} locale={session.locale} />}
     </div>
   );
 }

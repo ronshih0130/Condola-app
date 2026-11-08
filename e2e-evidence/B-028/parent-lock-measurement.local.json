@@ -1,0 +1,365 @@
+{
+ "label": "LOCAL MEASUREMENT ONLY — disposable local PostgreSQL clone, synthetic seed; not the T0 rehearsal (T0 reserve pending)",
+ "postgres": "16.15 (Homebrew)",
+ "holdMs": 400,
+ "lockTimeoutMs": 3000,
+ "pollMs": 20,
+ "callerTimeouts": {
+  "connectionDefaults": {
+   "idle_in_transaction_session_timeout": "0",
+   "lock_timeout": "0",
+   "statement_timeout": "0"
+  },
+  "roleOrDatabaseTimeoutOverrides": 0,
+  "gatewayProconfig": [
+   "search_path=pg_catalog, public, app, pg_temp"
+  ],
+  "callPath": "repair-approval.ts submitEstimate -> run -> svc -> svcOn (no SET lock_timeout/statement_timeout)"
+ },
+ "measurements": [
+  {
+   "scenario": "ticket-update-then-estimate-submit",
+   "parent": "public.maintenance_tickets",
+   "first": "UPDATE maintenance_tickets SET title (non-key)",
+   "second": "app.b013_submit_estimate (ticket FOR UPDATE, property_owners FOR SHARE, heads/versions insert)",
+   "expectBlocked": true,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 417,
+   "observedBlocked": true,
+   "blockedSamples": 17,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "maintenance_tickets",
+      "mode": "AccessExclusiveLock"
+     }
+    ]
+   },
+   "outcome": "ok",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "estimate-submit-then-ticket-update",
+   "parent": "public.maintenance_tickets",
+   "first": "app.b013_submit_estimate (ticket FOR UPDATE, property_owners FOR SHARE, heads/versions insert)",
+   "second": "UPDATE maintenance_tickets SET title (non-key)",
+   "expectBlocked": true,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 419,
+   "observedBlocked": true,
+   "blockedSamples": 18,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "maintenance_tickets",
+      "mode": "ExclusiveLock"
+     }
+    ]
+   },
+   "outcome": "ok",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "ticket-update-then-head-fk-insert",
+   "parent": "public.maintenance_tickets",
+   "first": "UPDATE maintenance_tickets SET title (non-key)",
+   "second": "INSERT app.b013_estimate_heads (FK key-share on maintenance_tickets only)",
+   "expectBlocked": false,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 24,
+   "observedBlocked": false,
+   "blockedSamples": 0,
+   "blockedByHolder": false,
+   "firstBlockedSample": null,
+   "outcome": "ok",
+   "blockerCount": 0
+  },
+  {
+   "scenario": "owner-update-then-estimate-submit",
+   "parent": "public.property_owners",
+   "first": "UPDATE property_owners SET repair_approval_threshold_minor (non-key)",
+   "second": "app.b013_submit_estimate (ticket FOR UPDATE, property_owners FOR SHARE, heads/versions insert)",
+   "expectBlocked": true,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 418,
+   "observedBlocked": true,
+   "blockedSamples": 17,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "property_owners",
+      "mode": "RowShareLock"
+     }
+    ]
+   },
+   "outcome": "ok",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "estimate-submit-then-owner-update",
+   "parent": "public.property_owners",
+   "first": "app.b013_submit_estimate (ticket FOR UPDATE, property_owners FOR SHARE, heads/versions insert)",
+   "second": "UPDATE property_owners SET repair_approval_threshold_minor (non-key)",
+   "expectBlocked": true,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 417,
+   "observedBlocked": true,
+   "blockedSamples": 18,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "property_owners",
+      "mode": "ExclusiveLock"
+     }
+    ]
+   },
+   "outcome": "ok",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "job-update-then-appointment-insert",
+   "parent": "public.repair_vendor_jobs",
+   "first": "UPDATE repair_vendor_jobs SET contact_window (non-key)",
+   "second": "INSERT app.b013_repair_appointments (job guard FOR SHARE + FK)",
+   "expectBlocked": true,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 421,
+   "observedBlocked": true,
+   "blockedSamples": 16,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "repair_vendor_jobs",
+      "mode": "RowShareLock"
+     }
+    ]
+   },
+   "outcome": "ok",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "appointment-insert-then-job-update",
+   "parent": "public.repair_vendor_jobs",
+   "first": "INSERT app.b013_repair_appointments (job guard FOR SHARE + FK)",
+   "second": "UPDATE repair_vendor_jobs SET contact_window (non-key)",
+   "expectBlocked": true,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 419,
+   "observedBlocked": true,
+   "blockedSamples": 18,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "repair_vendor_jobs",
+      "mode": "ExclusiveLock"
+     }
+    ]
+   },
+   "outcome": "ok",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "ticket-held-past-lock-timeout",
+   "parent": "public.maintenance_tickets",
+   "first": "UPDATE maintenance_tickets SET title (non-key)",
+   "second": "app.b013_submit_estimate",
+   "expectBlocked": true,
+   "holdMs": 1500,
+   "lockTimeoutMs": 250,
+   "elapsedMs": 257,
+   "observedBlocked": true,
+   "blockedSamples": 10,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "maintenance_tickets",
+      "mode": "AccessExclusiveLock"
+     }
+    ]
+   },
+   "outcome": "error:55P03",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "property-update-then-estimate-submit",
+   "parent": "public.properties",
+   "first": "UPDATE properties SET name (non-key)",
+   "second": "app.b013_submit_estimate (ticket FOR UPDATE, property_owners FOR SHARE, heads/versions insert)",
+   "expectBlocked": true,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 414,
+   "observedBlocked": true,
+   "blockedSamples": 17,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "properties",
+      "mode": "RowShareLock"
+     }
+    ]
+   },
+   "outcome": "ok",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "owner-contact-update-then-estimate-submit",
+   "parent": "public.contacts",
+   "first": "UPDATE contacts SET display_name (non-key, designated owner contact)",
+   "second": "app.b013_submit_estimate (ticket FOR UPDATE, property_owners FOR SHARE, heads/versions insert)",
+   "expectBlocked": true,
+   "holdMs": 400,
+   "lockTimeoutMs": 3000,
+   "elapsedMs": 422,
+   "observedBlocked": true,
+   "blockedSamples": 17,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": [
+     {
+      "locktype": "transactionid",
+      "relation": null,
+      "mode": "ShareLock"
+     }
+    ],
+    "tuple_locks": [
+     {
+      "locktype": "tuple",
+      "relation": "contacts",
+      "mode": "RowShareLock"
+     }
+    ]
+   },
+   "outcome": "ok",
+   "blockerCount": 1
+  },
+  {
+   "scenario": "production-call-path-unbounded-wait",
+   "parent": "public.maintenance_tickets",
+   "first": "UPDATE maintenance_tickets SET title (non-key)",
+   "second": "submitEstimate() TS wrapper via svc (no lock_timeout/statement_timeout)",
+   "expectBlocked": true,
+   "holdMs": 1500,
+   "lockTimeoutMs": 0,
+   "elapsedMs": 1517,
+   "observedBlocked": true,
+   "blockedSamples": 64,
+   "blockedByHolder": true,
+   "firstBlockedSample": {
+    "wait_event_type": "Lock",
+    "wait_event": "transactionid",
+    "blockers": 1,
+    "waiting": null,
+    "tuple_locks": null
+   },
+   "outcome": "still_waiting_at_1500ms; test cancelled via pg_cancel_backend -> error:errors.generic",
+   "blockerCount": 1
+  }
+ ]
+}

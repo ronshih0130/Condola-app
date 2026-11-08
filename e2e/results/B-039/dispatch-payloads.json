@@ -1,0 +1,70 @@
+[
+ {
+  "locale": "zh-TW",
+  "kind": "assigned",
+  "push": {
+   "channelId": "<uuid>",
+   "to": "<line-user>",
+   "messages": [
+    {
+     "type": "text",
+     "text": "【Condola】您有一件新的維修工作。請開啟此連結查看：https://app.condola.app/v/<job-token>"
+    }
+   ],
+   "headers": {
+    "X-Line-Retry-Key": "<uuid>"
+   }
+  }
+ },
+ {
+  "locale": "en",
+  "kind": "assigned",
+  "push": {
+   "channelId": "<uuid>",
+   "to": "<line-user>",
+   "messages": [
+    {
+     "type": "text",
+     "text": "Condola: You have a new repair job. Open this link to view it: https://app.condola.app/v/<job-token>"
+    }
+   ],
+   "headers": {
+    "X-Line-Retry-Key": "<uuid>"
+   }
+  }
+ },
+ {
+  "locale": "zh-TW",
+  "kind": "cancelled",
+  "push": {
+   "channelId": "<uuid>",
+   "to": "<line-user>",
+   "messages": [
+    {
+     "type": "text",
+     "text": "【Condola】您先前收到的維修工作已取消，原連結已失效。如有疑問，請聯絡管理公司。"
+    }
+   ],
+   "headers": {
+    "X-Line-Retry-Key": "<uuid>"
+   }
+  }
+ },
+ {
+  "locale": "zh-TW",
+  "kind": "rescheduled",
+  "push": {
+   "channelId": "<uuid>",
+   "to": "<line-user>",
+   "messages": [
+    {
+     "type": "text",
+     "text": "【Condola】您的維修工作安排已更新。請開啟此連結查看最新內容：https://app.condola.app/v/<job-token>"
+    }
+   ],
+   "headers": {
+    "X-Line-Retry-Key": "<uuid>"
+   }
+  }
+ }
+]

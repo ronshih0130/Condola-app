@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { Pool, type PoolClient } from "pg";
+import { Client, Pool, type PoolClient } from "pg";
 import { svc, tx } from "./db";
 import { createTicket } from "./domain";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
@@ -132,11 +132,8 @@ test(
               )`,
             [ticketIds],
           );
-          await cleanup.query(
-            `UPDATE vendor_documents SET reissued_from = NULL
-              WHERE ticket_id = ANY($1::uuid[])`,
-            [ticketIds],
-          );
+          // Delete the whole fixture chain in one statement; reissue links are
+          // immutable and the self-FK is satisfied when all siblings are removed.
           await cleanup.query(
             `DELETE FROM vendor_documents WHERE ticket_id = ANY($1::uuid[])`,
             [ticketIds],
@@ -429,10 +426,14 @@ test(
     });
 
     await assert.rejects(previewVendorDocument(context(ticketIds[0])));
-    await svc(null, (client) => client.query(
-      `UPDATE contacts SET receipt_title = '測試收據抬頭' WHERE id = $1`,
-      [ownerId],
-    ));
+    // B-022: API roles can no longer write receipt_title directly (owner-entered only);
+    // the fixture writes it as the table owner, like a maintenance operation.
+    {
+      const owner = new Client({ connectionString: process.env.DATABASE_URL });
+      await owner.connect();
+      try { await owner.query(`UPDATE contacts SET receipt_title = '測試收據抬頭' WHERE id = $1`, [ownerId]); }
+      finally { await owner.end(); }
+    }
 
     const operations = await Promise.all(ticketIds.map((ticketId) =>
       createVendorDocumentInvite(

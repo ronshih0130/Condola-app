@@ -14,6 +14,7 @@ import { FirstPeriodSummary } from "@/components/first-period-summary";
 import { MoveInInvoicePreview } from "@/components/move-in-invoice-preview";
 import { moveInPreview } from "@/server/move-in-preview";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
+import { PortalResendEntry } from "@/components/portal-resend-entry";
 import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
@@ -77,7 +78,7 @@ export default async function LeasePage({
     ["msg", "s_b95abdb"],
   ] as const;
   const messages = tab === "msg" && lease.thread_id ? await threadMessages(session, lease.thread_id) : [];
-  const moveOut = tab === "summary" && session.kind === "staff" && can(session.role, "leases.edit") && !session.needsSandbox && isMoveOutNoticeEnabled()
+  const moveOut = tab === "summary" && session.kind === "staff" && can(session, "leases.edit") && !session.needsSandbox && isMoveOutNoticeEnabled()
     ? await tx(session.userId, (client) => maybe<{ moved_out_on: string | null }>(client,
       `SELECT moved_out_on::text FROM leases WHERE id=$1 AND org_id=$2`, [id, session.orgId]),
       { orgId: session.orgId, environment: session.environment })
@@ -191,6 +192,7 @@ export default async function LeasePage({
                   leaseId={id}
                   activated={tenantActivated}
                 />
+                <PortalResendEntry session={session} kind="tenant" contactId={lease.tenant_contact_id} leaseId={id} />
               </div>
             ) : null}
             {lease.status !== "active" ? (

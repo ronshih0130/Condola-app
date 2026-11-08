@@ -399,11 +399,13 @@ export function isLegacyReminderClaimFenced(error: unknown): boolean {
   return Boolean(e && ((e.code === "42501" && e.message === "Legacy reminder claim unavailable") || e.code === "55P03"));
 }
 
-function dbStore(): ClaimStore {
+/** Inject only database execution and transport; claim/fence SQL stays shared
+ * with the cron so disposable integration tests exercise the real store. */
+export function legacyReminderStore(execute: typeof query = query, send: ClaimStore["send"] = sendMail): ClaimStore {
   return {
     async claim(plan) {
       try {
-        const row = await query<{ id: string }>(
+        const row = await execute<{ id: string }>(
           `INSERT INTO email_log (org_id, kind, target_id, threshold)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (org_id, kind, target_id, threshold) WHERE kind <> 'password_reset'
@@ -420,12 +422,12 @@ function dbStore(): ClaimStore {
       }
     },
     async complete(id, messageId) {
-      await query(`UPDATE email_log SET message_id = $2, sent_at = now() WHERE id = $1`, [id, messageId]);
+      await execute(`UPDATE email_log SET message_id = $2, sent_at = now() WHERE id = $1`, [id, messageId]);
     },
     async release(id) {
-      await query(`DELETE FROM email_log WHERE id = $1 AND message_id IS NULL`, [id]);
+      await execute(`DELETE FROM email_log WHERE id = $1 AND message_id IS NULL`, [id]);
     },
-    send: sendMail,
+    send,
   };
 }
 
@@ -496,6 +498,6 @@ export async function runDueReminders(now = new Date()) {
       ),
     );
   }
-  const sent = await deliverReminders(plans, dbStore());
+  const sent = await deliverReminders(plans, legacyReminderStore());
   return { sent, skipped: null as string | null };
 }

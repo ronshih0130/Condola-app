@@ -116,7 +116,7 @@ export default async function AccountPage({
               ) : null}
             </div>
           )}
-          {can(session.role, "settings.edit") ? (
+          {can(session, "settings.edit") ? (
             <form action={actionRequireMfa} style={{ marginTop: 12 }}>
               <label className="row">
                 <input type="checkbox" name="require" defaultChecked={factor.required} /> {t("i_require_mfa")}

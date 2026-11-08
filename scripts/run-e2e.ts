@@ -53,7 +53,7 @@ for (const file of files) {
     : { ESIGN_ENABLED: "false" };
   // Handover uses its own bounded private object-service fixture; select its
   // exact checked-in config only for that file, keeping other batches isolated.
-  const centerSpecs = new Set(["e2e/b028-center-local.spec.ts", "e2e/b017-center-busy.spec.ts", "e2e/b017-mark-response-loss.spec.ts", "e2e/b017-mark-hydration.spec.ts"]);
+  const centerSpecs = new Set(["e2e/b017-center-busy.spec.ts", "e2e/b017-mark-response-loss.spec.ts", "e2e/b017-mark-hydration.spec.ts"]);
   const config = file === "e2e/handover.spec.ts"
     ? ["--config", "e2e/handover-playwright.config.ts"]
     : file === "e2e/b011-handover-comparison.spec.ts" ? ["--config", "e2e/b011-comparison-private-playwright.config.ts"]
@@ -75,6 +75,7 @@ for (const file of files) {
     : file === "e2e/b015-archive-workflow.spec.ts" ? ["--config", "e2e/b015-archive-workflow-private-playwright.config.ts"]
     : file === "e2e/b015-edit-local.spec.ts" ? ["--config", "e2e/tenant-directory-edit-playwright.config.ts"]
     : file === "e2e/b015-directory-local.spec.ts" ? ["--config", "e2e/tenant-directory-compat-playwright.config.ts"]
+    : file === "e2e/b028-center-local.spec.ts" ? ["--config", "e2e/b028-off-private-playwright.config.ts"]
     : centerSpecs.has(file) ? ["--config", "playwright.b017-localhost.config.ts"] : [];
   const status = run([...config, file, "--output", output], scopedEnv);
   if (status === 130 || status === 143) process.exit(status);

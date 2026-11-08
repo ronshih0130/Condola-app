@@ -185,6 +185,7 @@ test("staff signed-PDF route serves a manager download", async () => {
   assert.equal(response.headers.get("content-type"), "application/pdf");
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.match(response.headers.get("content-disposition") ?? "", /^attachment; filename="/);
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), own.bytes);
 });
 

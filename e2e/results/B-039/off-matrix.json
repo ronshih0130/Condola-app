@@ -1,0 +1,74 @@
+[
+ {
+  "gate": "environment",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "line_platform",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "line_push",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "notification_delivery_v2",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "line_vendor_portal",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "dispatch platform false",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "dispatch platform malformed",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "dispatch org false",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "dispatch org malformed",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "dispatch org missing",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "dispatch setting missing",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ },
+ {
+  "gate": "dispatch empty allowlist",
+  "lineWrites": 0,
+  "pushes": 0,
+  "dispatchSharedAndRevoked": true
+ }
+]

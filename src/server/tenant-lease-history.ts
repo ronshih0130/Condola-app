@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import type { Client } from 'pg';
 import { consentCoversCurrent } from './consent';
 import { tx } from './db';
@@ -33,18 +34,20 @@ async function currentContext(c:Client,s:Session){const q=await c.query(`SELECT 
 
 /** Read-only current context, with a keyset over the actual authorized ended leases. */
 export async function tenantEndedLeaseList(s:Session,cursor?:string):Promise<TenantEndedLeaseList> {
+  s = await guardEffectiveSession(s, null);
  if(!valid(s)|| (cursor!==undefined && (typeof cursor!=='string'||!isUuid(cursor)||cursor!==cursor.toLowerCase())))return unavailable;
- try{return await tx(s.userId,async c=>{
+ try{return await tx(s.userId,async c=>withEffectiveAuthority(c, s, null, async () => {
   if(!await currentContext(c,s))return unavailable;
   const result=await c.query<SummaryRow>(`SELECT ${summarySelect} ${summaryJoins} WHERE ${context} AND ${eligibleLease} AND ($6::uuid IS NULL OR l.id>$6::uuid) ORDER BY l.id LIMIT 51`,[...args(s),cursor??null]);
   if(!await currentContext(c,s))return unavailable;
   const items=result.rows.slice(0,50).map(summary);return {state:'ready',items,nextCursor:result.rows.length>50 ? items[items.length-1].leaseId : null};
- },{orgId:s.orgId,environment:s.environment},{readOnly:true});}catch(error){logServerError('tenant_ended_lease_list',error);return unavailable;}
+ }),{orgId:s.orgId,environment:s.environment},{readOnly:true});}catch(error){logServerError('tenant_ended_lease_list',error);return unavailable;}
 }
 
 export async function tenantEndedLeaseDetail(s:Session,leaseId:string):Promise<TenantEndedLeaseDetail> {
+  s = await guardEffectiveSession(s, null);
  if(!valid(s)||typeof leaseId!=='string'||!isUuid(leaseId))return unavailable;
- try{return await tx(s.userId,async c=>{
+ try{return await tx(s.userId,async c=>withEffectiveAuthority(c, s, null, async () => {
   const found=await c.query<SummaryRow & {pdf_readable:boolean}>(`SELECT ${summarySelect},app.tenant_signed_pdf_readable(l.org_id,l.id) AS pdf_readable ${summaryJoins} WHERE ${context} AND ${eligibleLease} AND l.id=$6::uuid`,[...args(s),leaseId]);
   const row=found.rows[0];if(!row)return unavailable;
   if(!tenantSignedPdfGloballyEnabled()||row.pdf_readable!==true)return {state:'ready',lease:summary(row),pdfAvailability:'unavailable',pdfs:[]};
@@ -59,13 +62,14 @@ export async function tenantEndedLeaseDetail(s:Session,leaseId:string):Promise<T
   const again=await c.query<{ok:boolean}>(`SELECT EXISTS(SELECT 1 FROM public.leases l JOIN public.organizations o ON o.id=l.org_id WHERE ${context} AND ${eligibleLease} AND l.id=$6::uuid AND app.tenant_signed_pdf_readable(l.org_id,l.id)) AS ok`,[...args(s),leaseId]);
   if(!again.rows[0]?.ok)return unavailable;
   return {state:'ready',lease:summary(row),pdfAvailability:'available',pdfs:files.rows.map(f=>({id:f.id,current:f.current,uploadedAt:f.uploaded_at,sizeBytes:f.size_bytes}))};
- },{orgId:s.orgId,environment:s.environment},{readOnly:true});}catch(error){logServerError('tenant_ended_lease_detail',error);return unavailable;}
+ }),{orgId:s.orgId,environment:s.environment},{readOnly:true});}catch(error){logServerError('tenant_ended_lease_detail',error);return unavailable;}
 }
 
 /** One authenticated SELECT binds the current tenant, exact ended lease and PDF bytes. */
 export async function tenantEndedLeaseSignedPdf(s:Session,leaseId:string,pdfId:string):Promise<TenantEndedSignedPdf|null> {
+  s = await guardEffectiveSession(s, null);
  if(!valid(s)||!tenantSignedPdfGloballyEnabled()||typeof leaseId!=='string'||!isUuid(leaseId)||typeof pdfId!=='string'||!isUuid(pdfId))return null;
- return tx(s.userId,async c=>{
+ return tx(s.userId,async c=>withEffectiveAuthority(c, s, null, async () => {
   const q=await c.query<TenantEndedSignedPdf>(`SELECT pdf.id::text,pdf.content,octet_length(pdf.content) AS size_bytes,'signed-lease-'||pdf.id::text||'.pdf' AS file_name FROM public.lease_signed_pdfs pdf JOIN public.leases l ON l.org_id=pdf.org_id AND l.id=pdf.lease_id JOIN public.organizations o ON o.id=l.org_id WHERE ${context} AND ${eligibleLease} AND l.id=$6::uuid AND pdf.id=$7::uuid AND app.tenant_signed_pdf_readable(pdf.org_id,pdf.lease_id) AND app.is_lease_tenant(pdf.lease_id)`,[...args(s),leaseId,pdfId]);return q.rows[0]??null;
- },{orgId:s.orgId,environment:s.environment},{readOnly:true});
+ }),{orgId:s.orgId,environment:s.environment},{readOnly:true});
 }

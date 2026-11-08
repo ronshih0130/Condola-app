@@ -1,3 +1,6 @@
+import { recordUsage, recordStoredFileUsage, recordPaperSignatureUsage, usageDedupeKey } from './usage-events';
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
@@ -25,13 +28,15 @@ import { calculateStatement } from "./statement-calculation";
 import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "./move-in-invoice";
 import { billingPreviewsEnabled } from "./billing-preview-rules";
 import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
-import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
+import { decideConfirmation } from "./b010-proxy-confirm-rules";
+import { beginPaymentCenter, finalizePaymentCenter, producePaymentResultEvent } from "./payment-center-events";
 import { syncVacantOwnerExpense } from "./utility-expense";
 import { depositMinorForFrequency, depositPolicyState, resolveDepositPolicy, type DepositPolicy } from "./deposit-rules";
 import { depositCapSaveAllowed, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
 import { leaseIdentityReady } from "./id-docs";
+import { identityRequiredForSigning } from "./id-sign-gate";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus, isUuid } from "./repair-rules";
@@ -199,6 +204,8 @@ async function insertPropertyUnit(
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
         [input.orgId, input.propertyId, input.label, input.floor, input.rentalMode, input.areaUnit, input.baseRentMinor, addressKeyValue],
       );
+  await recordUsage(client, { orgId: input.orgId, dimension: 'units', quantity: BigInt(1), occurredAt: new Date(),
+    sourceTable: 'units', sourceId: unit.id, dedupeKey: usageDedupeKey('units', 'units', unit.id) });
   const roomIds: string[] = [];
   for (const room of input.rooms) {
     const inserted = await one<{ id: string }>(
@@ -305,7 +312,8 @@ function propertySubmitPayload(input: PropertyInput) {
 }
 
 export async function createProperty(session: Session, input: PropertyInput) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "props.edit");
+  assertStaff(session, ["admin", "manager"], "props.edit");
   if (!input.name.trim()) throw new FlowError("errors.required", { field: "i_property_name", step: 1 });
   if (!input.city.trim()) throw new FlowError("errors.required", { field: "i_city", step: 1 });
   if (!input.street.trim()) throw new FlowError("errors.required", { field: "i_address", step: 1 });
@@ -333,7 +341,8 @@ export async function createProperty(session: Session, input: PropertyInput) {
   const ownerEmail = cleanEmail(input.ownerEmail, { field: "i_email_label", step: 1 });
   if (input.ownerMode === "new" && !input.ownerName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea", step: 1 });
 
-  const created = await tx(session.userId, async (client) => {
+  const created = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
+    await assertCustomAuthorityOn(client, session, "props.edit");
     const submitToken = (input.submitToken || "").trim().slice(0, 80);
     const submitHash = submitToken ? sha256(stableStringify(propertySubmitPayload(input))) : "";
     if (submitToken) {
@@ -526,17 +535,19 @@ export async function createProperty(session: Session, input: PropertyInput) {
       });
     }
     return { propertyId: property.id, ownerContactId, roomIds, inviteCode: null as string | null };
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 
   if (input.rentalMode === "by_room" && created.roomIds.length >= 3) await markTryout(session.orgId, "property");
   return created;
 }
 
 export async function setMeterSerial(session: Session, propertyId: string, serial: string) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "props.edit");
+  assertStaff(session, ["admin", "manager"], "props.edit");
   const value = serial.trim();
   if (!value) throw new FlowError("errors.required");
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
+    await assertCustomAuthorityOn(client, session, "props.edit");
     await admitActiveArchiveAncestry(client, session.orgId, {kind:"property",id:propertyId});
     await assertCurrentArchiveCaller(client, session);
     const unit = await maybe<{ id: string }>(
@@ -568,18 +579,20 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
       [session.orgId, propertyId, unit.id, value],
     );
     await assertCurrentArchiveCaller(client,session);
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function setOwnerPhoneVisibility(session: Session, propertyOwnerId: string, canView: boolean) {
+  session = await guardEffectiveSession(session, "settings.edit");
   assertPerm(session, "settings.edit");
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "settings.edit", async () => {
+    await assertCustomAuthorityOn(client, session, "settings.edit");
     const updated = await client.query(
       `UPDATE property_owners SET can_view_tenant_phone = $2 WHERE id = $1 AND org_id = $3`,
       [propertyOwnerId, canView, session.orgId],
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export type LeaseInput = {
@@ -860,7 +873,8 @@ async function insertPortalUserUnlessEmailTaken(
 }
 
 export async function createLease(session: Session, input: LeaseInput) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   if (input.firstPeriodProrate !== undefined && typeof input.firstPeriodProrate !== "boolean") throw new FlowError("errors.required");
   if (!input.roomId || !input.startDate || !input.endDate) throw new FlowError("errors.required", { field: "s_8569bc8" });
   const tenantContactId = existingTenantId(input.tenantContactId);
@@ -897,7 +911,8 @@ export async function createLease(session: Session, input: LeaseInput) {
   if (!idempotencyKey.ok) throw new FlowError("errors.leaseFailed");
   let result;
   try {
-    result = await leaseWrite(() => tx(session.userId, async (client) => {
+    result = await leaseWrite(() => tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
+    await assertCustomAuthorityOn(client, session, "leases.edit");
     if (idempotencyKey.value) {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`lease-key:${session.orgId}:${idempotencyKey.value}`]);
     }
@@ -1318,7 +1333,7 @@ export async function createLease(session: Session, input: LeaseInput) {
       utilityKept,
       billKept,
     };
-  }, { orgId: session.orgId, environment: session.environment }));
+  }), { orgId: session.orgId, environment: session.environment }));
   } catch (error) {
     if (error instanceof FlowError && error.key === "errors.generic") throw new FlowError("errors.leaseFailed");
     throw error;
@@ -1348,7 +1363,8 @@ export async function updateLease(
     firstPeriodProrate?: boolean;
   },
 ) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   if (input.firstPeriodProrate !== undefined && typeof input.firstPeriodProrate !== "boolean") throw new FlowError("errors.required");
   if (!input.leaseId) throw new FlowError("errors.required");
   const rentMajor = coerceNumber(input.rentMajor);
@@ -1358,7 +1374,8 @@ export async function updateLease(
   if (!input.updatedAt?.trim()) throw new FlowError("errors.required");
   return leaseWrite(() => tx(
     session.userId,
-    async (client) => {
+    async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
+    await assertCustomAuthorityOn(client, session, "leases.edit");
       await assertCurrentArchiveCaller(client, session);
       const archiveTarget = await admitLeaseArchiveAncestry(client, session.orgId, input.leaseId);
       await assertCurrentArchiveCaller(client, session);
@@ -1464,7 +1481,7 @@ export async function updateLease(
           depositPolicy,
         ),
       };
-    },
+    }),
     { orgId: session.orgId, environment: session.environment },
   ));
 }
@@ -1549,7 +1566,7 @@ async function signLeaseOn(client: Client, session: Session, input: SignLeaseInp
     const asManager = Boolean(member) && (member?.role === "admin" || member?.role === "manager") && !asTenant;
     if (!asTenant && !asManager) throw new FlowError("errors.forbidden");
     validateFirstPeriodSource(lease, true);
-    if (!simulation && !(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
+    if (!simulation && await identityRequiredForSigning(client, session.orgId) && !(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
     const role = asTenant ? "tenant" : "manager";
     const signature = await maybe<{ id: string }>(
       client,
@@ -1606,6 +1623,7 @@ async function signLeaseOn(client: Client, session: Session, input: SignLeaseInp
 }
 
 export async function signLease(session: Session, input: SignLeaseInput) {
+  session = await guardEffectiveSession(session, null);
   if (!input.consent) throw new FlowError("errors.consentRequired");
   if (!input.signedName.trim()) throw new FlowError("errors.required");
   const result = await leaseWrite(() => svc(session.userId, (client) => signLeaseOn(client, session, input)));
@@ -1619,11 +1637,13 @@ export async function uploadSignedLeasePdf(
   leaseId: string,
   file: { bytes: Uint8Array; fileName: string; replaceReason?: unknown },
 ) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   if (!isSignedPdf(file.bytes)) throw new FlowError("errors.pdf");
   const fileName = signedPdfName(file.fileName);
   const hash = createHash("sha256").update(file.bytes).digest("hex");
-  const result = await tx(session.userId, async (client) => {
+  const result = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
+    await assertCustomAuthorityOn(client, session, "leases.edit");
     const prior = await maybe<{status:string;esign:string}>(client,`SELECT status::text,esign_status::text AS esign FROM leases WHERE id=$1 AND org_id=$2`,[leaseId,session.orgId]);
     if(!prior)throw new FlowError("errors.notFound");
     const needsAdmission=(row:{status:string;esign:string})=>row.esign!=='imported' && ['draft','pending_signature'].includes(row.status);
@@ -1653,7 +1673,7 @@ export async function uploadSignedLeasePdf(
     const versions = await import("./paper-lease-versions");
     const paperVersion = await versions.preparePaperLeaseVersion(client, session, leaseId, file.replaceReason);
     const imported = lease.esign === "imported";
-    if (!imported && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
+    if (!imported && await identityRequiredForSigning(client, session.orgId) && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
     const stored = await one<{ id: string }>(
       client,
@@ -1706,6 +1726,8 @@ export async function uploadSignedLeasePdf(
         WHERE id = $1 AND org_id = $4`,
       [leaseId, stored.id, hash, session.orgId],
     );
+    await recordStoredFileUsage(client, session.orgId, stored.id);
+    await recordPaperSignatureUsage(client, session.orgId, leaseId, hash);
     if (activated) {
       await ensureThread(client, leaseId);
       const invoiceId = await issueMoveInInvoice(client, leaseId);
@@ -1714,7 +1736,7 @@ export async function uploadSignedLeasePdf(
     }
     if(target)await assertCurrentArchiveCaller(client,session);
     return { activated: false, invoiceId: null as string | null };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
   if (result.activated) {
     await svc(session.userId, (client) => queueDemoNotice(client, leaseId, "rent_due"));
     await markTryout(session.orgId, "lease");
@@ -1812,9 +1834,11 @@ async function finalSimulationClock(client: Client, session: Session) {
 
 /** Sandbox-only shortcut. The authenticated staff member remains the actor. */
 export async function simulateTenantSignature(session: Session, leaseId: string) {
-  assertStaff(session, ["admin", "manager"]);
+  session = await guardEffectiveSession(session, "leases.edit");
+  assertStaff(session, ["admin", "manager"], "leases.edit");
   if (!isUuid(leaseId)) throw new FlowError("errors.notFound");
-  const outcome = await svc(session.userId, async client => {
+  const outcome = await svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
+    await assertCustomAuthorityOn(client, session, "leases.edit");
     await pinSimulationContext(client, session);
     if (session.environment !== "sandbox") {
       const lease = await maybe<{ id: string }>(client, `SELECT id FROM leases WHERE id=$1 AND org_id=$2 FOR SHARE NOWAIT`, [leaseId, session.orgId]);
@@ -1834,7 +1858,7 @@ export async function simulateTenantSignature(session: Session, leaseId: string)
     if (!(await simulationContextValid(client, session))) throw new FlowError("errors.notFound");
     await finalSimulationClock(client, session);
     return { denied: false as const, result };
-  });
+  }));
   if (outcome.denied) throw new FlowError("errors.forbidden");
   if (outcome.result.esign === "fully_signed") await markTryout(session.orgId, "lease");
   return outcome.result;
@@ -1907,11 +1931,13 @@ export async function recordPayment(
   session: Session,
   input: { leaseId: string; amountMajor: number; paidOn: string; last5: string; reference: string; requestId?: string },
 ) {
+  session = await guardEffectiveSession(session, "pay.record");
   const amount = toMinor(input.amountMajor);
   if (!(amount > 0) || !input.paidOn) throw new FlowError("errors.amount");
 
   if (session.kind === "tenant") {
-    const paymentId = await tx(session.userId, async (client) => {
+    const paymentId = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => {
+    await assertCustomAuthorityOn(client, session, "pay.record");
       const lease = await one<{ property_id: string; currency: string; org_id: string }>(
         client,
         `SELECT property_id::text, currency, org_id::text FROM leases WHERE id = $1`,
@@ -1950,12 +1976,13 @@ export async function recordPayment(
         ],
       );
       return payment.id;
-    }, requireOrgScope(session));
+    }), requireOrgScope(session));
     return { paymentId, status: "submitted" as const };
   }
 
-  assertStaff(session, ["admin", "manager", "accountant"]);
-  const result = await tx(session.userId, async (client) => {
+  assertStaff(session, ["admin", "manager", "accountant"], "pay.record");
+  const result = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => {
+    await assertCustomAuthorityOn(client, session, "pay.record");
     let lease = await one<{ property_id: string; currency: string }>(
       client,
       `SELECT property_id::text, currency FROM leases WHERE id = $1 AND org_id = $2`,
@@ -2019,18 +2046,21 @@ export async function recordPayment(
     await allocateAndLedger(client, payment, session.userId, invoices);
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);
+    await producePaymentResultEvent(client,session,payment.id);
     if (enabled) {
       await client.query(`SELECT app.b010_payment_command_store($1,$2,$3,$4)`,[session.orgId,input.requestId,digest,payment.id]);
     }
     return {paymentId:payment.id,enabled};
-  }, requireOrgScope(session));
-  if (!result.enabled) await svc(session.userId, async (client) => queueDemoNotice(client, input.leaseId, "payment_confirmed"));
+  }), requireOrgScope(session));
+  if (!result.enabled) await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => queueDemoNotice(client, input.leaseId, "payment_confirmed")));
   return { paymentId:result.paymentId, status: "confirmed" as const };
 }
 
-export async function confirmPayment(session: Session, paymentId: string) {
-  assertStaff(session, ["admin", "manager", "accountant"]);
-  const result = await tx(session.userId, async (client) => {
+export async function confirmPayment(session: Session, paymentId: string, options: {proxyOwnerConfirmed?: boolean; source?: string} = {}) {
+  session = await guardEffectiveSession(session, "pay.record");
+  assertStaff(session, ["admin", "manager", "accountant"], "pay.record");
+  const result = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => {
+    await assertCustomAuthorityOn(client, session, "pay.record");
     const initial=await maybe<{lease_id:string}>(client,`SELECT lease_id::text FROM payments WHERE id=$1 AND org_id=$2`,[paymentId,session.orgId]);
     if (!initial) throw new FlowError("errors.notFound");
     const enabled=await lockPaymentResultContext(client,session,initial.lease_id);
@@ -2043,22 +2073,50 @@ export async function confirmPayment(session: Session, paymentId: string) {
     if (payment.status !== "submitted") throw new FlowError("errors.paymentState");
     const invoices=await lockAllocationInvoices(client,session.orgId,payment.lease_id);
     if (enabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
+    let decision: ReturnType<typeof decideConfirmation> | null = null;
+    if (enabled) {
+      const collector = await maybe<{collector:"management"|"owner";owner_contact_id:string|null}>(
+        client,
+        `SELECT collector,owner_contact_id FROM app.b010_payment_collector($1)`,
+        [payment.id],
+      );
+      if (!collector) throw new FlowError("errors.forbidden");
+      decision = decideConfirmation({
+        collector: collector.collector,
+        ownerContactId: collector.owner_contact_id,
+        actor: {kind:"staff",role:session.role,userId:session.userId},
+        proxyOwnerConfirmed: options.proxyOwnerConfirmed === true,
+        paymentStatus: payment.status,
+      });
+      if (!decision.ok) {
+        throw new FlowError(decision.code === "proxy_confirmation_required" ? "errors.proxyOwnerConfirmRequired" : "errors.forbidden");
+      }
+    }
     const balance=invoices.reduce((sum,invoice)=>sum+Number(invoice.balance_minor),0);
     if (Number(payment.amount_minor)>balance) throw new FlowError("errors.amountTooHigh");
     await client.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now() WHERE id=$1`,[payment.id,session.userId]);
     await allocateAndLedger(client,payment,session.userId,invoices);
+    if (decision?.ok) {
+      await client.query(
+        `SELECT app.b010_record_confirmation($1,$2,$3,$4,'submitted','confirmed')`,
+        [payment.id,decision.confirmedVia,decision.onBehalfOfOwnerContactId,options.source ?? "staff_ui"],
+      );
+    }
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);
+    await producePaymentResultEvent(client,session,payment.id);
     return {leaseId:payment.lease_id,enabled};
-  }, requireOrgScope(session));
-  if (!result.enabled) await svc(session.userId, async (client) => queueDemoNotice(client,result.leaseId,"payment_confirmed"));
+  }), requireOrgScope(session));
+  if (!result.enabled) await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => queueDemoNotice(client,result.leaseId,"payment_confirmed")));
   return {paymentId,status:"confirmed" as const};
 }
 
 export async function rejectPayment(session: Session, paymentId: string, reason: string) {
-  assertStaff(session, ["admin", "manager", "accountant"]);
+  session = await guardEffectiveSession(session, "pay.record");
+  assertStaff(session, ["admin", "manager", "accountant"], "pay.record");
   if (!reason.trim()) throw new FlowError("errors.required");
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => {
+    await assertCustomAuthorityOn(client, session, "pay.record");
     const initial=await maybe<{lease_id:string}>(client,`SELECT lease_id::text FROM payments WHERE id=$1 AND org_id=$2`,[paymentId,session.orgId]);
     if (!initial) throw new FlowError("errors.paymentState");
     const enabled=await lockPaymentResultContext(client,session,initial.lease_id);
@@ -2071,7 +2129,8 @@ export async function rejectPayment(session: Session, paymentId: string, reason:
     if (updated.rowCount !== 1) throw new FlowError("errors.paymentState");
     const source=enabled ? await emitPaymentResult(client,paymentId,"payment_rejected") : null;
     await finalizePaymentCenter(client,center,source);
-  }, requireOrgScope(session));
+    await producePaymentResultEvent(client,session,paymentId);
+  }), requireOrgScope(session));
 }
 
 // Property and owner spreadsheets are parsed in the browser and committed by
@@ -2133,10 +2192,12 @@ export function sampleCsv(payment: { paidOn: string; amountMinor: number; last5:
 }
 
 export async function importBankCsv(session: Session, csv: string) {
+  session = await guardEffectiveSession(session, "bank.reconcile");
   assertPerm(session, "bank.reconcile");
   const rows = parseCsv(csv).filter((row) => row.date && row.amount);
   if (rows.length === 0) throw new FlowError("errors.csv");
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "bank.reconcile", async () => {
+    await assertCustomAuthorityOn(client, session, "bank.reconcile");
     const account = await one<{ id: string; currency: string }>(
       client,
       `SELECT id, currency FROM bank_accounts WHERE org_id = $1 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
@@ -2148,6 +2209,7 @@ export async function importBankCsv(session: Session, csv: string) {
        VALUES ($1,'bank-imports',$2,'statement.csv','text/csv',$3,$4) RETURNING id`,
       [session.orgId, `demo/${randomUUID()}.csv`, Buffer.byteLength(csv), session.userId],
     );
+    await recordStoredFileUsage(client, session.orgId, file.id);
     let mapping = await maybe<{ id: string }>(
       client,
       `SELECT id FROM bank_csv_mappings WHERE bank_account_id = $1 LIMIT 1`,
@@ -2193,7 +2255,7 @@ export async function importBankCsv(session: Session, csv: string) {
       [imported.id, rows.length],
     );
     return { importId: imported.id, rows: rows.length, suggestions };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 async function suggestMatches(
@@ -2234,8 +2296,10 @@ async function suggestMatches(
 }
 
 export async function approveMatch(session: Session, suggestionId: string) {
+  session = await guardEffectiveSession(session, "bank.reconcile");
   assertPerm(session, "bank.reconcile");
-  const leaseId = await tx(session.userId, async (client) => {
+  const leaseId = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "bank.reconcile", async () => {
+    await assertCustomAuthorityOn(client, session, "bank.reconcile");
     const suggestion = await maybe<{
       id: string;
       bank_transaction_id: string;
@@ -2306,13 +2370,14 @@ export async function approveMatch(session: Session, suggestionId: string) {
       await allocateAndLedger(client, payment, session.userId, invoices);
       const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
       await finalizePaymentCenter(client,center,source);
+      await producePaymentResultEvent(client,session,payment.id);
     } else if (payment.status === "confirmed") {
       await client.query(`UPDATE payments SET bank_transaction_id = $2 WHERE id = $1`, [payment.id, suggestion.bank_transaction_id]);
     } else {
       throw new FlowError("errors.paymentState");
     }
     return payment.lease_id;
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
   return { leaseId };
 }
 
@@ -2345,10 +2410,12 @@ async function linkStatementInvoices(client: Client, orgId: string, propertyIds:
 }
 
 export async function generateStatement(session: Session, input: { ownerContactId: string; month: string; previewFingerprint?: string }) {
+  session = await guardEffectiveSession(session, "stmt.generate");
   assertPerm(session, "stmt.generate");
   if (!/^\d{4}-\d{2}$/.test(input.month)) throw new FlowError("errors.required");
   const bounds = monthBounds(input.month);
-  const statementId = await tx(session.userId, async (client) => {
+  const statementId = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "stmt.generate", async () => {
+    await assertCustomAuthorityOn(client, session, "stmt.generate");
     const previewEnabled = await billingPreviewsEnabled(client, session.orgId);
     if (previewEnabled && !input.previewFingerprint) throw new FlowError("errors.statementPreviewChanged");
     const properties = await many<{ property_id: string; currency: string; name: string }>(
@@ -2457,7 +2524,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
     }
     await linkStatementInvoices(client, session.orgId, propertyIds);
     return { id: statement.id, earned: rent + other > 0 };
-  }, { orgId: session.orgId, environment: session.environment }, input.previewFingerprint ? { isolation: "serializable" } : undefined).catch((error: unknown) => {
+  }), { orgId: session.orgId, environment: session.environment }, input.previewFingerprint ? { isolation: "serializable" } : undefined).catch((error: unknown) => {
     if (input.previewFingerprint && error instanceof Error && (error.cause as { code?: string } | undefined)?.code === "40001") {
       throw new FlowError("errors.statementPreviewChanged");
     }
@@ -2482,8 +2549,10 @@ export async function createTicket(
   session: Session,
   input: { leaseId: string; category: string; title: string; description: string; priority?: string },
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   if (!input.title.trim()) throw new FlowError("errors.required");
-  const result = await tx(session.userId, async (client) => {
+  const result = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
+    await assertCustomAuthorityOn(client, session, "tickets.update");
     const lease = await one<{ property_id: string; unit_id: string; target_room_id: string | null; org_id: string }>(
       client,
       `SELECT property_id::text, unit_id::text, target_room_id::text, org_id::text FROM leases WHERE id = $1`,
@@ -2568,7 +2637,7 @@ export async function createTicket(
     await client.query(`SELECT app.note_ticket_opened($1::uuid)`, [ticket.id]);
     await assertCurrentArchiveCaller(client,session);
     return { ticketId: ticket.id, tryoutOrgId: null };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
   if (result.tryoutOrgId) await markTryout(result.tryoutOrgId, "repair");
   return result.ticketId;
 }
@@ -2578,9 +2647,11 @@ export async function updateTicket(
   ticketId: string,
   patch: { status?: string; assigneeMemberId?: string; note?: string },
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertPerm(session, "tickets.update");
   if (patch.status) assertTicketStatus(patch.status);
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
+    await assertCustomAuthorityOn(client, session, "tickets.update");
     const initial = await maybe<{status:string;assigned_member_id:string|null}>(client,`SELECT status::text,assigned_member_id::text FROM maintenance_tickets WHERE id=$1 AND org_id=$2`,[ticketId,session.orgId]);
     if (!initial) throw new FlowError("errors.notFound");
     const requiresAdmission = (row:{status:string;assigned_member_id:string|null}) => Boolean((patch.status && patch.status!==row.status && !["resolved","closed","cancelled"].includes(patch.status)) || (patch.assigneeMemberId && patch.assigneeMemberId!==row.assigned_member_id));
@@ -2623,12 +2694,14 @@ export async function updateTicket(
       );
     }
     if (admitted) await assertCurrentArchiveCaller(client,session);
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function postMessage(session: Session, threadId: string, body: string) {
+  session = await guardEffectiveSession(session, "messages.send");
   if (!body.trim()) throw new FlowError("errors.required");
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "messages.send", async () => {
+    await assertCustomAuthorityOn(client, session, "messages.send");
     if (session.kind === "tenant") {
       const contact = await maybe<{ id: string; org_id: string }>(
         client,
@@ -2659,22 +2732,24 @@ export async function postMessage(session: Session, threadId: string, body: stri
       [session.orgId, threadId, session.userId, member.id, body.trim()],
     );
     await client.query(`UPDATE message_threads SET last_message_at = now() WHERE id = $1 AND org_id = $2`, [threadId, session.orgId]);
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function inviteTeammate(session: Session, input: { email: string; role: OrgRole }) {
-  assertStaff(session, ["admin"]);
+  session = await guardEffectiveSession(session, "team.manage");
+  assertStaff(session, ["admin"], "team.manage");
   assertTeamInvitesAllowed(session.orgId);
   const email = cleanEmail(input.email);
   if (!email) throw new FlowError("errors.required");
   const code = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "team.manage", async () => {
+    await assertCustomAuthorityOn(client, session, "team.manage");
     await client.query(
       `INSERT INTO invitations (org_id, kind, role, email, code_hash, expires_at, invited_by)
        VALUES ($1,'team_member',$2::org_role,$3,$4, now() + interval '7 days', $5)`,
       [session.orgId, input.role, email, sha256(code), session.userId],
     );
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
   const note = outboundNote(session.environment);
   if (note) await writeAudit(session.orgId, session.userId, "invite", { email, role: input.role, note });
   return { code };
@@ -2683,10 +2758,12 @@ export async function inviteTeammate(session: Session, input: { email: string; r
 export { addExpense } from "./expenses";
 
 export async function reversePayment(session: Session, paymentId: string, reason: string) {
+  session = await guardEffectiveSession(session, "pay.reverse");
   assertPerm(session, "pay.reverse");
   const note=reason.trim();
   if (!note) throw new FlowError("errors.required");
-  await tx(session.userId,async (client) => {
+  await tx(session.userId,async (client) => withEffectiveAuthority(client, session, "pay.reverse", async () => {
+    await assertCustomAuthorityOn(client, session, "pay.reverse");
     const initial=await maybe<{id:string;lease_id:string;status:string;ledger_transaction_id:string|null}>(client,
       `SELECT id::text,lease_id::text,status::text,ledger_transaction_id::text FROM payments WHERE id=$1 AND org_id=$2`,[paymentId,session.orgId]);
     if (!initial || initial.status !== "confirmed" || !initial.ledger_transaction_id) throw new FlowError("errors.paymentState");
@@ -2707,13 +2784,16 @@ export async function reversePayment(session: Session, paymentId: string, reason
     await client.query(`UPDATE payments SET status='reversed' WHERE id=$1 AND org_id=$2`,[payment.id,session.orgId]);
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_reversed") : null;
     await finalizePaymentCenter(client,center,source);
-  },{orgId:session.orgId,environment:session.environment});
+    await producePaymentResultEvent(client,session,payment.id);
+  }),{orgId:session.orgId,environment:session.environment});
 }
 
 export async function closeMonth(session: Session, month: string, note: string) {
+  session = await guardEffectiveSession(session, "month.close");
   assertPerm(session, "month.close");
   if (!/^\d{4}-\d{2}$/.test(month)) throw new FlowError("errors.required");
-  await tx(session.userId, async (client) => {
+  await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "month.close", async () => {
+    await assertCustomAuthorityOn(client, session, "month.close");
     if (!await currentOwnerTransferStaff(client, session)) throw new FlowError("errors.forbidden");
     await lockOwnerTransferPeriod(client, session.orgId);
     const existing = await maybe<{ id: string }>(
@@ -2730,5 +2810,5 @@ export async function closeMonth(session: Session, month: string, note: string) 
       [session.orgId, `${month}-01`, session.userId, note.trim() || null],
     );
     if (!await currentOwnerTransferStaff(client, session)) throw new FlowError("errors.forbidden");
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 }

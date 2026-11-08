@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { tx } from './db';
 import { consentCoversCurrent, type StoredConsent } from './consent';
 import { logServerError } from './errors';
@@ -5,13 +6,14 @@ import { tenantBillLines, type TenantBillLine } from './money';
 import { tenantPayeeVisible } from './pay-note';
 import { isUuid } from './repair-rules';
 import { historyFlagEnabled, safeMinor, summarizeBill, sumMinor, type BillState } from './tenant-payment-history-rules';
+import { monthlyDuePeriods, type MonthlyDuePeriod } from './tenant-monthly-due-rules';
 import type { Session } from './types';
 
 export type TenantPaymentReport = { id:string; status:'submitted'|'confirmed'|'rejected'|'reversed'; current:{amountMinor:number;currency:string;paidOn:string}; submittedAt:string; confirmedAt:string|null; rejectionReason:string|null; reversalReason:'unavailable'; original:{state:'unavailable'}|{state:'available';amountMinor:number;currency:string;paidOn:string} };
-export type TenantPaymentHistory = {state:'off'}|{state:'unavailable'}|{state:'ready';lease:{id:string;status:string;currency:string;canReport:boolean;legacyPayeeVisible:boolean};bill:{state:BillState;overdue:boolean;pending:boolean;balanceMinor:number;paidMinor:number;currency:string;lines:TenantBillLine[]};reports:TenantPaymentReport[];nextCursor:string|null};
+export type TenantPaymentHistory = {state:'off'}|{state:'unavailable'}|{state:'ready';lease:{id:string;status:string;currency:string;canReport:boolean;legacyPayeeVisible:boolean};bill:{state:BillState;overdue:boolean;pending:boolean;balanceMinor:number;paidMinor:number;currency:string;lines:TenantBillLine[]};monthlyDue:MonthlyDuePeriod[];reports:TenantPaymentReport[];nextCursor:string|null};
 type ReportRow={id:string;status:TenantPaymentReport['status'];amount:string;currency:string;paid_on:string;submitted_at:string;confirmed_at:string|null;rejected_reason:string|null;payer_contact_id:string|null};
 type InvoiceRow={id:string;status:string;total:string;paid:string;balance:string;due_on:string;currency:string};
-type LineRow={invoice_id:string;charge_type:string;amount:string;description:string;period_start:string|null};
+type LineRow={invoice_id:string;charge_type:string;amount:string;description:string;period_start:string|null;line_no:number;invoice_number:string};
 const unavailable={state:'unavailable' as const},off={state:'off' as const};
 const valid=(s:Session)=>s.kind==='tenant'&&s.role===null&&!s.needsSandbox&&consentCoversCurrent(s.consent??null)&&[s.userId,s.sessionId,s.orgId,s.liveOrgId].every(isUuid)&&(s.environment==='live'||s.environment==='sandbox');
 const ctx=`o.id=$1::uuid AND o.environment::text=$5 AND ((o.environment='live' AND o.id=$4::uuid AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=$4::uuid))
@@ -22,8 +24,9 @@ const personal=`p.org_id=$1::uuid AND p.lease_id=$3::uuid AND p.source='tenant_p
 function encodeCursor(id:string):string { return id; }
 /** Only selected-lease UUIDs and an own-report cursor or exact own report are accepted. */
 export async function tenantPaymentHistory(s:Session,leaseId:string,options:{view:'current'|'ended';cursor?:string;reportId?:string}):Promise<TenantPaymentHistory> {
+  s = await guardEffectiveSession(s, null);
  if(!valid(s)||!options||!['current','ended'].includes(options.view)||!isUuid(leaseId)||(options?.cursor!==undefined&&!isUuid(options.cursor))||(options?.reportId!==undefined&&!isUuid(options.reportId))||(options?.cursor&&options?.reportId))return unavailable;
- try{return await tx(s.userId,async c=>{
+ try{return await tx(s.userId,async c=>withEffectiveAuthority(c, s, null, async () => {
   const args=[s.orgId,s.userId,s.sessionId,s.liveOrgId,s.environment,leaseId];
   // OFF is decided before lease/report lookup so the existing page remains authoritative.
   const controls=await c.query<{flags:unknown;global:unknown}>(`SELECT o.feature_flags flags,(SELECT value FROM public.platform_settings WHERE key='tenant_payment_history') AS global FROM public.organizations o WHERE ${ctx}`,[s.orgId,s.userId,s.sessionId,s.liveOrgId,s.environment]);
@@ -39,12 +42,15 @@ export async function tenantPaymentHistory(s:Session,leaseId:string,options:{vie
   const parsed=invoices.rows.map(i=>({status:i.status,total:safeMinor(i.total),paid:safeMinor(i.paid),balance:safeMinor(i.balance),dueOn:i.due_on}));
   const bill=summarizeBill(lease.status,parsed,lease.timezone,new Date());
   const open=invoices.rows.filter(i=>i.status==='open'||i.status==='partially_paid');
-  let lines:TenantBillLine[]=[];
+  let lines:TenantBillLine[]=[],monthlyDue:MonthlyDuePeriod[]=[];
   if(open.length) {
-   const rows=await c.query<LineRow>(`SELECT il.invoice_id::text,il.charge_type::text,il.amount_minor::text amount,il.description,i.period_start::text FROM public.invoice_lines il JOIN public.invoices i ON i.org_id=il.org_id AND i.id=il.invoice_id WHERE il.org_id=$1::uuid AND il.invoice_id=ANY($2::uuid[]) ORDER BY il.invoice_id,il.line_no`,[s.orgId,open.map(i=>i.id)]);
+   const rows=await c.query<LineRow>(`SELECT il.invoice_id::text,il.charge_type::text,il.amount_minor::text amount,il.description,i.period_start::text,il.line_no,i.invoice_number FROM public.invoice_lines il JOIN public.invoices i ON i.org_id=il.org_id AND i.id=il.invoice_id WHERE il.org_id=$1::uuid AND il.invoice_id=ANY($2::uuid[]) ORDER BY il.invoice_id,il.line_no`,[s.orgId,open.map(i=>i.id)]);
    // Bound every intermediate accumulation in the reused bill allocator.
    sumMinor(rows.rows.map(x=>Math.abs(safeMinor(x.amount))));
    lines=open.flatMap(i=>tenantBillLines(rows.rows.filter(x=>x.invoice_id===i.id).map(x=>({charge_type:x.charge_type,amount_minor:safeMinor(x.amount),description:x.description,period_start:x.period_start})),safeMinor(i.paid)));
+   // FR-Q6-01: per billing month, rent + utilities + other charges − credits/代墊 offsets − paid, in BigInt from the raw strings; each component keeps its invoice-line source.
+   const byInvoice=new Map(open.map(i=>[i.id,i]));
+   monthlyDue=monthlyDuePeriods(rows.rows.map(x=>{const inv=byInvoice.get(x.invoice_id)!;return {invoiceId:x.invoice_id,invoiceNumber:x.invoice_number,periodStart:x.period_start,dueOn:inv.due_on,currency:inv.currency,invoicePaidMinor:inv.paid,lineNo:x.line_no,chargeType:x.charge_type,amountMinor:x.amount,description:x.description};}));
    for (const invoice of open) { const own=tenantBillLines(rows.rows.filter(x=>x.invoice_id===invoice.id).map(x=>({charge_type:x.charge_type,amount_minor:safeMinor(x.amount),description:x.description,period_start:x.period_start})),safeMinor(invoice.paid)); if(sumMinor(own.map(x=>x.amountMinor))!==safeMinor(invoice.balance))return unavailable; }
   }
   const select=`p.id::text,p.status::text,p.amount_minor::text amount,p.currency::text,p.paid_on::text,to_char(p.submitted_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') submitted_at,CASE WHEN p.confirmed_at IS NULL THEN NULL ELSE to_char(p.confirmed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END confirmed_at,p.rejected_reason,p.payer_contact_id::text`;
@@ -66,6 +72,6 @@ export async function tenantPaymentHistory(s:Session,leaseId:string,options:{vie
    if(snapshots.length===1&&a.actor===s.userId&&a.embedded_id===p.id&&a.embedded_org===s.orgId&&a.source==='tenant_portal'&&a.lease_id===leaseId&&a.submitted_by===s.userId&&a.payer===p.payer_contact_id&&a.amount&&a.currency===p.currency&&a.paid_on&&/^\d{4}-\d{2}-\d{2}$/.test(a.paid_on)) {try{const amountMinor=safeMinor(a.amount);if(amountMinor>0)evidence={state:'available',amountMinor,currency:a.currency,paidOn:a.paid_on};}catch{/* legacy evidence unavailable */}}
    return {id:p.id,status:p.status,current:{amountMinor:safeMinor(p.amount),currency:p.currency,paidOn:p.paid_on},submittedAt:p.submitted_at,confirmedAt:p.confirmed_at,rejectionReason:p.status==='rejected'?p.rejected_reason:null,reversalReason:'unavailable',original:evidence};
   });
-  return {state:'ready',lease:{id:leaseId,status:lease.status,currency:lease.currency,canReport:options.view==='current'&&['active','pending_signature'].includes(lease.status)&&bill.balanceMinor>0,legacyPayeeVisible:options.view==='current'&&tenantPayeeVisible(lease.status,lines.length===0,lines)},bill:{...bill,pending:pendingResult.rows[0]?.pending===true,currency:lease.currency,lines},reports:result,nextCursor:reports.rows.length>50?encodeCursor(selected[selected.length-1].id):null};
- },{orgId:s.orgId,environment:s.environment},{isolation:'repeatable read',readOnly:true});}catch(error){logServerError('tenant_payment_history',error);return unavailable;}
+  return {state:'ready',lease:{id:leaseId,status:lease.status,currency:lease.currency,canReport:options.view==='current'&&['active','pending_signature'].includes(lease.status)&&bill.balanceMinor>0,legacyPayeeVisible:options.view==='current'&&tenantPayeeVisible(lease.status,lines.length===0,lines)},bill:{...bill,pending:pendingResult.rows[0]?.pending===true,currency:lease.currency,lines},monthlyDue,reports:result,nextCursor:reports.rows.length>50?encodeCursor(selected[selected.length-1].id):null};
+ }),{orgId:s.orgId,environment:s.environment},{isolation:'repeatable read',readOnly:true});}catch(error){logServerError('tenant_payment_history',error);return unavailable;}
 }

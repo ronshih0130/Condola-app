@@ -43,7 +43,7 @@ export default async function TicketsPage({
     unitId: unitId || null,
     roomId: roomId || null,
   });
-  const canWrite = can(session.role, "tickets.update");
+  const canWrite = can(session, "tickets.update");
   const readonly = t("i_repair_readonly_role");
   return (
     <>

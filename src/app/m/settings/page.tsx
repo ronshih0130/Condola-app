@@ -1,3 +1,6 @@
+import { upgradeGate } from "@/server/upgrade-gate";
+import { FREE_UNITS } from "@/server/billing";
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -14,9 +17,10 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const query = await searchParams;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "settings.edit");
+  const gate = await upgradeGate(session, FREE_UNITS);
   const t = makeT(session.locale);
-  const mail = can(session.role, "settings.edit") ? await orgMailSettings(session.orgId) : null;
+  const mail = can(session, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   return (
     <>
       <PageHeader title={t("i_nav_settings")} />
@@ -50,12 +54,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </form>
       ) : null}
       <div className="card pad" style={{ maxWidth: 720 }}>
-        {session.environment === "sandbox" ? (
+        {!gate.redirectTo && session.environment === "sandbox" ? (
           <div className="alert warn" data-testid="sandbox-plan" style={{ marginBottom: 12 }}>
             {t("i_sandbox_plan")}
           </div>
         ) : null}
-        {session.environment === "sandbox" ? null : (
+        {gate.redirectTo || session.environment === "sandbox" ? null : (
           <p data-testid="settings-plan">{t("i_settings_plan")}</p>
         )}
         {isPlatformAdmin(session.email) ? (
