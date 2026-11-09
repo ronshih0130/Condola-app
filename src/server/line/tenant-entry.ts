@@ -10,7 +10,7 @@ export async function lineInviteEntry(token: string): Promise<{ orgId: string; p
  return withClient(async c => {
   const row = (await c.query<{ org_id: string; kind: "tenant" | "owner" }>(`SELECT org_id,kind FROM invitations
    WHERE code_hash=$1 AND kind IN ('tenant','owner') AND status='pending' AND expires_at>now()
-   AND app.b033_portal_enabled(org_id,kind)`, [hashInviteToken(token)])).rows[0];
+   AND app.b033_portal_enabled(org_id,kind::text)`, [hashInviteToken(token)])).rows[0];
   return row ? { orgId: row.org_id, persona: row.kind } : null;
  });
 }

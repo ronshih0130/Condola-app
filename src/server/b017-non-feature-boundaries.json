@@ -185,7 +185,7 @@
   },
   "src/app/accept/[token]/page.tsx#AcceptPage": {
     "reason": "Public invitation bearer; no staff authority is granted by describing or accepting a token",
-    "sha256": "5cc211f51303387c7d1567cb8d6479fb95fb092385f24092ae23a4f3e66d681d"
+    "sha256": "362ef5682a4bd0e062162f18e5999df82bc006e8639349be72fbb03e0980518f"
   },
   "src/server/consent-actions.ts#actionAcceptReconsent": {
     "reason": "Account identity and consent bootstrap; independent from organization custom grants",
