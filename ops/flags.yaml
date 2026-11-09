@@ -169,7 +169,7 @@ flags:
     ring: internal
     global_kill: "platform_settings.repair_approvals enabled must be boolean true and allowed_org_ids must include this organization"
     org_override: "organizations.feature_flags.repair_approvals must be boolean true; current exact owner relationship and selected environment apply"
-    activation: "local personal default settings only; existing request metadata recovery remains current-owner even OFF/archive; no estimate approval, dispatch, staging activation or provider delivery"
+    activation: "OFF by default; hosted activation permitted ONLY for Ron's 4 allowlisted internal orgs (290b776d, c55c4cd7, abe00ada, f833d997); requires per-flag QA Class B verdict + CEO GO + T+0/T+15 checks; in-app notification events only (delivery capture-only), no money movement, no provider delivery (email/LINE/SMS/payment); staff estimate/owner decision/emergency gate on this flag (LIVE orgs too), appointment scheduling/dispatch gating also need vendor_dispatch_enabled (sandbox/beta only); existing request metadata recovery remains current-owner even OFF/archive; no other org, design partner or GA; rollback = platform_settings/org override to OFF; per CEO 2026-11-09 PST"
 
   INVITE_RESEND_RESULTS:
     owner: Ron
