@@ -421,7 +421,7 @@ flags:
     ring: internal
     global_kill: "platform_settings.vendor_documents requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
     org_override: "organizations.feature_flags.vendor_documents must be boolean true"
-    activation: "local synthetic validation only; no hosted activation"
+    activation: "OFF by default; hosted activation permitted ONLY for Ron's 4 allowlisted internal orgs (290b776d, c55c4cd7, abe00ada, f833d997); requires per-flag QA Class B verdict + CEO GO + T+0/T+15 checks; no other org, design partner or GA; rollback = platform_settings/org override to OFF; per CEO GO 2026-11-09 PST"
 
   usage_events:
     owner: Ron
