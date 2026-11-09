@@ -22,6 +22,7 @@ function required(value, name) {
 export function buildSeedSql(env, opts) {
   const orgs = (opts && opts.orgs) || [];
   for (const org of orgs) if (!UUID.test(org)) throw new Error(`invalid org uuid: ${org}`);
+  if (opts && opts.enable && orgs.length === 0) throw new Error("--enable requires --orgs <uuid,...>");
   const enable = Boolean(opts && opts.enable);
 
   const loginChannelId = required(env.LINE_LOGIN_CHANNEL_ID, "LINE_LOGIN_CHANNEL_ID");

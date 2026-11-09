@@ -66,3 +66,7 @@ test("emits only public identifier env values, never secret values", () => {
   assert.ok(sql.includes("1234567890"), "login channel id present");
   assert.ok(sql.includes("9876543210"), "messaging channel id present");
 });
+
+test("buildSeedSql throws when --enable is set without any orgs", () => {
+  assert.throws(() => buildSeedSql(env, { orgs: [], enable: true }), /--enable requires --orgs/);
+});

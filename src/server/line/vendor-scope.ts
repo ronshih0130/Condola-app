@@ -56,5 +56,6 @@ export async function vendorViewOn(c: Client, job: VendorScope) {
   JOIN properties p ON p.id=t.property_id AND p.org_id=t.org_id
   LEFT JOIN units u ON u.id=t.unit_id AND u.org_id=t.org_id WHERE j.id=$1 AND j.org_id=$2`,
   [job.job_id, job.org_id])).rows[0];
+ if (!row) rejectLine(404, "not_found");
  return { ...vendorLinkSafeView(row), currency: row.currency, reported: row.reported, capability: job.capability };
 }

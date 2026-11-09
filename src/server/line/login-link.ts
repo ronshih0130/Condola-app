@@ -24,7 +24,7 @@ export type LineFlow = {
  state_hash: string; nonce_hash: string; pkce_hash: string | null; oauth_started_at: Date | null;
  expires_at: Date; consumed_at: Date | null; verified_hash: string | null; attempts: number; return_path: string;
 };
-type Channel = { id: string; login_channel_id: string; login_channel_secret_ref: string; line_provider_id: string; liff_id: string; tenant_config_verified_at: Date | null };
+type Channel = { id: string; login_channel_id: string; login_channel_secret_ref: string; line_provider_id: string; liff_id: string | null; tenant_config_verified_at: Date | null };
 type Invite = { id: string; org_id: string; contact_id: string; kind: LinePersona; code_hash: string;
  status: string; expires_at: Date; email: string | null; lease_id: string | null };
 type Account = { id: string; email: string; email_confirmed_at: Date | null; has_password: boolean; matches: boolean };

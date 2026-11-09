@@ -82,8 +82,12 @@
       }
       if (config.flow) { startOAuth(config.flow); return; }
       if (config.purpose === "login") {
-        const flow = (await post("/api/line/flows", { purpose: "login", orgId: config.orgId, persona: config.persona })).flow;
-        startOAuth(flow);
+        try {
+          const flow = (await post("/api/line/flows", { purpose: "login", orgId: config.orgId, persona: config.persona })).flow;
+          startOAuth(flow);
+        } catch {
+          showError();
+        }
         return;
       }
       showError();

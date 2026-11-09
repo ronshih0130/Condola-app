@@ -9,7 +9,7 @@ import { channelOn, flowOn, lineTransaction, randomProof, sessionOn } from "./lo
 import { browserProof, cookie, LINE_BROWSER_COOKIE, LINE_CSRF_COOKIE, lineCookie, lineResponse, privateHeaders } from "./login-routes";
 
 function escape(value: string) { return value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!); }
-type Bootstrap = { liffId: string; orgId: string; csrf: string; flow: string | null; persona: LinePersona;
+type Bootstrap = { liffId: string | null; orgId: string; csrf: string; flow: string | null; persona: LinePersona;
  purpose?: string; company?: string; contactId?: string; verified?: boolean };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const toLogin = () => new NextResponse(null, { status: 303, headers: { ...privateHeaders, Location: "/login" } });
