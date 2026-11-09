@@ -6,7 +6,9 @@
   if (!node) return;
   let config;
   try { config = JSON.parse(node.textContent); } catch { return; }
-  if (config.persona === "tenant") await tenant(config);
+  // LINE Login v2.1 WEB OAuth fallback used whenever the host did not inject a LIFF SDK.
+  function startOAuth(flow) { location.assign("/api/line/login/start?flow=" + encodeURIComponent(flow)); }
+  if (config.persona === "tenant" || (config.persona === "owner" && config.purpose === "invite")) await tenant(config);
   else if (config.persona === "vendor") await vendor(config);
   else if (config.persona === "owner") await owner(config);
 
@@ -56,7 +58,37 @@
         });
       }
     }
-    if (!liff) { showError(); return; }
+    if (!liff) {
+      // No LIFF SDK: drive the LINE Login v2.1 WEB OAuth redirect instead.
+      if ((config.purpose === "invite" || config.purpose === "bind") && config.verified) {
+        // The OAuth callback already verified the LINE identity; bind without an id_token.
+        form.onsubmit = event => {
+          event.preventDefault();
+          return once(async () => {
+            if (!form.elements.consent.checked) return;
+            const result = await post(config.purpose === "invite" ? "/api/line/invites/accept" : "/api/line/bind", {
+              flow: config.flow, password: form.elements.password.value,
+              secondFactor: form.elements.secondFactor.value, consentTextKey: "line.binding.v1",
+            });
+            form.elements.password.value = "";
+            form.elements.secondFactor.value = "";
+            await confirmSession();
+            next(result.next || (config.persona === "tenant" ? "/t" : config.persona === "owner" ? "/o/statements" : "/vendor-account"));
+          });
+        };
+        const submit = document.getElementById("line-submit");
+        if (submit) submit.disabled = false;
+        return;
+      }
+      if (config.flow) { startOAuth(config.flow); return; }
+      if (config.purpose === "login") {
+        const flow = (await post("/api/line/flows", { purpose: "login", orgId: config.orgId, persona: config.persona })).flow;
+        startOAuth(flow);
+        return;
+      }
+      showError();
+      return;
+    }
     try {
       await liff.init({ liffId: config.liffId });
       // SDK redirect processing must finish first. Strip every provider/query fragment afterward.
@@ -107,7 +139,18 @@
     // Exactly the landings /api/line/session can return for a vendor flow: job claim, return path
     // (/vendor-account or /v/liff), or the vendor consent entry wrapping either return path.
     const landings = ["/v/liff/job", "/vendor-account", "/v/liff", "/consent?next=%2Fvendor-account", "/consent?next=%2Fv%2Fliff"];
-    if (!window.liff) return;
+    if (!window.liff) {
+      // No LIFF SDK: start the WEB OAuth redirect from an existing or freshly minted login flow.
+      try {
+        if (config.flow) { if (!config.verified) startOAuth(config.flow); return; }
+        if (config.orgId) {
+          const response = await fetch("/api/line/flows", { method: "POST", credentials: "same-origin", cache: "no-store",
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purpose: "login", orgId: config.orgId, persona: config.persona, csrf: config.csrf }) });
+          if (response.ok) { const flow = (await response.json()).flow; if (flow) startOAuth(flow); }
+        }
+      } catch { /* Existing Email entry remains available; no tokens enter URLs/storage/logs. */ }
+      return;
+    }
     try {
       await window.liff.init({ liffId: config.liffId });
       // SDK redirect processing must finish before the URL is normalized to the opaque flow/org hint.
@@ -150,7 +193,16 @@
         } finally { button.disabled = false; }
       });
       // An existing account can select its portal without another SDK login.
-      if (buttons.length || !window.liff) return;
+      if (buttons.length) return;
+      if (!window.liff) {
+        // No LIFF SDK: owner login via the WEB OAuth redirect.
+        if (config.flow) { if (!config.verified) startOAuth(config.flow); return; }
+        if (config.orgId) {
+          const flow = await post("/api/line/flows", { purpose: "login", orgId: config.orgId, persona: config.persona, csrf: config.csrf });
+          if (flow && flow.flow) startOAuth(flow.flow);
+        }
+        return;
+      }
       await window.liff.init({ liffId: config.liffId });
       const entry = location.pathname + (config.flow ? "?flow=" + encodeURIComponent(config.flow) : "");
       history.replaceState(null, "", entry);

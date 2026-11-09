@@ -6,6 +6,7 @@ import { PORTAL_ROLE_COOKIE } from "../portal-role";
 import { selectLinePortal } from "./portal";
 import { readLineConfig } from "./config";
 import { resolveLocalLineSecret } from "./secrets";
+import { createLineCodeExchange } from "./oauth-exchange";
 import type { SecretResolver } from "./webhook";
 import { LineError, rejectLine, liffPath, type LinePersona } from "./login-token";
 import { acceptLineLink, callbackLineLogin, createLineFlow, exchangeLineSession, flowOn, lineTransaction,
@@ -148,4 +149,4 @@ export function createLineHandlers(deps: { resolveSecret?: SecretResolver; excha
   });
  }
 }
-export const lineHandlers = createLineHandlers();
+export const lineHandlers = createLineHandlers({ exchangeCode: createLineCodeExchange() });

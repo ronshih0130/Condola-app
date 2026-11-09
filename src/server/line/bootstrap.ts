@@ -10,7 +10,7 @@ import { browserProof, cookie, LINE_BROWSER_COOKIE, LINE_CSRF_COOKIE, lineCookie
 
 function escape(value: string) { return value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!); }
 type Bootstrap = { liffId: string; orgId: string; csrf: string; flow: string | null; persona: LinePersona;
- purpose?: string; company?: string; contactId?: string };
+ purpose?: string; company?: string; contactId?: string; verified?: boolean };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const toLogin = () => new NextResponse(null, { status: 303, headers: { ...privateHeaders, Location: "/login" } });
 /**
@@ -41,8 +41,8 @@ export function createLiffBootstrap(persona: LinePersona) {
       const f = await flowOn(c, flow, proof!);
       if (f.persona !== persona) throw new LineError(404, "not_found");
       const channel = await channelOn(c, f.org_id, persona);
-      const base = { liffId: channel.liff_id, orgId: f.org_id, csrf: proof!.csrf, flow, persona };
-      if (persona !== "tenant") return base;
+      const base = { liffId: channel.liff_id, orgId: f.org_id, csrf: proof!.csrf, flow, persona, verified: Boolean(f.verified_hash) };
+      if (persona === "vendor") return base;
       const company = (await c.query("SELECT name FROM organizations WHERE id=$1", [f.org_id])).rows[0].name;
       return { ...base, purpose: f.kind, company };
      });
@@ -84,7 +84,7 @@ export function createLiffBootstrap(persona: LinePersona) {
   const status = config || vendorGeneric ? 200 : 404;
   const data = config ? `<script type="application/json" id="line-bootstrap">${JSON.stringify(config).replace(/</g, "\\u003c")}</script><script src="/line-bootstrap.js" defer></script>` : "";
   let html: string, csp: string;
-  if (persona === "tenant") {
+  if (persona === "tenant" || (persona === "owner" && config?.purpose === "invite")) {
    const copy = lineTenantCopy(locale);
    const confirm = config && ["invite", "bind", "manage"].includes(config.purpose ?? "");
    const form = confirm ? `<p>${escape(config!.company ?? "")}</p><form id="line-confirm" method="post" action="/api/line/bind"><label>${escape(t("i_password"))}<input name="password" type="password" autocomplete="current-password" required></label><label>${escape(t("i_mfa_code"))}<input name="secondFactor" inputmode="numeric" autocomplete="one-time-code"></label><label><input type="checkbox" name="consent" required>${escape(copy.consent)}</label><button id="line-submit" type="submit" disabled>${escape(copy.bind)}</button></form>` : "";
