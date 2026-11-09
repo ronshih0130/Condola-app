@@ -63,25 +63,22 @@ The comparator blob `7b774195` cited by earlier design notes is not in this repo
 | `.github/workflows/t0-dump.yml` | Absent at `9ebe581` and absent on this branch. Triggers are `workflow_dispatch` and push to `ops/t0-dump-run` only, and that job uses `secrets.PROD_DB_URL_SESSION`. | Not run by this push. | Do not push that branch. |
 | This new workflow | `workflow_dispatch` only. It is not registered until it exists on `main`. | No deploy steps, no `environment`, no `secrets` expressions, `deployments: none`, `id-token: none`. | Does not run for this PR. A future dispatch uses one public hosted runner and the public Postgres image. |
 
-`actions: write` is set so `setup-node` cache and `upload-artifact` can run. `contents` stays `read`. Unspecified token scopes are none. The hosted runner still has outbound network; a read-only contents token does not turn that off and does not, by itself, prove secrets cannot be referenced by a later edit. The script rejects inherited secret names. `persist-credentials` is false. `GITHUB_TOKEN` is still injected by GitHub with the scopes above and is not printed.
+The rehearsal token is `contents: read` and `actions: none`. `setup-node` dependency caching and `actions/upload-artifact` use the Actions API; once a workflow sets any permission, an omitted `actions` scope is none, and saving a cache or uploading an artifact needs `actions: write`. That scope is not limited to one summary file, so those two features are not used. The sanitized JSON is appended to the job step summary, which is a runner file and does not write through the token. The hosted runner still has outbound network. A read-only contents token does not turn that off and does not, by itself, prove a later edit cannot reference secrets. The script rejects inherited secret names. `persist-credentials` is false. `GITHUB_TOKEN` is still injected by GitHub with the scopes above and is not printed.
 
 GitHub environments on this repo: none returned. Deployments API: empty. No self-hosted runner, paid action, package upgrade, flag edit, or live database change is included.
 
-## Default-branch guard (not applied)
+## Default-branch guard
 
-Merging this file is a push to `main`. That push matches both existing CI workflows. If Depot is connected and `STAGING_AUTODEPLOY` is `true`, `.depot/workflows/ci.yml` can deploy staging. Do not apply a silent disable in this PR.
+Merging this work to `main` is a push to `main`. `.depot/workflows/ci.yml` can deploy staging only when Depot runs that file, the push ref is `main`, `STAGING_AUTODEPLOY` is exactly `true`, and the check job sets `staging_deploy=yes`. The variable is still UNKNOWN, not false. This change does not set it and does not call Depot.
 
-Proposal only, for a later review, adding one unset arm so a rehearsal-config merge cannot deploy unless a human sets both values. An absent arm skips deploy even when `STAGING_AUTODEPLOY` is `true`, so applying it changes live deploy behavior:
+`scripts/staging-deploy-guard.sh` prints `skip` only when every changed path is one of the rehearsal or guard files. Any other path, and an empty path list, prints `deploy`. The Depot check step uses that result only on a main push. If the previous SHA is missing or `git fetch` fails, the step leaves the decision at `deploy`, so an unreadable diff does not turn staging deploys off. The step always exits 0 and does not change the existing test, build, or `cf-deploy-staging.sh` steps.
 
-```yaml
-# NOT APPLIED. Do not edit .depot/workflows/ci.yml as part of rehearsal registration
-# until this behavior change is explicitly accepted.
-deploy-staging:
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_AUTODEPLOY == 'true' && vars.CONDOLA_STAGING_DEPLOY_ARM == 'true'
-```
-
-Leave the variable unset until a human intends a staging deploy. This proposal does not prove Depot is disconnected and does not treat `STAGING_AUTODEPLOY` as false.
+A main push that also changes application code still reaches `deploy-staging` under the original variable check. A push that changes only the listed rehearsal and guard files does not. Depot itself remains UNVERIFIED; this guard is the in-repo condition, not a connection test.
 
 ## Evidence
 
-Static checks cover the workflow shape, pins, and `bash -n`. One local synthetic run in this disposable environment, with Node v20.20.2 / npm 10.8.2 and the pinned image, matched the fingerprint: 224 tables, 323 rows, 8 sequences, 287 policies, server `17.11 (Debian 17.11-1.pgdg13+2)`. The apply step printed `SET LOCAL can only be used in transaction blocks` twice. That is the existing `psql -f` shape used by CI, and it did not fail the run. That local run is not GitHub Actions execution of this workflow, not the PG16 baseline, and not product QA.
+Static checks cover the workflow shape, pins, `bash -n`, and `scripts/staging-deploy-guard.test.sh`. One local synthetic run in this disposable environment, with Node v20.20.2 / npm 10.8.2 and the pinned image, matched the fingerprint: 224 tables, 323 rows, 8 sequences, 287 policies, server `17.11 (Debian 17.11-1.pgdg13+2)`. The apply step printed `SET LOCAL can only be used in transaction blocks` twice. That is the existing `psql -f` shape used by CI, and it did not fail the run. That local run is not GitHub Actions execution of this workflow, not the PG16 RLS/worker/browser baseline, and not management/tenant/owner/vendor acceptance.
+
+No tracked advisory record decides dependency risk for production. Dependabot alerts for this repository are disabled (API HTTP 403, that message). Code-scanning alerts are not readable with this token (HTTP 403). This change does not accept that risk and does not upgrade packages.
+
+`scripts/claim.sh status` and `acquire` both stop before any lock write in this checkout: `origin` is not `https://origin.cursor.com/ron-shih/condola-app`. The tool's compare-and-swap is `git push --force-with-lease` onto `ops-lock` and is not run by hand. `ops-lock` was observed RELEASED at generation 135. No claim was created.

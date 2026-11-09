@@ -39,6 +39,7 @@ if on["workflow_dispatch"]:
     raise SystemExit("workflow_dispatch inputs are not allowed")
 perms = doc.get("permissions") or {}
 expected_false = {
+    "actions": "none",
     "checks": "none",
     "deployments": "none",
     "discussions": "none",
@@ -51,8 +52,10 @@ expected_false = {
     "security-events": "none",
     "statuses": "none",
 }
-if perms.get("contents") != "read" or perms.get("actions") != "write":
+if perms.get("contents") != "read" or perms.get("actions") != "none":
     raise SystemExit(f"unexpected token scopes: {perms}")
+if "actions/upload-artifact" in text or "cache:" in text or "actions: write" in text:
+    raise SystemExit("rehearsal workflow must not request actions write")
 for key, value in expected_false.items():
     if perms.get(key) != value:
         raise SystemExit(f"missing {key}: {value}")
@@ -82,12 +85,8 @@ if "npm ci" not in "\n".join(step.get("run", "") for step in job["steps"] if "ru
     raise SystemExit("npm ci missing")
 if "npm install" in text:
     raise SystemExit("npm install is not allowed")
-upload = next(step for step in job["steps"] if str(step.get("uses", "")).startswith("actions/upload-artifact@"))
-with_ = upload["with"]
-if with_.get("path") != "product/pg17-rehearsal-out/summary.json":
-    raise SystemExit("artifact path is not the summary allowlist")
-if with_.get("retention-days") != 1 or with_.get("if-no-files-found") != "error":
-    raise SystemExit("artifact retention is not short and strict")
+if "GITHUB_STEP_SUMMARY" not in text or "pg17-rehearsal-out/summary.json" not in text:
+    raise SystemExit("sanitized summary must be published in the job summary")
 script = pathlib.Path(sql_path).with_name("pg17-synthetic-rehearsal.sh").read_text()
 if tree not in script or sha not in script or image not in script:
     raise SystemExit("script pins drifted from the workflow")
@@ -97,6 +96,7 @@ for required in ("last_value", "is_called", "relrowsecurity", "relforcerowsecuri
 print("static-ok")
 PY
   bash -n "$ROOT/scripts/pg17-synthetic-rehearsal.sh"
+  bash "$ROOT/scripts/staging-deploy-guard.test.sh"
 }
 
 if [[ "${1:-}" == "--static" ]]; then
