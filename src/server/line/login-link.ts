@@ -24,7 +24,7 @@ export type LineFlow = {
  state_hash: string; nonce_hash: string; pkce_hash: string | null; oauth_started_at: Date | null;
  expires_at: Date; consumed_at: Date | null; verified_hash: string | null; attempts: number; return_path: string;
 };
-type Channel = { id: string; login_channel_id: string; login_channel_secret_ref: string; line_provider_id: string; liff_id: string; tenant_config_verified_at: Date | null };
+type Channel = { id: string; login_channel_id: string; login_channel_secret_ref: string; line_provider_id: string; liff_id: string | null; tenant_config_verified_at: Date | null };
 type Invite = { id: string; org_id: string; contact_id: string; kind: LinePersona; code_hash: string;
  status: string; expires_at: Date; email: string | null; lease_id: string | null };
 type Account = { id: string; email: string; email_confirmed_at: Date | null; has_password: boolean; matches: boolean };
@@ -57,7 +57,7 @@ export async function channelOn(c: Client, orgId: string, persona: LinePersona):
   CASE $2 WHEN 'tenant' THEN ch.liff_id_tenant WHEN 'owner' THEN ch.liff_id_owner WHEN 'vendor' THEN ch.liff_id_vendor END AS liff_id
   FROM line_channels ch WHERE app.b033_portal_enabled($1,$2) AND ch.id=app.b033_selected_channel($1) FOR SHARE OF ch`, [orgId, persona])).rows[0];
  if (!row) rejectLine(404, "not_found");
- if (!row.tenant_config_verified_at || !row.liff_id || !row.login_channel_id || !row.login_channel_secret_ref) rejectLine(503, "line_unavailable");
+ if (!row.tenant_config_verified_at || !row.login_channel_id || !row.login_channel_secret_ref) rejectLine(503, "line_unavailable");
  return row;
 }
 export async function sessionOn(c: Client, token?: string, recent = false) {
@@ -332,7 +332,7 @@ export async function startLineLogin(handle: string, proof: BrowserProof, origin
   return { url: url.toString(), verifier };
  });
 }
-/** Interface only: the shipped route has no live code exchange capability. */
+/** Token-endpoint exchange contract; the live implementation is createLineCodeExchange in oauth-exchange.ts. */
 export type LineCodeExchange = (input: { code: string; verifier: string; redirectUri: string; channelId: string; secretRef: string }) => Promise<string>;
 export async function callbackLineLogin(input: { flow: string; state: string; code?: string; error?: string; verifier: string; origin: string },
  proof: BrowserProof, resolve: SecretResolver, exchange: LineCodeExchange, meta: RequestMeta, auth: AuthInput) {

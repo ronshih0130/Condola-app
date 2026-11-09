@@ -62,9 +62,9 @@ import {
 } from "./vendor-repair-rules";
 
 import {
-  VENDOR_LINK_ENABLED,
   renderableTypeFields,
   vendorLinkCapability,
+  vendorLinkGlobalOn,
   vendorLinkOn,
   vendorLinkSafeView,
   type VendorLinkCapability,
@@ -74,11 +74,24 @@ import { planVendorAttribution } from "./vendor-attribution";
 import { requireOrgScope } from "./org-guard";
 import { recordVendorDispatchEvent } from "./line/dispatch-events";
 
-let vendorLinkKillSwitch: boolean = VENDOR_LINK_ENABLED;
+let vendorLinkTestOverride: boolean | null = null;
 
-/** Changes only the in-process kill switch; organization flags remain authoritative. */
-export function __setVendorLinkKillSwitchForTests(on: boolean) {
-  vendorLinkKillSwitch = on;
+/**
+ * Test override of the platform gate (name kept: 15 test files use it).
+ * true = treat platform_settings as satisfied (org flag still required);
+ * false = force OFF; null = read platform_settings (production behaviour).
+ */
+export function __setVendorLinkKillSwitchForTests(on: boolean | null) {
+  vendorLinkTestOverride = on;
+}
+
+/** Resolves the per-org two-gate decision honouring the test override. */
+function vendorLinkDecision(global: unknown, flags: unknown, orgId: string): boolean {
+  if (vendorLinkTestOverride === false) return false;
+  if (vendorLinkTestOverride === true) {
+    return vendorLinkOn({ enabled: true, allowed_org_ids: [orgId] }, flags, orgId);
+  }
+  return vendorLinkOn(global, flags, orgId);
 }
 
 type OpenJob = {
@@ -153,9 +166,10 @@ export function vendorJobUrl(origin: string, token: string) {
 
 export async function orgVendorDispatchPolicy(orgId: string) {
   const row = await svc(null, (client) =>
-    maybe<{ environment: string; plan_tier: string; feature_flags: unknown }>(
+    maybe<{ environment: string; plan_tier: string; feature_flags: unknown; vendor_link: unknown }>(
       client,
-      `SELECT environment::text, plan_tier::text, feature_flags
+      `SELECT environment::text, plan_tier::text, feature_flags,
+              (SELECT value FROM platform_settings WHERE key = 'vendor_link') AS vendor_link
          FROM organizations WHERE id = $1`,
       [orgId],
     ),
@@ -164,7 +178,7 @@ export async function orgVendorDispatchPolicy(orgId: string) {
     dispatch: Boolean(row && vendorDispatchEnabled({
       environment: row.environment, planTier: row.plan_tier, featureFlags: row.feature_flags,
     })),
-    enhanced: vendorLinkOn(vendorLinkKillSwitch, row?.feature_flags),
+    enhanced: vendorLinkDecision(row?.vendor_link ?? null, row?.feature_flags, orgId),
   };
 }
 
@@ -192,12 +206,14 @@ export async function repairDispatchAllowed(client: Client, orgId: string, versi
 }
 
 async function vendorLinkEnabledOn(client: Client, orgId: string) {
-  const row = await maybe<{ feature_flags: unknown }>(
+  const row = await maybe<{ feature_flags: unknown; vendor_link: unknown }>(
     client,
-    `SELECT feature_flags FROM organizations WHERE id = $1`,
+    `SELECT feature_flags,
+            (SELECT value FROM platform_settings WHERE key = 'vendor_link') AS vendor_link
+       FROM organizations WHERE id = $1`,
     [orgId],
   );
-  return vendorLinkOn(vendorLinkKillSwitch, row?.feature_flags);
+  return vendorLinkDecision(row?.vendor_link ?? null, row?.feature_flags, orgId);
 }
 
 export async function vendorLinkEnabledForOrg(orgId: string) {
@@ -275,9 +291,16 @@ export async function assertEnhancedVendorMutation(
 }
 
 /** Same-transaction ticket lock fences closure through notification marking. */
-/** Read-only view of the in-process kill switch (notification gateway choice). */
-export function vendorLinkKillSwitchOn() {
-  return vendorLinkKillSwitch === true;
+/** Platform gate for the notification gateway (override-aware; one tiny query). */
+export async function vendorLinkGlobalEnabledOn(client: Client): Promise<boolean> {
+  if (vendorLinkTestOverride === true) return true;
+  if (vendorLinkTestOverride === false) return false;
+  const row = await maybe<{ vendor_link: unknown }>(
+    client,
+    `SELECT value AS vendor_link FROM platform_settings WHERE key = 'vendor_link'`,
+    [],
+  );
+  return vendorLinkGlobalOn(row?.vendor_link ?? null);
 }
 
 async function assertDispatchFlag(client: Client, orgId: string) {

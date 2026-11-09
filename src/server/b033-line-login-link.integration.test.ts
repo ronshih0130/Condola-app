@@ -12,6 +12,7 @@ import { createSession } from "./auth";
 import { totpCode } from "./totp";
 import { lineHash, type LinePersona } from "./line/login-token";
 import { createLineHandlers, LINE_BROWSER_COOKIE, LINE_CSRF_COOKIE, LINE_FLOW_COOKIE, LINE_PKCE_COOKIE } from "./line/login-routes";
+import { createLineCodeExchange } from "./line/oauth-exchange";
 import { randomProof } from "./line/login-link";
 import { dispatchLinePush, type LinePush } from "./line/quota";
 import { createCapturedLineTransport } from "./line/transport";
@@ -677,4 +678,63 @@ test("step-up admission survives incorrect passwords and rejects CSRF before cre
  for (let i = 0; i < 10; i++) await parsed(await reauth(req("/api/line/reauth", { ...input, password: "wrong" }, { session: token })), 401);
  await parsed(await reauth(req("/api/line/reauth", input, { session: token })), 429);
  assert.equal((await db.query("SELECT count(*)::int n FROM app.b033_line_stepups")).rows[0].n, 0);
+});
+
+for (const persona of ["tenant", "owner"] as const) test(`web OAuth invite: callback verifies via mocked LINE token endpoint, bootstrap shows verified, accept without idToken links and signs in (${persona})`, async () => {
+ const i = await invite({ persona });
+ await db.query("DELETE FROM line_account_links WHERE contact_id=$1", [i.contact]);
+ const f = await flow({ purpose: "invite", inviteToken: i.token });
+ const started = await start(req(`/api/line/login/start?flow=${f.flow}`));
+ const url = new URL(started.headers.get("location")!);
+ const verifier = new RegExp(`${LINE_PKCE_COOKIE}=([^;,]+)`).exec(started.headers.get("set-cookie")!)![1];
+ const loginId = (await db.query("SELECT login_channel_id FROM line_channels WHERE id=$1", [channel])).rows[0].login_channel_id;
+ let calls = 0;
+ const mockFetch = async (input: string | URL | Request, init?: RequestInit) => {
+  calls++;
+  assert.equal(input, "https://api.line.me/oauth2/v2.1/token"); assert.equal(init?.method, "POST");
+  const form = new URLSearchParams(String(init?.body));
+  assert.equal(form.get("grant_type"), "authorization_code"); assert.equal(form.get("code"), "local-code");
+  assert.equal(form.get("redirect_uri"), `${origin}/api/line/login/callback`); assert.equal(form.get("client_id"), loginId);
+  assert.equal(form.get("client_secret"), secret); assert.equal(form.get("code_verifier"), verifier);
+  return new Response(JSON.stringify({ id_token: jwt({ nonce: url.searchParams.get("nonce") }) }), { status: 200, headers: { "content-type": "application/json" } });
+ };
+ const resolveSecret = async (ref: string) => { assert.equal(ref, "local-ref"); return { secret, identityPepper: pepper, destination: "local-bot" }; };
+ const handlers = createLineHandlers({ exchangeCode: createLineCodeExchange({ fetch: mockFetch, resolveSecret }), resolveSecret });
+ const request = () => req(`/api/line/login/callback?state=${url.searchParams.get("state")}&code=local-code`, undefined,
+  { cookies: `${LINE_FLOW_COOKIE}=${f.flow}; ${LINE_PKCE_COOKIE}=${verifier}` });
+ const seg = persona === "tenant" ? "t" : "o";
+ const result = await handlers.callback(request());
+ assert.equal(result.status, 303); assert.equal(result.headers.get("location"), `${origin}/${seg}/liff?flow=${f.flow}`);
+ assert.ok(!sessionCookie(result)); assert.equal(calls, 1);
+ const boot = await entries[persona](req(`/${seg}/liff?flow=${f.flow}`));
+ assert.equal(boot.status, 200, await boot.clone().text()); const html = await boot.text();
+ const config = JSON.parse(/id="line-bootstrap">(.*?)<\/script>/.exec(html)![1]);
+ assert.equal(config.verified, true); assert.equal(config.purpose, "invite"); assert.ok(html.includes('id="line-confirm"'));
+ const res = await accept(req("/api/line/invites/accept", { flow: f.flow, password: DEMO_PASSWORD, consentTextKey: "line.binding.v1" }));
+ const value = await parsed(res);
+ const next = persona === "tenant" ? ["/t", "/consent/portal?next=%2Ft"] : ["/o/statements", "/consent/portal?next=%2Fo%2Fstatements"];
+ assert.ok(next.includes(value.next), value.next); assert.ok(sessionCookie(res));
+ const linkRows = (await db.query("SELECT status FROM line_account_links WHERE contact_id=$1 AND persona=$2", [i.contact, persona])).rows;
+ assert.equal(linkRows.length, 1); assert.equal(linkRows[0].status, "linked");
+ assert.equal((await db.query("SELECT status FROM invitations WHERE id=$1", [i.id])).rows[0].status, "accepted");
+ await parsed(await handlers.callback(request()), 409); assert.equal(calls, 1);
+});
+
+test("web OAuth invite: token endpoint 400 yields 503 line_unavailable, no verification or identity", async () => {
+ const i = await invite();
+ await db.query("DELETE FROM line_account_links WHERE contact_id=$1", [i.contact]);
+ const f = await flow({ purpose: "invite", inviteToken: i.token });
+ const started = await start(req(`/api/line/login/start?flow=${f.flow}`));
+ const url = new URL(started.headers.get("location")!);
+ const verifier = new RegExp(`${LINE_PKCE_COOKIE}=([^;,]+)`).exec(started.headers.get("set-cookie")!)![1];
+ const mockFetch = async () =>
+  new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400, headers: { "content-type": "application/json" } });
+ const resolveSecret = async (ref: string) => { assert.equal(ref, "local-ref"); return { secret, identityPepper: pepper, destination: "local-bot" }; };
+ const handlers = createLineHandlers({ exchangeCode: createLineCodeExchange({ fetch: mockFetch, resolveSecret }), resolveSecret });
+ const before = await identityCounts();
+ const res = await handlers.callback(req(`/api/line/login/callback?state=${url.searchParams.get("state")}&code=local-code`, undefined,
+  { cookies: `${LINE_FLOW_COOKIE}=${f.flow}; ${LINE_PKCE_COOKIE}=${verifier}` }));
+ assert.equal(res.status, 503); assert.match(await res.text(), /line_unavailable/);
+ assert.equal((await db.query("SELECT verified_hash FROM app.b033_line_flows WHERE flow_hash=$1", [lineHash(f.flow)])).rows[0].verified_hash, null);
+ assert.deepEqual(await identityCounts(), before);
 });

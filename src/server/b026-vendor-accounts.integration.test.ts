@@ -422,7 +422,7 @@ test("B-026 account/job separation, V-12 and V-13", async t => {
       await assert.rejects(vendorAccountHistory(credential));
       assert.equal((await GET(request("GET", credential))).status, 403);
     });
-    assert.match(readFileSync("src/server/vendor-link-rules.ts", "utf8"), /VENDOR_LINK_ENABLED = false/);
+    assert.doesNotMatch(readFileSync("src/server/vendor-link-rules.ts", "utf8"), /VENDOR_LINK_ENABLED/);
   } finally {
     __setVendorLinkKillSwitchForTests(false);
     await clone.cleanup();

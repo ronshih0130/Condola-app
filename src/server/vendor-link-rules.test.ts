@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  VENDOR_LINK_ENABLED,
   renderableTypeFields,
   vendorLinkCapability,
+  vendorLinkGlobalOn,
   vendorLinkOn,
   vendorLinkSafeView,
 } from "./vendor-link-rules";
 
-test("vendor_link requires both explicit switches", () => {
-  assert.equal(VENDOR_LINK_ENABLED, false);
-  const flags: Array<[unknown, boolean]> = [
+test("vendor_link requires platform_settings allowlist and org flag", () => {
+  const org = "11111111-1111-1111-1111-111111111111";
+  const other = "22222222-2222-2222-2222-222222222222";
+  const orgFlags: Array<[unknown, boolean]> = [
     [undefined, false], [null, false], [false, false], [true, false],
     ["true", false], [1, false], [[], false], [{}, false],
     [{ vendor_link: null }, false], [{ vendor_link: false }, false],
@@ -19,11 +20,26 @@ test("vendor_link requires both explicit switches", () => {
     [{ vendor_link: {} }, false], [{ vendor_link: [] }, false],
     [{ vendor_link: true }, true], [{ vendor_link: "true" }, true],
   ];
-  for (const [value, enabled] of flags) {
-    assert.equal(vendorLinkOn(false, value), false);
-    assert.equal(vendorLinkOn(true, value), enabled);
+  const globals: Array<[unknown, boolean, boolean]> = [
+    [undefined, false, false],
+    [null, false, false],
+    [[], false, false],
+    [{ enabled: false }, false, false],
+    [{ enabled: false, allowed_org_ids: [org] }, false, false],
+    [{ enabled: "true", allowed_org_ids: [org] }, false, false],
+    [{ enabled: true }, false, false],
+    [{ enabled: true, allowed_org_ids: org }, false, false],
+    [{ enabled: true, allowed_org_ids: [other] }, false, true],
+    [{ enabled: true, allowed_org_ids: [org] }, true, true],
+  ];
+  for (const [global, gateOpen] of globals) {
+    for (const [flag, flagOn] of orgFlags) {
+      assert.equal(vendorLinkOn(global, flag, org), gateOpen && flagOn);
+    }
   }
-  assert.equal(vendorLinkOn("true" as unknown as boolean, { vendor_link: true }), false);
+  for (const [global, , globalOn] of globals) {
+    assert.equal(vendorLinkGlobalOn(global), globalOn);
+  }
 });
 
 const now = new Date("2026-10-25T12:00:00Z");

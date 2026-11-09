@@ -15,13 +15,14 @@ import { resetAndSeed } from "./seed";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { createSession } from "./auth";
 import { DEMO_PASSWORD } from "./demo-password";
-import { approveVendorSharing, dispatchVendor, __setVendorLinkKillSwitchForTests } from "./vendor-repair";
+import { approveVendorSharing, dispatchVendor } from "./vendor-repair";
 import { claimVendorAccount, inviteVendorAccount, syncVendorAccount } from "./vendor-accounts";
 import type { Session } from "./types";
 import { lineHash } from "./line/login-token";
 import { randomProof } from "./line/login-link";
 import { LINE_JOB_COOKIE } from "./line/vendor-scope";
 import { createLineHandlers, LINE_BROWSER_COOKIE, LINE_CSRF_COOKIE, LINE_FLOW_COOKIE, LINE_PKCE_COOKIE } from "./line/login-routes";
+import { createLineCodeExchange } from "./line/oauth-exchange";
 import { dispatchLinePush, type LinePush } from "./line/quota";
 import { createCapturedLineTransport } from "./line/transport";
 import { POST as flows } from "../app/api/line/flows/route";
@@ -75,13 +76,13 @@ async function issue(staff = admin) {
  await db.query(`INSERT INTO maintenance_tickets(id,org_id,property_id,ticket_number,category,title,description,status)
   SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE INTERNAL TITLE','PRIVATE INTERNAL DESCRIPTION','open'
   FROM properties WHERE org_id=$2 ORDER BY id LIMIT 1`,[ticketId,staff.orgId]);
- __setVendorLinkKillSwitchForTests(true);
+ await flag("vendor_link");
  try {
   const job = await dispatchVendor(staff,ticketId,{ vendorName: `B035-${randomUUID()}`,vendorPhone:"0912111222",vendorTrade:"plumbing",contactWindow:"Monday" },origin);
   await approveVendorSharing(staff,ticketId,job.jobId,{ description:"Approved scoped repair",attachmentIds:[] });
   const contact = (await db.query("SELECT vendor_contact_id FROM repair_vendor_jobs WHERE id=$1",[job.jobId])).rows[0].vendor_contact_id as string;
   return { ...job,ticketId,contact,token:new URL(job.url).pathname.slice(3) };
- } finally { __setVendorLinkKillSwitchForTests(false); }
+ } finally { await flag("vendor_link", false); }
 }
 async function flow(token?: string, input: Record<string,string> = {}) {
  return parsed(await flows(req("/api/line/flows",{ purpose:"login",persona:"vendor",orgId:ORG_ID,...(token ? {jobToken:token}:{}),...input })),201);
@@ -123,6 +124,7 @@ test.beforeEach(async () => {
   for (const key of ["line_platform","line_vendor_portal","line_tenant_portal","line_owner_portal"]) await flag(key,true,true,org);
   await db.query("UPDATE organizations SET feature_flags=feature_flags||'{\"vendor_dispatch\":true,\"vendor_link\":true}' WHERE id=$1",[org]);
  }
+ await flag("vendor_link", false);
  channel=(await db.query("SELECT id FROM line_channels WHERE mode='platform_default' AND is_active")).rows[0].id;
  await db.query("SELECT app.b033_liff_configure($1,'local-tenant','local-vendor','local-owner')",[channel]);
  await db.query("UPDATE line_channels SET login_channel_id='b035-login',login_channel_secret_ref='b035-local' WHERE id=$1",[channel]);
@@ -134,7 +136,7 @@ test.beforeEach(async () => {
  };
  admin=await staff(USERS.admin,ORG_ID); foreignAdmin=await staff(USERS.coastAdmin,ORG2_ID);
 });
-test.after(async () => { globalThis.fetch=savedFetch;if(baselineDir)rmSync(baselineDir,{recursive:true,force:true});__setVendorLinkKillSwitchForTests(false);await db?.end();await clone?.cleanup();
+test.after(async () => { globalThis.fetch=savedFetch;if(baselineDir)rmSync(baselineDir,{recursive:true,force:true});await db?.end();await clone?.cleanup();
  for (const key of ["DEMO_MODE","ID_DOC_ENCRYPTION_KEY","LINE_PLATFORM_ENABLED","LINE_CHANNEL_SECRETS"]) { if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key]; } });
 
 test("valid assigned LINE flow opens only its shared job, without account identity promotion",async()=>{
@@ -205,10 +207,10 @@ for(const mode of ["expired","revoked","reassigned","sharing","hash","archived"]
 });
 test("real re-dispatch to another vendor denies the old claim and new flows from the old token with zero writes",async()=>{
  const j=await issue(),c=await claim(j.token);
- __setVendorLinkKillSwitchForTests(true);
+ await flag("vendor_link");
  let next:Awaited<ReturnType<typeof dispatchVendor>>;
  try { next=await dispatchVendor(admin,j.ticketId,{vendorName:`B035-next-${randomUUID()}`,vendorPhone:"0912333444",vendorTrade:"plumbing",contactWindow:"Tuesday"},origin); }
- finally { __setVendorLinkKillSwitchForTests(false); }
+ finally { await flag("vendor_link", false); }
  assert.notEqual(next.jobId,j.jobId);
  const ticket=(await db.query("SELECT assigned_vendor_contact_id FROM maintenance_tickets WHERE id=$1",[j.ticketId])).rows[0].assigned_vendor_contact_id;
  assert.ok(ticket);assert.notEqual(ticket,j.contact);
@@ -483,7 +485,7 @@ test("job-entry proof is same-origin, body-only and write-free; OFF or invalid t
  assert.equal((await proof({jobToken:j.token})).status,404);assert.deepEqual(await snapshot(),before);
 });
 for(const branch of ["classic","enhanced"] as const)test(`${branch} /v/[token] page HTML is byte-identical to the pre-B-035 page whenever vendor LINE gates are OFF`,async()=>{
- const j=await issue();__setVendorLinkKillSwitchForTests(branch==="enhanced");
+ const j=await issue();await flag("vendor_link", branch==="enhanced");
  try {
   for(const [locale,label] of [["zh-TW","在 LINE 中繼續"],["en","Continue in LINE"]]){
    const baseline=await vendorPageHtml(j.token,locale,true);
@@ -501,5 +503,57 @@ for(const branch of ["classic","enhanced"] as const)test(`${branch} /v/[token] p
    }finally{await restore();}}
    assert.equal(await vendorPageHtml(j.token,locale),on);
   }
- } finally {__setVendorLinkKillSwitchForTests(false);}
+ } finally {await flag("vendor_link", false);}
+});
+
+test("staff-dispatched job link: web OAuth via mocked LINE token endpoint emits only a job claim",async()=>{
+ const j=await issue(),f=await flow(j.token),s=await start(req(`/api/line/login/start?flow=${f.flow}`));assert.equal(s.status,302);
+ const url=new URL(s.headers.get("location")!),verifier=cookieValue(s,LINE_PKCE_COOKIE)!;
+ const loginId=(await db.query("SELECT login_channel_id FROM line_channels WHERE id=$1",[channel])).rows[0].login_channel_id;
+ let calls=0;
+ const mockFetch=async(input:string|URL|Request,init?:RequestInit)=>{
+  calls++;assert.equal(input,"https://api.line.me/oauth2/v2.1/token");assert.equal(init?.method,"POST");
+  const form=new URLSearchParams(String(init?.body));
+  assert.equal(form.get("grant_type"),"authorization_code");assert.equal(form.get("code"),"local");
+  assert.equal(form.get("redirect_uri"),`${origin}/api/line/login/callback`);assert.equal(form.get("client_id"),loginId);
+  assert.equal(form.get("client_secret"),secret);assert.equal(form.get("code_verifier"),verifier);
+  return new Response(JSON.stringify({id_token:jwt({nonce:url.searchParams.get("nonce")})}),{status:200,headers:{"content-type":"application/json"}});
+ };
+ const resolveSecret=async(ref:string)=>{assert.equal(ref,"b035-local");return{secret,identityPepper:pepper,destination:"local"};};
+ const handlers=createLineHandlers({exchangeCode:createLineCodeExchange({fetch:mockFetch,resolveSecret}),resolveSecret});
+ const res=await handlers.callback(req(`/api/line/login/callback?state=${url.searchParams.get("state")}&code=local`,undefined,{extra:`${LINE_FLOW_COOKIE}=${f.flow}; ${LINE_PKCE_COOKIE}=${verifier}`}));
+ assert.equal(res.status,303);assert.equal(res.headers.get("location"),origin+"/v/liff/job");
+ assert.ok(cookieValue(res,LINE_JOB_COOKIE));assert.ok(!cookieValue(res,"condola_session"));assert.equal(calls,1);
+});
+
+test("vendor_link two-gate: platform_settings OFF denies sharing approval and LINE job claim; allowlisted ON works",async()=>{
+ try {
+  // Dispatch a vendor (needs the gate via the test override) but DO NOT approve sharing yet.
+  const ticketId=randomUUID();
+  await db.query(`INSERT INTO maintenance_tickets(id,org_id,property_id,ticket_number,category,title,description,status)
+   SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE INTERNAL TITLE','PRIVATE INTERNAL DESCRIPTION','open'
+   FROM properties WHERE org_id=$2 ORDER BY id LIMIT 1`,[ticketId,admin.orgId]);
+  await flag("vendor_link");
+  const job=await dispatchVendor(admin,ticketId,{ vendorName:`B035-${randomUUID()}`,vendorPhone:"0912111222",vendorTrade:"plumbing",contactWindow:"Monday" },origin);
+  const token=new URL(job.url).pathname.slice(3);
+
+  // Org feature flag is ON; only the platform_settings gate varies below.
+  await db.query(`UPDATE organizations SET feature_flags = coalesce(feature_flags,'{}')||'{"vendor_link":true}' WHERE id=$1`,[ORG_ID]);
+
+  // OFF case A: no platform_settings row -> approval forbidden; unapproved job cannot start a LINE flow (404).
+  await db.query("DELETE FROM platform_settings WHERE key='vendor_link'");
+  await assert.rejects(approveVendorSharing(admin,ticketId,job.jobId,{ description:"Approved scoped repair",attachmentIds:[] }),(e:unknown)=>(e as {key?:string}).key==="errors.forbidden");
+  await parsed(await flows(req("/api/line/flows",{ purpose:"login",persona:"vendor",orgId:ORG_ID,jobToken:token })),404);
+
+  // OFF case B: allowlist contains a different org -> approval still rejected.
+  await db.query("INSERT INTO platform_settings(key,value) VALUES('vendor_link',$1::jsonb) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",[JSON.stringify({ enabled:true,allowed_org_ids:[randomUUID()] })]);
+  await assert.rejects(approveVendorSharing(admin,ticketId,job.jobId,{ description:"Approved scoped repair",attachmentIds:[] }),(e:unknown)=>(e as {key?:string}).key==="errors.forbidden");
+
+  // ON: allowlist contains this org -> approval + LINE claim succeed.
+  await db.query("INSERT INTO platform_settings(key,value) VALUES('vendor_link',$1::jsonb) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",[JSON.stringify({ enabled:true,allowed_org_ids:[ORG_ID] })]);
+  await approveVendorSharing(admin,ticketId,job.jobId,{ description:"Approved scoped repair",attachmentIds:[] });
+  await claim(token);
+ } finally {
+  await db.query("DELETE FROM platform_settings WHERE key='vendor_link'");
+ }
 });
