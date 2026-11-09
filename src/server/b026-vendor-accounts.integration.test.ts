@@ -50,7 +50,7 @@ const on = { enabled: true, allowed_org_ids: [ORG_ID] };
 async function issue(contactId?: string, staff = admin) {
   const ticketId = randomUUID();
   await sql(`INSERT INTO maintenance_tickets(id,org_id,property_id,ticket_number,category,title,description,status)
-    SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE TITLE','PRIVATE DESCRIPTION','open' FROM properties WHERE org_id=$2 ORDER BY id LIMIT 1`, [ticketId, staff.orgId]);
+    SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE TITLE','PRIVATE DESCRIPTION','open' FROM properties WHERE org_id=$2 AND archived_at IS NULL ORDER BY id LIMIT 1`, [ticketId, staff.orgId]);
   __setVendorLinkKillSwitchForTests(true);
   const job = await dispatchVendor(staff, ticketId, { vendorId: contactId, vendorName: contactId ? "" : `Account-${randomUUID()}`,
     vendorPhone: "0912111222", vendorTrade: "plumbing", contactWindow: "Monday" }, origin);

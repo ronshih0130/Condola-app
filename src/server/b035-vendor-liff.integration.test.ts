@@ -75,7 +75,7 @@ async function issue(staff = admin) {
  const ticketId = randomUUID();
  await db.query(`INSERT INTO maintenance_tickets(id,org_id,property_id,ticket_number,category,title,description,status)
   SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE INTERNAL TITLE','PRIVATE INTERNAL DESCRIPTION','open'
-  FROM properties WHERE org_id=$2 ORDER BY id LIMIT 1`,[ticketId,staff.orgId]);
+  FROM properties WHERE org_id=$2 AND archived_at IS NULL ORDER BY id LIMIT 1`,[ticketId,staff.orgId]);
  await flag("vendor_link");
  try {
   const job = await dispatchVendor(staff,ticketId,{ vendorName: `B035-${randomUUID()}`,vendorPhone:"0912111222",vendorTrade:"plumbing",contactWindow:"Monday" },origin);
@@ -532,7 +532,7 @@ test("vendor_link two-gate: platform_settings OFF denies sharing approval and LI
   const ticketId=randomUUID();
   await db.query(`INSERT INTO maintenance_tickets(id,org_id,property_id,ticket_number,category,title,description,status)
    SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE INTERNAL TITLE','PRIVATE INTERNAL DESCRIPTION','open'
-   FROM properties WHERE org_id=$2 ORDER BY id LIMIT 1`,[ticketId,admin.orgId]);
+   FROM properties WHERE org_id=$2 AND archived_at IS NULL ORDER BY id LIMIT 1`,[ticketId,admin.orgId]);
   await flag("vendor_link");
   const job=await dispatchVendor(admin,ticketId,{ vendorName:`B035-${randomUUID()}`,vendorPhone:"0912111222",vendorTrade:"plumbing",contactWindow:"Monday" },origin);
   const token=new URL(job.url).pathname.slice(3);

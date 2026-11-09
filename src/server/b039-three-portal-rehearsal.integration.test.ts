@@ -92,7 +92,7 @@ async function newJob(ticketId?: string, vendorId?: string) {
  const id = ticketId ?? randomUUID();
  if (!ticketId) await db.query(`INSERT INTO maintenance_tickets(id,org_id,property_id,ticket_number,category,title,description,status)
   SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE TITLE','PRIVATE DESCRIPTION','open'
-  FROM properties WHERE org_id=$2 ORDER BY id LIMIT 1`,[id,ORG_ID]);
+  FROM properties WHERE org_id=$2 AND archived_at IS NULL ORDER BY id LIMIT 1`,[id,ORG_ID]);
  const job = await kill(() => dispatchVendor(admin,id,{ vendorId, vendorName: vendorId ? "" : `B039R-${randomUUID()}`,vendorPhone:"0912111222",vendorTrade:"plumbing",contactWindow:"Monday" },origin));
  const contact = (await db.query("SELECT vendor_contact_id FROM repair_vendor_jobs WHERE id=$1",[job.jobId])).rows[0].vendor_contact_id as string;
  await db.query("UPDATE contacts SET email=$2 WHERE id=$1",[contact,`vendor-${contact.slice(0,8)}@local.test`]);

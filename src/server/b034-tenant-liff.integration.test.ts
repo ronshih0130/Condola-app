@@ -415,7 +415,7 @@ test("a real single-job capability cannot create LINE binding, staff authority o
  await db.query("UPDATE organizations SET feature_flags=feature_flags||'{\"vendor_dispatch\":true,\"vendor_link\":true}' WHERE id=$1", [ORG_ID]);
  const ticket = (await db.query(`INSERT INTO maintenance_tickets(org_id,property_id,ticket_number,category,title,description,status)
   SELECT $1,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$1),'plumbing','Local repair','Local description','open'
-  FROM properties WHERE org_id=$1 ORDER BY id LIMIT 1 RETURNING id`, [ORG_ID])).rows[0].id;
+  FROM properties WHERE org_id=$1 AND archived_at IS NULL ORDER BY id LIMIT 1 RETURNING id`, [ORG_ID])).rows[0].id;
  __setVendorLinkKillSwitchForTests(true);
  try {
   const job = await dispatchVendor(staff, ticket, { vendorName: "Local vendor", vendorPhone: "0912111222", vendorTrade: "plumbing", contactWindow: "Monday" }, origin);
