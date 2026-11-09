@@ -1,0 +1,100 @@
+# Manual synthetic PostgreSQL 17 rehearsal.
+# Configuration ref: the commit that contains this file (not registered until
+# it is on the default branch; this file has no push or pull_request trigger).
+# Product checkout: fixed SHA below. Do not point this job at a live database.
+
+name: PG17 synthetic rehearsal
+
+on:
+  workflow_dispatch:
+
+# contents: read only. The actions scope is none. A dependency cache save or
+# artifact upload would need a broader actions scope than this rehearsal uses.
+# The sanitized summary is appended to the job step summary instead.
+permissions:
+  actions: none
+  checks: none
+  contents: read
+  deployments: none
+  discussions: none
+  id-token: none
+  issues: none
+  packages: none
+  pages: none
+  pull-requests: none
+  repository-projects: none
+  security-events: none
+  statuses: none
+
+jobs:
+  rehearse:
+    name: synthetic backup and restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17.11@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+        env:
+          POSTGRES_USER: condola
+          POSTGRES_PASSWORD: condola
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U condola -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout rehearsal configuration
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          path: rehearsal-config
+
+      - name: Checkout fixed product SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: 9ebe581108c1ed6a9b050dc31f429201fb5be781
+          fetch-depth: 1
+          path: product
+
+      - name: Set up Node 20.20.2
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20.20.2
+
+      - name: Install the pinned lockfile
+        working-directory: product
+        env:
+          npm_config_audit: "false"
+          npm_config_fund: "false"
+        run: npm ci
+
+      - name: Rehearse dump and restore
+        working-directory: product
+        env:
+          PRODUCT_DIR: ${{ github.workspace }}/product
+          CONDOLA_PG17_USE_SERVICE: "1"
+          CONDOLA_RLS_DISPOSABLE: "YES"
+          CONDOLA_SYNTHETIC_REHEARSAL: "YES"
+          DEMO_MODE: "true"
+          PGPORT: "5432"
+          WRANGLER_SEND_METRICS: "false"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: bash "${{ github.workspace }}/rehearsal-config/scripts/pg17-synthetic-rehearsal.sh"
+
+      - name: Publish sanitized summary
+        if: always()
+        working-directory: product
+        run: |
+          set -euo pipefail
+          test -f pg17-rehearsal-out/summary.json
+          python3 -c 'import json,pathlib; json.loads(pathlib.Path("pg17-rehearsal-out/summary.json").read_text())'
+          {
+            echo '### PG17 synthetic summary'
+            echo '```json'
+            cat pg17-rehearsal-out/summary.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
