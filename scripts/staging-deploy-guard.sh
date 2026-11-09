@@ -12,7 +12,9 @@ docs/pg17-synthetic-rehearsal.md
 scripts/pg17-restore-compare.sql
 scripts/pg17-synthetic-rehearsal.sh
 scripts/staging-deploy-guard.sh
-scripts/staging-deploy-guard.test.sh'
+scripts/staging-deploy-guard.test.sh
+scripts/claim.sh
+scripts/claim-github.test.sh'
 
 saw=0
 while IFS= read -r path || [[ -n "$path" ]]; do

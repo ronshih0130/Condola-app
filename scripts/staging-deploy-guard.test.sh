@@ -28,7 +28,9 @@ expect skip \
   scripts/pg17-restore-compare.sql \
   scripts/pg17-synthetic-rehearsal.sh \
   scripts/staging-deploy-guard.sh \
-  scripts/staging-deploy-guard.test.sh
+  scripts/staging-deploy-guard.test.sh \
+  scripts/claim.sh \
+  scripts/claim-github.test.sh
 expect deploy src/server/seed.ts
 expect deploy .gitignore src/server/seed.ts
 expect deploy package.json

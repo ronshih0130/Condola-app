@@ -81,4 +81,8 @@ Static checks cover the workflow shape, pins, `bash -n`, and `scripts/staging-de
 
 No tracked advisory record decides dependency risk for production. Dependabot alerts for this repository are disabled (API HTTP 403, that message). Code-scanning alerts are not readable with this token (HTTP 403). This change does not accept that risk and does not upgrade packages.
 
-`scripts/claim.sh status` and `acquire` both stop before any lock write in this checkout: `origin` is not `https://origin.cursor.com/ron-shih/condola-app`. The tool's compare-and-swap is `git push --force-with-lease` onto `ops-lock` and is not run by hand. `ops-lock` was observed RELEASED at generation 135. No claim was created.
+The earlier suggestion to acquire ownership from a Cursor Origin checkout is withdrawn. GitHub `ronshih0130/Condola-app` is the source of truth. Do not point this branch at Origin.
+
+Frozen `9ebe581` `scripts/claim.sh` blob `8b2a3109717e7d0af044611fd8a1a75a46d6d165` accepts only Cursor Origin. An unmerged candidate already exists: commit `923283c2ff504dc6806757cf8f1d1620de6df16f` on `ops/claim-github-remote` (2026-11-04, parent `4a80cea5`, claim.sh blob `f242c4afa6bac330e40704273e5467ab826bfe1f`). That parent blob equals the frozen blob. There is no pull request and `docs/DECISIONS.md` still records Origin as canonical, so that commit is not treated as an accepted live tool. This branch copies only its remote check. `scripts/claim-github.test.sh` runs acquire, renew, holder refusal, release, and a forced-failed compare-and-swap against a local bare repository. It does not write the live `ops-lock`.
+
+Adoption after independent review: use a checkout whose fetch and push URLs are exactly one of the four credential-free GitHub forms, then `CONDOLA_SESSION_ID=<uuid> bash scripts/claim.sh acquire repo B <who>`. A URL with an embedded token is refused and is not a workaround. `CLAIM_TEST_ANY_REMOTE` stays a test-only switch.
