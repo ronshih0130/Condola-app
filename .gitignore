@@ -14,6 +14,7 @@
 /coverage
 /test-results
 /playwright-report
+/pg17-rehearsal-out/
 
 # next.js
 /.next/
