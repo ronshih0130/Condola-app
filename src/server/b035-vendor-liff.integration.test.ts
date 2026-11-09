@@ -22,6 +22,7 @@ import { lineHash } from "./line/login-token";
 import { randomProof } from "./line/login-link";
 import { LINE_JOB_COOKIE } from "./line/vendor-scope";
 import { createLineHandlers, LINE_BROWSER_COOKIE, LINE_CSRF_COOKIE, LINE_FLOW_COOKIE, LINE_PKCE_COOKIE } from "./line/login-routes";
+import { createLineCodeExchange } from "./line/oauth-exchange";
 import { dispatchLinePush, type LinePush } from "./line/quota";
 import { createCapturedLineTransport } from "./line/transport";
 import { POST as flows } from "../app/api/line/flows/route";
@@ -502,4 +503,24 @@ for(const branch of ["classic","enhanced"] as const)test(`${branch} /v/[token] p
    assert.equal(await vendorPageHtml(j.token,locale),on);
   }
  } finally {__setVendorLinkKillSwitchForTests(false);}
+});
+
+test("staff-dispatched job link: web OAuth via mocked LINE token endpoint emits only a job claim",async()=>{
+ const j=await issue(),f=await flow(j.token),s=await start(req(`/api/line/login/start?flow=${f.flow}`));assert.equal(s.status,302);
+ const url=new URL(s.headers.get("location")!),verifier=cookieValue(s,LINE_PKCE_COOKIE)!;
+ const loginId=(await db.query("SELECT login_channel_id FROM line_channels WHERE id=$1",[channel])).rows[0].login_channel_id;
+ let calls=0;
+ const mockFetch=async(input:string|URL|Request,init?:RequestInit)=>{
+  calls++;assert.equal(input,"https://api.line.me/oauth2/v2.1/token");assert.equal(init?.method,"POST");
+  const form=new URLSearchParams(String(init?.body));
+  assert.equal(form.get("grant_type"),"authorization_code");assert.equal(form.get("code"),"local");
+  assert.equal(form.get("redirect_uri"),`${origin}/api/line/login/callback`);assert.equal(form.get("client_id"),loginId);
+  assert.equal(form.get("client_secret"),secret);assert.equal(form.get("code_verifier"),verifier);
+  return new Response(JSON.stringify({id_token:jwt({nonce:url.searchParams.get("nonce")})}),{status:200,headers:{"content-type":"application/json"}});
+ };
+ const resolveSecret=async(ref:string)=>{assert.equal(ref,"b035-local");return{secret,identityPepper:pepper,destination:"local"};};
+ const handlers=createLineHandlers({exchangeCode:createLineCodeExchange({fetch:mockFetch,resolveSecret}),resolveSecret});
+ const res=await handlers.callback(req(`/api/line/login/callback?state=${url.searchParams.get("state")}&code=local`,undefined,{extra:`${LINE_FLOW_COOKIE}=${f.flow}; ${LINE_PKCE_COOKIE}=${verifier}`}));
+ assert.equal(res.status,303);assert.equal(res.headers.get("location"),origin+"/v/liff/job");
+ assert.ok(cookieValue(res,LINE_JOB_COOKIE));assert.ok(!cookieValue(res,"condola_session"));assert.equal(calls,1);
 });
