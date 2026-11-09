@@ -53,12 +53,12 @@ export function buildSeedSql(env, opts) {
 
   if (enable) {
     const orgArray = "jsonb_build_array(" + orgs.map(o => sqlStr(o)).join(", ") + ")";
-    const flagMerge = '{"line_platform":true,"line_tenant_portal":true,"line_owner_portal":true,"line_vendor_portal":true}';
+    const flagMerge = '{"line_platform":true,"line_tenant_portal":true,"line_owner_portal":true,"line_vendor_portal":true,"vendor_link":true}';
     for (const org of orgs) {
       lines.push(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM public.organizations WHERE id = ${sqlStr(org)}) THEN RAISE EXCEPTION 'unknown org %', ${sqlStr(org)}; END IF; END $$;`);
       lines.push(`UPDATE public.organizations SET feature_flags = coalesce(feature_flags, '{}'::jsonb) || ${sqlStr(flagMerge)}::jsonb WHERE id = ${sqlStr(org)};`);
     }
-    for (const key of ["line_platform", "line_tenant_portal", "line_owner_portal", "line_vendor_portal"]) {
+    for (const key of ["line_platform", "line_tenant_portal", "line_owner_portal", "line_vendor_portal", "vendor_link"]) {
       lines.push(
         `INSERT INTO public.platform_settings (key, value) VALUES (${sqlStr(key)}, jsonb_build_object('enabled', true, 'allowed_org_ids', ${orgArray}))`,
         "ON CONFLICT (key) DO UPDATE SET value = jsonb_build_object('enabled', true, 'allowed_org_ids',",

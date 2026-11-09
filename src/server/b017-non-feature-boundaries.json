@@ -281,7 +281,7 @@
   },
   "src/server/notification-center.ts#centerVendorItems": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",
-    "sha256": "ceb2b84384d069eba2f4536548cd2a180fac5ed22ae06f09495b2a540d7ac5ef"
+    "sha256": "9d9ff42277871e69be2a583351e8e8de556e5c09c03f885a5dd5e300211fc719"
   },
   "src/server/sandbox.ts#sandboxChrome": {
     "reason": "Account environment chrome and own sample preference; no business records or aggregates returned",

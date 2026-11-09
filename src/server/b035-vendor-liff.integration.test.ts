@@ -524,3 +524,37 @@ test("staff-dispatched job link: web OAuth via mocked LINE token endpoint emits 
  assert.equal(res.status,303);assert.equal(res.headers.get("location"),origin+"/v/liff/job");
  assert.ok(cookieValue(res,LINE_JOB_COOKIE));assert.ok(!cookieValue(res,"condola_session"));assert.equal(calls,1);
 });
+
+test("vendor_link two-gate: platform_settings OFF denies sharing approval and LINE job claim; allowlisted ON works",async()=>{
+ try {
+  // Dispatch a vendor (needs the gate via the test override) but DO NOT approve sharing yet.
+  const ticketId=randomUUID();
+  await db.query(`INSERT INTO maintenance_tickets(id,org_id,property_id,ticket_number,category,title,description,status)
+   SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE INTERNAL TITLE','PRIVATE INTERNAL DESCRIPTION','open'
+   FROM properties WHERE org_id=$2 ORDER BY id LIMIT 1`,[ticketId,admin.orgId]);
+  __setVendorLinkKillSwitchForTests(true);
+  const job=await dispatchVendor(admin,ticketId,{ vendorName:`B035-${randomUUID()}`,vendorPhone:"0912111222",vendorTrade:"plumbing",contactWindow:"Monday" },origin);
+  __setVendorLinkKillSwitchForTests(null);
+  const token=new URL(job.url).pathname.slice(3);
+
+  // Org feature flag is ON; only the platform_settings gate varies below.
+  await db.query(`UPDATE organizations SET feature_flags = coalesce(feature_flags,'{}')||'{"vendor_link":true}' WHERE id=$1`,[ORG_ID]);
+
+  // OFF case A: no platform_settings row -> approval forbidden; unapproved job cannot start a LINE flow (404).
+  await db.query("DELETE FROM platform_settings WHERE key='vendor_link'");
+  await assert.rejects(approveVendorSharing(admin,ticketId,job.jobId,{ description:"Approved scoped repair",attachmentIds:[] }),(e:unknown)=>(e as {key?:string}).key==="errors.forbidden");
+  await parsed(await flows(req("/api/line/flows",{ purpose:"login",persona:"vendor",orgId:ORG_ID,jobToken:token })),404);
+
+  // OFF case B: allowlist contains a different org -> approval still rejected.
+  await db.query("INSERT INTO platform_settings(key,value) VALUES('vendor_link',$1::jsonb) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",[JSON.stringify({ enabled:true,allowed_org_ids:[randomUUID()] })]);
+  await assert.rejects(approveVendorSharing(admin,ticketId,job.jobId,{ description:"Approved scoped repair",attachmentIds:[] }),(e:unknown)=>(e as {key?:string}).key==="errors.forbidden");
+
+  // ON: allowlist contains this org -> approval + LINE claim succeed.
+  await db.query("INSERT INTO platform_settings(key,value) VALUES('vendor_link',$1::jsonb) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",[JSON.stringify({ enabled:true,allowed_org_ids:[ORG_ID] })]);
+  await approveVendorSharing(admin,ticketId,job.jobId,{ description:"Approved scoped repair",attachmentIds:[] });
+  await claim(token);
+ } finally {
+  __setVendorLinkKillSwitchForTests(false);
+  await db.query("DELETE FROM platform_settings WHERE key='vendor_link'");
+ }
+});

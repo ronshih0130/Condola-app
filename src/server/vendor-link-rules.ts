@@ -1,10 +1,18 @@
-/** Keep disabled until the remaining sharing and assignment contracts are reviewed. */
-export const VENDOR_LINK_ENABLED = false;
+/**
+ * Two-gate vendor-link control: platform_settings.vendor_link +
+ * organizations.feature_flags.vendor_link; default OFF (no row = OFF).
+ */
+export function vendorLinkGlobalOn(global: unknown): boolean {
+  if (!global || typeof global !== "object" || Array.isArray(global)) return false;
+  const g = global as Record<string, unknown>;
+  return g.enabled === true && Array.isArray(g.allowed_org_ids);
+}
 
-export function vendorLinkOn(killSwitch: boolean, featureFlags: unknown): boolean {
-  if (killSwitch !== true || !featureFlags || typeof featureFlags !== "object" || Array.isArray(featureFlags)) {
-    return false;
-  }
+export function vendorLinkOn(global: unknown, featureFlags: unknown, orgId: string): boolean {
+  if (!vendorLinkGlobalOn(global)) return false;
+  const allowed = (global as Record<string, unknown>).allowed_org_ids as unknown[];
+  if (!allowed.includes(orgId)) return false;
+  if (!featureFlags || typeof featureFlags !== "object" || Array.isArray(featureFlags)) return false;
   const value = (featureFlags as Record<string, unknown>).vendor_link;
   return value === true || value === "true";
 }

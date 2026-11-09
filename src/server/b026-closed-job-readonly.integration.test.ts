@@ -376,7 +376,7 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
           assert.deepEqual(operation.sql.filter(sql => /^(BEGIN|COMMIT|ROLLBACK)$/.test(sql)),
             ["BEGIN", "COMMIT", "BEGIN", "COMMIT", "BEGIN", "ROLLBACK"]);
           assert.match(operation.sql[3], /^SELECT job_id::text, org_id::text, ticket_id::text FROM app.open_vendor_job/);
-          assert.equal(operation.sql[8], "SELECT environment::text, plan_tier::text, feature_flags FROM organizations WHERE id = $1");
+          assert.equal(operation.sql[8], "SELECT environment::text, plan_tier::text, feature_flags, (SELECT value FROM platform_settings WHERE key = 'vendor_link') AS vendor_link FROM organizations WHERE id = $1");
           assert.ok(operation.sql[10].includes("FROM public.organizations o CROSS JOIN public.platform_settings f"));
           assert.ok(operation.sql[14].includes(reader));
           assert.ok(!operation.sql.some(sql => /advisory|FOR UPDATE|SELECT feature_flags FROM/.test(sql)));

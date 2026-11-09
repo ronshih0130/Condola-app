@@ -35,6 +35,7 @@ test("enable-only sections appear only with the flag", () => {
   assert.ok(enabled.includes("line_tenant_portal"));
   assert.ok(enabled.includes("line_owner_portal"));
   assert.ok(enabled.includes("line_vendor_portal"));
+  assert.ok(enabled.includes("vendor_link"));
   assert.ok(enabled.includes("INSERT INTO public.audit_log"));
   assert.ok(enabled.includes("line_enable_internal"));
   assert.ok(enabled.includes("feature_flags"));
