@@ -72,7 +72,7 @@ async function ticket(staff = admin) {
  const id = randomUUID();
  await db.query(`INSERT INTO maintenance_tickets(id,org_id,property_id,ticket_number,category,title,description,status)
   SELECT $1,$2,id,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$2),'plumbing','PRIVATE INTERNAL TITLE','PRIVATE INTERNAL DESCRIPTION','open'
-  FROM properties WHERE org_id=$2 ORDER BY id LIMIT 1`,[id,staff.orgId]);
+  FROM properties WHERE org_id=$2 AND archived_at IS NULL ORDER BY id LIMIT 1`,[id,staff.orgId]);
  return id;
 }
 type Job = { jobId: string; url: string; ticketId: string; contact: string; token: string };
