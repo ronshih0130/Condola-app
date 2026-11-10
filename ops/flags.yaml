@@ -468,6 +468,14 @@ flags:
     global_kill: "platform_settings.upload_recovery requires strict boolean enabled and a valid allowed_org_ids array containing the selected organization; absent or malformed is OFF"
     org_override: "organizations.feature_flags.upload_recovery must be strict boolean true"
     activation: "local synthetic tests only (repair ticket photos, mocked storage); staging not activated"
+  unit_line_invite:
+    owner: PE
+    expires_at: "2026-12-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.unit_line_invite enabled must be boolean true and allowed_org_ids must include this organization"
+    org_override: "organizations.feature_flags.unit_line_invite must be boolean true"
+    activation: "OFF by default everywhere; hosted activation permitted ONLY for Ron's 4 allowlisted internal orgs (290b776d, c55c4cd7, abe00ada, f833d997); requires per-flag QA Class B verdict + CEO GO + T+0/T+15 checks; LINE bind only, in-app notice only, 0 outbound (no email/LINE/SMS); no other org, design partner or GA; rollback = platform_settings/org override to OFF; per CEO 2026-11-10 09:02 PT"
   vendor_link:
     owner: Ron
     expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
