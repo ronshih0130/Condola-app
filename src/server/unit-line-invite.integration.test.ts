@@ -210,7 +210,7 @@ test("R-a6 landing path is /join/{token} with no query token and no third-party 
   assert.ok(!html.includes("<script src"));
   assert.ok(html.includes("TODO-R&D"));
   assert.ok(html.includes("等待管理方確認租約"));
-  const res = await joinGet(new Request(`http://localhost/join/${token}`), { params: { token } });
+  const res = await joinGet(new Request(`http://localhost/join/${token}`), { params: Promise.resolve({ token }) });
   const body = await res.text();
   assert.ok(body.includes(`/join/${token}`));
 });
