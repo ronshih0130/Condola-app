@@ -240,7 +240,7 @@ export async function acceptBind(input: {
       const contact = await client.query<{ id: string }>(
         `INSERT INTO public.contacts (org_id, user_id, is_tenant, display_name)
          VALUES ($1, $2, true, $3)
-         ON CONFLICT (org_id, user_id) WHERE user_id IS NOT NULL
+         ON CONFLICT (org_id, user_id) WHERE user_id IS NOT NULL AND is_tenant AND archived_at IS NULL
          DO UPDATE SET is_tenant = true
          RETURNING id`,
         [input.orgId, userId, displayName],

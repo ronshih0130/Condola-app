@@ -40,6 +40,10 @@ test.after(async () => {
   await clone?.cleanup();
 });
 
+test.beforeEach(async () => {
+  await query(`DELETE FROM app.unit_invite_attempts`);
+});
+
 async function ensureMigration() {
   const present = await query<{ ok: number }>(
     `SELECT 1 AS ok FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
