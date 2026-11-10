@@ -378,7 +378,8 @@ test("R-c2 email-less minted accounts can be removed without reauth_required", a
   await clearBinds(unit_id);
   const token = (await issueInvite(await admin(), unit_id)).token;
   const bound = await acceptBind({ orgId: ORG_ID, unitId: unit_id, token, lineSub: `line-c2-${randomUUID()}` });
-  await assert.doesNotReject(() => removeBinding(await admin(), bound.bindingId));
+  const staff = await admin();
+  await assert.doesNotReject(() => removeBinding(staff, bound.bindingId));
   const user = await query<{ encrypted_password: string | null }>(
     `SELECT encrypted_password FROM auth.users WHERE id = $1`,
     [bound.userId],
