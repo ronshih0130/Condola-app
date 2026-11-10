@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Client } from "pg";
+import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { svc } from "./db";
 import { FlowError } from "./errors";
 import type { Session } from "./types";
@@ -64,6 +65,11 @@ export function staffCanManage(session: Session): boolean {
   return session.kind === "staff" && (session.role === "admin" || session.role === "manager");
 }
 
+async function requireInviteStaff(session: Session): Promise<Session> {
+  if (!staffCanManage(session)) throw new FlowError("errors.forbidden");
+  return guardEffectiveSession(session, "leases.edit");
+}
+
 export function mapSqlError(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
   const codes = [
@@ -118,15 +124,15 @@ async function audit(
 }
 
 export async function issueInvite(session: Session, unitId: string): Promise<{ token: string; path: string }> {
-  if (!staffCanManage(session)) throw new FlowError("errors.forbidden");
+  session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
   const token = newInviteToken();
   const hash = hashInviteToken(token);
   try {
-    await withSql(session.userId, async (client) => {
+    await withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
       await client.query("SELECT app.unit_line_issue($1, $2, $3, $4)", [session.orgId, unitId, hash, session.userId]);
       await audit(client, session.orgId, session.userId, session.role, "unit_invite_secrets", unitId, "insert", "unit_line_issue", maskToken(token));
-    });
+    }));
   } catch (err) {
     mapSqlError(err);
   }
@@ -134,15 +140,15 @@ export async function issueInvite(session: Session, unitId: string): Promise<{ t
 }
 
 export async function rotateInvite(session: Session, unitId: string): Promise<{ token: string; path: string }> {
-  if (!staffCanManage(session)) throw new FlowError("errors.forbidden");
+  session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
   const token = newInviteToken();
   const hash = hashInviteToken(token);
   try {
-    await withSql(session.userId, async (client) => {
+    await withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
       await client.query("SELECT app.unit_line_rotate($1, $2, $3, $4)", [session.orgId, unitId, hash, session.userId]);
       await audit(client, session.orgId, session.userId, session.role, "unit_invite_secrets", unitId, "insert", "unit_line_rotate", maskToken(token));
-    });
+    }));
   } catch (err) {
     mapSqlError(err);
   }
@@ -201,11 +207,11 @@ export async function acceptBind(input: {
 }
 
 export async function removeBinding(session: Session, bindingId: string): Promise<void> {
-  if (!staffCanManage(session)) throw new FlowError("errors.forbidden");
+  session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
 
   try {
-    await withSql(session.userId, async (client) => {
+    await withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
       const binding = await client.query<{ user_id: string; contact_id: string | null }>(
         "SELECT user_id, contact_id FROM app.unit_bindings WHERE id = $1 AND org_id = $2",
         [bindingId, session.orgId],
@@ -239,7 +245,7 @@ export async function removeBinding(session: Session, bindingId: string): Promis
         );
       }
       await audit(client, session.orgId, session.userId, session.role, "unit_bindings", bindingId, "update", "unit_line_remove");
-    });
+    }));
   } catch (err) {
     mapSqlError(err);
   }
@@ -251,17 +257,17 @@ export async function includeOnLease(
   unitId: string,
   bindingIds: string[],
 ): Promise<void> {
-  if (!staffCanManage(session)) throw new FlowError("errors.forbidden");
+  session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
   try {
-    await withSql(session.userId, async (client) => {
+    await withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
       await client.query("SELECT app.unit_line_include_on_lease($1, $2, $3, $4)", [
         session.orgId,
         leaseId,
         unitId,
         bindingIds,
       ]);
-    });
+    }));
   } catch (err) {
     mapSqlError(err);
   }
@@ -301,23 +307,23 @@ export async function tenantPortalView(orgId: string, userId: string): Promise<T
 }
 
 export async function listBindings(session: Session, unitId: string): Promise<Record<string, unknown>[]> {
-  if (!staffCanManage(session)) throw new FlowError("errors.forbidden");
-  return withSql(session.userId, async (client) => {
+  session = await requireInviteStaff(session);
+  return withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const res = await client.query(
       "SELECT * FROM app.unit_bindings WHERE org_id = $1 AND unit_id = $2 ORDER BY bound_at DESC",
       [session.orgId, unitId],
     );
     return res.rows as Record<string, unknown>[];
-  });
+  }));
 }
 
 export async function listInvites(session: Session, unitId: string): Promise<Record<string, unknown>[]> {
-  if (!staffCanManage(session)) throw new FlowError("errors.forbidden");
-  return withSql(session.userId, async (client) => {
+  session = await requireInviteStaff(session);
+  return withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const res = await client.query(
       "SELECT id, org_id, unit_id, expires_at, revoked_at, issued_by, created_at FROM app.unit_invite_secrets WHERE org_id = $1 AND unit_id = $2 ORDER BY created_at DESC",
       [session.orgId, unitId],
     );
     return res.rows as Record<string, unknown>[];
-  });
+  }));
 }
