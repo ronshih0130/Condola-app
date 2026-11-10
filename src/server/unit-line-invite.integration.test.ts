@@ -419,8 +419,20 @@ test("R-b5 staff in org A may be tenant in org B", async () => {
 
 test("T-R-b5 one LINE is tenant on A1 (linked) + B1 (pending) and owner of P; scopes do not bleed", async () => {
   // A1 is 2F 大安和平, not the unitAndLease() row on 信義松仁 (P, owned by USERS.owner).
-  const A1 = "33f46ee6-2f3a-43c4-881b-88c6527d8127";
-  const A1_LEASE = "b155fe03-4704-4398-ae27-56d3ea8f9e8e";
+  // Look up by name: seed.ts assigns fresh UUIDs on each db:reset (including CI).
+  const a1 = await query<{ unit_id: string; lease_id: string }>(
+    `SELECT u.id::text AS unit_id, l.id::text AS lease_id
+       FROM units u
+       JOIN properties p ON p.id = u.property_id
+       JOIN leases l ON l.unit_id = u.id AND l.org_id = u.org_id AND l.status = 'active'
+      WHERE p.name = '大安和平' AND u.label = '2F' AND u.org_id = $1
+      ORDER BY l.created_at
+      LIMIT 1`,
+    [ORG_ID],
+  );
+  assert.ok(a1.rows[0], "seed A1 2F 大安和平");
+  const A1 = a1.rows[0].unit_id;
+  const A1_LEASE = a1.rows[0].lease_id;
   await flag(true, [ORG_ID, ORG2_ID]);
   const { unit_id: B1 } = await unitAndLease(ORG2_ID);
   await clearBinds(A1);
