@@ -245,3 +245,14 @@ END;
 $$;
 REVOKE ALL ON FUNCTION app.unit_line_include_on_lease(uuid, uuid, uuid, uuid[]) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION app.unit_line_include_on_lease(uuid, uuid, uuid, uuid[]) TO service_role;
+
+CREATE TABLE app.unit_invite_attempts (
+  key text PRIMARY KEY,
+  failed_count integer NOT NULL DEFAULT 0,
+  locked_until timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE app.unit_invite_attempts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.unit_invite_attempts FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON app.unit_invite_attempts FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON app.unit_invite_attempts TO service_role;

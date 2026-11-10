@@ -26,6 +26,7 @@ import {
   rotateInvite,
   tenantPortalView,
   unitLineInviteOn,
+  UNIT_LINE_TOKEN_ATTEMPT_LIMIT,
 } from "./unit-line-invite";
 
 // B-033 unit_line_invite. Local disposable PostgreSQL clone only. All people and tokens are synthetic.
@@ -131,13 +132,40 @@ test("R-a2 secrets store only the hash, never the raw token", async () => {
   assert.notEqual(rows.rows[0].token_hash, issued.token);
 });
 
-test("R-a3 seats 2-4 on the same invite succeed (rate-limit reserved)", async () => {
+test("R-a3 seats 2-4 on the same invite succeed", async () => {
   await flag(true);
   const { unit_id } = await unitAndLease();
   await clearBinds(unit_id);
   const issued = await issueInvite(await admin(), unit_id);
   for (const n of [2, 3, 4]) {
     const bound = await acceptBind({ orgId: ORG_ID, unitId: unit_id, token: issued.token, lineSub: `line-a3-${n}-${randomUUID()}` });
+    assert.ok(bound.bindingId);
+  }
+});
+
+test("R-a3 same token is throttled on attempt N+1", async () => {
+  await flag(true);
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  await issueInvite(await admin(), unit_id);
+  const unusedToken = newInviteToken();
+  const ip = "192.0.2.80";
+  for (let i = 0; i < UNIT_LINE_TOKEN_ATTEMPT_LIMIT; i++) {
+    await assert.rejects(
+      () => acceptBind({ orgId: ORG_ID, unitId: unit_id, token: unusedToken, lineSub: `line-a3-throttle-${i}-${randomUUID()}`, ip }),
+      (err: unknown) => err instanceof FlowError && err.key !== "errors.rateLimited",
+    );
+  }
+  await assert.rejects(
+    () => acceptBind({ orgId: ORG_ID, unitId: unit_id, token: unusedToken, lineSub: `line-a3-throttle-final-${randomUUID()}`, ip }),
+    (err: unknown) => err instanceof FlowError && err.key === "errors.rateLimited",
+  );
+  const other = await otherUnit(ORG_ID, unit_id);
+  await clearBinds(other);
+  const fresh = await issueInvite(await admin(), other);
+  const ip2 = "192.0.2.81";
+  for (const n of [1, 2, 3, 4]) {
+    const bound = await acceptBind({ orgId: ORG_ID, unitId: other, token: fresh.token, lineSub: `line-a3-fresh-${n}-${randomUUID()}`, ip: ip2 });
     assert.ok(bound.bindingId);
   }
 });
@@ -350,7 +378,7 @@ test("R-c2 email-less minted accounts can be removed without reauth_required", a
   await clearBinds(unit_id);
   const token = (await issueInvite(await admin(), unit_id)).token;
   const bound = await acceptBind({ orgId: ORG_ID, unitId: unit_id, token, lineSub: `line-c2-${randomUUID()}` });
-  await removeBinding(await admin(), bound.bindingId);
+  await assert.doesNotReject(() => removeBinding(await admin(), bound.bindingId));
   const user = await query<{ encrypted_password: string | null }>(
     `SELECT encrypted_password FROM auth.users WHERE id = $1`,
     [bound.userId],
@@ -490,6 +518,8 @@ test("OUT-0 bind and remove do not write email_log rows", async () => {
   await removeBinding(staff, bound.bindingId);
   const after = await query<{ n: number }>(`SELECT count(*)::int AS n FROM email_log`);
   assert.equal(after.rows[0].n, before.rows[0].n);
+  const src = readFileSync(new URL("./unit-line-invite.ts", import.meta.url), "utf8") + readFileSync(new URL("../app/join/[token]/route.ts", import.meta.url), "utf8");
+  assert.equal(/twilio|mitake|every8d|sms\s*otp|sendSms/i.test(src), false);
 });
 
 test("R-recovery no self-service recoverBinding; manager unlinks, rotates, and the tenant rebinds with a new LINE", async () => {

@@ -2268,5 +2268,6 @@
   "im_xlsx_epoch": "This workbook uses an unsupported date system. Save a copy using the 1900 date system, or use CSV with YYYY-MM-DD dates, then preview again.",
  "i_custom_role_native_ceiling": "Custom roles can only restrict the member’s native role. Remove permissions outside that role before assigning.",
  "i_uli_wait_lease": "Waiting for the manager to confirm the lease",
- "i_uli_recovery_placeholder": "TODO-R&D account recovery pending"
+ "i_uli_recovery_placeholder": "TODO-R&D account recovery pending",
+  "i_uli_rate_limited": "Too many attempts. Try again later."
 }

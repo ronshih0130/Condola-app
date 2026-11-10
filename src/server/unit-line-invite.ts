@@ -3,7 +3,11 @@ import type { Client } from "pg";
 import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { svc } from "./db";
 import { FlowError } from "./errors";
+import { lockActive, nextFailure } from "./lockout";
 import type { Session } from "./types";
+
+export const UNIT_LINE_TOKEN_ATTEMPT_LIMIT = 8;
+export const UNIT_LINE_IP_ATTEMPT_LIMIT = 20;
 
 export function newInviteToken(): string {
   return randomBytes(32).toString("base64url");
@@ -72,6 +76,7 @@ async function requireInviteStaff(session: Session): Promise<Session> {
 
 export function mapSqlError(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("rate_limited")) throw new FlowError("errors.rateLimited");
   const codes = [
     "flag_off",
     "not_found",
@@ -96,6 +101,50 @@ async function withSql<T>(userId: string | null, fn: (client: Client) => Promise
       mapSqlError(err);
     }
   });
+}
+
+function tokenAttemptKey(token: string): string {
+  return `uli-token:${hashInviteToken(token)}`;
+}
+
+function ipAttemptKey(ip: string | undefined): string {
+  return `uli-ip:${(ip || "unknown").trim().slice(0, 128) || "unknown"}`;
+}
+
+async function attemptLocked(key: string): Promise<boolean> {
+  return withSql(null, async (client) => {
+    const row = await client.query<{ locked_until: Date | null }>(
+      `SELECT locked_until FROM app.unit_invite_attempts WHERE key = $1`,
+      [key],
+    );
+    return lockActive(row.rows[0]?.locked_until ?? null, new Date());
+  });
+}
+
+async function noteAttempt(key: string, limit: number): Promise<void> {
+  await withSql(null, async (client) => {
+    const now = new Date();
+    const row = await client.query<{ failed_count: number; locked_until: Date | null }>(
+      `SELECT failed_count, locked_until FROM app.unit_invite_attempts WHERE key = $1`,
+      [key],
+    );
+    const current = row.rows[0];
+    if (current && lockActive(current.locked_until, now)) return;
+    const base = current && current.locked_until && !lockActive(current.locked_until, now) ? 0 : (current?.failed_count ?? 0);
+    const next = nextFailure(base, now, limit);
+    await client.query(
+      `INSERT INTO app.unit_invite_attempts (key, failed_count, locked_until, updated_at)
+       VALUES ($1, $2, $3, now())
+       ON CONFLICT (key) DO UPDATE
+         SET failed_count = EXCLUDED.failed_count, locked_until = EXCLUDED.locked_until, updated_at = now()`,
+      [key, next.failedCount, next.lockedUntil],
+    );
+  });
+}
+
+async function noteFailure(token: string, ip: string | undefined): Promise<void> {
+  await noteAttempt(tokenAttemptKey(token), UNIT_LINE_TOKEN_ATTEMPT_LIMIT);
+  await noteAttempt(ipAttemptKey(ip), UNIT_LINE_IP_ATTEMPT_LIMIT);
 }
 
 export async function unitLineInviteOn(orgId: string): Promise<boolean> {
@@ -167,7 +216,11 @@ export async function acceptBind(input: {
 }): Promise<{ bindingId: string; userId: string }> {
   if (!(await unitLineInviteOn(input.orgId))) throw new FlowError("errors.notFound");
   if (/^\d{6}$/.test(input.token) || inviteTokenBytes(input.token) !== 32) {
+    await noteFailure(input.token, input.ip);
     throw new FlowError("errors.invalid");
+  }
+  if ((await attemptLocked(tokenAttemptKey(input.token))) || (await attemptLocked(ipAttemptKey(input.ip)))) {
+    throw new FlowError("errors.rateLimited");
   }
   const hash = hashInviteToken(input.token);
   const lineHash = createHash("sha256").update(input.lineSub).digest("hex");
@@ -202,7 +255,8 @@ export async function acceptBind(input: {
       return { bindingId, userId };
     });
   } catch (err) {
-    mapSqlError(err);
+    await noteFailure(input.token, input.ip);
+    throw err;
   }
 }
 

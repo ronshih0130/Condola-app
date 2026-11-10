@@ -2268,5 +2268,6 @@
   "im_xlsx_epoch": "此活頁簿使用尚未支援的日期系統。請另存使用 1900 日期系統的副本，或改用 YYYY-MM-DD 日期的 CSV，再重新預覽。",
  "i_custom_role_native_ceiling": "自訂角色只能縮減成員原生角色的權限。請先移除超出原生角色的權限再指派。",
  "i_uli_wait_lease": "等待管理方確認租約",
- "i_uli_recovery_placeholder": "TODO-R&D 帳號復原流程待研發"
+ "i_uli_recovery_placeholder": "TODO-R&D 帳號復原流程待研發",
+  "i_uli_rate_limited": "嘗試次數過多，請稍後再試。"
 }
