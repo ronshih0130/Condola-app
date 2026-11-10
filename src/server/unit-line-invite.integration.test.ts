@@ -180,7 +180,7 @@ test("R-a3 same token is throttled on attempt N+1", async () => {
 
 test("R-a4 landing GET sets Referrer-Policy no-referrer and Cache-Control no-store", async () => {
   const token = newInviteToken();
-  const res = await joinGet(new Request(`http://localhost/join/${token}`), { params: { token } });
+  const res = await joinGet(new Request(`http://localhost/join/${token}`), { params: Promise.resolve({ token }) });
   assert.equal(res.headers.get("Referrer-Policy"), "no-referrer");
   assert.equal(res.headers.get("Cache-Control"), "no-store");
   const headers = referrerHeaders();
@@ -214,6 +214,50 @@ test("R-a6 landing path is /join/{token} with no query token and no third-party 
   const body = await res.text();
   assert.ok(body.includes(`/join/${token}`));
 });
+
+test("public join GET with invalid, expired, or revoked tokens leaks no org, unit, or name", async () => {
+  await flag(true);
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  const issued = await issueInvite(await admin(), unit_id);
+  const meta = await query<{ org_name: string; property_name: string; unit_label: string }>(
+    `SELECT o.name AS org_name, p.name AS property_name, u.label AS unit_label
+       FROM units u
+       JOIN organizations o ON o.id = u.org_id
+       JOIN properties p ON p.id = u.property_id
+      WHERE u.id = $1`,
+    [unit_id],
+  );
+  assert.ok(meta.rows[0], "seed unit metadata");
+  const people = await query<{ display_name: string }>(
+    `SELECT display_name FROM contacts WHERE org_id = $1 AND archived_at IS NULL AND display_name IS NOT NULL`,
+    [ORG_ID],
+  );
+  const forbidden = [
+    meta.rows[0].org_name,
+    meta.rows[0].property_name,
+    meta.rows[0].unit_label,
+    ...people.rows.map((r) => r.display_name),
+  ].filter((s) => s && s.trim().length > 1);
+
+  async function assertNoLeak(token: string, label: string) {
+    const res = await joinGet(new Request(`http://localhost/join/${token}`), { params: Promise.resolve({ token }) });
+    assert.equal(res.status, 200, label);
+    const html = await res.text();
+    for (const s of forbidden) {
+      assert.equal(html.includes(s), false, `${label} leaked ${JSON.stringify(s)}`);
+    }
+    assert.equal(/松信|海岸|信義|大安|Oakland|張雅文|王小美|陳建宏|林秀英/u.test(html), false, `${label} leaked a seed name`);
+  }
+
+  await assertNoLeak("not-a-real-token", "invalid");
+  await assertNoLeak(issued.token, "issued (GET must not look up the invite)");
+  await query(`UPDATE app.unit_invite_secrets SET expires_at = now() - interval '1 day' WHERE token_hash = $1`, [hashInviteToken(issued.token)]);
+  await assertNoLeak(issued.token, "expired");
+  await query(`UPDATE app.unit_invite_secrets SET expires_at = now() + interval '14 days', revoked_at = now() WHERE token_hash = $1`, [hashInviteToken(issued.token)]);
+  await assertNoLeak(issued.token, "revoked");
+});
+
 
 test("R-a7 rotate invalidates the old token and keeps existing bindings", async () => {
   await flag(true);
