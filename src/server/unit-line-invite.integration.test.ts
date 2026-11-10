@@ -28,6 +28,7 @@ import {
   unitLineInviteOn,
   UNIT_LINE_TOKEN_ATTEMPT_LIMIT,
 } from "./unit-line-invite";
+import { ownerPropertyNames, ownerHome } from "./queries";
 
 // B-033 unit_line_invite. Local disposable PostgreSQL clone only. All people and tokens are synthetic.
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>>;
@@ -54,17 +55,20 @@ async function ensureMigration() {
   await withClient((client) => client.query(sql));
 }
 
-async function flag(on: boolean, orgId = ORG_ID) {
+async function flag(on: boolean, orgId: string | string[] = ORG_ID) {
+  const orgIds = Array.isArray(orgId) ? orgId : [orgId];
   await query(
     `INSERT INTO platform_settings(key, value) VALUES ('unit_line_invite', $1::jsonb)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [JSON.stringify(on ? { enabled: true, allowed_org_ids: [orgId] } : { enabled: false, allowed_org_ids: [] })],
+    [JSON.stringify(on ? { enabled: true, allowed_org_ids: orgIds } : { enabled: false, allowed_org_ids: [] })],
   );
   if (on) {
-    await query(
-      `UPDATE organizations SET feature_flags = jsonb_set(coalesce(feature_flags, '{}'::jsonb), '{unit_line_invite}', 'true'::jsonb, true) WHERE id = $1`,
-      [orgId],
-    );
+    for (const id of orgIds) {
+      await query(
+        `UPDATE organizations SET feature_flags = jsonb_set(coalesce(feature_flags, '{}'::jsonb), '{unit_line_invite}', 'true'::jsonb, true) WHERE id = $1`,
+        [id],
+      );
+    }
   } else {
     await query(
       `UPDATE organizations SET feature_flags = coalesce(feature_flags, '{}'::jsonb) - 'unit_line_invite'`,
@@ -256,7 +260,7 @@ test("R-b1 manager must tick bound tenants; until then 等待管理方確認租�
   await clearBinds(unit_id);
   const issued = await issueInvite(await admin(), unit_id);
   const bound = await acceptBind({ orgId: ORG_ID, unitId: unit_id, token: issued.token, lineSub: `line-b1-${randomUUID()}`, enteredName: "合成租客" });
-  const pending = await tenantPortalView(ORG_ID, bound.userId);
+  const pending = await tenantPortalView(ORG_ID, bound.userId, unit_id);
   assert.equal(pending.viewLeaseLabel, "等待管理方確認租約");
   assert.equal(pending.showPay, false);
   assert.equal(pending.showId, false);
@@ -267,7 +271,7 @@ test("R-b1 manager must tick bound tenants; until then 等待管理方確認租�
   );
   assert.equal(parties.rows[0].n, 0);
   await includeOnLease(await admin(), lease_id, unit_id, [bound.bindingId]);
-  const linked = await tenantPortalView(ORG_ID, bound.userId);
+  const linked = await tenantPortalView(ORG_ID, bound.userId, unit_id);
   assert.equal(linked.showPay, true);
   assert.equal(linked.showId, true);
   assert.equal(linked.showRepair, true);
@@ -281,7 +285,7 @@ test("R-b2 pending binder has no payment, ID-document, or repair entry points", 
   await clearBinds(unit_id);
   const issued = await issueInvite(await admin(), unit_id);
   const bound = await acceptBind({ orgId: ORG_ID, unitId: unit_id, token: issued.token, lineSub: `line-b2-${randomUUID()}` });
-  const view = await tenantPortalView(ORG_ID, bound.userId);
+  const view = await tenantPortalView(ORG_ID, bound.userId, unit_id);
   assert.equal(view.showPay, false);
   assert.equal(view.showId, false);
   assert.equal(view.showRepair, false);
@@ -321,21 +325,133 @@ test("R-b4 the same LINE identity cannot bind two users on one unit", async () =
     (err) => isFlow(err, "errors.identity_conflict"));
 });
 
-test("R-b5 staff members cannot bind; one LINE cannot hold two units (C-12)", async () => {
+test("R-b5 staff+tenant same org is identity_conflict", async () => {
+  await flag(true);
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  const token = (await issueInvite(await admin(), unit_id)).token;
+  await assert.rejects(
+    () => acceptBind({ orgId: ORG_ID, unitId: unit_id, token, lineSub: `line-b5-${randomUUID()}`, userId: USERS.admin }),
+    (err) => isFlow(err, "errors.identity_conflict"),
+  );
+});
+
+test("R-b5 one LINE may bind two units", async () => {
   await flag(true);
   const { unit_id } = await unitAndLease();
   await clearBinds(unit_id);
   const staff = await admin();
   const token = (await issueInvite(staff, unit_id)).token;
-  await assert.rejects(() => acceptBind({ orgId: ORG_ID, unitId: unit_id, token, lineSub: `line-b5-${randomUUID()}`, userId: USERS.admin }),
-    (err) => isFlow(err, "errors.staff_conflict"));
   const lineSub = `line-b5-multi-${randomUUID()}`;
-  await acceptBind({ orgId: ORG_ID, unitId: unit_id, token, lineSub });
+  const bound1 = await acceptBind({ orgId: ORG_ID, unitId: unit_id, token, lineSub });
   const unit2 = await otherUnit(ORG_ID, unit_id);
   await clearBinds(unit2);
   const token2 = (await issueInvite(staff, unit2)).token;
-  await assert.rejects(() => acceptBind({ orgId: ORG_ID, unitId: unit2, token: token2, lineSub }),
-    (err) => isFlow(err, "errors.multi_unit"));
+  const bound2 = await acceptBind({ orgId: ORG_ID, unitId: unit2, token: token2, lineSub });
+  assert.equal(bound1.userId, bound2.userId);
+  const rows = await query(
+    `SELECT unit_id FROM app.unit_bindings
+      WHERE user_id = $1 AND unit_id IN ($2, $3) AND status IN ('pending','lease_linked')`,
+    [bound1.userId, unit_id, unit2],
+  );
+  assert.equal(rows.rows.length, 2);
+});
+
+test("R-b5 staff in org A may be tenant in org B", async () => {
+  await flag(true, [ORG_ID, ORG2_ID]);
+  const { unit_id } = await unitAndLease(ORG2_ID);
+  await clearBinds(unit_id);
+  const staff = await session(USERS.coastAdmin, "staff", "admin", ORG2_ID);
+  const token = (await issueInvite(staff, unit_id)).token;
+  const bound = await acceptBind({
+    orgId: ORG2_ID,
+    unitId: unit_id,
+    token,
+    lineSub: `line-b5-crossorg-${randomUUID()}`,
+    userId: USERS.maintenance,
+  });
+  assert.equal(bound.userId, USERS.maintenance);
+});
+
+test("T-R-b5 one LINE is tenant on A1 (linked) + B1 (pending) and owner of P; scopes do not bleed", async () => {
+  // A1 is 2F 大安和平, not the unitAndLease() row on 信義松仁 (P, owned by USERS.owner).
+  const A1 = "33f46ee6-2f3a-43c4-881b-88c6527d8127";
+  const A1_LEASE = "b155fe03-4704-4398-ae27-56d3ea8f9e8e";
+  await flag(true, [ORG_ID, ORG2_ID]);
+  const { unit_id: B1 } = await unitAndLease(ORG2_ID);
+  await clearBinds(A1);
+  await clearBinds(B1);
+
+  const lineSub = `line-trb5-${randomUUID()}`;
+  const empty = (v: { viewLeaseLabel: string; showPay: boolean; showId: boolean; showRepair: boolean; showMessages: boolean }) =>
+    v.viewLeaseLabel === "" && !v.showPay && !v.showId && !v.showRepair && !v.showMessages;
+
+  const adminSess = await admin();
+  const tokenA = (await issueInvite(adminSess, A1)).token;
+  const boundA = await acceptBind({ orgId: ORG_ID, unitId: A1, token: tokenA, lineSub, userId: USERS.owner });
+  const coastSess = await session(USERS.coastAdmin, "staff", "admin", ORG2_ID);
+  const tokenB = (await issueInvite(coastSess, B1)).token;
+  const boundB = await acceptBind({ orgId: ORG2_ID, unitId: B1, token: tokenB, lineSub, userId: USERS.owner });
+  assert.equal(boundA.userId, USERS.owner);
+  assert.equal(boundB.userId, USERS.owner);
+  await includeOnLease(adminSess, A1_LEASE, A1, [boundA.bindingId]);
+
+  const a1View = await tenantPortalView(ORG_ID, USERS.owner, A1);
+  assert.equal(a1View.viewLeaseLabel, "lease");
+  assert.equal(a1View.showPay, true);
+  assert.equal(a1View.showId, true);
+  assert.equal(a1View.showRepair, true);
+  assert.equal(a1View.showMessages, true);
+  const b1View = await tenantPortalView(ORG2_ID, USERS.owner, B1);
+  assert.equal(b1View.viewLeaseLabel, "等待管理方確認租約");
+  assert.equal(b1View.showPay, false);
+  assert.equal(b1View.showId, false);
+  assert.equal(b1View.showRepair, false);
+  assert.equal(b1View.showMessages, false);
+
+  const ownerSess = await session(USERS.owner, "owner", null, ORG_ID);
+  const names = await ownerPropertyNames(ownerSess);
+  assert.ok(names.some((n) => n.name === "信義松仁"));
+  assert.ok(!names.some((n) => n.name === "大安和平"));
+  assert.ok(!names.some((n) => n.name === "Oakland 12th"));
+  const home = await ownerHome(ownerSess);
+  assert.ok(!home.some((row) => row.unit_label === "2F"));
+
+  await assert.rejects(async () => ownerPropertyNames(await session(USERS.owner, "tenant", null, ORG_ID)));
+
+  assert.ok(empty(await tenantPortalView(ORG2_ID, USERS.owner, A1)));
+  assert.ok(empty(await tenantPortalView(ORG_ID, USERS.owner, B1)));
+  const namesOrg2 = await ownerPropertyNames(await session(USERS.owner, "owner", null, ORG2_ID));
+  assert.ok(!namesOrg2.some((n) => n.name === "信義松仁"));
+
+  // (6) before removing A1, so the user is still a tenant in both orgs.
+  await assert.rejects(
+    () => query(
+      `INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, 'manager', 'active')`,
+      [ORG_ID, USERS.owner],
+    ),
+    (err: unknown) => /identity_conflict/.test(err instanceof Error ? err.message : String(err)),
+  );
+  await assert.rejects(
+    () => query(
+      `INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, 'manager', 'active')`,
+      [ORG2_ID, USERS.owner],
+    ),
+    (err: unknown) => /identity_conflict/.test(err instanceof Error ? err.message : String(err)),
+  );
+
+  await withClient((c) => insertTestAuthSession(c, USERS.owner));
+  await removeBinding(adminSess, boundA.bindingId);
+  assert.ok(empty(await tenantPortalView(ORG_ID, USERS.owner, A1)));
+  const b1Still = await tenantPortalView(ORG2_ID, USERS.owner, B1);
+  assert.equal(b1Still.viewLeaseLabel, "等待管理方確認租約");
+  const namesAfter = await ownerPropertyNames(ownerSess);
+  assert.ok(namesAfter.some((n) => n.name === "信義松仁"));
+  const sess = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM auth_sessions WHERE user_id = $1 AND revoked_at IS NULL`,
+    [USERS.owner],
+  );
+  assert.ok(sess.rows[0].n >= 1);
 });
 
 test("R-b6 an entered name matching a lease party does not auto-add the binder to the lease", async () => {
@@ -459,7 +575,7 @@ test("R-X-money a pending binder cannot see payment entry points", async () => {
   await clearBinds(unit_id);
   const token = (await issueInvite(await admin(), unit_id)).token;
   const bound = await acceptBind({ orgId: ORG_ID, unitId: unit_id, token, lineSub: `line-xm-${randomUUID()}` });
-  const view = await tenantPortalView(ORG_ID, bound.userId);
+  const view = await tenantPortalView(ORG_ID, bound.userId, unit_id);
   assert.equal(view.showPay, false);
 });
 
@@ -484,7 +600,7 @@ test("R-X-leak bindings and portal view do not leak across orgs", async () => {
   const bound = await acceptBind({ orgId: ORG_ID, unitId: unit_id, token, lineSub: `line-xl-${randomUUID()}` });
   const listed = await listBindings(await admin(), unit_id);
   assert.ok(listed.every((row) => String(row.org_id) === ORG_ID));
-  const otherView = await tenantPortalView(ORG2_ID, bound.userId);
+  const otherView = await tenantPortalView(ORG2_ID, bound.userId, unit_id);
   assert.equal(otherView.viewLeaseLabel, "");
   assert.equal(otherView.showPay, false);
 });

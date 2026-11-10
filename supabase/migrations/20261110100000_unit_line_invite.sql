@@ -74,29 +74,7 @@ ALTER TABLE app.unit_bind_impostor_flags FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON app.unit_bind_impostor_flags FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON app.unit_bind_impostor_flags TO service_role;
 
-CREATE FUNCTION app.unit_line_single_unit_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  -- C-12 extension room: relax this trigger later to allow multi-unit tenants.
-  IF NEW.status IN ('pending','lease_linked') THEN
-    IF EXISTS (
-      SELECT 1 FROM app.unit_bindings b
-       WHERE b.org_id = NEW.org_id
-         AND b.line_identity_hash = NEW.line_identity_hash
-         AND b.unit_id <> NEW.unit_id
-         AND b.status IN ('pending','lease_linked')
-         AND b.id <> NEW.id
-    ) THEN
-      RAISE EXCEPTION 'multi_unit';
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER unit_line_single_unit_guard
-  BEFORE INSERT OR UPDATE ON app.unit_bindings
-  FOR EACH ROW EXECUTE FUNCTION app.unit_line_single_unit_guard();
+-- C-12 (Ron 2026-11-10 12:03 PT): a LINE may be tenant on several units and also an owner (incl. same org). Same-org staff+tenant remains blocked in unit_line_accept and unit_line_staff_tenant_guard.
 
 CREATE FUNCTION app.unit_line_issue(p_org uuid, p_unit uuid, p_hash text, p_issuer uuid)
   RETURNS uuid
@@ -178,12 +156,11 @@ BEGIN
 
   IF EXISTS (SELECT 1 FROM public.org_members m
               WHERE m.org_id = p_org AND m.user_id = p_user) THEN
-    RAISE EXCEPTION 'staff_conflict';
+    RAISE EXCEPTION 'identity_conflict';
   END IF;
 
   IF EXISTS (SELECT 1 FROM app.unit_bindings b
-              WHERE b.org_id = p_org AND b.unit_id = p_unit
-                AND b.line_identity_hash = p_line_identity_hash
+              WHERE b.line_identity_hash = p_line_identity_hash
                 AND b.user_id <> p_user
                 AND b.status IN ('pending','lease_linked')) THEN
     RAISE EXCEPTION 'identity_conflict';
@@ -214,9 +191,18 @@ BEGIN
     RAISE EXCEPTION 'not_found';
   END IF;
 
-  UPDATE public.auth_sessions
-     SET revoked_at = now()
-   WHERE user_id = v_user AND revoked_at IS NULL;
+  IF v_user IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM app.unit_bindings b
+                      WHERE b.user_id = v_user
+                        AND b.status IN ('pending','lease_linked'))
+     AND NOT EXISTS (SELECT 1 FROM public.contacts c
+                      WHERE c.user_id = v_user
+                        AND c.is_owner
+                        AND c.archived_at IS NULL) THEN
+    UPDATE public.auth_sessions
+       SET revoked_at = now()
+     WHERE user_id = v_user AND revoked_at IS NULL;
+  END IF;
 
   -- LINE portal sessions share public.auth_sessions (app.b033_line_sessions has no revoked_at).
 END;
@@ -245,6 +231,24 @@ END;
 $$;
 REVOKE ALL ON FUNCTION app.unit_line_include_on_lease(uuid, uuid, uuid, uuid[]) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION app.unit_line_include_on_lease(uuid, uuid, uuid, uuid[]) TO service_role;
+
+CREATE FUNCTION app.unit_line_staff_tenant_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.status = 'active' AND EXISTS (
+    SELECT 1 FROM app.unit_bindings b
+     WHERE b.org_id = NEW.org_id AND b.user_id = NEW.user_id
+       AND b.status IN ('pending','lease_linked')
+  ) THEN
+    RAISE EXCEPTION 'identity_conflict';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER unit_line_staff_tenant_guard
+  BEFORE INSERT OR UPDATE ON public.org_members
+  FOR EACH ROW EXECUTE FUNCTION app.unit_line_staff_tenant_guard();
 
 CREATE TABLE app.unit_invite_attempts (
   key text PRIMARY KEY,

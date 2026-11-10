@@ -230,6 +230,16 @@ export async function acceptBind(input: {
     return await withSql(input.userId ?? null, async (client) => {
       let userId = input.userId;
       if (!userId) {
+        const existing = await client.query<{ user_id: string }>(
+          `SELECT user_id::text FROM app.unit_bindings
+            WHERE line_identity_hash = $1
+            ORDER BY (status IN ('pending','lease_linked')) DESC, bound_at DESC
+            LIMIT 1`,
+          [lineHash],
+        );
+        if (existing.rows[0]) userId = existing.rows[0].user_id;
+      }
+      if (!userId) {
         const email = `portal-${randomUUID()}@demo.condola.local`;
         const provisioned = await client.query<{ id: string }>(
           "SELECT app.provision_portal_user($1, $2, null) AS id",
@@ -335,13 +345,12 @@ export interface TenantPortalView {
   showMessages: boolean;
 }
 
-export async function tenantPortalView(orgId: string, userId: string): Promise<TenantPortalView> {
+export async function tenantPortalView(orgId: string, userId: string, unitId: string): Promise<TenantPortalView> {
   return withSql(null, async (client) => {
     const res = await client.query<{ status: string }>(
       `SELECT status FROM app.unit_bindings
-        WHERE org_id = $1 AND user_id = $2 AND status IN ('pending','lease_linked')
-        ORDER BY bound_at DESC LIMIT 1`,
-      [orgId, userId],
+        WHERE org_id = $1 AND user_id = $2 AND unit_id = $3 AND status IN ('pending','lease_linked')`,
+      [orgId, userId, unitId],
     );
     const row = res.rows[0];
     if (row?.status === "lease_linked") {

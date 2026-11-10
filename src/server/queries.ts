@@ -18,6 +18,7 @@ import {
 } from "./list-search";
 import { rentUtilityDueMinor, tenantBillLines } from "./money";
 import type { Session } from "./types";
+import { FlowError } from "./errors";
 import {
   tenantSignedPdfGloballyEnabled,
   tenantSignedPdfOn,
@@ -1521,6 +1522,7 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
 }
 
 export async function ownerPropertyNames(session: Session) {
+  if (session.kind !== "owner") throw new FlowError("errors.forbidden");
   session = await guardEffectiveSession(session, null);
   return tx(session.userId, async (client) =>
     withEffectiveReadAuthority(client, session, null, async () => many<{ id: string; name: string }>(
@@ -1535,6 +1537,7 @@ export async function ownerPropertyNames(session: Session) {
 }
 
 export async function ownerHome(session: Session) {
+  if (session.kind !== "owner") throw new FlowError("errors.forbidden");
   session = await guardEffectiveSession(session, null);
   return tx(session.userId, async (client) =>
     withEffectiveReadAuthority(client, session, null, async () => many<{
