@@ -105,8 +105,8 @@ flags:
     default: false
     ring: internal
     global_kill: "existing runtime MOVE_OUT_NOTICE_ENABLED absent or not exactly true"
-    org_override: "existing action pins authorized session organization/environment; per-org rollout reconciliation remains B027 work"
-    activation: "local synthetic tests only; no staged or production activation"
+    org_override: "platform_settings.move_out_notice enabled must be boolean true and allowed_org_ids must include this organization; organizations.feature_flags.move_out_notice must be boolean true"
+    activation: "default OFF everywhere; per-org admission exists; no staged or production activation in this change; Worker var remains the global kill"
 
   rent_reminders_v2:
     owner: Ron
