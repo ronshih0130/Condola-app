@@ -22,6 +22,18 @@
 - These mode provisions explicitly amend Rules 1/6; `ops/RULES.md` must carry the same amendment.
 - Desktop model CLIs are not required. Run bash scripts in macOS Terminal or an app's terminal tool.
 - Neither mode starts execution before acquiring repository ownership; read-only discovery is allowed first.
+- Claude 端到端 mode: see section below.
+
+## 「Claude 端到端」模式
+- This is a mode for local Claude (with local Codex as implementer/QA per the handoff below); it governs how Claude-authored work reaches production.
+- (a) Claude never self-reviews. Non-author QA is mandatory, and the QA model MUST NOT be the author model. Allowed non-author QA: Gemini or Codex. Claude may not sign off on Claude-authored work.
+- (b) The Step-6 system design / spec (condola-hub `01-mission/dev-workflow.md` step 6) MUST include a production checklist covering: migrations, Worker config, secret NAMES only (never secret values), external console settings (e.g. LINE), flag plan, and rollback. Acceptance criteria MUST cover failure states, permissions, and concurrency.
+- (c) Done means production-usable, not merely "PR opened" or "CI green." The path is: hosted CI → staging → non-author QA → CEO exact-SHA GO → prod with flag OFF → T+0/T+15 → ON for the 4 internal orgs → Ron acceptance. Claude may run on its own up to staging; production never changes without the gates above.
+- (c) The status table MUST be generated from the actual main/prod state (live SHAs, Worker versions, flags), never from memory or a planned board.
+- Authoritative handoff (do not copy here): condola-hub `20-build/LOCAL-DEV-MODE-HANDOFF.md` — https://github.com/ronshih0130/condola-hub/blob/main/20-build/LOCAL-DEV-MODE-HANDOFF.md
+- That handoff is the single source for stories, AC, mockups, BUILD-ORDER, PRINCIPLES 49–57, QA standard, release gates, safety red lines, and switch-to-local / switch-back steps. When Ron announces a switch to local development mode, follow that handoff so local Claude or Codex use the same pipeline as Grok Bot.
+- This mode does not waive CEO exact-SHA GO, prod flag-OFF ship, T+0/T+15, or Ron acceptance.
+- Docs-only / no secrets: never put secret values in this file.
 
 ## Start of every session
 1. Fetch Origin and inspect `ops-lock` read-only; remain dormant while another executor owns it.
