@@ -6,7 +6,6 @@ import {
   issueInvite,
   rotateInvite,
   listBindings,
-  unitLineInviteOn,
   acceptBindExisting,
   hashInviteToken,
   INVITE_TOKEN_RE,
@@ -52,9 +51,6 @@ export async function handleStaffLive(
 ): Promise<NextResponse> {
   if (!session) return emptySession();
   if (!UUID_RE.test(unitId)) return badId();
-  if (!(await unitLineInviteOn(session.orgId))) {
-    return json({ ok: false, error: "errors.notFound" }, 404);
-  }
   try {
     const cur = await currentInvite(session, unitId);
     const rows = await listBindings(session, unitId);
@@ -91,9 +87,6 @@ export async function handleStaffIssue(
 ): Promise<NextResponse> {
   if (!session) return emptySession();
   if (!UUID_RE.test(unitId)) return badId();
-  if (!(await unitLineInviteOn(session.orgId))) {
-    return json({ ok: false, error: "errors.notFound" }, 404);
-  }
   try {
     const cur = await currentInvite(session, unitId);
     if (cur) {
@@ -137,9 +130,6 @@ export async function handleStaffRotate(
 ): Promise<NextResponse> {
   if (!session) return emptySession();
   if (!UUID_RE.test(unitId)) return badId();
-  if (!(await unitLineInviteOn(session.orgId))) {
-    return json({ ok: false, error: "errors.notFound" }, 404);
-  }
   try {
     const rotated = await rotateInvite(session, unitId);
     const after = await currentInvite(session, unitId);

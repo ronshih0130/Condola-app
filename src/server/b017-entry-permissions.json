@@ -414,5 +414,8 @@
   "src/server/unit-line-invite.ts#removeBinding": "leases.edit",
   "src/server/unit-line-invite.ts#includeOnLease": "leases.edit",
   "src/server/unit-line-invite.ts#listBindings": "leases.edit",
-  "src/server/unit-line-invite.ts#listInvites": "leases.edit"
+  "src/server/unit-line-invite.ts#listInvites": "leases.edit",
+  "src/server/unit-line-invite-api.ts#handleStaffLive": "leases.edit",
+  "src/server/unit-line-invite-api.ts#handleStaffIssue": "leases.edit",
+  "src/server/unit-line-invite-api.ts#handleStaffRotate": "leases.edit"
 }

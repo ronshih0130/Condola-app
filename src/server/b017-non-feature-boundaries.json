@@ -494,5 +494,9 @@
   "src/server/payment-center-events.ts#producePaymentResultEvent": {
     "reason": "Internal: same-transaction notification event producer only; all request callers must guard first and remain scanned through this body",
     "sha256": "22ac1f1396e3b75dad65c76401ab744a0e4bff0f9a5ebd2c941db07db14a364d"
+  },
+  "src/server/unit-line-invite-api.ts#handleAcceptExisting": {
+    "reason": "Existing-account unit invite accept; the session user binds only themselves under the same 4-seat cap; no staff authority",
+    "sha256": "045966ea2326243622c0d997dc5d7a2215a95564b95a09653e3d7ac3331d0ca3"
   }
 }
