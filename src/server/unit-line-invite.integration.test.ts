@@ -52,9 +52,17 @@ async function ensureMigration() {
     `SELECT 1 AS ok FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'app' AND p.proname = 'unit_line_invite_on' LIMIT 1`,
   );
-  if (present.rows[0]) return;
-  const sql = readFileSync(new URL("../../supabase/migrations/20261110100000_unit_line_invite.sql", import.meta.url), "utf8");
-  await withClient((client) => client.query(sql));
+  if (!present.rows[0]) {
+    const sql = readFileSync(new URL("../../supabase/migrations/20261110100000_unit_line_invite.sql", import.meta.url), "utf8");
+    await withClient((client) => client.query(sql));
+  }
+  const seatCap = await query<{ ok: number }>(
+    `SELECT 1 AS ok FROM pg_trigger WHERE tgname = 'unit_bindings_seat_cap_guard' LIMIT 1`,
+  );
+  if (!seatCap.rows[0]) {
+    const capSql = readFileSync(new URL("../../supabase/migrations/20261110110000_unit_line_invite_seat_cap.sql", import.meta.url), "utf8");
+    await withClient((client) => client.query(capSql));
+  }
 }
 
 async function flag(on: boolean, orgId: string | string[] = ORG_ID) {
@@ -363,6 +371,139 @@ test("R-a8 five concurrent accepts on one token yield four seats and one seat_ca
     [freeUnit],
   );
   assert.equal(count.rows[0].n, 4);
+});
+
+test("MGT-40-AC3 / R-a8 issue revokes earlier live secrets; only one live secret per unit", async () => {
+  await flag(true);
+  const { unit_id } = await unitAndLease();
+  const freeUnit = await otherUnit(ORG_ID, unit_id);
+  await clearBinds(freeUnit);
+
+  const first = (await issueInvite(await admin(), freeUnit)).token;
+  const second = (await issueInvite(await admin(), freeUnit)).token;
+
+  await assert.rejects(
+    acceptBind({ orgId: ORG_ID, unitId: freeUnit, token: first, lineSub: `line-revoked-${randomUUID()}` }),
+    (err: unknown) => isFlow(err, "errors.revoked"),
+  );
+
+  const bound = await acceptBind({
+    orgId: ORG_ID,
+    unitId: freeUnit,
+    token: second,
+    lineSub: `line-live-${randomUUID()}`,
+  });
+  assert.ok(bound.bindingId);
+
+  const live = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app.unit_invite_secrets WHERE unit_id = $1 AND revoked_at IS NULL`,
+    [freeUnit],
+  );
+  assert.equal(live.rows[0].n, 1);
+
+  const dupHash = hashInviteToken(newInviteToken());
+  await assert.rejects(
+    query(
+      `INSERT INTO app.unit_invite_secrets (org_id, unit_id, token_hash, expires_at)
+       VALUES ($1, $2, $3, now() + interval '14 days')`,
+      [ORG_ID, freeUnit, dupHash],
+    ),
+    (err: unknown) => err instanceof Error && ((err as { code?: string }).code === "23505" || /duplicate key|unique/i.test(err.message)),
+  );
+
+  await clearBinds(freeUnit);
+});
+
+test("TEN-20-AC3 / R-a8 five concurrent accepts across two secrets yield at most four seats and DB seat_cap", async () => {
+  await flag(true);
+  const { unit_id } = await unitAndLease();
+  const freeUnit = await otherUnit(ORG_ID, unit_id);
+
+  const run = async () => {
+    await clearBinds(freeUnit);
+    await query(`UPDATE app.unit_invite_secrets SET revoked_at = now() WHERE unit_id = $1 AND revoked_at IS NULL`, [freeUnit]);
+    const tokenA = (await issueInvite(await admin(), freeUnit)).token;
+    const tokenB = newInviteToken();
+    const hashB = hashInviteToken(tokenB);
+    await query(`DROP INDEX IF EXISTS app.unit_invite_secrets_one_live_per_unit`);
+    try {
+      await query(
+        `INSERT INTO app.unit_invite_secrets (org_id, unit_id, token_hash, expires_at)
+         VALUES ($1, $2, $3, now() + interval '14 days')`,
+        [ORG_ID, freeUnit, hashB],
+      );
+      const tokens = [tokenA, tokenA, tokenA, tokenB, tokenB];
+      const results = await Promise.allSettled(
+        tokens.map((t, i) =>
+          acceptBind({ orgId: ORG_ID, unitId: freeUnit, token: t, lineSub: `line-split-${i}-${randomUUID()}` }),
+        ),
+      );
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      const cap = results.filter((r) => r.status === "rejected" && isFlow((r as PromiseRejectedResult).reason, "errors.seat_cap")).length;
+      const count = await query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM app.unit_bindings WHERE unit_id = $1 AND status IN ('pending','lease_linked')`,
+        [freeUnit],
+      );
+      return { ok, cap, count: count.rows[0].n };
+    } finally {
+      await query(
+        `UPDATE app.unit_invite_secrets SET revoked_at = now()
+          WHERE unit_id = $1 AND revoked_at IS NULL
+            AND id NOT IN (
+              SELECT id FROM app.unit_invite_secrets
+               WHERE unit_id = $1 AND revoked_at IS NULL
+               ORDER BY created_at DESC, id DESC LIMIT 1
+            )`,
+        [freeUnit],
+      );
+      await query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS unit_invite_secrets_one_live_per_unit
+           ON app.unit_invite_secrets (org_id, unit_id) WHERE revoked_at IS NULL`,
+      );
+    }
+  };
+
+  let r = await run();
+  if (!(r.ok === 4 && r.cap === 1 && r.count === 4)) {
+    r = await run();
+  }
+  assert.equal(r.ok, 4);
+  assert.equal(r.cap, 1);
+  assert.equal(r.count, 4);
+
+  await clearBinds(freeUnit);
+});
+
+test("TEN-20-AC3 / R-a8 seat cap is enforced by the unit_bindings trigger on direct insert", async () => {
+  await flag(true);
+  const { unit_id } = await unitAndLease();
+  const freeUnit = await otherUnit(ORG_ID, unit_id);
+  await clearBinds(freeUnit);
+
+  for (let i = 0; i < 4; i++) {
+    await query(
+      `INSERT INTO app.unit_bindings (org_id, unit_id, user_id, line_identity_hash, status)
+       VALUES ($1, $2, $3, $4, 'pending')`,
+      [ORG_ID, freeUnit, randomUUID(), `direct-${i}-${randomUUID()}`],
+    );
+  }
+
+  await assert.rejects(
+    query(
+      `INSERT INTO app.unit_bindings (org_id, unit_id, user_id, line_identity_hash, status)
+       VALUES ($1, $2, $3, $4, 'pending')`,
+      [ORG_ID, freeUnit, randomUUID(), `direct-5-${randomUUID()}`],
+    ),
+    (err: unknown) => err instanceof Error && /seat_cap/.test(err.message),
+  );
+
+  const count = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app.unit_bindings WHERE unit_id = $1 AND status IN ('pending','lease_linked')`,
+    [freeUnit],
+  );
+  assert.equal(count.rows[0].n, 4);
+
+  await clearBinds(freeUnit);
 });
 
 test("R-b1 manager must tick bound tenants; until then 等待管理方確認租約 and no pay/id/repair", async () => {
