@@ -140,14 +140,48 @@ test("audited payee gateway keeps disclosure, denial and isolation in one durabl
     await client.query("BEGIN");
     await client.query("SET LOCAL ROLE authenticated");
     await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('app.active_org_id',$2,true),set_config('app.env','live',true)`, [USERS.admin, org]);
-    // CB2 (MGT-04): a legacy authenticated write to a non-payee column on the
-    // protected (assigned) account now succeeds instead of raising 42501.
-    assert.equal((await client.query(`UPDATE bank_accounts SET show_to_tenants=false WHERE id=$1`, [accountId])).rowCount, 1);
+    // B-1 (MGT-04 / TEN-06): on a protected (assigned) payee account a legacy
+    // authenticated write may touch ONLY nickname; show_to_tenants is gated, so
+    // the gateway raises 42501 ('payee account requires gateway').
+    await client.query("SAVEPOINT cb2_admin_show");
+    await assert.rejects(
+      client.query(`UPDATE bank_accounts SET show_to_tenants=false WHERE id=$1`, [accountId]),
+      /payee|permission denied/i,
+    );
+    await client.query("ROLLBACK TO SAVEPOINT cb2_admin_show");
+    // B-1 (MGT-04 / TEN-06): nickname-only is the sole permitted legacy edit on
+    // the protected account and must still succeed.
+    await client.query("SAVEPOINT cb2_admin_nick");
+    assert.equal((await client.query(`UPDATE bank_accounts SET nickname='changed' WHERE id=$1`, [accountId])).rowCount, 1);
+    await client.query("ROLLBACK TO SAVEPOINT cb2_admin_nick");
+    // B-1 (MGT-04 / TEN-06): an accountant org_member is equally gated; a
+    // bank_code edit on the protected account raises 42501.
+    await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('app.active_org_id',$2,true),set_config('app.env','live',true)`, [USERS.accountant, org]);
+    await client.query("SAVEPOINT cb2_acct_bankcode");
+    await assert.rejects(
+      client.query(`UPDATE bank_accounts SET bank_code='999' WHERE id=$1`, [accountId]),
+      /payee|permission denied/i,
+    );
+    await client.query("ROLLBACK TO SAVEPOINT cb2_acct_bankcode");
     await client.query("ROLLBACK");
     await client.query("BEGIN");
     await client.query("SET LOCAL ROLE service_role");
-    // CB2 (MGT-04): same for a legacy service_role non-payee edit.
-    assert.equal((await client.query(`UPDATE bank_accounts SET bank_name='changed' WHERE id=$1`, [accountId])).rowCount, 1);
+    // B-1 (MGT-04 / TEN-06): service_role is not exempt; a legacy bank_name edit
+    // on the protected account raises 42501.
+    await client.query("SAVEPOINT cb2_svc_bankname");
+    await assert.rejects(
+      client.query(`UPDATE bank_accounts SET bank_name='changed' WHERE id=$1`, [accountId]),
+      /payee|permission denied/i,
+    );
+    await client.query("ROLLBACK TO SAVEPOINT cb2_svc_bankname");
+    // B-1 (MGT-04 / TEN-06): and an account_last5 edit under service_role is
+    // likewise rejected 42501.
+    await client.query("SAVEPOINT cb2_svc_last5");
+    await assert.rejects(
+      client.query(`UPDATE bank_accounts SET account_last5='00000' WHERE id=$1`, [accountId]),
+      /payee|permission denied/i,
+    );
+    await client.query("ROLLBACK TO SAVEPOINT cb2_svc_last5");
     await client.query("ROLLBACK");
     await client.query("BEGIN");
     await client.query("SET LOCAL ROLE authenticated");
