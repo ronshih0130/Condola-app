@@ -25,15 +25,42 @@ export function referrerHeaders(): Record<string, string> {
   return { "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" };
 }
 
+// 32-byte base64url token from newInviteToken() is exactly 43 chars.
+export const INVITE_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function joinLandingHeaders(): Record<string, string> {
+  return {
+    ...referrerHeaders(),
+    "Content-Security-Policy":
+      "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+    "X-Content-Type-Options": "nosniff",
+  };
+}
+
 export function maskToken(token: string): string {
   if (token.length > 8) return token.slice(0, 2) + "…" + token.slice(-2);
   return "***";
 }
 
-export function landingHtml(opts: { token: string; firm?: string; unit?: string; copy?: string }): string {
-  const firm = opts.firm ?? "Condola";
-  const unit = opts.unit ?? "";
-  const copy = opts.copy ?? "";
+export function landingHtml(opts: { token?: string; firm?: string; unit?: string; copy?: string }): string {
+  const firm = escapeHtml(opts.firm ?? "Condola");
+  const unit = escapeHtml(opts.unit ?? "");
+  const copy = escapeHtml(opts.copy ?? "");
+  const token =
+    typeof opts.token === "string" && INVITE_TOKEN_RE.test(opts.token) ? opts.token : null;
+  const continueLine =
+    token === null
+      ? "<p>此邀請連結無效或已失效</p>"
+      : `<a href="/join/${escapeHtml(token)}">continue</a>`;
   return [
     "<!doctype html>",
     '<html lang="zh-TW">',
@@ -49,7 +76,7 @@ export function landingHtml(opts: { token: string; firm?: string; unit?: string;
     `<p>${unit}</p>`,
     `<p>${copy}</p>`,
     "<p>等待管理方確認租約</p>",
-    `<a href="/join/${opts.token}">continue</a>`,
+    continueLine,
     "<!-- TODO-R&D account recovery flow pending -->",
     "</main>",
     "</body>",

@@ -13,6 +13,8 @@ import * as uli from "./unit-line-invite";
 import {
   acceptBind,
   hashInviteToken,
+  escapeHtml,
+  INVITE_TOKEN_RE,
   includeOnLease,
   inviteTokenBytes,
   issueInvite,
@@ -213,6 +215,71 @@ test("R-a6 landing path is /join/{token} with no query token and no third-party 
   const res = await joinGet(new Request(`http://localhost/join/${token}`), { params: Promise.resolve({ token }) });
   const body = await res.text();
   assert.ok(body.includes(`/join/${token}`));
+});
+
+test("TEN-19-AC3 / R-a6 join GET with a script path returns the generic page and sets CSP", async () => {
+  for (const payload of ['"><script>alert(1)</script>', 'qa"><b>qaxss']) {
+    const res = await joinGet(
+      new Request(`http://localhost/join/${encodeURIComponent(payload)}`),
+      { params: Promise.resolve({ token: payload }) },
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("Content-Type"), "text/html; charset=utf-8");
+    const body = await res.text();
+    // The raw payload must not reflect into the same-origin page in any form.
+    assert.ok(!body.includes("<script>"));
+    assert.ok(!body.includes("<b>qaxss"));
+    assert.ok(!body.includes(payload));
+    assert.ok(!body.includes(`href="/join/${payload}`));
+    const csp = res.headers.get("Content-Security-Policy");
+    assert.ok(csp && csp.includes("default-src 'none'"));
+    assert.ok(!csp.includes("unsafe-inline"));
+    assert.equal(res.headers.get("X-Content-Type-Options"), "nosniff");
+    // R-a4 headers still present via joinLandingHeaders().
+    assert.equal(res.headers.get("Referrer-Policy"), "no-referrer");
+    assert.equal(res.headers.get("Cache-Control"), "no-store");
+  }
+});
+
+test("TEN-19-AC3 / R-a6 join GET enforces INVITE_TOKEN_RE boundaries", async () => {
+  const invalid = [
+    "",
+    "A".repeat(42),
+    "A".repeat(44),
+    "A".repeat(42) + ".",
+    "A".repeat(42) + "/",
+    "A".repeat(42) + " ",
+    "123456",
+    "好".repeat(43),
+  ];
+  for (const token of invalid) {
+    assert.equal(INVITE_TOKEN_RE.test(token), false);
+    const res = await joinGet(
+      new Request("http://localhost/join/x"),
+      { params: Promise.resolve({ token }) },
+    );
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    if (token.length > 0) assert.ok(!body.includes(token));
+    assert.ok(!body.includes(`/join/${token}"`));
+    assert.ok(!body.includes("<script"));
+  }
+
+  const valid = newInviteToken();
+  assert.equal(INVITE_TOKEN_RE.test(valid), true);
+  const res = await joinGet(
+    new Request(`http://localhost/join/${valid}`),
+    { params: Promise.resolve({ token: valid }) },
+  );
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  // Valid charset needs no escaping, so the escaped token equals the token.
+  assert.ok(body.includes(`<a href="/join/${escapeHtml(valid)}">continue</a>`));
+  assert.ok(body.includes(`/join/${valid}`));
+  // The route looks up nothing: firm stays default and unit stays empty, so
+  // there is no org/unit leak on the public landing page.
+  assert.ok(body.includes("<h1>Condola</h1>"));
+  assert.ok(body.includes("<p></p>"));
 });
 
 test("public join GET with invalid, expired, or revoked tokens leaks no org, unit, or name", async () => {
