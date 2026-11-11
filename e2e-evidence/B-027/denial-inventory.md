@@ -6,15 +6,15 @@ Real loaders, HTTP handlers, session cookies, authorization and PostgreSQL RLS a
 
 | Surface | File:line | Role | Expected | Test name |
 |---|---|---|---|---|
-| /m/properties/[id] loader | src/server/queries.ts:325 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/properties/[id] loader |
-| /m/leases/[id] loader | src/server/queries.ts:695 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/leases/[id] loader |
-| /m/tenants/[id] loader | src/server/queries.ts:1974 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tenants/[id] loader |
-| /m/statements/[id] loader | src/server/queries.ts:1087 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/statements/[id] loader |
-| /m/tickets/[id] loader | src/server/queries.ts:1251 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tickets/[id] loader |
-| signed PDF bytes reader | src/server/queries.ts:810 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: signed PDF bytes reader |
+| /m/properties/[id] loader | src/server/queries.ts:326 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/properties/[id] loader |
+| /m/leases/[id] loader | src/server/queries.ts:696 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/leases/[id] loader |
+| /m/tenants/[id] loader | src/server/queries.ts:1976 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tenants/[id] loader |
+| /m/statements/[id] loader | src/server/queries.ts:1089 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/statements/[id] loader |
+| /m/tickets/[id] loader | src/server/queries.ts:1253 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: /m/tickets/[id] loader |
+| signed PDF bytes reader | src/server/queries.ts:811 | foreign staff Admin; own Admin/Manager | null; same fixture non-null | B027 loader: signed PDF bytes reader |
 | lease PDF API | src/app/api/pdf/leases/[id]/route.ts:11 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: lease PDF API |
 | statement PDF API | src/app/api/pdf/statements/[id]/route.ts:11 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: statement PDF API |
-| signed PDF download | src/app/m/leases/[id]/signed/route.ts:8 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: signed PDF download |
+| signed PDF download | src/app/m/leases/[id]/signed/route.ts:11 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: signed PDF download |
 | ticket photo redirect/bytes | src/app/api/tickets/photos/[id]/route.ts:7 | foreign staff Admin; own Admin/Manager | 404, no body/filename/URL leakage; own 200 or photo 302 | B027 HTTP: ticket photo redirect/bytes |
 | repair photo metadata + URL + byte route | src/server/repairs.ts:500 | Accountant / foreign staff; own Admin/Manager | forbidden/null/404; no storage call; own filename and bytes | B027 Accountant photo readers deny metadata URLs and bytes |
 | company audit screen/history + direct RLS | src/server/audit-read.ts:737 | Manager / Accountant / Staff=maintenance / foreign Admin; own Admin | empty entries; own Admin sees fixture | B027 company audit excludes every non-Admin role |
@@ -24,7 +24,7 @@ Real loaders, HTTP handlers, session cookies, authorization and PostgreSQL RLS a
 | direct photo file metadata and legacy attachment bytes | src/server/b027-denial-inventory.integration.test.ts:238 | foreign staff; own Admin/Manager | zero rows; same fixture exact filename/path/bytes | B027 direct photo data remains isolated across organizations |
 | direct files metadata via authenticated RLS | src/server/b027-denial-inventory.integration.test.ts:251 | Accountant; own Admin positive control | zero filename/path rows (GAP-01 fixed by 20261106232000) | B027 GAP-01 Accountant must not read ticket photo file metadata |
 | direct ticket attachment bytes via authenticated RLS | src/server/b027-denial-inventory.integration.test.ts:346 | Accountant; foreign staff and own Admin controls | zero bytes rows (GAP-02 fixed by 20261106232000) | B027 GAP-02 Accountant must not read legacy ticket attachment bytes |
-| /m/tickets/[id] photo metadata loader | src/server/queries.ts:1251 | Accountant; own Admin positive control | empty photos (no filenames/paths/ids), count only (GAP-03 fixed) | B027 GAP-03 Accountant ticket loader must not return photo metadata |
+| /m/tickets/[id] photo metadata loader | src/server/queries.ts:1253 | Accountant; own Admin positive control | empty photos (no filenames/paths/ids), count only (GAP-03 fixed) | B027 GAP-03 Accountant ticket loader must not return photo metadata |
 | public.id_document_objects catalog | src/server/b027-denial-inventory.integration.test.ts:387 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE false | B027 grants: public.id_document_objects |
 | public.lease_signed_pdfs catalog | src/server/b027-denial-inventory.integration.test.ts:388 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated SELECT/INSERT/DELETE; RLS ON; FORCE false | B027 grants: public.lease_signed_pdfs |
 | public.payee_account_numbers catalog | src/server/b027-denial-inventory.integration.test.ts:389 | anon / authenticated (effective, inherited + PUBLIC + columns) | anon none; authenticated none; RLS ON; FORCE false | B027 grants: public.payee_account_numbers |
