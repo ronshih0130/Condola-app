@@ -18,8 +18,11 @@ import {
   includeOnLease,
   inviteTokenBytes,
   issueInvite,
+  joinUrl,
+  currentInvite,
   landingHtml,
   listBindings,
+  listInvites,
   maskToken,
   newInviteToken,
   referrerHeaders,
@@ -62,6 +65,14 @@ async function ensureMigration() {
   if (!seatCap.rows[0]) {
     const capSql = readFileSync(new URL("../../supabase/migrations/20261110110000_unit_line_invite_seat_cap.sql", import.meta.url), "utf8");
     await withClient((client) => client.query(capSql));
+  }
+  const display = await query<{ ok: number }>(
+    `SELECT 1 AS ok FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'app' AND c.relname = 'unit_invite_display' LIMIT 1`,
+  );
+  if (!display.rows[0]) {
+    const displaySql = readFileSync(new URL("../../supabase/migrations/20261110120000_unit_invite_display.sql", import.meta.url), "utf8");
+    await withClient((client) => client.query(displaySql));
   }
 }
 
@@ -922,4 +933,106 @@ test("R-recovery no self-service recoverBinding; manager unlinks, rotates, and t
   assert.notEqual(again.bindingId, bound.bindingId);
   const old = await query<{ status: string }>(`SELECT status FROM app.unit_bindings WHERE id = $1`, [bound.bindingId]);
   assert.equal(old.rows[0].status, "unlinked");
+});
+
+
+test("MGT-51-AC2 / TEN-29-AC1 issueInvite writes a 43-char display token; currentInvite.path equals joinUrl(token) and /join/<token>; listInvites has no raw token", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  const issued = await issueInvite(staff, unit_id);
+  assert.equal(issued.token.length, 43);
+
+  const disp = await query<{ token: string }>(
+    `SELECT d.token FROM app.unit_invite_display d
+       JOIN app.unit_invite_secrets s ON s.id = d.secret_id
+      WHERE s.org_id = $1 AND s.unit_id = $2 AND s.revoked_at IS NULL`,
+    [ORG_ID, unit_id],
+  );
+  assert.equal(disp.rows.length, 1);
+  assert.equal(disp.rows[0].token, issued.token);
+  assert.equal(disp.rows[0].token.length, 43);
+
+  const cur = await currentInvite(staff, unit_id);
+  assert.ok(cur);
+  assert.equal(cur.token, issued.token);
+  assert.equal(cur.cap, 4);
+  assert.equal(joinUrl(issued.token), `/join/${issued.token}`);
+  assert.equal(cur.path, joinUrl(issued.token));
+  assert.equal(cur.path, `/join/${issued.token}`);
+
+  const listed = await listInvites(staff, unit_id);
+  assert.equal(JSON.stringify(listed).includes(issued.token), false);
+
+  const cols = await query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'app' AND table_name = 'unit_invite_secrets' AND column_name = 'token'`,
+  );
+  assert.equal(cols.rows.length, 0);
+});
+
+test("MGT-51-AC2 rotateInvite replaces the display token and the revoke trigger drops the old row", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  const first = await issueInvite(staff, unit_id);
+  const second = await rotateInvite(staff, unit_id);
+  assert.notEqual(second.token, first.token);
+
+  const cur = await currentInvite(staff, unit_id);
+  assert.ok(cur);
+  assert.equal(cur.token, second.token);
+
+  const disp = await query<{ token: string }>(
+    `SELECT d.token FROM app.unit_invite_display d
+       JOIN app.unit_invite_secrets s ON s.id = d.secret_id
+      WHERE s.org_id = $1 AND s.unit_id = $2`,
+    [ORG_ID, unit_id],
+  );
+  assert.equal(disp.rows.length, 1);
+  assert.equal(disp.rows[0].token, second.token);
+
+  const old = await query<{ ok: number }>(
+    `SELECT 1 AS ok FROM app.unit_invite_display WHERE token = $1`,
+    [first.token],
+  );
+  assert.equal(old.rows.length, 0);
+});
+
+test("MGT-51-AC2 currentInvite is null when no live invite; FLAG-OFF currentInvite is notFound and writes no display row", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  await query(`UPDATE app.unit_invite_secrets SET revoked_at = now() WHERE unit_id = $1 AND revoked_at IS NULL`, [unit_id]);
+  assert.equal(await currentInvite(staff, unit_id), null);
+
+  const before = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app.unit_invite_display d
+       JOIN app.unit_invite_secrets s ON s.id = d.secret_id
+      WHERE s.org_id = $1 AND s.unit_id = $2`,
+    [ORG_ID, unit_id],
+  );
+  await flag(false);
+  await assert.rejects(() => currentInvite(staff, unit_id), (err) => isFlow(err, "errors.notFound"));
+  await assert.rejects(() => issueInvite(staff, unit_id), (err) => isFlow(err, "errors.notFound"));
+  const after = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app.unit_invite_display d
+       JOIN app.unit_invite_secrets s ON s.id = d.secret_id
+      WHERE s.org_id = $1 AND s.unit_id = $2`,
+    [ORG_ID, unit_id],
+  );
+  assert.equal(after.rows[0].n, before.rows[0].n);
+  await flag(true);
+});
+
+test("MGT-51-AC2 accountant and maintenance cannot call currentInvite", async () => {
+  await flag(true);
+  const { unit_id } = await unitAndLease();
+  const accountant = await session(USERS.accountant, "staff", "accountant");
+  await assert.rejects(() => currentInvite(accountant, unit_id), (err) => isFlow(err, "errors.forbidden"));
+  const maintenance = await session(USERS.maintenance, "staff", "maintenance");
+  await assert.rejects(() => currentInvite(maintenance, unit_id), (err) => isFlow(err, "errors.forbidden"));
 });
