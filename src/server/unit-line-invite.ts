@@ -340,6 +340,58 @@ export async function acceptBind(input: {
   }
 }
 
+export function existingLoginHash(userId: string): string {
+  return createHash("sha256").update("existing-login:" + userId).digest("hex");
+}
+
+// TEN-29-AC2: existing-account bind; same unit lock and 4-seat cap as LINE accept. No new-signup path.
+export async function acceptBindExisting(input: {
+  orgId: string;
+  unitId: string;
+  token: string;
+  userId: string;
+  ip?: string;
+  displayName?: string;
+}): Promise<{ bindingId: string; userId: string }> {
+  if (!(await unitLineInviteOn(input.orgId))) throw new FlowError("errors.notFound");
+  if (!input.userId) throw new FlowError("errors.forbidden");
+  if (/^\d{6}$/.test(input.token) || inviteTokenBytes(input.token) !== 32) {
+    await noteFailure(input.token, input.ip);
+    throw new FlowError("errors.invalid");
+  }
+  if ((await attemptLocked(tokenAttemptKey(input.token))) || (await attemptLocked(ipAttemptKey(input.ip)))) {
+    throw new FlowError("errors.rateLimited");
+  }
+  const hash = hashInviteToken(input.token);
+  const lineHash = existingLoginHash(input.userId);
+  const displayName = input.displayName || "tenant";
+
+  try {
+    return await withSql(input.userId, async (client) => {
+      const userId = input.userId;
+      const contact = await client.query<{ id: string }>(
+        `INSERT INTO public.contacts (org_id, user_id, is_tenant, display_name)
+         VALUES ($1, $2, true, $3)
+         ON CONFLICT (org_id, user_id) WHERE user_id IS NOT NULL AND is_tenant AND archived_at IS NULL
+         DO UPDATE SET is_tenant = true
+         RETURNING id`,
+        [input.orgId, userId, displayName],
+      );
+      const contactId = contact.rows[0].id;
+      const res = await client.query<{ id: string }>(
+        "SELECT app.unit_line_accept($1, $2, $3, $4, $5, $6, $7, $8, $9) AS id",
+        [input.orgId, input.unitId, hash, userId, lineHash, displayName, null, contactId, input.ip ?? null],
+      );
+      const bindingId = res.rows[0].id;
+      await audit(client, input.orgId, userId, null, "unit_bindings", bindingId, "insert", "unit_line_bound");
+      return { bindingId, userId };
+    });
+  } catch (err) {
+    await noteFailure(input.token, input.ip);
+    throw err;
+  }
+}
+
 export async function removeBinding(session: Session, bindingId: string): Promise<void> {
   session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
