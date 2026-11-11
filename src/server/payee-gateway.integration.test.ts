@@ -117,6 +117,12 @@ test("audited payee gateway keeps disclosure, denial and isolation in one durabl
     // Existing assignment is rechecked if privileged historical data changes.
     await client.query(`UPDATE bank_accounts SET property_id=$1 WHERE id=$2`, [property, accountId]);
     assert.equal((await invoke("tenant", tenantSession, USERS.tenant, org, "live", lease)).value.data.account.account_number, fields.accountNumber);
+    // CB3 (TEN-06): flags ON and accountId assigned to `lease`, but a same-org
+    // tenant may read only their own lease's payee; otherLease stays denied.
+    const crossTenantOn = await invoke("tenant", tenantSession, USERS.tenant, org, "live", otherLease);
+    assert.equal(crossTenantOn.value.ok, false);
+    assert.ok(["forbidden", "not_found"].includes(crossTenantOn.value.reason));
+    assert.equal(crossTenantOn.value.data, null);
     await client.query(`UPDATE bank_accounts SET property_id=$1 WHERE id=$2`, [otherProperty, accountId]);
     assert.equal((await invoke("tenant", tenantSession, USERS.tenant, org, "live", lease)).value.data.account, null);
     await client.query(`UPDATE bank_accounts SET property_id=NULL WHERE id=$1`, [accountId]);
@@ -134,11 +140,14 @@ test("audited payee gateway keeps disclosure, denial and isolation in one durabl
     await client.query("BEGIN");
     await client.query("SET LOCAL ROLE authenticated");
     await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('app.active_org_id',$2,true),set_config('app.env','live',true)`, [USERS.admin, org]);
-    await assert.rejects(client.query(`UPDATE bank_accounts SET show_to_tenants=false WHERE id=$1`, [accountId]), /payee|permission denied/i);
+    // CB2 (MGT-04): a legacy authenticated write to a non-payee column on the
+    // protected (assigned) account now succeeds instead of raising 42501.
+    assert.equal((await client.query(`UPDATE bank_accounts SET show_to_tenants=false WHERE id=$1`, [accountId])).rowCount, 1);
     await client.query("ROLLBACK");
     await client.query("BEGIN");
     await client.query("SET LOCAL ROLE service_role");
-    await assert.rejects(client.query(`UPDATE bank_accounts SET bank_name='changed' WHERE id=$1`, [accountId]), /payee|permission denied/i);
+    // CB2 (MGT-04): same for a legacy service_role non-payee edit.
+    assert.equal((await client.query(`UPDATE bank_accounts SET bank_name='changed' WHERE id=$1`, [accountId])).rowCount, 1);
     await client.query("ROLLBACK");
     await client.query("BEGIN");
     await client.query("SET LOCAL ROLE authenticated");
@@ -152,7 +161,30 @@ test("audited payee gateway keeps disclosure, denial and isolation in one durabl
     await client.query("BEGIN");
     await client.query("SET LOCAL ROLE authenticated");
     await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('app.active_org_id',$2,true),set_config('app.env','live',true)`, [USERS.admin, org]);
-    await assert.rejects(client.query(`UPDATE bank_accounts SET nickname='changed' WHERE id=$1`, [legacyId]), /payee|permission denied/i);
+    // CB2 (MGT-04): once legacyId is an assigned payee it is protected, but a
+    // legacy non-payee column edit must still succeed...
+    assert.equal((await client.query(`UPDATE bank_accounts SET nickname='changed' WHERE id=$1`, [legacyId])).rowCount, 1);
+    // ...payee fields, identity/property/archive moves and DELETE of the
+    // protected row still require the gateway (CB2 / MGT-04 / TEN-06).
+    for (const sql of [
+      `UPDATE bank_accounts SET holder_name='x' WHERE id=$1`,
+      `UPDATE bank_accounts SET country_code='US' WHERE id=$1`,
+      `UPDATE bank_accounts SET details='{"swift":"x"}'::jsonb WHERE id=$1`,
+      `UPDATE bank_accounts SET is_default_payee=true WHERE id=$1`,
+      `UPDATE bank_accounts SET property_id=$2 WHERE id=$1`,
+      `UPDATE bank_accounts SET archived_at=now() WHERE id=$1`,
+      `DELETE FROM bank_accounts WHERE id=$1`,
+    ]) {
+      await client.query("SAVEPOINT cb2");
+      await assert.rejects(client.query(sql, sql.includes("$2") ? [legacyId, property] : [legacyId]), /payee|permission denied/i);
+      await client.query("ROLLBACK TO SAVEPOINT cb2");
+    }
+    // payee_assignment_guard is OF payee_bank_account_id only: a direct legacy
+    // reassignment is blocked, an ordinary lease edit still succeeds (MGT-04).
+    await client.query("SAVEPOINT cb2");
+    await assert.rejects(client.query(`UPDATE leases SET payee_bank_account_id=$1 WHERE id=$2`, [accountId, lease]), /assignment|payee|permission denied/i);
+    await client.query("ROLLBACK TO SAVEPOINT cb2");
+    assert.equal((await client.query(`UPDATE leases SET start_date=current_date-1 WHERE id=$1`, [lease])).rowCount, 1);
     await client.query("ROLLBACK");
     assert.equal((await invoke("assign", adminSession, USERS.admin, org, "live", lease, { accountId })).value.ok, true);
 

@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261110200000_b003_payee_legacy_write_guard.sql": {
+    addOnly: false,
+    reason: "rewrites app.payee_bank_guard so legacy non-payee updates on a protected/assigned account succeed (CB2 / MGT-04); still blocks payee-field writes, identity/property/archive moves, and DELETE of protected rows; REVOKE reapplied. Not add-only because it changes existing trigger function behavior.",
+  },
   "supabase/migrations/20261110100000_unit_line_invite.sql": {
     addOnly: false,
     reason: "Adds private unit invite secrets, bindings and impostor-flag tables with RLS FORCE, a C-12 single-unit guard, service-only SECURITY DEFINER gateways (issue/rotate/accept/remove/include_on_lease) and a default-OFF unit_line_invite flag. Constraints and privilege revokes require Class B review. No existing identity, lease entitlement or outbound transport change.",
