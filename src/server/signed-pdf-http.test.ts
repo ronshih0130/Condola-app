@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Session } from "./types";
-import { staffSignedPdfHttp, tenantSignedPdfHttp } from "./signed-pdf-http";
+import { legacyStaffSignedPdfHttp, staffSignedPdfHttp, tenantSignedPdfHttp } from "./signed-pdf-http";
 
 const org = "00000000-0000-4000-8000-000000000010";
 const other = "00000000-0000-4000-8000-000000000011";
@@ -94,4 +94,173 @@ test("staff signed-PDF HTTP allows only admin or manager and writes an audit row
   assert.equal(ok.headers.get("Cache-Control"), "private, no-store");
   assert.equal(reads, 1);
   assert.equal(audits, 1);
+});
+
+test("legacy staff signed-PDF HTTP redirects logged-out requests without touching storage", async () => {
+  let reads = 0;
+  let audits = 0;
+  const read = async () => {
+    reads += 1;
+    return { id: pdf, content: bytes, file_name: "lease.pdf" };
+  };
+  const audit = async () => {
+    audits += 1;
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: null, leaseId: lease, read, audit, logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 307);
+  assert.equal(res.headers.get("Location"), "/login");
+  assert.equal(reads, 0);
+  assert.equal(audits, 0);
+});
+
+test("legacy staff signed-PDF HTTP hides the lease from accountants", async () => {
+  let reads = 0;
+  let audits = 0;
+  const read = async () => {
+    reads += 1;
+    return { id: pdf, content: bytes, file_name: "lease.pdf" };
+  };
+  const audit = async () => {
+    audits += 1;
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session({ kind: "staff", role: "accountant", leaseId: undefined }), leaseId: lease, read, audit, logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 404);
+  assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(res.headers.get("X-Content-Type-Options"), "nosniff");
+  const body = await res.text();
+  assert.equal(body, "Not found");
+  assert.ok(!body.startsWith("%PDF"));
+  assert.equal(reads, 0);
+  assert.equal(audits, 0);
+});
+
+test("legacy staff signed-PDF HTTP hides the lease from maintenance staff", async () => {
+  let reads = 0;
+  let audits = 0;
+  const read = async () => {
+    reads += 1;
+    return { id: pdf, content: bytes, file_name: "lease.pdf" };
+  };
+  const audit = async () => {
+    audits += 1;
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session({ kind: "staff", role: "maintenance", leaseId: undefined }), leaseId: lease, read, audit, logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 404);
+  assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(res.headers.get("X-Content-Type-Options"), "nosniff");
+  const body = await res.text();
+  assert.ok(!body.startsWith("%PDF"));
+  assert.equal(reads, 0);
+  assert.equal(audits, 0);
+});
+
+test("legacy staff signed-PDF HTTP rejects the tenant portal session", async () => {
+  let reads = 0;
+  const read = async () => {
+    reads += 1;
+    return { id: pdf, content: bytes, file_name: "lease.pdf" };
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session(), leaseId: lease, read, audit: async () => assert.fail("audit"), logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 404);
+  assert.equal(reads, 0);
+});
+
+test("legacy staff signed-PDF HTTP requires current consent even for admins", async () => {
+  let reads = 0;
+  const read = async () => {
+    reads += 1;
+    return { id: pdf, content: bytes, file_name: "lease.pdf" };
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session({ kind: "staff", role: "admin", leaseId: undefined, consent: null }), leaseId: lease, read, audit: async () => assert.fail("audit"), logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 403);
+  assert.equal(reads, 0);
+});
+
+test("legacy staff signed-PDF HTTP rejects a malformed lease id before reading", async () => {
+  let reads = 0;
+  const read = async () => {
+    reads += 1;
+    return { id: pdf, content: bytes, file_name: "lease.pdf" };
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session({ kind: "staff", role: "admin", leaseId: undefined }), leaseId: "not-a-uuid", read, audit: async () => assert.fail("audit"), logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 404);
+  assert.equal(reads, 0);
+});
+
+test("legacy staff signed-PDF HTTP returns 404 when the read finds nothing", async () => {
+  let audits = 0;
+  const read = async () => null;
+  const audit = async () => {
+    audits += 1;
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session({ kind: "staff", role: "admin", leaseId: undefined }), leaseId: lease, read, audit, logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 404);
+  assert.equal(audits, 0);
+});
+
+test("legacy staff signed-PDF HTTP serves the PDF to admins and audits the download", async () => {
+  let audits = 0;
+  let auditedPdfId: string | null = null;
+  const read = async () => ({ id: pdf, content: bytes, file_name: "lease.pdf" });
+  const audit = async (pdfId: string) => {
+    audits += 1;
+    auditedPdfId = pdfId;
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session({ kind: "staff", role: "admin", leaseId: undefined }), leaseId: lease, read, audit, logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "application/pdf");
+  assert.match(res.headers.get("Content-Disposition") ?? "", /attachment/);
+  assert.equal(res.headers.get("Content-Length"), String(bytes.length));
+  assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+  const body = new Uint8Array(await res.arrayBuffer());
+  assert.deepEqual(body, bytes);
+  assert.equal(audits, 1);
+  assert.equal(auditedPdfId, pdf);
+});
+
+test("legacy staff signed-PDF HTTP serves the PDF to managers and audits once", async () => {
+  let audits = 0;
+  const read = async () => ({ id: pdf, content: bytes, file_name: "lease.pdf" });
+  const audit = async () => {
+    audits += 1;
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session({ kind: "staff", role: "manager", leaseId: undefined }), leaseId: lease, read, audit, logError: () => assert.fail("log"),
+  });
+  assert.equal(res.status, 200);
+  assert.equal(audits, 1);
+});
+
+test("legacy staff signed-PDF HTTP fails closed with 503 and no bytes when the audit write throws", async () => {
+  let logs = 0;
+  const read = async () => ({ id: pdf, content: bytes, file_name: "lease.pdf" });
+  const audit = async () => {
+    throw new Error("audit down");
+  };
+  const res = await legacyStaffSignedPdfHttp({
+    session: session({ kind: "staff", role: "admin", leaseId: undefined }), leaseId: lease, read, audit, logError: () => {
+      logs += 1;
+    },
+  });
+  assert.equal(res.status, 503);
+  assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+  const body = await res.text();
+  assert.ok(!body.startsWith("%PDF"));
+  assert.equal(logs, 1);
 });

@@ -2,6 +2,7 @@ import { ownerPropertyScope, ownerStatementScope } from "./owner-scope";
 import { effectiveReadOptions, guardEffectiveSession, withEffectiveReadAuthority } from "@/server/b017-custom-role-governance";
 import { customRolesAdmitted, customRolesEnabledOn, customAuthorityAllowsOn, requireEffectivePerm, maskContactFields, resolveCustomRoleSession } from "./b017-custom-role-governance";
 import { assertPerm, can, canTicketPhotos, type PermKey } from "./perms";
+import { staffRoleMayDownloadSignedPdf } from "./signed-pdf-http";
 import type { TenantOption } from "@/tenant-pick";
 import type { QueryResultRow } from "pg";
 import { query, maybe, many, tx } from "./db";
@@ -809,15 +810,16 @@ export async function leaseDetail(session: Session, id: string) {
 
 export async function signedLeasePdf(session: Session, leaseId: string) {
   session = await guardEffectiveSession(session, "props.view");
+  if (!staffRoleMayDownloadSignedPdf(session)) return null;
   await admitCustomRead(session, "props.view");
   return tx(session.userId, async (client) =>
-    withEffectiveReadAuthority(client, session, "props.view", async () => maybe<{ file_name: string; content: Buffer }>(
+    withEffectiveReadAuthority(client, session, "props.view", async () => maybe<{ id: string; file_name: string; content: Buffer }>(
       client,
-      `SELECT f.file_name, pdf.content
+      `SELECT pdf.id::text AS id, f.file_name, pdf.content
          FROM lease_signed_pdfs pdf
          JOIN files f ON f.id = pdf.file_id
         WHERE pdf.lease_id = $1 AND pdf.org_id = $2
-        ORDER BY pdf.created_at DESC
+        ORDER BY pdf.created_at DESC, pdf.id DESC
         LIMIT 1`,
       [leaseId, session.orgId],
     )), requireOrgScope(session), effectiveReadOptions(session),

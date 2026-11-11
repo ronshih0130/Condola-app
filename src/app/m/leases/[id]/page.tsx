@@ -2,6 +2,7 @@ import { archiveCopy } from "@/i18n/record-archive";
 import { HandoverEntry } from "@/components/handover-entry";
 import { RenewalComparisonEntry } from "@/components/renewal-comparison-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
+import { staffRoleMayDownloadSignedPdf } from "@/server/signed-pdf-http";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { dictionary, makeT } from "@/i18n";
@@ -343,7 +344,11 @@ export default async function LeasePage({
               {lease.signed_pdf ? (
                 <p data-testid="paper-signed">
                   {t("lease_paper_signed")}{" "}
-                  <a href={`/m/leases/${id}/signed`}>{lease.signed_pdf}</a>
+                  {staffRoleMayDownloadSignedPdf(session) ? (
+                    <a href={`/m/leases/${id}/signed`}>{lease.signed_pdf}</a>
+                  ) : (
+                    lease.signed_pdf
+                  )}
                 </p>
               ) : null}
               {session.role === "admin" || session.role === "manager" ? (
