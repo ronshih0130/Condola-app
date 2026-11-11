@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261110220000_b002_move_out_notice_admission.sql": {
+    addOnly: true,
+    reason: "Seeds default-OFF move_out_notice (enabled false, empty allowlist) with ON CONFLICT DO NOTHING. No functions, tables, grants, constraints, or data backfill. The Worker var MOVE_OUT_NOTICE_ENABLED remains the global kill switch.",
+  },
   "supabase/migrations/20261110210000_b003_payee_protected_nickname_only.sql": {
     addOnly: false,
     reason: "rewrites app.payee_bank_guard so that on a protected/assigned payee account, legacy authenticated/service_role updates may change only nickname and updated_at (B-1 / MGT-04 / TEN-06); bank_code, branch_code, bank_name, account_last5, currency, show_to_tenants and every other column still 42501 / gateway-only; REVOKE reapplied. Not add-only because it changes existing trigger function behavior.",

@@ -65,6 +65,8 @@ test("pre-migration active open lease gains a move-out retention clock", async (
     apply("supabase/migrations/20261031100206_b002_legacy_open_moveout.sql");
     await db.query(`UPDATE leases SET id_retention_auto_end=false WHERE id=$1`, [openLease]);
     assert.equal((await db.query(`SELECT id_retention_auto_end FROM leases WHERE id=$1`, [openLease])).rows[0].id_retention_auto_end, null);
+    await db.query(`INSERT INTO platform_settings(key, value) VALUES ('move_out_notice', jsonb_build_object('enabled', true, 'allowed_org_ids', jsonb_build_array($1::text))) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [org]);
+    await db.query(`UPDATE organizations SET feature_flags = jsonb_set(coalesce(feature_flags, '{}'::jsonb), '{move_out_notice}', 'true'::jsonb, true) WHERE id IN ($1)`, [org]);
     const oldFlag = process.env.MOVE_OUT_NOTICE_ENABLED;
     process.env.MOVE_OUT_NOTICE_ENABLED = "true";
     try {
