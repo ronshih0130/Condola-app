@@ -56,6 +56,18 @@ async function withLease(fn: (fixture: Fixture) => Promise<void>) {
          VALUES ('Other move-out notice org', 'TW', 'TWD') RETURNING id::text`,
       );
       await client.query(`INSERT INTO org_members(org_id,user_id,role,status) VALUES ($1,$2,'admin','active'),($3,$2,'admin','active')`, [orgId, USERS.admin, otherOrg.rows[0]!.id]);
+      // Admit both orgs: the per-org gate must open, and the "another org"
+      // sub-test needs otherOrgId admitted so RLS yields not_found, not disabled.
+      await client.query(
+        `INSERT INTO platform_settings(key, value)
+         VALUES ('move_out_notice', jsonb_build_object('enabled', true, 'allowed_org_ids', jsonb_build_array($1::text, $2::text)))
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [orgId, otherOrg.rows[0]!.id],
+      );
+      await client.query(
+        `UPDATE organizations SET feature_flags = jsonb_set(coalesce(feature_flags, '{}'::jsonb), '{move_out_notice}', 'true'::jsonb, true) WHERE id IN ($1, $2)`,
+        [orgId, otherOrg.rows[0]!.id],
+      );
       const contact = await client.query<{ id: string }>(
         `INSERT INTO contacts (org_id, is_tenant, display_name)
          VALUES ($1, true, 'Move-out notice tenant') RETURNING id::text`,

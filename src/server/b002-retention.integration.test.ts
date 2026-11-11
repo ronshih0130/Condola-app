@@ -140,6 +140,8 @@ test("move-out audit records authenticated actor and both corrections", async ()
   try {
     const org = (await client.query<{ id: string }>(`INSERT INTO organizations(name,country_code,default_currency) VALUES ('B002 audit','TW','TWD') RETURNING id::text`)).rows[0].id;
     await client.query(`INSERT INTO org_members(org_id,user_id,role,status) VALUES ($1,$2,'admin','active')`, [org, USERS.admin]);
+    await client.query(`INSERT INTO platform_settings(key, value) VALUES ('move_out_notice', jsonb_build_object('enabled', true, 'allowed_org_ids', jsonb_build_array($1::text))) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [org]);
+    await client.query(`UPDATE organizations SET feature_flags = jsonb_set(coalesce(feature_flags, '{}'::jsonb), '{move_out_notice}', 'true'::jsonb, true) WHERE id IN ($1)`, [org]);
     const property = (await client.query<{ id: string }>(`INSERT INTO properties(org_id,name,country_code,currency,timezone) VALUES ($1,'B002 audit','TW','TWD','Asia/Taipei') RETURNING id::text`, [org])).rows[0].id;
     const unit = (await client.query<{ id: string }>(`INSERT INTO units(org_id,property_id,label) VALUES ($1,$2,'B002 audit') RETURNING id::text`, [org, property])).rows[0].id;
     const lease = (await client.query<{ id: string }>(`INSERT INTO leases(org_id,property_id,unit_id,target_unit_id,status,start_date,currency,rent_amount_minor) VALUES ($1,$2,$3,$3,'active','2025-01-01','TWD',0) RETURNING id::text`, [org, property, unit])).rows[0].id;
