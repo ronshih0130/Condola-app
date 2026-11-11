@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { Client } from "pg";
 import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
-import { NextRequest } from "next/server";
 import { GET } from "../app/signup/unit-qr/route";
 import { POST } from "../app/api/signup/unit-qr/route";
 import { unitQrClientIp } from "./unit-qr-ingress";
@@ -14,7 +13,7 @@ import { resetAndSeed } from "./seed";
 import { confirmSignupToken, startSignup } from "./signup";
 import { cloneTestDatabase } from "./test-database-clone";
 import type { Session } from "./types";
-import { createUnitQrForm, unitQrFormMatches, completeUnitQr, issueUnitQr, readUnitQrContext, readUnitQrContinuation, revokeUnitQr, scanUnitQr, unitQrHash, unitQrStaffUnits, UNIT_QR_COOKIE } from "./unit-qr-signup";
+import { createUnitQrForm, unitQrFormMatches, completeUnitQr, issueUnitQr, readUnitQrContext, readUnitQrContinuation, revokeUnitQr, scanUnitQr, unitQrHash, unitQrStaffUnits } from "./unit-qr-signup";
 
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>>;
 let session: Session;
@@ -40,9 +39,9 @@ async function issued(actor = session, unitId = unit) {
   assert.ok(value);
   return { ...value, token: new URLSearchParams(new URL(value.url).hash.slice(1)).get("t")! };
 }
-function exchange(token: string, extra: Record<string,string> = {}) {
-  return POST(new NextRequest(`${origin}/api/signup/unit-qr`, { method: "POST",
-    headers: { origin, host: new URL(origin).host, "content-type": "application/json", ...extra }, body: JSON.stringify({ token }) }));
+function exchange(...args: unknown[]) {
+  void args;
+  return POST();
 }
 async function scanned(actor = session, unitId = unit) {
   const qr = await issued(actor, unitId);
@@ -121,21 +120,17 @@ test("staff issuance requires current session, admin/manager membership and acti
 test("token route exchanges once for HttpOnly opaque handle and reveals no org/unit before verification", async () => {
   const qr=await issued();
   assert.equal(qr.url.includes(ORG_ID),false); assert.equal(qr.url.includes(unit),false);
-  const response=await exchange(qr.token);
-  assert.equal(response.status,204); assert.equal(response.headers.get("location"),null);
   assert.equal(new URL(qr.url).pathname,"/signup/unit-qr");
   assert.equal(new URL(qr.url).search,"");
+  const before=await snapshot();
+  const response=await exchange(qr.token);
+  assert.equal(response.status,404);
+  assert.equal(await response.text(),"");
+  assert.equal(response.headers.get("location"),null);
+  assert.equal(response.headers.get("set-cookie"),null);
   assert.match(response.headers.get("cache-control")!,/no-store/);
   assert.equal(response.headers.get("referrer-policy"),"no-referrer");
-  const cookie=response.cookies.get(UNIT_QR_COOKIE)!;
-  assert.equal(cookie.path,"/signup"); assert.ok(cookie.httpOnly); assert.equal(cookie.sameSite,"lax"); assert.equal(cookie.maxAge,1800);
-  const context=await readUnitQrContext(cookie.value);
-  assert.deepEqual(context,{id:qr.id,done:false,active:true});
-  assert.equal(await response.text(),"");
-  assert.equal(await scanUnitQr(qr.token,meta.ip),null);
-  const stored=(await query(`SELECT token_hash,handle_hash FROM app.b005_unit_qr_contexts WHERE id=$1`,[qr.id])).rows[0];
-  assert.equal(stored.token_hash,unitQrHash(qr.token)); assert.equal(stored.handle_hash,unitQrHash(cookie.value));
-  assert.equal((await query(`SELECT count(*)::int AS n FROM app.b005_unit_qr_applicants`)).rows[0].n,0);
+  assert.deepEqual(await snapshot(),before);
 });
 
 test("scan -> existing signup -> email verification -> profile associates exactly once across two connections", async () => {
@@ -412,15 +407,12 @@ test("rotating forged forwarding chains cannot bypass the trusted-address scan l
 
 test("exchange errors and audit output never contain bearer, handle or profile; cross-site POST cannot consume", async () => {
   const qr=await issued();
-  assert.equal((await exchange(qr.token,{origin:"https://attacker.invalid"})).status,404);
-  const success=await exchange(qr.token);
-  assert.equal(success.status,204);
-  for(const token of [qr.token,`${qr.token}invalid`]) {
-    const response=await exchange(token);
+  for(const response of [await exchange(qr.token,{origin:"https://attacker.invalid"}),await exchange(qr.token)]) {
     assert.equal(response.status,404);
     assert.equal(await response.text(),"");
     assert.equal(JSON.stringify([...response.headers]).includes(qr.token),false);
   }
+  assert.ok(await scanUnitQr(qr.token,meta.ip));
   const logs=JSON.stringify((await query(`SELECT * FROM audit_log WHERE event_type LIKE 'unit_qr_%'`)).rows);
   assert.equal(logs.includes(qr.token),false);
 });
@@ -477,10 +469,11 @@ test("resume follows the explicitly bound application when issuance order is rev
   assert.deepEqual(await readUnitQrContext(null,user.userId),{id:a.id,done:true,active:true});
 });
 
-test("entry GET and exchange POST return empty private 404 when globally OFF or no org admitted", async () => {
+test("GET is a static L1 200 regardless of flag while exchange POST stays empty private 404 (TEN-29-AC3)", async () => {
   const qr = await issued();
-  assert.equal((await GET()).status,200);
+  let body: string | undefined;
   for (const [global,org] of [
+    [{enabled:true,allowed_org_ids:[ORG_ID,ORG2_ID]},true],
     [{enabled:false,allowed_org_ids:[ORG_ID]},true],
     [{enabled:"true",allowed_org_ids:[ORG_ID]},true],
     [{enabled:true,allowed_org_ids:[]},true],
@@ -490,13 +483,22 @@ test("entry GET and exchange POST return empty private 404 when globally OFF or 
   ] as const) {
     await enable(global,org);
     const before = await snapshot();
-    assert.equal(await createUnitQrForm("a".repeat(43)),null);
-    for (const response of [await GET(),await exchange(qr.token)]) {
-      assert.equal(response.status,404);
-      assert.equal(await response.text(),"");
-      assert.equal(response.headers.get("cache-control"),"private, no-store");
-      assert.equal(response.headers.get("referrer-policy"),"no-referrer");
-    }
+    const entry = await GET();
+    assert.equal(entry.status,200);
+    assert.match(entry.headers.get("cache-control")!,/no-store/);
+    assert.equal(entry.headers.get("referrer-policy"),"no-referrer");
+    assert.equal(entry.headers.get("location"),null);
+    const text = await entry.text();
+    assert.ok(text.includes("這個 QR 已停用"));
+    assert.equal(text.includes(ORG_ID),false);
+    assert.equal(text.includes(unit),false);
+    assert.equal(text.includes(qr.token),false);
+    body ??= text;
+    assert.equal(text,body);
+    const response = await exchange(qr.token);
+    assert.equal(response.status,404);
+    assert.equal(await response.text(),"");
+    assert.equal(response.headers.get("set-cookie"),null);
     assert.deepEqual(await snapshot(),before);
   }
 });

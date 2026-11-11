@@ -145,7 +145,7 @@
   },
   "src/server/signup-actions.ts#actionStartSignup": {
     "reason": "Public signup or firm creation before staff membership exists",
-    "sha256": "67b1145982eb8a94b41c13c3d36ac29ed3cc4051c1dd9cbbfbd26bdc94dca679"
+    "sha256": "66f802663b1c7e97ceb86d38b17128b1da5a8717c69bb6a32a71e1011313d7c0"
   },
   "src/server/signup-actions.ts#actionResendSignup": {
     "reason": "Public signup or firm creation before staff membership exists",
@@ -169,7 +169,7 @@
   },
   "src/server/signup-actions.ts#actionCreateFirm": {
     "reason": "Public signup or firm creation before staff membership exists",
-    "sha256": "583eb04d6b9a39e9c03fcb022a1724f76ebb92c14885d9081f4f676afbe6e633"
+    "sha256": "7c308e08a85ce39f0a5e205f6b4231e820e2b87c1e682be33936b62b6ff3477d"
   },
   "src/server/auth-actions.ts#actionAccept": {
     "reason": "Public invitation bearer; no staff authority is granted by describing or accepting a token",
@@ -205,7 +205,7 @@
   },
   "src/app/signup/firm/page.tsx#FirmPage": {
     "reason": "Account identity and consent bootstrap; independent from organization custom grants",
-    "sha256": "2a192b6bf326dfd480f4366812cddd405f82d2ce2d25e4feb7474c5b9f5b7d4d"
+    "sha256": "8bc48110d455bf97ed06e7620af77496b8bbd12949b93516bac4aeb25bfd22b2"
   },
   "src/app/reset/[token]/page.tsx#ResetPage": {
     "reason": "Account identity and consent bootstrap; independent from organization custom grants",
@@ -337,19 +337,15 @@
   },
   "src/app/api/signup/unit-qr/route.ts#POST": {
     "reason": "Public signup or firm creation before staff membership exists",
-    "sha256": "4cb15f82842ab58829b30db4223c0b3d78c13fde3677bc8bfb131df19a7272ed"
+    "sha256": "26f19710c0001ee50e1ce208439329650b177eb8b9d6c4f86d476a69586a0768"
   },
   "src/app/signup/unit-qr/route.ts#GET": {
     "reason": "Public signup or firm creation before staff membership exists",
-    "sha256": "ca6f5a78abf3b0eb0b14ca7f6287801a0827e372252973b87f41847a3e15120e"
+    "sha256": "5088ccd971fc72431f9961607cdb1a79a65791f8dc62c06779db515bb6828cc7"
   },
   "src/app/signup/page.tsx#SignupPage": {
     "reason": "Public signup or firm creation before staff membership exists",
-    "sha256": "873e436bbc059aefff7830b98c32adf6bad9a80021c3387397230fde6bb70cd7"
-  },
-  "src/server/unit-qr-actions.ts#actionCompleteUnitQr": {
-    "reason": "Public signup or firm creation before staff membership exists",
-    "sha256": "8dce48b4c7d23e3f5c65ccb7afe1aefb7968704ba0a1aa98d73ca2d3d052535e"
+    "sha256": "4a47c9a2ed80f86d26872194801f6c41970f7fb8f3d31bec95d1d1b841f45988"
   },
   "src/app/api/vendor-account/route.ts#GET": {
     "reason": "Vendor account self-service by auth-cookie identity; vendor-owned records only, no member session",

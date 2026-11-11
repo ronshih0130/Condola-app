@@ -7,7 +7,7 @@ flags:
     ring: internal
     global_kill: "platform_settings.unit_qr_signup enabled must be boolean true and allowed_org_ids an array containing this organization"
     org_override: "organizations.feature_flags.unit_qr_signup must be boolean true"
-    activation: "OFF; local synthetic tests only; dedicated UNIT_QR_SIGNING_KEY required; Ron decides activation"
+    activation: "must not be turned on (Ron Q1, MGT-51-AC4); do not set UNIT_QR_SIGNING_KEY; remove this flag by 2026-11-24; local library tests only"
 
   ESIGN_ENABLED:
     owner: Ron

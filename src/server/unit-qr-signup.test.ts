@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { normalizeUnitQrIp, unitQrClientIp } from "./unit-qr-ingress";
-import { unitQrExchangeScript, unitQrEntryResponse } from "./unit-qr-entry";
 import { clearUnitQrCookie, invalidateUnitQrCookie } from "./unit-qr-cookie";
 import test from "node:test";
 import { createRequire } from "node:module";
@@ -12,6 +11,9 @@ import type { ReactElement } from "react";
 import { unitQrCopy } from "../i18n/lanes/unit-qr";
 import { randomBytes } from "node:crypto";
 import { newUnitQrToken, verifyUnitQrToken } from "./unit-qr-signup";
+import { landingHtml } from "./unit-line-invite";
+import { GET } from "../app/signup/unit-qr/route";
+import { POST } from "../app/api/signup/unit-qr/route";
 
 test("QR signatures fail closed, carry no unit data, and reject tampering/key rotation", () => {
   const saved = process.env.UNIT_QR_SIGNING_KEY;
@@ -49,34 +51,35 @@ test("only runtime-trusted ingress or socket determines the normalized limiter i
   assert.equal(normalizeUnitQrIp(" ::1 "),"::1");
 });
 
-test("fragment is scrubbed before parsing, POST, analytics or errors, including rejected exchange", async () => {
-  for(const ok of [true,false,"throw"] as const) {
-    const events: unknown[][]=[];
-    const token="synthetic-private-bearer";
-    await runInNewContext(unitQrExchangeScript,{
-      location:{hash:`#t=${token}`,pathname:"/signup/unit-qr",replace:(url:string)=>events.push(["replace",url])},
-      history:{replaceState:(state:null,title:string,path:string)=>events.push(["scrub",state,title,path])},
-      URLSearchParams,
-      fetch:async(url:string,init:RequestInit)=>{
-        assert.deepEqual(events,[["scrub",null,"","/signup/unit-qr"]]);
-        assert.equal(init.body,JSON.stringify({token}));
-        assert.equal(init.referrerPolicy,"no-referrer");
-        events.push(["request",url,init.method || "GET"]);
-        if(ok==="throw") throw new Error(token);
-        return {ok};
-      },
-      console:{error:()=>assert.fail("No error logging"),log:()=>assert.fail("No logging")},
-    });
-    assert.equal(JSON.stringify(events).includes(token),false);
-    assert.deepEqual(events.at(-1),["replace",ok===true?"/signup":"/signup?error=required"]);
+test("TEN-29-AC3 / R-a6: retired QR GET serves one static no-store page that ignores any token and POST always 404s empty", async () => {
+  const token = "zqx".repeat(15).slice(0, 43); // 43-char token the page must never echo
+  assert.equal(token.length, 43);
+  assert.equal((GET as (...args: unknown[]) => unknown).length, 0);
+  const responses = [await GET(), await GET(), await GET()];
+  const bodies: string[] = [];
+  for (const res of responses) {
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("cache-control") || "", /no-store/);
+    assert.equal(res.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(res.headers.get("location"), null);
+    assert.ok((res.headers.get("content-type") || "").startsWith("text/html"));
+    const html = await res.text();
+    assert.ok(html.includes("這個 QR 已停用"));
+    assert.ok(html.includes("請跟管理公司拿最新的邀請"));
+    assert.equal(html.includes("<script"), false);
+    assert.doesNotMatch(html, /\{\{|\$\{|%company%|%unit%|__COMPANY__|__UNIT__/);
+    assert.equal(html.includes(token), false);
+    bodies.push(html);
   }
-  const response=unitQrEntryResponse();
-  assert.match(response.headers.get("content-security-policy")!,/default-src 'none'/);
-  const html=await response.text();
-  assert.equal((html.match(/<script/g)||[]).length,1);
-  assert.doesNotMatch(html,/src=|analytics|sendBeacon|console\./);
-  const route=readFileSync(new URL("../app/api/signup/unit-qr/route.ts",import.meta.url),"utf8");
-  assert.doesNotMatch(route,/console\.|recordFunnel|recordAudit/);
+  assert.equal(bodies[0], bodies[1]);
+  assert.equal(bodies[1], bodies[2]);
+  const post = await POST();
+  assert.equal(post.status, 404);
+  assert.equal(await post.text(), "");
+  assert.equal(post.headers.get("location"), null);
+  assert.equal(post.headers.get("set-cookie"), null);
+  assert.match(post.headers.get("cache-control") || "", /no-store/);
+  assert.equal(post.headers.get("referrer-policy"), "no-referrer");
 });
 
 test("clearing a browser handle expires the same signup-scoped HttpOnly cookie", () => {
@@ -86,14 +89,12 @@ test("clearing a browser handle expires the same signup-scoped HttpOnly cookie",
 });
 
 
-// Execute the real action/page/form source with only framework and I/O boundaries
-// replaced. This catches redirects losing intent, not just helper return values.
+// Execute the real signup action and page source with only framework and I/O
+// boundaries replaced. The retired unit-qr cookie must leave no trace in output.
 function signupProbe() {
   const jar = new Map<string,string>();
-  const formHandles = new Map<string,string>();
   const calls: string[] = [];
   const signupInputs: Record<string,unknown>[] = [];
-  let disabled = false;
   const require = createRequire(import.meta.url);
   const cookieJar = {
     get: (name:string) => jar.has(name) ? {value:jar.get(name)!} : undefined,
@@ -101,34 +102,14 @@ function signupProbe() {
       if(options.maxAge===0) jar.delete(name); else jar.set(name,value);
     },
   };
-  const qr = {
-    UNIT_QR_COOKIE: "condola_unit_qr",
-    readUnitQrContinuation: async (handle?:string) => {
-      calls.push("continuation");
-      if (!handle) return {state:"absent"};
-      if (handle==="invalid") return {state:"invalid"};
-      if (disabled) return {state:"disabled"};
-      return {state:"active",context:{id:handle,done:false,active:true}};
-    },
-    createUnitQrForm: async (handle:string) => {
-      calls.push("create-form");
-      const id = `opaque-form-${formHandles.size}`;
-      formHandles.set(id,handle); return id;
-    },
-    unitQrFormMatches: async (id:string,handle:string) => {
-      calls.push("match-form"); return formHandles.get(id)===handle;
-    },
-  };
   const redirect = (path:string) => { throw new Error(`REDIRECT ${path}`); };
   const modules: Record<string,unknown> = {
     "next/headers": {cookies:async()=>cookieJar,headers:async()=>new Headers({host:"localhost"})},
     "next/navigation": {redirect},
-    "./unit-qr-signup": qr,
-    "@/server/unit-qr-signup": qr,
     "./unit-qr-cookie": {clearUnitQrCookie,invalidateUnitQrCookie},
     "./signup": {startSignup:async(input:Record<string,unknown>)=>{
       calls.push("signup-write"); signupInputs.push(input);
-      return {ok:true,status:"verify",email:"synthetic@example.invalid",devToken:null,unitQrBound:!!input.unitQrHandle};
+      return {ok:true,status:"verify",email:"synthetic@example.invalid",devToken:null};
     }},
     "@/server/session": {requestPrefs:async()=>({locale:"en"})},
     "@/server/brand-v2": {brandV2Enabled:()=>false},
@@ -151,68 +132,63 @@ function signupProbe() {
     return exports;
   }
   const actions = load("./signup-actions.ts") as {actionStartSignup:(form:FormData)=>Promise<void>};
-  const abandon = load("./unit-qr-actions.ts") as {actionAbandonUnitQr:()=>Promise<void>};
   modules["@/server/signup-actions"]=actions;
-  modules["@/server/unit-qr-actions"]=abandon;
   modules["@/components/signup-form"]=load("../components/signup-form.tsx");
   const page = load("../app/signup/page.tsx") as {default:(props:{searchParams:Promise<{error?:string}>})=>Promise<ReactElement>};
   return {
-    jar,calls,signupInputs,actions,abandon,
-    disable:()=>{disabled=true;},
+    jar,calls,signupInputs,actions,
     html: async(error?:string)=>renderToStaticMarkup(await page.default({searchParams:Promise.resolve({error})})),
   };
 }
-function renderedForm(html:string) {
-  const match=html.match(/name="unitQrContinuation" value="([^"]+)"/);
-  assert.ok(match,"QR form must render an exact continuation id");
-  const form=new FormData(); form.set("unitQrContinuation",match[1]); return form;
-}
 
-test("expired cookie rejection survives redirect and a second submission until abandon or rescan", async () => {
-  const probe=signupProbe();
-  probe.jar.set("condola_unit_qr","handle-a");
-  const form=renderedForm(await probe.html());
-  probe.jar.delete("condola_unit_qr"); // browser expiry while the form is open
-  await assert.rejects(probe.actions.actionStartSignup(form),/REDIRECT \/signup\?error=required/);
-  assert.equal(probe.jar.get("condola_unit_qr"),"invalid");
-  const retryPage=await probe.html("required");
-  assert.ok(retryPage.includes('role="alert"'));
-  assert.equal(retryPage.includes('name="email"'),false);
-  // Even a second submission omitting the stale hidden field cannot downgrade.
-  await assert.rejects(probe.actions.actionStartSignup(new FormData()),/REDIRECT \/signup\?error=required/);
-  assert.equal(probe.signupInputs.length,0);
-  assert.equal((await probe.html()).includes('name="email"'),false);
-  await assert.rejects(probe.abandon.actionAbandonUnitQr(),/REDIRECT \/signup$/);
-  assert.ok((await probe.html()).includes('name="email"'));
-  probe.jar.set("condola_unit_qr","handle-rescanned");
-  const replacement=renderedForm(await probe.html());
-  await assert.rejects(probe.actions.actionStartSignup(replacement),/REDIRECT \/signup\/verify/);
-  assert.equal(probe.signupInputs[0].unitQrHandle,"handle-rescanned");
-  assert.equal(probe.jar.has("condola_unit_qr"),false);
+test("TEN-29-AC4: signup page and action ignore the retired unit-qr cookie and never bind a unit handle", async () => {
+  const withCookie=signupProbe(); withCookie.jar.set("condola_unit_qr","old-handle");
+  const without=signupProbe();
+  const a=await withCookie.html();
+  const b=await without.html();
+  assert.equal(a,b);
+  assert.ok(a.includes('name="email"'));
+  for(const forbidden of ["UNIT_QR_COOKIE","unit-qr-signup-hint","unitQrContinuation","actionAbandonUnitQr","createUnitQrForm"]) {
+    assert.equal(a.includes(forbidden),false);
+  }
+  const pageSrc=readFileSync(new URL("../app/signup/page.tsx",import.meta.url),"utf8");
+  for(const forbidden of ["UNIT_QR_COOKIE","readUnitQrContinuation","createUnitQrForm","actionAbandonUnitQr","unit-qr-signup-hint","unitQrCopy"]) {
+    assert.equal(pageSrc.includes(forbidden),false);
+  }
+  const probe=signupProbe(); probe.jar.set("condola_unit_qr","old-handle");
+  const form=new FormData(); form.set("unitQrContinuation","old-form");
+  await assert.rejects(probe.actions.actionStartSignup(form),/REDIRECT \/signup\/verify/);
+  assert.equal(probe.signupInputs.length,1);
+  assert.equal(probe.signupInputs[0].unitQrHandle,undefined);
 });
 
-test("tab A cannot submit tab B's continuation and rejection occurs before signup writes", async () => {
-  const probe=signupProbe();
-  probe.jar.set("condola_unit_qr","handle-a");
-  const a=renderedForm(await probe.html());
-  probe.jar.set("condola_unit_qr","handle-b");
-  const b=renderedForm(await probe.html());
-  assert.notEqual(a.get("unitQrContinuation"),b.get("unitQrContinuation"));
-  await assert.rejects(probe.actions.actionStartSignup(a),/REDIRECT \/signup\?error=required/);
-  assert.equal(probe.signupInputs.length,0);
-  assert.equal(probe.jar.get("condola_unit_qr"),"invalid");
-  await assert.rejects(probe.actions.actionStartSignup(b),/REDIRECT \/signup\?error=required/);
-  assert.equal(probe.signupInputs.length,0);
+test("MGT-51-AC3: units index drops the QR invite link and every unit-qr surface is deleted", () => {
+  const unitsSrc=readFileSync(new URL("../app/m/units/page.tsx",import.meta.url),"utf8");
+  assert.equal(unitsSrc.includes("單元申請連結"),false);
+  assert.equal(unitsSrc.includes("/m/units/qr"),false);
+  for(const gone of [
+    "../app/m/units/qr/page.tsx",
+    "../components/unit-qr-control.tsx",
+    "./unit-qr-actions.ts",
+    "../components/unit-qr-profile.tsx",
+  ]) {
+    assert.equal(existsSync(new URL(gone,import.meta.url)),false);
+  }
 });
 
-test("OFF signup output and action sequence equal ordinary signup with no form persistence or matching", async () => {
-  const ordinary=signupProbe();
-  const off=signupProbe(); off.disable(); off.jar.set("condola_unit_qr","old-handle");
-  assert.equal(await off.html(),await ordinary.html());
-  assert.deepEqual(off.calls,ordinary.calls);
-  const staleForm=new FormData(); staleForm.set("unitQrContinuation","old-form");
-  await assert.rejects(off.actions.actionStartSignup(staleForm),/REDIRECT \/signup\/verify/);
-  await assert.rejects(ordinary.actions.actionStartSignup(new FormData()),/REDIRECT \/signup\/verify/);
-  assert.deepEqual(off.calls,ordinary.calls);
-  assert.equal(JSON.stringify(off.signupInputs),JSON.stringify(ordinary.signupInputs));
+test("MGT-51-AC4 / FLAG-OFF: unit_qr_signup defaults off, is pinned off, and no signing key ships in tracked config", () => {
+  const flags=readFileSync(new URL("../../ops/flags.yaml",import.meta.url),"utf8");
+  const idx=flags.indexOf("unit_qr_signup");
+  assert.notEqual(idx,-1);
+  const block=flags.slice(idx);
+  assert.match(block,/default:\s*false/);
+  assert.ok(block.includes("must not be turned on"));
+  const wrangler=readFileSync(new URL("../../wrangler.jsonc",import.meta.url),"utf8");
+  assert.equal(wrangler.includes("UNIT_QR_SIGNING_KEY"),false);
+});
+
+test("TEN-29-AC2: the QR landing page exposes no Email-signup path or /signup link", () => {
+  const html=landingHtml({token:"A".repeat(43),firm:"Acme",unit:"A1"});
+  assert.equal(html.includes("用 Email 建立"),false);
+  assert.equal(html.includes("/signup"),false);
 });
