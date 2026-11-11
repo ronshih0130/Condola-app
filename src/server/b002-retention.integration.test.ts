@@ -137,6 +137,7 @@ test("move-out audit records authenticated actor and both corrections", async ()
   await client.connect();
   const previous = process.env.MOVE_OUT_NOTICE_ENABLED;
   process.env.MOVE_OUT_NOTICE_ENABLED = "true";
+  const moveOutNoticeSetting = await client.query(`SELECT value FROM platform_settings WHERE key='move_out_notice'`);
   try {
     const org = (await client.query<{ id: string }>(`INSERT INTO organizations(name,country_code,default_currency) VALUES ('B002 audit','TW','TWD') RETURNING id::text`)).rows[0].id;
     await client.query(`INSERT INTO org_members(org_id,user_id,role,status) VALUES ($1,$2,'admin','active')`, [org, USERS.admin]);
@@ -158,6 +159,8 @@ test("move-out audit records authenticated actor and both corrections", async ()
     assert.deepEqual(await recordMoveOutNotice(client, { ...input, actorUserId: USERS.tenant, movedOutOn: "2025-12-01" }), { ok: false, reason: "forbidden" });
   } finally {
     if (previous === undefined) delete process.env.MOVE_OUT_NOTICE_ENABLED; else process.env.MOVE_OUT_NOTICE_ENABLED = previous;
+    if (moveOutNoticeSetting.rows.length) await client.query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='move_out_notice'`, [JSON.stringify(moveOutNoticeSetting.rows[0].value)]);
+    else await client.query(`DELETE FROM platform_settings WHERE key='move_out_notice'`);
     await client.end();
   }
 });
