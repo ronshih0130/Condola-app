@@ -266,6 +266,7 @@ test("the lease idempotency migration is additive and later than shared staging 
     "20261109061000_b010_recipient_payer_check.sql",
     "20261110100000_unit_line_invite.sql",
     "20261110110000_unit_line_invite_seat_cap.sql",
+    "20261110120000_unit_invite_display.sql",
     "20261110200000_b003_payee_legacy_write_guard.sql",
     "20261110210000_b003_payee_protected_nickname_only.sql",
   ]);

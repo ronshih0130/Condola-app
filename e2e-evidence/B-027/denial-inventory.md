@@ -80,6 +80,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/id-documents/finalize/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/id-documents/photo/route.ts:1 | HTTP handler executed above |
 | src/app/api/import/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/join/accept/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/bind/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/flows/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/identity/route.ts:1 | Enumerated only; outside representative selection |
@@ -93,6 +94,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/line/session/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/vendor-job/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/webhook/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/m/units/[unitId]/invite/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/mock-subscription/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/monthly-rent-issue/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/notification-center/mark/route.ts:1 | Enumerated only; outside representative selection |

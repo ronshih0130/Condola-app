@@ -250,6 +250,10 @@ test("live screens do not render LINE product copy, including the app footer", (
         const lineEnd = text.indexOf("\n", match.index);
         const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd).trim();
         if (line.startsWith("//") || line.startsWith("*") || line.startsWith("/*")) continue;
+        // TEN-29-AC3: the Ron-approved unified-invite L1 mockup (mockups/unified-invite) ships this
+        // exact clause as static HTML in src/app/signup/unit-qr/route.ts. Skip only that approved
+        // sentence; every other hardcoded LINE mention stays flagged.
+        if (line.includes("掃完用 LINE 就能加入。")) continue;
         if (!nearGate(text, match.index)) ungated.push(`${path} hardcoded LINE`);
       }
     }

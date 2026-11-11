@@ -30,6 +30,10 @@ const added = {
     addOnly: false,
     reason: "Follow-up to 20261110100000: revokes extra live invite secrets, adds a partial unique index (one live secret per unit), CREATE OR REPLACE of unit_line_issue/rotate/accept/include_on_lease with per-unit row locks and a function-level seat check, and a BEFORE trigger on app.unit_bindings that enforces the 4-seat cap even on direct inserts. Privilege REVOKE/GRANT on the replaced functions. Not add-only because it rewrites existing functions, updates existing secret rows, and adds a uniqueness constraint plus privilege changes.",
   },
+  "supabase/migrations/20261110120000_unit_invite_display.sql": {
+    addOnly: false,
+    reason: "New raw-token display table for reprinting the live /join path, plus store helper and revoke-triggered delete; REVOKE/GRANT, FORCE RLS, and a trigger on the existing secrets table mean it is not add-only. No change to identity, seat cap, accept, or flag defaults.",
+  },
   "supabase/migrations/20261109061000_b010_recipient_payer_check.sql": {
     addOnly: false,
     reason: "Closes the b010 co-tenant payer gap: CREATE OR REPLACE app.b028_center_recipient_valid from its live post-S3 body, adding in the b010_event_id branch a payment_% + tenant payer check (payments.payer_contact_id joined via b010_source_events.payment_id = NEW.contact_id, and that payer contact's user_id = NEW.principal_user_id) that fails closed with 23514 'Invalid recipient', mirroring the neutral_source contract so a non-payer co-tenant can no longer receive a payment_* center event. Non-tenant (staff) b010 recipients, neutral_source, rent_*, vendor_job and the lock_tables_nowait_retry contacts lock are unchanged; signature, SECURITY DEFINER, search_path, owner and the REVOKE-from-PUBLIC/anon/authenticated/service_role grant pattern preserved. No table, column, flag or data change.",

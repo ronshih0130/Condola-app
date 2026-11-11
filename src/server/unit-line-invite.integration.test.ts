@@ -12,14 +12,19 @@ import { GET as joinGet } from "../app/join/[token]/route";
 import * as uli from "./unit-line-invite";
 import {
   acceptBind,
+  acceptBindExisting,
+  existingLoginHash,
   hashInviteToken,
   escapeHtml,
   INVITE_TOKEN_RE,
   includeOnLease,
   inviteTokenBytes,
   issueInvite,
+  joinUrl,
+  currentInvite,
   landingHtml,
   listBindings,
+  listInvites,
   maskToken,
   newInviteToken,
   referrerHeaders,
@@ -30,6 +35,7 @@ import {
   unitLineInviteOn,
   UNIT_LINE_TOKEN_ATTEMPT_LIMIT,
 } from "./unit-line-invite";
+import { handleStaffLive, handleStaffIssue, handleStaffRotate, handleAcceptExisting } from "./unit-line-invite-api";
 import { ownerPropertyNames, ownerHome } from "./queries";
 
 // B-033 unit_line_invite. Local disposable PostgreSQL clone only. All people and tokens are synthetic.
@@ -62,6 +68,14 @@ async function ensureMigration() {
   if (!seatCap.rows[0]) {
     const capSql = readFileSync(new URL("../../supabase/migrations/20261110110000_unit_line_invite_seat_cap.sql", import.meta.url), "utf8");
     await withClient((client) => client.query(capSql));
+  }
+  const display = await query<{ ok: number }>(
+    `SELECT 1 AS ok FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'app' AND c.relname = 'unit_invite_display' LIMIT 1`,
+  );
+  if (!display.rows[0]) {
+    const displaySql = readFileSync(new URL("../../supabase/migrations/20261110120000_unit_invite_display.sql", import.meta.url), "utf8");
+    await withClient((client) => client.query(displaySql));
   }
 }
 
@@ -922,4 +936,270 @@ test("R-recovery no self-service recoverBinding; manager unlinks, rotates, and t
   assert.notEqual(again.bindingId, bound.bindingId);
   const old = await query<{ status: string }>(`SELECT status FROM app.unit_bindings WHERE id = $1`, [bound.bindingId]);
   assert.equal(old.rows[0].status, "unlinked");
+});
+
+
+test("MGT-51-AC2 / TEN-29-AC1 issueInvite writes a 43-char display token; currentInvite.path equals joinUrl(token) and /join/<token>; listInvites has no raw token", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  const issued = await issueInvite(staff, unit_id);
+  assert.equal(issued.token.length, 43);
+
+  const disp = await query<{ token: string }>(
+    `SELECT d.token FROM app.unit_invite_display d
+       JOIN app.unit_invite_secrets s ON s.id = d.secret_id
+      WHERE s.org_id = $1 AND s.unit_id = $2 AND s.revoked_at IS NULL`,
+    [ORG_ID, unit_id],
+  );
+  assert.equal(disp.rows.length, 1);
+  assert.equal(disp.rows[0].token, issued.token);
+  assert.equal(disp.rows[0].token.length, 43);
+
+  const cur = await currentInvite(staff, unit_id);
+  assert.ok(cur);
+  assert.equal(cur.token, issued.token);
+  assert.equal(cur.cap, 4);
+  assert.equal(joinUrl(issued.token), `/join/${issued.token}`);
+  assert.equal(cur.path, joinUrl(issued.token));
+  assert.equal(cur.path, `/join/${issued.token}`);
+
+  const listed = await listInvites(staff, unit_id);
+  assert.equal(JSON.stringify(listed).includes(issued.token), false);
+
+  const cols = await query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'app' AND table_name = 'unit_invite_secrets' AND column_name = 'token'`,
+  );
+  assert.equal(cols.rows.length, 0);
+});
+
+test("MGT-51-AC2 rotateInvite replaces the display token and the revoke trigger drops the old row", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  const first = await issueInvite(staff, unit_id);
+  const second = await rotateInvite(staff, unit_id);
+  assert.notEqual(second.token, first.token);
+
+  const cur = await currentInvite(staff, unit_id);
+  assert.ok(cur);
+  assert.equal(cur.token, second.token);
+
+  const disp = await query<{ token: string }>(
+    `SELECT d.token FROM app.unit_invite_display d
+       JOIN app.unit_invite_secrets s ON s.id = d.secret_id
+      WHERE s.org_id = $1 AND s.unit_id = $2`,
+    [ORG_ID, unit_id],
+  );
+  assert.equal(disp.rows.length, 1);
+  assert.equal(disp.rows[0].token, second.token);
+
+  const old = await query<{ ok: number }>(
+    `SELECT 1 AS ok FROM app.unit_invite_display WHERE token = $1`,
+    [first.token],
+  );
+  assert.equal(old.rows.length, 0);
+});
+
+test("MGT-51-AC2 currentInvite is null when no live invite; FLAG-OFF currentInvite is notFound and writes no display row", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  await query(`UPDATE app.unit_invite_secrets SET revoked_at = now() WHERE unit_id = $1 AND revoked_at IS NULL`, [unit_id]);
+  assert.equal(await currentInvite(staff, unit_id), null);
+
+  const before = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app.unit_invite_display d
+       JOIN app.unit_invite_secrets s ON s.id = d.secret_id
+      WHERE s.org_id = $1 AND s.unit_id = $2`,
+    [ORG_ID, unit_id],
+  );
+  await flag(false);
+  await assert.rejects(() => currentInvite(staff, unit_id), (err) => isFlow(err, "errors.notFound"));
+  await assert.rejects(() => issueInvite(staff, unit_id), (err) => isFlow(err, "errors.notFound"));
+  const after = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app.unit_invite_display d
+       JOIN app.unit_invite_secrets s ON s.id = d.secret_id
+      WHERE s.org_id = $1 AND s.unit_id = $2`,
+    [ORG_ID, unit_id],
+  );
+  assert.equal(after.rows[0].n, before.rows[0].n);
+  await flag(true);
+});
+
+test("MGT-51-AC2 accountant and maintenance cannot call currentInvite", async () => {
+  await flag(true);
+  const { unit_id } = await unitAndLease();
+  const accountant = await session(USERS.accountant, "staff", "accountant");
+  await assert.rejects(() => currentInvite(accountant, unit_id), (err) => isFlow(err, "errors.forbidden"));
+  const maintenance = await session(USERS.maintenance, "staff", "maintenance");
+  await assert.rejects(() => currentInvite(maintenance, unit_id), (err) => isFlow(err, "errors.forbidden"));
+});
+
+
+async function jsonOf(res: { status: number; json: () => Promise<unknown> }) {
+  return { status: res.status, body: await res.json() as Record<string, unknown> };
+}
+
+test("TEN-29-AC2 landing copy has no 用 Email 建立 signup entry", () => {
+  assert.equal(landingHtml({}).includes("用 Email 建立"), false);
+  assert.equal(landingHtml({ token: "A".repeat(43) }).includes("用 Email 建立"), false);
+});
+
+test("TEN-29-AC2 / R-a8 acceptBindExisting occupies one seat on the same 4-cap", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  const unitId = await otherUnit(ORG_ID, unit_id);
+  await clearBinds(unitId);
+  const issued = await issueInvite(staff, unitId);
+
+  for (let i = 0; i < 3; i++) {
+    await acceptBind({
+      orgId: ORG_ID,
+      unitId,
+      token: issued.token,
+      lineSub: `line-existing-${i}-${randomUUID()}`,
+      displayName: `LINE ${i}`,
+    });
+  }
+
+  const bound = await acceptBindExisting({
+    orgId: ORG_ID,
+    unitId,
+    token: issued.token,
+    userId: USERS.tenant,
+    displayName: "既有帳號",
+  });
+  assert.equal(bound.userId, USERS.tenant);
+
+  const rows = await listBindings(staff, unitId);
+  const occupied = rows.filter((b) => b.status === "pending" || b.status === "lease_linked");
+  assert.equal(occupied.length, 4);
+  const cur = await currentInvite(staff, unitId);
+  assert.ok(cur);
+  assert.equal(cur.bound, 4);
+
+  const hashed = await query<{ line_identity_hash: string }>(
+    `SELECT line_identity_hash FROM app.unit_bindings
+      WHERE user_id = $1 AND unit_id = $2 AND status IN ('pending','lease_linked')`,
+    [USERS.tenant, unitId],
+  );
+  assert.equal(hashed.rows.length, 1);
+  assert.equal(hashed.rows[0].line_identity_hash, existingLoginHash(USERS.tenant));
+
+  await assert.rejects(
+    () => acceptBind({ orgId: ORG_ID, unitId, token: issued.token, lineSub: `line-fifth-${randomUUID()}` }),
+    (err: unknown) => isFlow(err, "errors.seat_cap"),
+  );
+  await assert.rejects(
+    () => acceptBindExisting({ orgId: ORG_ID, unitId, token: issued.token, userId: USERS.tenant2 }),
+    (err: unknown) => isFlow(err, "errors.seat_cap"),
+  );
+});
+
+test("TEN-29-AC2 / R-b5 acceptBindExisting staff same org is identity_conflict; flag off is notFound", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  const issued = await issueInvite(staff, unit_id);
+
+  await assert.rejects(
+    () => acceptBindExisting({ orgId: ORG_ID, unitId: unit_id, token: issued.token, userId: USERS.admin }),
+    (err: unknown) => isFlow(err, "errors.identity_conflict"),
+  );
+
+  await flag(false);
+  await assert.rejects(
+    () => acceptBindExisting({ orgId: ORG_ID, unitId: unit_id, token: issued.token, userId: USERS.tenant }),
+    (err: unknown) => isFlow(err, "errors.notFound"),
+  );
+  await flag(true);
+});
+
+test("TEN-29-AC2 handleAcceptExisting binds the logged-in tenant", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  const unitId = await otherUnit(ORG_ID, unit_id);
+  await clearBinds(unitId);
+  const issued = await issueInvite(staff, unitId);
+
+  const tenantSess = await session(USERS.tenant, "tenant", null);
+  const { status, body } = await jsonOf(await handleAcceptExisting(tenantSess, { token: issued.token, orgId: ORG_ID, unitId }));
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+  const result = body.result as { userId?: string };
+  assert.equal(result.userId, USERS.tenant);
+
+  const out = await jsonOf(await handleAcceptExisting(null, { token: issued.token }));
+  assert.equal(out.status, 401);
+  assert.deepEqual(Object.keys(out.body).sort(), ["error", "ok"]);
+});
+
+test("MGT-52-AC3 / R-X-perm accountant and maintenance get 403 from live, issue, and rotate with no token or bindings", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  const issued = await issueInvite(staff, unit_id);
+  await acceptBind({ orgId: ORG_ID, unitId: unit_id, token: issued.token, lineSub: `line-perm-${randomUUID()}`, displayName: "T" });
+
+  const denied = [
+    await session(USERS.accountant, "staff", "accountant"),
+    await session(USERS.maintenance, "staff", "maintenance"),
+  ];
+  const handlers = [handleStaffLive, handleStaffIssue, handleStaffRotate];
+  for (const sess of denied) {
+    for (const handler of handlers) {
+      const { status, body } = await jsonOf(await handler(sess, unit_id));
+      assert.equal(status, 403);
+      assert.equal(body.ok, false);
+      assert.equal(body.error, "errors.forbidden");
+      assert.deepEqual(Object.keys(body), ["ok", "error"]);
+      const text = JSON.stringify(body);
+      assert.equal(text.includes(issued.token), false);
+      assert.equal(text.includes("bindings"), false);
+      assert.equal(text.includes("display_name"), false);
+      assert.equal(text.includes("/join/"), false);
+    }
+  }
+
+  const live = await jsonOf(await handleStaffLive(staff, unit_id));
+  assert.equal(live.status, 200);
+  assert.equal(live.body.ok, true);
+  assert.ok((live.body.bound as number) >= 1);
+  assert.equal(live.body.cap, 4);
+  assert.ok(Array.isArray(live.body.bindings));
+  assert.equal("token" in live.body, false);
+  assert.equal("path" in live.body, false);
+  assert.equal(JSON.stringify(live.body).includes(issued.token), false);
+
+  const issuedAgain = await jsonOf(await handleStaffIssue(staff, unit_id));
+  assert.equal(issuedAgain.status, 200);
+  const again = issuedAgain.body.result as { token?: string };
+  assert.equal(again.token, issued.token);
+});
+
+test("MGT-52-AC3 FLAG-OFF staff live/issue/rotate are 404", async () => {
+  await flag(true);
+  const staff = await admin();
+  const { unit_id } = await unitAndLease();
+  await clearBinds(unit_id);
+  await issueInvite(staff, unit_id);
+
+  await flag(false);
+  for (const handler of [handleStaffLive, handleStaffIssue, handleStaffRotate]) {
+    const { status, body } = await jsonOf(await handler(staff, unit_id));
+    assert.equal(status, 404);
+    assert.equal(body.error, "errors.notFound");
+    assert.equal("token" in body, false);
+    assert.equal("result" in body, false);
+  }
+  await flag(true);
 });

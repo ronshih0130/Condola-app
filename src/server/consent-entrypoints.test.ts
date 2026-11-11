@@ -20,7 +20,6 @@ const checker = program.getTypeChecker();
 // Staff exports in server/vendor-link-actions.ts use the default guarded classification.
 // vendor-onboarding.ts and vendor-receipt.ts are services, not entrypoints.
 const openActions: Record<string, Record<string, string>> = {
-  "server/unit-qr-actions.ts": { actionAbandonUnitQr: "Clears only the caller browser continuation; no data or entitlement change", actionCompleteUnitQr: "Existing signup identity; completeUnitQr checks verified email and current consent without a staff or portal entitlement" },
   "server/auth-actions.ts": {
     actionSignIn: "Establish identity", actionLineLogin: "Establish identity",
     actionSecondFactor: "Complete authentication", actionForgot: "Recover identity",
@@ -75,8 +74,8 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/vendor-account/route.ts": { GET: "Account cookie identity plus current consent via authorizeVendorAccountRequest; no persona or session writes", POST: "Account cookie identity plus current consent via authorizeVendorAccountRequest; strict same-origin mutation" },
   "api/vendor-estimate/route.ts": { POST: "B-026 scoped vendor token and flag gateway, no user session" },
   "join/[token]/route.ts": { GET: "Public B-033 unit LINE invite landing; token in the path only, no account session, no outbound" },
-  "signup/unit-qr/route.ts": { GET: "Static isolated fragment scrub and POST exchange; no account data" },
-  "api/signup/unit-qr/route.ts": { POST: "Signed short-lived context exchange only; no identity or data access; signup retains consent and verification" },
+  "signup/unit-qr/route.ts": { GET: "Static retired B-005 L1 page; no database, no account data, no token interpolation" },
+  "api/signup/unit-qr/route.ts": { POST: "Always 404; no body read, no cookie, no identity or data access" },
   "api/auth/enter/route.ts": { GET: "Authentication continuation checks consent" },
   "api/auth/sign-out/route.ts": { POST: "Always permit leaving" },
   "api/cron/reminders/route.ts": { POST: "Cron secret, no human identity" },

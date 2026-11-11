@@ -206,7 +206,8 @@ export async function issueInvite(session: Session, unitId: string): Promise<{ t
   const hash = hashInviteToken(token);
   try {
     await withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
-      await client.query("SELECT app.unit_line_issue($1, $2, $3, $4)", [session.orgId, unitId, hash, session.userId]);
+      const { rows } = await client.query<{ id: string }>("SELECT app.unit_line_issue($1, $2, $3, $4) AS id", [session.orgId, unitId, hash, session.userId]);
+      await client.query("SELECT app.unit_line_store_display($1, $2)", [rows[0].id, token]);
       await audit(client, session.orgId, session.userId, session.role, "unit_invite_secrets", unitId, "insert", "unit_line_issue", maskToken(token));
     }));
   } catch (err) {
@@ -222,13 +223,55 @@ export async function rotateInvite(session: Session, unitId: string): Promise<{ 
   const hash = hashInviteToken(token);
   try {
     await withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
-      await client.query("SELECT app.unit_line_rotate($1, $2, $3, $4)", [session.orgId, unitId, hash, session.userId]);
+      const { rows } = await client.query<{ id: string }>("SELECT app.unit_line_rotate($1, $2, $3, $4) AS id", [session.orgId, unitId, hash, session.userId]);
+      await client.query("SELECT app.unit_line_store_display($1, $2)", [rows[0].id, token]);
       await audit(client, session.orgId, session.userId, session.role, "unit_invite_secrets", unitId, "insert", "unit_line_rotate", maskToken(token));
     }));
   } catch (err) {
     mapSqlError(err);
   }
   return { token, path: `/join/${token}` };
+}
+
+
+export function joinUrl(token: string): string {
+  return `/join/${token}`;
+}
+
+export async function currentInvite(
+  session: Session,
+  unitId: string,
+): Promise<{ token: string; path: string; expires_at: Date; bound: number; cap: number } | null> {
+  session = await requireInviteStaff(session);
+  if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
+  return withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
+    const { rows } = await client.query<{ token: string; expires_at: Date }>(
+      `SELECT d.token, s.expires_at
+         FROM app.unit_invite_secrets s
+         JOIN app.unit_invite_display d ON d.secret_id = s.id
+        WHERE s.org_id = $1 AND s.unit_id = $2
+          AND s.revoked_at IS NULL AND s.expires_at > now()
+        ORDER BY s.created_at DESC
+        LIMIT 1`,
+      [session.orgId, unitId],
+    );
+    if (rows.length === 0) return null;
+    const token = rows[0].token;
+    const { rows: bindRows } = await client.query<{ bound: number }>(
+      `SELECT count(*)::int AS bound
+         FROM app.unit_bindings
+        WHERE org_id = $1 AND unit_id = $2
+          AND status IN ('pending', 'lease_linked')`,
+      [session.orgId, unitId],
+    );
+    return {
+      token,
+      path: joinUrl(token),
+      expires_at: rows[0].expires_at,
+      bound: bindRows[0].bound,
+      cap: 4,
+    };
+  }));
 }
 
 export async function acceptBind(input: {
@@ -286,6 +329,58 @@ export async function acceptBind(input: {
       const res = await client.query<{ id: string }>(
         "SELECT app.unit_line_accept($1, $2, $3, $4, $5, $6, $7, $8, $9) AS id",
         [input.orgId, input.unitId, hash, userId, lineHash, displayName, input.enteredName ?? null, contactId, input.ip ?? null],
+      );
+      const bindingId = res.rows[0].id;
+      await audit(client, input.orgId, userId, null, "unit_bindings", bindingId, "insert", "unit_line_bound");
+      return { bindingId, userId };
+    });
+  } catch (err) {
+    await noteFailure(input.token, input.ip);
+    throw err;
+  }
+}
+
+export function existingLoginHash(userId: string): string {
+  return createHash("sha256").update("existing-login:" + userId).digest("hex");
+}
+
+// TEN-29-AC2: existing-account bind; same unit lock and 4-seat cap as LINE accept. No new-signup path.
+export async function acceptBindExisting(input: {
+  orgId: string;
+  unitId: string;
+  token: string;
+  userId: string;
+  ip?: string;
+  displayName?: string;
+}): Promise<{ bindingId: string; userId: string }> {
+  if (!(await unitLineInviteOn(input.orgId))) throw new FlowError("errors.notFound");
+  if (!input.userId) throw new FlowError("errors.forbidden");
+  if (/^\d{6}$/.test(input.token) || inviteTokenBytes(input.token) !== 32) {
+    await noteFailure(input.token, input.ip);
+    throw new FlowError("errors.invalid");
+  }
+  if ((await attemptLocked(tokenAttemptKey(input.token))) || (await attemptLocked(ipAttemptKey(input.ip)))) {
+    throw new FlowError("errors.rateLimited");
+  }
+  const hash = hashInviteToken(input.token);
+  const lineHash = existingLoginHash(input.userId);
+  const displayName = input.displayName || "tenant";
+
+  try {
+    return await withSql(input.userId, async (client) => {
+      const userId = input.userId;
+      const contact = await client.query<{ id: string }>(
+        `INSERT INTO public.contacts (org_id, user_id, is_tenant, display_name)
+         VALUES ($1, $2, true, $3)
+         ON CONFLICT (org_id, user_id) WHERE user_id IS NOT NULL AND is_tenant AND archived_at IS NULL
+         DO UPDATE SET is_tenant = true
+         RETURNING id`,
+        [input.orgId, userId, displayName],
+      );
+      const contactId = contact.rows[0].id;
+      const res = await client.query<{ id: string }>(
+        "SELECT app.unit_line_accept($1, $2, $3, $4, $5, $6, $7, $8, $9) AS id",
+        [input.orgId, input.unitId, hash, userId, lineHash, displayName, null, contactId, input.ip ?? null],
       );
       const bindingId = res.rows[0].id;
       await audit(client, input.orgId, userId, null, "unit_bindings", bindingId, "insert", "unit_line_bound");
