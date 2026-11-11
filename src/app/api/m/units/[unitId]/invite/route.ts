@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { readSession } from "@/server/session";
 import {
   handleStaffLive,
@@ -26,6 +27,14 @@ export async function GET(
 ) {
   const session = await readSession();
   const { unitId } = await context.params;
+  if (!session) {
+    return NextResponse.json(
+      { ok: false, error: "errors.forbidden" },
+      { status: 401, headers: INVALID_HEADERS },
+    );
+  }
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   return handleStaffLive(session, unitId);
 }
 
@@ -35,6 +44,14 @@ export async function POST(
 ) {
   const session = await readSession();
   const { unitId } = await context.params;
+  if (!session) {
+    return NextResponse.json(
+      { ok: false, error: "errors.forbidden" },
+      { status: 401, headers: INVALID_HEADERS },
+    );
+  }
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
 
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) {
