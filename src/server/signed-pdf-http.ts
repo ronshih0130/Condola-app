@@ -5,6 +5,8 @@ import type { OrgRole, Session } from "./types";
 
 export const STAFF_SIGNED_PDF_ROLES = ["admin", "manager"] as const satisfies readonly OrgRole[];
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const privateHeaders = {
   "Cache-Control": "private, no-store",
   "X-Content-Type-Options": "nosniff",
@@ -80,6 +82,36 @@ export async function staffSignedPdfHttp(input: {
     const file = await input.read();
     if (!file) return signedPdfNotFound();
     await input.audit();
+    const bytes = Uint8Array.from(file.content);
+    return new Response(new Blob([bytes], { type: "application/pdf" }), {
+      headers: {
+        ...privateHeaders,
+        "Content-Type": "application/pdf",
+        "Content-Length": String(bytes.byteLength),
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(file.file_name)}"`,
+      },
+    });
+  } catch (error) {
+    input.logError(error);
+    return new Response("Unavailable", { status: 503, headers: privateHeaders });
+  }
+}
+
+export async function legacyStaffSignedPdfHttp(input: {
+  session: Session | null;
+  leaseId: string;
+  read: () => Promise<{ id: string; content: Uint8Array; file_name: string } | null>;
+  audit: (pdfId: string) => Promise<unknown>;
+  logError: (error: unknown) => void;
+}): Promise<Response> {
+  if (!input.session) return signedPdfLoginRedirect();
+  if (!staffRoleMayDownloadSignedPdf(input.session)) return signedPdfNotFound();
+  if (!consentCoversCurrent(input.session.consent ?? null)) return consentRequiredResponse();
+  if (!UUID.test(input.leaseId)) return signedPdfNotFound();
+  try {
+    const file = await input.read();
+    if (!file || !UUID.test(file.id)) return signedPdfNotFound();
+    await input.audit(file.id);
     const bytes = Uint8Array.from(file.content);
     return new Response(new Blob([bytes], { type: "application/pdf" }), {
       headers: {
