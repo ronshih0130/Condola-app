@@ -74,6 +74,7 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/vendor-account-staff/route.ts": { GET: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope", POST: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope" },
   "api/vendor-account/route.ts": { GET: "Account cookie identity plus current consent via authorizeVendorAccountRequest; no persona or session writes", POST: "Account cookie identity plus current consent via authorizeVendorAccountRequest; strict same-origin mutation" },
   "api/vendor-estimate/route.ts": { POST: "B-026 scoped vendor token and flag gateway, no user session" },
+  "join/[token]/route.ts": { GET: "Public B-033 unit LINE invite landing; token in the path only, no account session, no outbound" },
   "signup/unit-qr/route.ts": { GET: "Static isolated fragment scrub and POST exchange; no account data" },
   "api/signup/unit-qr/route.ts": { POST: "Signed short-lived context exchange only; no identity or data access; signup retains consent and verification" },
   "api/auth/enter/route.ts": { GET: "Authentication continuation checks consent" },

@@ -408,5 +408,11 @@
   "src/server/upload-recovery.ts#prepareBatchPhoto": "tickets.update",
   "src/server/upload-recovery.ts#confirmBatchPhoto": "tickets.update",
   "src/server/upload-recovery.ts#submitBatchPhotos": "tickets.update",
-  "src/server/upload-recovery.ts#discardBatchPhotos": "tickets.update"
+  "src/server/upload-recovery.ts#discardBatchPhotos": "tickets.update",
+  "src/server/unit-line-invite.ts#issueInvite": "leases.edit",
+  "src/server/unit-line-invite.ts#rotateInvite": "leases.edit",
+  "src/server/unit-line-invite.ts#removeBinding": "leases.edit",
+  "src/server/unit-line-invite.ts#includeOnLease": "leases.edit",
+  "src/server/unit-line-invite.ts#listBindings": "leases.edit",
+  "src/server/unit-line-invite.ts#listInvites": "leases.edit"
 }
