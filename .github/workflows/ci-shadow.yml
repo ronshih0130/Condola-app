@@ -1,0 +1,370 @@
+# CI shadow (self-hosted Mac mini) — push-only, non-required. The
+# `condola-macmini` runner is now ONLINE but may have NO toolchain installed.
+# This job NEVER downloads or installs Node/npm/Postgres: it FAILS FAST unless
+# the required tools are already present and match the pins. Mirrors hosted
+# ci.yml for shadow parity but adapts to macOS (no Docker, no apt, no sudo).
+#
+# Version pins are READ AT RUNTIME from ops/toolchain.json (shared config):
+#   node          -> 20.20.2  (repo toolchain: tests / e2e)              # comment only
+#   npm           -> 10.8.2   (repo toolchain)                           # comment only
+#   node_wrangler -> 22.23.5  (Node 22 LTS: wrangler / cf:build / test:worker)  # comment only
+# Do not hardcode versions in steps (comments above are informational only).
+#
+# Public-repo protections: push-to-main + workflow_dispatch only (never
+# pull_request / pull_request_target), job gated to this repo, read-only
+# permissions, no secrets, synthetic DATABASE_URL only.
+
+name: CI shadow (self-hosted)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Read-only. No write scopes (cache write would need a broader actions scope).
+permissions:
+  contents: read
+
+# Keep queued shadow jobs from piling up while the runner is unregistered.
+concurrency:
+  group: ci-shadow-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shadow:
+    name: shadow (self-hosted macOS)
+    # Forks never run this job; only this repo on push or manual dispatch.
+    if: >-
+      github.repository == 'ronshih0130/Condola-app' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, condola-macmini]
+    timeout-minutes: 90
+    env:
+      DEMO_MODE: "true"
+      CONDOLA_RLS_DISPOSABLE: "YES"
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      # --- Start-of-job cleanup (non-ephemeral runner) --------------------
+      - name: Pre-job cleanup (non-ephemeral runner)
+        run: |
+          set -uo pipefail
+          PGDATA="${RUNNER_TEMP}/condola-pg16-data"
+          PGSOCK="${RUNNER_TEMP}/condola-pg16-sock"
+          # Stop any leftover disposable Postgres from a prior run (best-effort).
+          for d in \
+            "/opt/homebrew/opt/postgresql@16/bin" \
+            "/usr/local/opt/postgresql@16/bin" \
+            "/Applications/Postgres.app/Contents/Versions/16/bin"; do
+            if [ -x "$d/pg_ctl" ] && [ -d "$PGDATA" ]; then
+              "$d/pg_ctl" -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true
+            fi
+          done
+          pg_ctl -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true
+          # Remove the throwaway temp PG data dir and socket dir.
+          rm -rf "$PGDATA" "$PGSOCK" 2>/dev/null || true
+          # Clear leftover checkout/workspace contents WITHOUT removing the
+          # workspace directory itself (actions/checkout needs it to exist).
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE/node_modules" 2>/dev/null || true
+            find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+          fi
+          echo "pre-job cleanup done"
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # --- Read shared toolchain pins (no hardcoded versions) -------------
+      - name: Read toolchain pins from ops/toolchain.json
+        run: |
+          set -euo pipefail
+          TC="ops/toolchain.json"
+          get() {
+            grep -oE "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$TC" \
+              | head -n1 | sed -E 's/.*:[[:space:]]*"([^"]*)".*/\1/'
+          }
+          NODE_VERSION="$(get node)"
+          NPM_VERSION="$(get npm)"
+          NODE_WRANGLER="$(get node_wrangler)"
+          test -n "$NODE_VERSION" && test -n "$NPM_VERSION" && test -n "$NODE_WRANGLER"
+          {
+            echo "NODE_VERSION=$NODE_VERSION"
+            echo "NPM_VERSION=$NPM_VERSION"
+            echo "NODE_WRANGLER=$NODE_WRANGLER"
+          } >> "$GITHUB_ENV"
+
+      # --- Require a preinstalled toolchain; FAIL FAST, never install -----
+      # The condola-macmini runner is online but may have no toolchain yet.
+      # This step runs BEFORE npm ci / tests / Postgres start so a missing or
+      # mismatched toolchain fails immediately and can never reach an installer.
+      # It discovers already-present binaries only — it does NOT download them.
+      - name: Require preinstalled toolchain (condola-macmini; no installs)
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            echo "$1" >&2
+            exit 1
+          }
+
+          # Locate a dir whose `node -v` reports exactly v$1. Searches the
+          # common per-user prefixes for `condola-runner` (nvm / volta /
+          # Homebrew node@N) plus PATH. Discovery only — never installs.
+          find_node_bin() {
+            local want="$1" d
+            local cands=(
+              "$HOME/.nvm/versions/node/v${want}/bin"
+              "$HOME/.volta/bin"
+              "/opt/homebrew/opt/node@20/bin"
+              "/opt/homebrew/opt/node@22/bin"
+              "/opt/homebrew/bin"
+              "/usr/local/bin"
+            )
+            if command -v node >/dev/null 2>&1; then
+              cands+=("$(dirname "$(command -v node)")")
+            fi
+            for d in "${cands[@]}"; do
+              if [ -x "$d/node" ] && [ "$("$d/node" -v 2>/dev/null)" = "v${want}" ]; then
+                printf '%s\n' "$d"
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          # Node 20 (repo toolchain: typecheck / lint / unit / rls / e2e).
+          NODE20_BIN="$(find_node_bin "$NODE_VERSION")" || \
+            fail "condola-macmini runner has no (or wrong) preinstalled toolchain. Missing tool: node v${NODE_VERSION} (repo toolchain). This job will NOT install it — provision node v${NODE_VERSION} on the runner (nvm/volta/Homebrew)."
+
+          # npm ships beside that node and must match the pin exactly.
+          if [ ! -x "$NODE20_BIN/npm" ]; then
+            fail "condola-macmini runner has no (or wrong) preinstalled toolchain. Missing tool: npm ${NPM_VERSION} (expected beside node v${NODE_VERSION}). This job will NOT install it."
+          fi
+          NPM_HAVE="$("$NODE20_BIN/npm" -v 2>/dev/null || true)"
+          if [ "$NPM_HAVE" != "$NPM_VERSION" ]; then
+            fail "condola-macmini runner has the wrong preinstalled toolchain. Tool: npm — found '${NPM_HAVE:-none}', expected pin ${NPM_VERSION}. This job will NOT install or upgrade npm."
+          fi
+
+          # Node 22 LTS (wrangler lane: cf:build / test:worker).
+          NODE22_BIN="$(find_node_bin "$NODE_WRANGLER")" || \
+            fail "condola-macmini runner has no (or wrong) preinstalled toolchain. Missing tool: node v${NODE_WRANGLER} (Node 22 LTS for cf:build / test:worker). This job will NOT install it — provision node v${NODE_WRANGLER} on the runner."
+
+          # PostgreSQL 16 (initdb / pg_ctl / psql) — same prefixes the PG
+          # start step uses. Fail here, not after unit tests.
+          PG_CANDS=(
+            "/opt/homebrew/opt/postgresql@16/bin"
+            "/usr/local/opt/postgresql@16/bin"
+            "/Applications/Postgres.app/Contents/Versions/16/bin"
+          )
+          if command -v pg_ctl >/dev/null 2>&1; then
+            PG_CANDS+=("$(dirname "$(command -v pg_ctl)")")
+          fi
+          PG16_BIN=""
+          for d in "${PG_CANDS[@]}"; do
+            if [ -x "$d/initdb" ] && [ -x "$d/pg_ctl" ] && [ -x "$d/psql" ]; then
+              case "$("$d/initdb" --version 2>/dev/null | awk '{print $NF}')" in
+                16.*) PG16_BIN="$d"; break ;;
+              esac
+            fi
+          done
+          [ -n "$PG16_BIN" ] || \
+            fail "condola-macmini runner has no preinstalled toolchain. Missing tool: PostgreSQL 16 (initdb/pg_ctl/psql for major 16). This job will NOT install it — provision Homebrew postgresql@16 or Postgres.app 16."
+
+          echo "Preinstalled toolchain OK (no installs performed):"
+          echo "  node ${NODE_VERSION} -> ${NODE20_BIN}"
+          echo "  npm  ${NPM_VERSION}  (beside node 20)"
+          echo "  node ${NODE_WRANGLER} -> ${NODE22_BIN}"
+          echo "  postgresql 16 -> ${PG16_BIN}"
+
+          # Export discovered locations and make Node 20 the default on PATH.
+          # No actions/setup-node anywhere in this job, so nothing can trigger
+          # a download; later steps switch Node via $NODE22_BIN / $NODE20_BIN.
+          {
+            echo "NODE20_BIN=$NODE20_BIN"
+            echo "NODE22_BIN=$NODE22_BIN"
+            echo "PG16_BIN=$PG16_BIN"
+          } >> "$GITHUB_ENV"
+          echo "$NODE20_BIN" >> "$GITHUB_PATH"
+
+      - name: Assert Node 20 / npm pins
+        run: |
+          set -euo pipefail
+          test "$(node -v)" = "v${NODE_VERSION}"
+          test "$(npm -v)" = "${NPM_VERSION}"
+
+      - name: Generate ephemeral synthetic test material
+        # Mirrors hosted ci.yml. No maintenance/prod keys. Print no values.
+        # GITHUB_ENV is an ephemeral runner file outside the checkout.
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { randomBytes } = require('node:crypto');
+          if (!process.env.GITHUB_ENV || process.env.CONDOLA_RLS_DISPOSABLE !== 'YES') throw new Error('Disposable CI environment required');
+          const names = ['ID_DOC_ENCRYPTION_KEY', 'ID_DOC_HMAC_KEY', 'ID_DOC_SIGNING_SECRET'];
+          fs.appendFileSync(process.env.GITHUB_ENV, names.map(name => name + '=' + randomBytes(32).toString('hex')).join('\n') + '\n');
+          fs.chmodSync(process.env.GITHUB_ENV, 0o600);
+          NODE
+
+      - run: npm ci
+
+      - name: Require PDF raster tools (poppler pdftoppm)
+        run: |
+          set -euo pipefail
+          if ! command -v pdftoppm >/dev/null 2>&1; then
+            echo "pdftoppm not found on PATH. Install Homebrew poppler on the runner; this job does NOT brew install." >&2
+            exit 1
+          fi
+          pdftoppm -v 2>&1 | head -n1 || true
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run copy:check
+      - run: npm run test:unit
+
+      # --- Disposable PostgreSQL 16 (macOS, no Docker) -------------------
+      - name: Start disposable PostgreSQL 16
+        run: |
+          set -euo pipefail
+          # Locate major-16 binaries already on the machine. Do NOT brew install.
+          # Prefer the dir the require step already validated ($PG16_BIN).
+          CANDIDATES=(
+            "${PG16_BIN:-}"
+            "/opt/homebrew/opt/postgresql@16/bin"
+            "/usr/local/opt/postgresql@16/bin"
+            "/Applications/Postgres.app/Contents/Versions/16/bin"
+          )
+          if command -v pg_ctl >/dev/null 2>&1; then
+            CANDIDATES+=("$(dirname "$(command -v pg_ctl)")")
+          fi
+          PG_BIN=""
+          for d in "${CANDIDATES[@]}"; do
+            [ -n "$d" ] || continue
+            if [ -x "$d/initdb" ] && [ -x "$d/pg_ctl" ] && [ -x "$d/psql" ]; then
+              ver="$("$d/initdb" --version | awk '{print $NF}')"
+              case "$ver" in
+                16.*) PG_BIN="$d"; break ;;
+              esac
+            fi
+          done
+          if [ -z "$PG_BIN" ]; then
+            echo "PostgreSQL 16 (initdb/pg_ctl/psql for major 16) not found. Install Homebrew postgresql@16 or Postgres.app 16; this job does NOT brew install." >&2
+            exit 1
+          fi
+          export PATH="$PG_BIN:$PATH"
+
+          PGDATA="${RUNNER_TEMP}/condola-pg16-data"
+          PGSOCK="${RUNNER_TEMP}/condola-pg16-sock"
+          PGPORT="25432"   # non-default, avoids colliding with other PG on the Mac
+          rm -rf "$PGDATA" "$PGSOCK"
+          mkdir -p "$PGSOCK"
+
+          initdb -D "$PGDATA" -U condola --auth=trust --encoding=UTF8 --no-locale >/dev/null
+          pg_ctl -D "$PGDATA" -w -t 60 \
+            -o "-p ${PGPORT} -k ${PGSOCK} -c listen_addresses=127.0.0.1" start
+
+          # Create role/db condola/condola; password used only inside DATABASE_URL.
+          psql -h 127.0.0.1 -p "$PGPORT" -U condola -d postgres -v ON_ERROR_STOP=1 \
+            -c "ALTER ROLE condola WITH PASSWORD 'condola';" \
+            -c "CREATE DATABASE condola OWNER condola;" >/dev/null
+
+          # Confirm server major version is 16 before applying schema.
+          SV="$(psql -h 127.0.0.1 -p "$PGPORT" -U condola -d postgres -tAc 'SHOW server_version_num')"
+          case "$SV" in
+            16*) : ;;
+            *) echo "Expected PostgreSQL 16, server_version_num=$SV" >&2; exit 1 ;;
+          esac
+
+          # Persist for later steps. DATABASE_URL is written to GITHUB_ENV, never printed.
+          echo "$PG_BIN" >> "$GITHUB_PATH"
+          {
+            echo "PG_BIN=$PG_BIN"
+            echo "PGDATA=$PGDATA"
+            echo "PGSOCK=$PGSOCK"
+            echo "PGPORT=$PGPORT"
+            echo "DATABASE_URL=postgres://condola:condola@127.0.0.1:${PGPORT}/condola"
+          } >> "$GITHUB_ENV"
+
+      - name: Apply schema and seed
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/stub/supabase_stub.sql
+          for migration in supabase/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+          npm run db:reset
+
+      - name: Check function execute privileges
+        run: bash scripts/check-function-privileges.sh
+
+      - run: npm run test:rls
+
+      # --- Node 22 LTS (wrangler lane only) ------------------------------
+      # Switch to the preinstalled Node 22 by prepending it to PATH. No
+      # actions/setup-node (that could download) — $NODE22_BIN was validated
+      # by the require step above.
+      - name: Select preinstalled Node 22 (wrangler lane)
+        run: echo "$NODE22_BIN" >> "$GITHUB_PATH"
+
+      - name: Assert Node 22 pin
+        run: |
+          set -euo pipefail
+          test "$(node -v)" = "v${NODE_WRANGLER}"
+
+      # Dual-Node: deps were installed under Node 20 by `npm ci` above.
+      # cf:build / test:worker run under Node 22 WITHOUT re-running npm ci.
+      - run: npm run cf:build
+      - run: npm run test:worker
+
+      # --- Playwright (workflow_dispatch only; back on Node 20) ----------
+      # Re-prepend the preinstalled Node 20 bin so it wins over Node 22.
+      - name: Select preinstalled Node 20 for e2e
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: echo "$NODE20_BIN" >> "$GITHUB_PATH"
+
+      - name: Install Playwright Chromium
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        # No `--with-deps` (that is an apt path; this is macOS).
+        run: npx playwright install chromium
+
+      - name: Run end-to-end tests
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: npm run test:e2e
+
+      # --- End-of-job cleanup (always) -----------------------------------
+      - name: Post-job cleanup (always, non-ephemeral runner)
+        if: always()
+        run: |
+          set -uo pipefail
+          PGDATA="${PGDATA:-${RUNNER_TEMP}/condola-pg16-data}"
+          PGSOCK="${PGSOCK:-${RUNNER_TEMP}/condola-pg16-sock}"
+          PG_BIN="${PG_BIN:-}"
+          stop_pg() {
+            if [ -n "$PG_BIN" ] && [ -x "$PG_BIN/pg_ctl" ]; then
+              "$PG_BIN/pg_ctl" -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true
+              return
+            fi
+            for d in \
+              "/opt/homebrew/opt/postgresql@16/bin" \
+              "/usr/local/opt/postgresql@16/bin" \
+              "/Applications/Postgres.app/Contents/Versions/16/bin"; do
+              if [ -x "$d/pg_ctl" ]; then
+                "$d/pg_ctl" -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true
+              fi
+            done
+            pg_ctl -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true
+          }
+          [ -d "$PGDATA" ] && stop_pg || true
+          # Remove temp PG data dir and socket dir.
+          rm -rf "$PGDATA" "$PGSOCK" 2>/dev/null || true
+          # Remove leftover node_modules / checkout debris so the persistent
+          # runner is clean — but keep the workspace directory itself.
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE/node_modules" 2>/dev/null || true
+            find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+          fi
+          # Do NOT touch the actions-runner install itself.
+          echo "post-job cleanup done"
