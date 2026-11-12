@@ -1,0 +1,43 @@
+/* Condola 租多啦 · Window Glow design tokens v1. Contrast in tokens.json */
+:root{
+  --cd-primary:#14325C;
+  --cd-primary-hover:#0F2748;
+  --cd-primary-pressed:#0B1F3A;
+  --cd-primary-soft:#E3EAF3;
+  --cd-accent:#2F6BFF;
+  --cd-accent-soft:#E8EFFF;
+  --cd-ink:#1B2533;
+  --cd-ink2:#4A5668;
+  --cd-ink3:#687384;
+  --cd-cream:#F4F6F8;
+  --cd-surface:#FFFFFF;
+  --cd-surface2:#EEF2F6;
+  --cd-border:#DDE3EA;
+  --cd-border-strong:#7F8B9C;
+  --cd-success:#2A7254;
+  --cd-success-bg:#E3F1EA;
+  --cd-warning:#935C0F;
+  --cd-warning-bg:#F8EEDB;
+  --cd-danger:#B0413E;
+  --cd-danger-bg:#F7E4E3;
+  --cd-info:#23748A;
+  --cd-info-bg:#E2F1F4;
+  --cd-focus:#2F6BFF;
+  --cd-topbar:#14325C;
+  --cd-focus-ring:0 0 0 2px #2F6BFF;
+  --cd-radius-sm:8px;--cd-radius-md:12px;--cd-radius-lg:20px;--font-sans:"Inter","Inter Variable","Noto Sans TC","Noto Sans CJK TC",-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;--font-display:"Plus Jakarta Sans","Inter","Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+
+@font-face{
+  font-family:'Inter';
+  src:url('/assets/fonts/Inter-latin-wght.woff2') format('woff2');
+  font-style:normal;
+  font-weight:100 900;
+  font-display:swap;
+}
+@font-face{
+  font-family:'Plus Jakarta Sans';
+  src:url('/assets/fonts/PlusJakartaSans-latin-wght.woff2') format('woff2');
+  font-style:normal;
+  font-weight:200 800;
+  font-display:swap;
+}

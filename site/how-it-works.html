@@ -1,0 +1,228 @@
+<!doctype html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>怎麼運作｜租多啦｜房屋出租的萬事通</title><meta name="description" content="從邀請租客屋主、租約留存、收租對帳到報修與月報，看看 Condola 租多啦怎麼處理你管理租務時最常卡關的地方。"><link rel="canonical" href="https://condola.app/how-it-works"><meta property="og:title" content="怎麼運作｜租多啦｜房屋出租的萬事通"><meta property="og:description" content="從邀請租客屋主、租約留存、收租對帳到報修與月報，看看 Condola 租多啦怎麼處理你管理租務時最常卡關的地方。"><meta property="og:url" content="https://condola.app/how-it-works"><meta property="og:type" content="website"><meta property="og:site_name" content="租多啦 Condola"><meta property="og:locale" content="zh_TW"><meta property="og:image" content="https://condola.app/assets/og-v2-20261029.png"><link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml"><link rel="icon" href="/favicon.ico?v=2" sizes="16x16 32x32 48x48"><link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2"><link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=2"><link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" sizes="180x180"><link rel="manifest" href="/site.webmanifest?v=2"><meta name="theme-color" content="#14325C"><link rel="stylesheet" href="/assets/mock-tokens.css"><style>
+@font-face{font-family:"Plus Jakarta Sans";src:url("/assets/fonts/PlusJakartaSans-latin-wght.woff2") format("woff2");font-weight:200 800;font-display:swap}
+@font-face{font-family:Inter;src:url("/assets/fonts/Inter-latin-wght.woff2") format("woff2");font-weight:100 900;font-display:swap}
+*{box-sizing:border-box}
+body{margin:0;background:var(--c-bg,#F5F7FA);color:var(--c-text,#1B2533);font:16px/1.8 Inter,"Noto Sans TC",sans-serif;letter-spacing:.02em}
+a{color:inherit;text-underline-offset:4px}
+img{max-width:100%;display:block}
+.w{max-width:1160px;margin:auto;padding:0 20px}
+h1,h2{font-family:"Plus Jakarta Sans","Noto Sans TC",sans-serif;line-height:1.4;margin:0 0 16px;letter-spacing:.01em}
+h1{font-size:44px}h2{font-size:28px}
+p{margin:0 0 24px;color:var(--c-text-2,#4A5668)}
+.eb{display:flex;align-items:center;gap:8px;margin-bottom:10px;font:700 12px/1.5 "Plus Jakarta Sans",sans-serif;letter-spacing:.12em;color:var(--c-text-3,#687384)}
+.eb:before{content:"";width:7px;height:7px;border-radius:50%;background:#2F6BFF;flex:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:12px 24px;border:1.5px solid #14325C;border-radius:999px;background:#14325C;color:#fff;font-weight:700;text-decoration:none;line-height:1.5}
+.btn.o{background:transparent;color:#14325C}
+a:focus-visible{outline:2px solid #2F6BFF;outline-offset:5px}
+header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--c-divider,#DDE3EA)}
+nav{height:68px;display:flex;align-items:center;gap:24px}
+.logo{flex:none}.logo img{width:150px;height:30px;object-fit:contain;object-position:left}
+nav .links{display:flex;gap:24px;margin-left:auto;font-size:15px}
+nav .links a{text-decoration:none;color:var(--c-text-2,#4A5668)}
+nav .links a[aria-current]{color:#14325C;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:7px}
+nav .btn{font-size:14px;padding:9px 18px;white-space:nowrap}
+.hero{text-align:center;max-width:830px;margin:auto;padding:72px 0 48px}
+.hero .eb{justify-content:center}
+.hero .motto{font-size:15px;margin:0 0 16px;color:#687384}
+.hero .sub{max-width:680px;margin:0 auto;font-size:17px}
+.start{width:100px;height:90px;object-fit:contain;margin:28px auto 0}
+.timeline{position:relative;list-style:none;padding:0 0 64px;margin:0}
+.thread{position:absolute;left:50%;top:0;bottom:0;width:24px;transform:translateX(-50%);pointer-events:none}
+.thread img{width:100%;height:100%;object-fit:fill}
+.step{position:relative;display:grid;grid-template-columns:1fr 64px 1fr;padding:28px 0}
+.node{position:absolute;top:65px;left:50%;transform:translateX(-50%);width:36px;height:36px;z-index:2}
+.card{position:relative;grid-column:3;padding:28px;border:1px solid var(--c-border,#DDE3EA);border-radius:var(--r-lg,24px);background:#fff;box-shadow:0 16px 40px -30px #14325C66;min-width:0}
+.step:nth-of-type(even) .card{grid-column:1}
+.card:before{content:"";position:absolute;left:-33px;top:53px;width:32px;border-top:2px solid #14325C}
+.step:nth-of-type(even) .card:before{left:auto;right:-33px}
+.step-head{display:flex;gap:14px;align-items:center;margin-bottom:18px}
+.step-head .eb{margin:0}
+.icon{display:block;width:44px;height:44px;flex:none;background:#14325C;-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat}
+.card p{font-size:15px;line-height:1.85}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;background:var(--c-surface-2,#EEF2F6);color:var(--c-text-2,#4A5668);font-size:12px;font-weight:600;line-height:1.7;white-space:nowrap;vertical-align:middle}
+.status{margin:-8px 0 20px}
+figure{margin:0;min-width:0}
+.frame{overflow:hidden;border:1px solid var(--c-border,#DDE3EA);border-radius:16px;background:#fff;box-shadow:0 14px 30px -23px #14325C66}
+.bar{height:27px;display:flex;align-items:center;gap:5px;padding:0 11px;background:var(--c-surface-2,#EEF2F6);border-bottom:1px solid #DDE3EA}
+.bar i{width:7px;height:7px;border-radius:50%;background:#CBD3DE}
+.frame>img{display:block;width:100%;height:auto;aspect-ratio:1280/800;object-fit:contain;object-position:top left}
+.placeholder{min-height:190px;display:grid;place-content:center;gap:12px;text-align:center;background:linear-gradient(135deg,#FAFBFC,#EEF2F6);color:#687384}
+.placeholder code{font:600 17px/1.6 Inter,monospace;color:#14325C}
+.placeholder svg{width:72px;height:48px;margin:auto;stroke:#14325C;fill:none;stroke-width:1.5}
+figcaption{margin-top:9px;text-align:center;color:var(--c-text-3,#687384);font-size:11px;letter-spacing:0;line-height:1.6}
+.phones{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);gap:8px;align-items:center}
+.phone{position:relative;overflow:hidden;border:5px solid #1B2533;border-radius:25px;background:#fff;max-width:190px;margin:auto}
+.phone img{width:100%;height:auto;aspect-ratio:390/844;object-fit:cover;object-position:top}
+.phone .pill{position:absolute;top:10px;right:6px;z-index:1;border:1px solid #DDE3EA}
+.sync{width:24px;height:32px;object-fit:contain}
+.vendor{padding:8px;border:1px dashed #CBD3DE;border-radius:23px;background:#FAFBFC}
+.vendor>.pill{display:table;margin:0 auto 9px}
+.cta{text-align:center;padding:0 0 88px}
+.end{width:36px;height:36px;margin:0 auto 28px}
+.band{background:var(--c-primary-soft,#E3EAF3);padding:48px 24px;border-radius:24px}
+.band .eb{justify-content:center}
+.band .btn{margin-top:12px}
+footer{background:#fff;border-top:1px solid var(--c-divider,#DDE3EA);padding:48px 0 28px;font-size:13px;color:var(--c-text-3,#687384)}
+footer .grid{display:grid;grid-template-columns:1.1fr .9fr .9fr 1.7fr;gap:28px}
+footer .brand{width:150px;height:auto}
+footer p{font-size:13px;margin:12px 0;color:inherit}
+footer b{display:block;margin-bottom:10px;color:var(--c-text,#1B2533);font-size:14px}
+footer .column>a{display:block;text-decoration:none;color:var(--c-text-2,#4A5668);margin-bottom:6px}
+footer .contact{overflow-wrap:anywhere}
+footer .contact a{text-decoration:none}
+.fn{border-top:1px solid var(--c-divider,#DDE3EA);margin-top:28px;padding-top:16px}
+.fn p{margin:0 0 8px}
+@media(max-width:760px){
+.w{padding:0 16px}nav{gap:8px;justify-content:space-between;height:68px}nav .links{display:none}
+.logo img{width:126px;height:28px}nav .btn{font-size:12px;padding:9px 12px;min-height:42px}
+nav .btn,nav .btn.o{background:transparent;color:#14325C}
+h1{font-size:32px}h2{font-size:24px}
+.hero{padding:40px 0 24px;text-align:left}.hero .eb{justify-content:flex-start}.hero .sub{font-size:16px}.start{width:72px;height:70px;margin:24px 0 0}
+.thread{left:15px;width:16px}.timeline{padding-bottom:40px}
+.step{display:block;padding:20px 0 20px 42px}.node{left:15px;top:51px;width:28px;height:28px}
+.card{padding:22px 18px;border-radius:20px}.card:before,.step:nth-of-type(even) .card:before{left:-28px;right:auto;top:44px;width:27px}
+.step-head{gap:10px;margin-bottom:14px}.icon{width:36px;height:36px}.card p{font-size:15px}
+.placeholder{min-height:156px}.phones{grid-template-columns:1fr;gap:14px}.phone{width:190px}.sync{justify-self:center;transform:rotate(90deg);width:32px;height:24px}.vendor{width:220px;max-width:100%;margin:auto}
+.cta{padding-bottom:56px}.end{margin-left:0}.band{padding:32px 20px}footer .grid{grid-template-columns:1fr;gap:24px}
+}
+@media(prefers-reduced-motion:no-preference){
+.hero{animation:fade .7s ease-out}
+.thread{clip-path:inset(0 0 0 0);animation:draw 1.5s ease-out}
+.reveal.seen{animation:fade .7s ease-out both}
+.seen .sync{animation:draw .8s ease-out both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes draw{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 0 0)}}
+}
+
+.nav-pricing{display:none!important}
+@media(max-width:760px){.nav-pricing{display:inline-flex!important;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:0 8px;color:#14325C;font-weight:700;text-decoration:none;white-space:nowrap}}
+</style></head><body>
+<header>
+<div class="w"><nav aria-label="主要導覽">
+<a class="logo" href="/" aria-label="租多啦 Condola 首頁"><img src="/assets/logo/condola_lockup_horizontal.svg" alt="租多啦 Condola" width="150" height="30"></a>
+<div class="links"><a href="/">首頁</a><a href="/how-it-works" aria-current="page">怎麼運作</a><a href="/pricing">方案價格</a><a href="/about">關於我們</a><a href="https://app.condola.app/signup">免費開始使用</a></div>
+<a class="nav-pricing" href="/pricing" style="display:inline-flex;align-items:center;min-height:44px">方案價格</a>
+<a id="nav-cta" class="btn o" href="/apply">申請成為設計夥伴</a>
+</nav></div>
+</header>
+<main class="w">
+<section class="hero" aria-labelledby="page-title">
+<div class="eb">HOW IT WORKS</div>
+<p class="motto">當房東不該這麼累。</p>
+<h1 id="page-title">從邀請到收租、報修、月報，你的每一步怎麼運作</h1>
+<p class="sub">你不用從零開始摸索——管理方、租客、屋主在同一套系統裡，各自看到自己需要的資訊，不必再翻對話紀錄對答案。</p>
+<img class="start" src="/assets/illus/hiw-start.svg" alt="" aria-hidden="true">
+</section>
+
+<div style="position:relative">
+<div class="thread" aria-hidden="true"><img src="/assets/illus/ecosystem-line-v.svg" alt=""></div>
+<ol class="timeline" aria-label="租務管理的五個步驟">
+<li class="step">
+<img class="node" src="/assets/illus/timeline-node.svg" alt="" aria-hidden="true">
+<article class="card reveal" aria-labelledby="step-1">
+<div class="step-head"><span class="icon" style="--icon:url('/assets/icons/step-1.svg')" aria-hidden="true"></span><div class="eb">STEP 1</div></div>
+<h2 id="step-1">先用範例資料跑一次，再邀請租客與屋主</h2>
+<p>第一次用新系統，你會擔心操作錯了會不會搞亂正式資料——註冊後你會直接進入自己的正式公司，想先練習，可以從側欄打開範例公司，範例和正式資料完全分開，不會互相影響。準備好後，再邀請租客與屋主進入各自的入口。</p>
+<figure>
+<div class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><div class="placeholder" aria-label="團隊入口畫面佔位">
+<svg viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="8"/><path d="M1 12h70M23 12v35M8 20h8M8 27h8M31 22h29M31 30h21M31 38h26"/></svg>
+<code>/m/team</code>
+</div></div>
+<figcaption>示意畫面・範例公司假資料</figcaption>
+</figure>
+</article>
+</li>
+
+<li class="step">
+<img class="node" src="/assets/illus/timeline-node.svg" alt="" aria-hidden="true">
+<article class="card reveal" aria-labelledby="step-2">
+<div class="step-head"><span class="icon" style="--icon:url('/assets/icons/step-2.svg')" aria-hidden="true"></span><div class="eb">STEP 2</div></div>
+<h2 id="step-2">租約留存在同一處，不必到處找</h2>
+<p>租客或屋主問起租約條件，你是不是得翻好幾個地方才找到正確版本？新增租約時就能記錄租期與押金條件，也可以上傳已簽回的租約 PDF 留存查閱。線上簽署功能即將推出。</p>
+<div class="status"><span class="pill">線上簽署即將推出</span></div>
+<figure>
+<div class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><div class="placeholder" aria-label="租約列表畫面佔位">
+<svg viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="8"/><path d="M1 12h70M10 21h10M28 21h33M10 30h10M28 30h33M10 39h10M28 39h24"/></svg>
+<code>/m/leases</code>
+</div></div>
+<figcaption>示意畫面・範例公司假資料</figcaption>
+</figure>
+</article>
+</li>
+
+<li class="step">
+<img class="node" src="/assets/illus/timeline-node.svg" alt="" aria-hidden="true">
+<article class="card reveal" aria-labelledby="step-3">
+<div class="step-head"><span class="icon" style="--icon:url('/assets/icons/step-3.svg')" aria-hidden="true"></span><div class="eb">STEP 3</div></div>
+<h2 id="step-3">收租與對帳，不必靠記憶核對</h2>
+<p>你是不是常常要靠印象判斷誰繳了錢？收租表一次看到待確認、未繳與逾期；租客回報繳款後，狀態會更新。銀行對帳單匯入後，系統會給配對建議，由你核准，不必每筆都從頭核對。</p>
+<figure>
+<div class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><img src="/assets/screens/m-rent-1280.png" alt="收租與對帳概念畫面，使用範例公司假資料" width="1280" height="800" loading="lazy"></div>
+<figcaption>示意畫面・範例公司假資料</figcaption>
+</figure>
+</article>
+</li>
+
+<li class="step">
+<img class="node" src="/assets/illus/timeline-node.svg" alt="" aria-hidden="true">
+<article class="card reveal" aria-labelledby="step-4">
+<div class="step-head"><span class="icon" style="--icon:url('/assets/icons/step-4.svg')" aria-hidden="true"></span><div class="eb">STEP 4</div></div>
+<h2 id="step-4">報修從申請到追蹤進度，雙方看到同一份狀態</h2>
+<p>租客半夜丟訊息說東西壞了，你隔天醒來卻不知道接下來該做什麼——報修案件可以留言、上傳照片，隨時查看目前的處理進度，你也能更新狀態、安排維修，不必再靠口頭轉述。廠商協作功能即將推出。</p>
+<div class="status"><span class="pill">廠商協作即將推出</span></div>
+<div class="phones">
+<figure><div class="phone"><img src="/assets/screens/t-repair-390.png" alt="租客報修概念畫面，使用範例公司假資料" width="390" height="844" loading="lazy"></div><figcaption>示意畫面・範例公司假資料</figcaption></figure>
+<img class="sync" src="/assets/illus/sync-link.svg" alt="" aria-hidden="true">
+<div class="vendor"><span class="pill">即將推出</span><figure><div class="phone"><span class="pill">即將推出</span><img src="/assets/screens/v-job-390.png" alt="廠商單案概念畫面，即將推出，使用範例公司假資料" width="390" height="844" loading="lazy"></div><figcaption>示意畫面・範例公司假資料</figcaption></figure></div>
+</div>
+</article>
+</li>
+
+<li class="step">
+<img class="node" src="/assets/illus/timeline-node.svg" alt="" aria-hidden="true">
+<article class="card reveal" aria-labelledby="step-5">
+<div class="step-head"><span class="icon" style="--icon:url('/assets/icons/step-5.svg')" aria-hidden="true"></span><div class="eb">STEP 5</div></div>
+<h2 id="step-5">月結單明細清楚列出，屋主自己就能核對</h2>
+<p>屋主一問月報怎麼算，你是不是得現場口算給他聽？月結單列出每個月的租金、費用與餘額，屋主可以直接查看明細並下載 PDF，自己核對就好。</p>
+<figure>
+<div class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><img src="/assets/screens/o-statement-1280.png" alt="屋主月結單概念畫面，使用範例公司假資料" width="1280" height="800" loading="lazy"></div>
+<figcaption>示意畫面・範例公司假資料</figcaption>
+</figure>
+</article>
+</li>
+</ol>
+</div>
+
+<section class="cta reveal" aria-labelledby="cta-title">
+<img class="end" src="/assets/illus/timeline-node.svg" alt="" aria-hidden="true">
+<div class="band">
+<div class="eb">YOUR SITUATION, MAPPED</div>
+<h2 id="cta-title">想看看自己的情境怎麼運作？</h2>
+<a id="page-cta" class="btn" href="/apply">申請成為設計夥伴</a>
+</div>
+</section>
+</main>
+<footer>
+<div class="w">
+<div class="grid">
+<div><a href="/"><img class="brand" src="/assets/logo/condola_lockup_horizontal.svg" alt="租多啦 Condola" width="150" height="30"></a><p>當房東不該這麼累。</p></div>
+<div class="column"><b>網站</b><a href="/">首頁</a><a href="/how-it-works">怎麼運作</a><a href="/pricing">方案價格</a><a href="/about">關於我們</a><a href="/apply">申請成為設計夥伴</a></div>
+<div class="column"><b>法遵</b><a href="https://app.condola.app/terms">服務條款</a><a href="https://app.condola.app/privacy">隱私權政策</a><a href="https://app.condola.app/refund">退款政策</a></div>
+<div class="contact"><b>聯絡我們</b><p>由艾隆科技 Airon Tech 經營（負責人 施振榮）。</p><p>Email：<a href="mailto:service@condola.app">service@condola.app</a>｜電話：<a href="tel:+886975317990">+886-975-317-990</a>｜LINE：<a href="https://line.me/R/ti/p/@644odqoe">@644odqoe</a>（租多啦官方客服帳號）｜403 台中市西區府後街38號</p></div>
+</div>
+<div class="fn"><p>Condola 租多啦是管理軟體，不代管物件；錢不經過租多啦，由租客與屋主／管理方直接處理。</p><p>© 2026 艾隆科技 Airon Tech. 保留所有權利。</p></div>
+</div>
+</footer>
+<script>
+(()=>{
+if(!("IntersectionObserver" in window))return;
+const nav=document.querySelector("#nav-cta"),primary=document.querySelector("#page-cta"),mobile=matchMedia("(max-width:760px)");
+let visible=false;
+const sync=()=>nav.classList.toggle("o",mobile.matches||visible);
+new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;sync()},{threshold:0,rootMargin:"-68px 0px 0px"}).observe(primary);
+mobile.addEventListener("change",sync);
+const reveal=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add("seen");reveal.unobserve(e.target)}}),{threshold:.08});
+document.querySelectorAll(".reveal").forEach(el=>reveal.observe(el));
+})();
+</script>
+</body></html>
