@@ -4,9 +4,15 @@ on:
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
+    # Site-only changes are covered by site.yml (test + build + secret-scan).
+    # Mixed PRs that also touch app paths still run this workflow.
+    paths-ignore:
+      - "site/**"
   push:
     branches:
       - "**"
+    paths-ignore:
+      - "site/**"
 
 jobs:
   check:

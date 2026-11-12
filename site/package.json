@@ -1,0 +1,9 @@
+{
+  "name": "condola-site-v2",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/b045b-pricing.test.mjs",
+    "build": "node scripts/build-check.mjs && node scripts/build-prod.mjs",
+    "secret-scan": "node scripts/secret-scan.mjs"
+  }
+}

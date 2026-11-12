@@ -1,0 +1,76 @@
+/* Condola brand v2 — all-blue: B 專業可靠 base, navy primary + one cobalt accent (terracotta removed 2026-10-26) */
+:root{
+  /* Neutrals (cool grey) */
+  --c-bg:#F4F6F8;          /* app background */
+  --c-surface:#FFFFFF;     /* cards, sheets, inputs */
+  --c-surface-2:#EEF2F6;   /* subtle summary card, hover */
+  --c-border:#DDE3EA;      /* inputs, dividers */
+  --c-divider:#E8ECF1;     /* hairlines */
+  --c-border-strong:#7F8B9C; /* strong border, 3.46:1 on white (UI 3:1) */
+  --c-focus:#2F6BFF;        /* focus ring 2px, offset 2px; white ring on navy */
+  --c-text:#1B2533;        /* primary text */
+  --c-text-2:#4A5668;      /* secondary text */
+  --c-text-3:#687384;      /* muted, footnotes, placeholders */
+  /* Primary (deep navy) — buttons, key numbers, active tab */
+  --c-primary:#14325C;
+  --c-primary-hover:#0F2748;
+  --c-primary-pressed:#0B1F3A; /* pressed state (2026-10-27) */
+  --c-primary-soft:#E3EAF3; /* active tab pill, focus ring bg */
+  --c-on-primary:#FFFFFF;
+  /* Brand accent (cobalt) — wordmark highlight, selected chips, trade chip, illustrations. NEVER the primary button.
+     Contrast: #2F6BFF on #FFFFFF 4.50:1 (AA body text, minimum); on --c-bg 4.15:1 (large text / icons / UI only);
+     vs navy #14325C 2.85:1 (clearly distinct hue/value, never place accent text on navy).
+     Chip text uses --c-brand-ink on --c-brand-soft: 5.88:1. */
+  --c-brand:#2F6BFF;
+  --c-brand-soft:#E8EFFF;
+  --c-brand-ink:#1F4FD1;
+  /* Semantic (calm) */
+  --c-success:#2A7254; --c-success-soft:#E3F1EA;
+  --c-warning:#935C0F; --c-warning-soft:#F8EEDB;
+  --c-danger:#B0413E;  --c-danger-soft:#F7E4E3;
+  --c-info:#23748A;    --c-info-soft:#E2F1F4;  /* teal-slate so 處理中 badges do not read as the cobalt accent; 4.6:1 on soft */
+  /* Type */
+  /* Latin: Inter (SIL Open Font License 1.1) first, so digits + Latin render in Inter; CJK falls through to Noto Sans TC (SIL OFL 1.1) */
+  --font-latin:"Inter","Inter Variable";
+  --font-cjk:"Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei";
+  --font-sans:"Inter","Inter Variable","Noto Sans TC","Noto Sans CJK TC",-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  /* Display (Latin headings + wordmark): Plus Jakarta Sans (SIL OFL 1.1) — rounder, friendlier than Inter; CJK still Noto Sans TC.
+     Evaluated vs Manrope (OFL): Manrope is more condensed/technical; Jakarta pairs better with Noto Sans TC stroke weight.
+     Money/amounts stay in Inter tabular (var(--font-sans)) — never use the display face for numbers in tables. */
+  --font-display:"Plus Jakarta Sans","Inter","Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --font-features:"tnum" 1,"cv11" 1;     /* Inter tabular nums + single-storey a */
+  --fs-display:34px; --lh-display:40px;  /* key amount */
+  --fs-h1:22px; --lh-h1:30px;            /* screen title */
+  --fs-h2:17px; --lh-h2:24px;            /* section title */
+  --fs-body:15px; --lh-body:22px;
+  --fs-small:13px; --lh-small:19px;
+  --fs-caption:12px; --lh-caption:17px;  /* footnote, tab labels */
+  /* zh vs en: same px sizes; zh uses looser line-height (CJK glyphs fill the em box), en tighter + slight negative tracking on large sizes */
+  --lh-zh:1.6; --lh-en:1.45; --lh-zh-heading:1.4; --lh-en-heading:1.2;
+  --ls-zh:0.02em;          /* body zh: slight open tracking */
+  --ls-en:0;               /* body en */
+  --ls-en-display:-0.02em; /* en headings/amounts >=22px */
+  --ls-caps:0.06em;        /* en uppercase labels */
+  --fw-regular:400; --fw-medium:500; --fw-bold:700;
+  --num:tabular-nums;                    /* use font-variant-numeric:var(--num) on money */
+  /* Spacing (4pt) */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
+  /* Radius */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-pill:999px;
+  /* Elevation */
+  --shadow-1:0 1px 2px rgba(20,50,92,.06),0 1px 1px rgba(20,50,92,.04);
+  --shadow-2:0 4px 16px rgba(20,50,92,.08);
+  /* Sizes */
+  --h-control:48px; --h-tabbar:64px; --w-mobile:390px; --w-desktop-content:960px;
+}
+.num{font-family:var(--font-latin),var(--font-cjk),sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+:lang(zh-TW){line-height:var(--lh-zh);letter-spacing:var(--ls-zh)}
+:lang(en){line-height:var(--lh-en);letter-spacing:var(--ls-en)}
+:lang(en) h1,:lang(en) h2,:lang(en) .display{letter-spacing:var(--ls-en-display);line-height:var(--lh-en-heading)}
+:lang(zh-TW) h1,:lang(zh-TW) h2,:lang(zh-TW) .display{line-height:var(--lh-zh-heading)}
+
+/* Display face hooks */
+.wordmark,h1,h2,.display-face{font-family:var(--font-display)}
+.wordmark{font-weight:800;letter-spacing:-0.01em}
+/* Form controls inherit the UI font (browsers default date/number inputs to system/monospace-like faces) */
+input,select,textarea,button{font-family:var(--font-sans);font-variant-numeric:tabular-nums}

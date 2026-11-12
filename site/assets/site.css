@@ -1,0 +1,72 @@
+/* Condola 租多啦 · Window Glow design tokens v1. Contrast in tokens.json */
+:root{
+  --cd-primary:#14325C;
+  --cd-primary-hover:#0F2748;
+  --cd-primary-pressed:#0B1F3A;
+  --cd-primary-soft:#E3EAF3;
+  --cd-accent:#2F6BFF;
+  --cd-accent-soft:#E8EFFF;
+  --cd-ink:#1B2533;
+  --cd-ink2:#4A5668;
+  --cd-ink3:#687384;
+  --cd-cream:#F4F6F8;
+  --cd-surface:#FFFFFF;
+  --cd-surface2:#EEF2F6;
+  --cd-border:#DDE3EA;
+  --cd-border-strong:#7F8B9C;
+  --cd-success:#2A7254;
+  --cd-success-bg:#E3F1EA;
+  --cd-warning:#935C0F;
+  --cd-warning-bg:#F8EEDB;
+  --cd-danger:#B0413E;
+  --cd-danger-bg:#F7E4E3;
+  --cd-info:#23748A;
+  --cd-info-bg:#E2F1F4;
+  --cd-focus:#2F6BFF;
+  --cd-topbar:#14325C;
+  --cd-focus-ring:0 0 0 2px #2F6BFF;
+  --cd-radius-sm:8px;--cd-radius-md:12px;--cd-radius-lg:20px;--font-sans:"Inter","Inter Variable","Noto Sans TC","Noto Sans CJK TC",-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;--font-display:"Plus Jakarta Sans","Inter","Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+
+
+*{box-sizing:border-box}body{margin:0;font-family:var(--font-sans);color:var(--cd-ink);background:var(--cd-cream);line-height:1.6}
+a{color:inherit;text-decoration:none}.w{max-width:1160px;margin:0 auto;padding:0 32px}
+nav{display:flex;align-items:center;gap:28px;height:72px}nav img{height:40px}nav .l{display:flex;gap:18px;font-size:15px;color:var(--cd-ink2);margin-left:auto}nav .in{font-size:15px}
+.btn{display:inline-block;background:var(--cd-primary);color:#fff;border-radius:12px;padding:14px 26px;font-weight:700;font-size:17px;box-shadow:0 6px 16px rgba(20,50,92,.25)}.btn:hover{background:var(--cd-primary-hover)}
+.btn.sm{padding:9px 18px;font-size:15px;box-shadow:none}.ghost{color:var(--cd-primary);font-weight:600;font-size:15px}
+h1{font-size:46px;line-height:1.25;margin:0 0 18px;letter-spacing:.5px}h2{font-size:30px;margin:0 0 12px}.sub{font-size:19px;color:var(--cd-ink2);margin:0 0 28px}
+.note{font-size:13px;color:var(--cd-ink3);margin-top:12px}section{padding:72px 0}
+.shot{border-radius:16px;border:1px solid var(--cd-border);box-shadow:0 20px 50px rgba(27,37,51,.16);width:100%;display:block;background:#fff}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.card{background:#fff;border:1px solid var(--cd-border);border-radius:20px;padding:24px}
+.card h3{margin:6px 0 6px;font-size:19px}.card p{margin:0;color:var(--cd-ink2);font-size:15px}
+.badge{display:inline-block;font-size:12px;background:var(--cd-accent-soft);color:var(--cd-warning);border:1px solid var(--cd-accent);border-radius:99px;padding:1px 9px;margin-left:6px;vertical-align:middle;font-weight:600}
+.ico{width:44px;height:44px;border-radius:12px;background:var(--cd-accent-soft);border:1px solid var(--cd-accent);display:grid;place-items:center;font-size:22px}
+.ph{border:2px dashed var(--cd-border-strong);border-radius:16px;padding:20px;color:var(--cd-ink3);font-size:14px;background:var(--cd-surface2)}
+.price{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.price .card b{font-size:30px;color:var(--cd-ink)}
+.band{background:var(--cd-ink);color:var(--cd-cream);border-radius:28px;padding:48px;text-align:center}.band .sub{color:#C9D3E0}
+footer{padding:40px 0;font-size:13px;color:var(--cd-ink3);border-top:1px solid var(--cd-border)}
+.line{display:inline-flex;gap:6px;align-items:center;background:#06C755;color:#fff;border-radius:99px;padding:4px 12px;font-size:13px;font-weight:700}
+@media(max-width:600px){.w{padding:0 18px}nav .l{display:none}nav img{height:32px}h1{font-size:30px}h2{font-size:23px}.sub{font-size:16px}section{padding:44px 0}
+.grid3,.price,.hero{grid-template-columns:1fr!important}.band{padding:30px 20px}.btn{display:block;text-align:center}.hide-m{display:none}nav .btn{display:inline-block;margin-left:auto}}
+.pp{display:grid;grid-template-columns:1fr 1.25fr;gap:36px;align-items:center;background:#fff;border:1px solid var(--cd-border);border-radius:24px;padding:28px;margin-bottom:20px}
+.pp:nth-child(even){grid-template-columns:1.25fr 1fr}.pp:nth-child(even) .ppt{order:2}
+.pain-q{display:inline-block;background:var(--cd-danger-bg);color:var(--cd-danger);border-radius:10px;padding:6px 12px;font-size:15px;margin-bottom:10px}
+.pp h3{font-size:22px;margin:4px 0 8px}.pp p{color:var(--cd-ink2);margin:0}.pp .imgs{display:grid;gap:10px}.pp .imgs picture{display:block}.pp .imgs img{width:100%;border-radius:12px;border:1px solid var(--cd-border);box-shadow:0 10px 26px rgba(27,37,51,.12)}
+.pp .imgs.two{grid-template-columns:1fr 1fr}.ok{color:var(--cd-success);font-weight:700;font-size:13px}
+.fg{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.fg .card h3{font-size:17px}
+@media(max-width:600px){.pp .imgs img{max-height:560px;object-fit:cover;object-position:top}.pp,.pp:nth-child(even){grid-template-columns:1fr;padding:18px}.pp:nth-child(even) .ppt{order:0}.fg{grid-template-columns:1fr}.pp .imgs.two{grid-template-columns:1fr}}.talk{display:block;font-size:14px;margin:10px 0 0}.talk a{color:var(--cd-primary);font-weight:600;text-decoration:underline}.band .talk a{color:#FFFFFF;text-decoration:underline;}footer a{text-decoration:underline}footer .line{text-decoration:none}nav .in{margin-left:4px}table{width:100%;border-collapse:collapse;background:#fff;border-radius:16px;overflow:hidden}th,td{border-bottom:1px solid var(--cd-border);padding:12px;text-align:left;font-size:15px}.pp .imgs img{max-height:none!important}
+h1,h2,h3{font-family:var(--font-display)}
+
+@font-face{
+  font-family:'Inter';
+  src:url('/assets/fonts/Inter-latin-wght.woff2') format('woff2');
+  font-style:normal;
+  font-weight:100 900;
+  font-display:swap;
+}
+@font-face{
+  font-family:'Plus Jakarta Sans';
+  src:url('/assets/fonts/PlusJakartaSans-latin-wght.woff2') format('woff2');
+  font-style:normal;
+  font-weight:200 800;
+  font-display:swap;
+}

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200" role="img" aria-labelledby="trust-flow-title" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <title id="trust-flow-title">款項從租客直接交給屋主或管理方，Condola 在金流路徑外只整理紀錄</title>
+  <g stroke="#14325C">
+    <circle cx="36" cy="58" r="24" fill="#E3EAF3"/>
+    <circle cx="200" cy="58" r="24" fill="#E3EAF3"/>
+    <circle cx="36" cy="51" r="7" fill="#FFFFFF"/>
+    <circle cx="200" cy="51" r="7" fill="#FFFFFF"/>
+    <path d="M24 70c0-13 24-13 24 0M188 70c0-13 24-13 24 0"/>
+    <path d="M68 58h102m-9-8 9 8-9 8"/>
+  </g>
+  <g fill="#14325C" stroke="none" text-anchor="middle" font-family="'Plus Jakarta Sans','Noto Sans TC',sans-serif" font-size="12">
+    <text x="36" y="106">租客</text>
+    <text x="195" y="106">屋主／管理方</text>
+  </g>
+  <rect x="80" y="126" width="80" height="46" rx="12" fill="#FFFFFF" stroke="#14325C" stroke-width="2.5"/>
+  <g stroke="#14325C" stroke-width="2.5">
+    <path d="M103 142a8 8 0 1 0 0 14"/>
+    <path d="M117 141h29M117 150h29M117 159h18"/>
+  </g>
+  <text x="120" y="192" text-anchor="middle" font-family="'Plus Jakarta Sans','Noto Sans TC',sans-serif" font-size="13" fill="#14325C" stroke="none">Condola：只整理紀錄</text>
+</svg>

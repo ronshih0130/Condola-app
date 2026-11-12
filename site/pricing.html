@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>方案與價格｜租多啦 Condola</title>
+<meta name="description" content="免費方案最多 5 戶。第 6 戶起，只計算超過 5 戶的部分，可選標準或進階。 只計算有生效租約的戶或房間。空房與範例公司資料不計費。">
+<link rel="canonical" href="https://condola.app/pricing">
+<meta property="og:title" content="方案與價格｜租多啦 Condola">
+<meta property="og:description" content="免費方案最多 5 戶。第 6 戶起，只計算超過 5 戶的部分，可選標準或進階。 只計算有生效租約的戶或房間。空房與範例公司資料不計費。">
+<meta property="og:url" content="https://condola.app/pricing">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="租多啦 Condola">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:image" content="https://condola.app/assets/og-v2-20261029.png">
+<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico?v=2" sizes="16x16 32x32 48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=2">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" sizes="180x180">
+<link rel="manifest" href="/site.webmanifest?v=2">
+<meta name="theme-color" content="#14325C">
+<link rel="stylesheet" href="/assets/mock-tokens.css">
+<style>
+:root{--p:#14325C;--ph:#0F2748;--ps:#E3EAF3;--ac:#2F6BFF;--acs:#E8EFFF;--aci:#1F4FD1;--ink:#1B2533;--ink2:#4A5668;--ink3:#687384;--bg:#F4F6F8;--s2:#EEF2F6;--bd:#DDE3EA;--bds:#7F8B9C;--ok:#2A7254;--oks:#E3F1EA;--wa:#935C0F;--was:#F8EEDB;--da:#B0413E;--das:#F7E4E3;--in:#23748A;--ins:#E2F1F4;
+--sans:"Inter","Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;--disp:"Plus Jakarta Sans","Inter","Noto Sans TC","Noto Sans CJK TC",system-ui,sans-serif}
+*{box-sizing:border-box}html{font-size:100%}
+body{margin:0;font-family:var(--sans);font-size:1rem;line-height:1.65;color:var(--ink);background:var(--bg)}
+a{color:inherit}h1,h2,h3{font-family:var(--disp);line-height:1.3;margin:0}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.w{max-width:1160px;margin:0 auto;padding:0 32px}
+header.site{background:#fff;border-bottom:1px solid var(--bd);position:relative}
+header.site nav{display:flex;align-items:center;gap:24px;height:72px}
+.logo{display:inline-flex;align-items:center;min-height:44px;text-decoration:none;font-family:var(--disp);font-weight:800;color:var(--p);font-size:1.25rem}
+.logo img{height:30px;width:auto;display:block}
+.nav-links{display:flex;gap:4px;margin-left:auto;align-items:center}
+.nav-links a{text-decoration:none;color:var(--ink2);font-size:.9375rem;padding:0 10px;min-height:44px;display:inline-flex;align-items:center;border-radius:8px}
+.nav-links a[aria-current]{color:var(--p);font-weight:700;background:var(--ps)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:48px;padding:0 22px;border-radius:12px;background:var(--p);color:#fff;font-weight:700;font-size:1rem;text-decoration:none;border:0;cursor:pointer;font-family:inherit}
+.btn:hover{background:var(--ph)}
+.btn.o{background:#fff;color:var(--p);border:1.5px solid var(--p)}
+.btn.o:hover{background:var(--ps)}
+.btn.sm{min-height:44px;padding:0 16px;font-size:.9375rem}
+.btn.block{display:flex;width:100%}
+.tlink{display:inline-flex;align-items:center;min-height:44px;color:var(--p);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.menu-btn{display:none;min-height:44px;min-width:44px;border:1px solid var(--bd);background:#fff;border-radius:10px;font:inherit;font-weight:600;color:var(--p);padding:0 12px;cursor:pointer}
+.mmenu{display:none}
+.hero{padding-top:56px;padding-bottom:28px;text-align:center}
+.hero h1{font-size:2.5rem;margin-bottom:12px}
+.lead{font-size:1.1875rem;color:var(--ink);margin:0 auto 6px;max-width:720px}
+.sub{font-size:1rem;color:var(--ink2);margin:0 auto 24px;max-width:720px}
+.seg{display:inline-flex;background:#fff;border:1px solid var(--bd);border-radius:14px;padding:4px;gap:4px}
+.seg button{min-height:44px;padding:0 18px;border:0;border-radius:10px;background:transparent;font:inherit;font-weight:600;color:var(--ink2);cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--p);color:#fff}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:12px 0 8px}
+.plan{background:#fff;border:1px solid var(--bd);border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:10px;position:relative}
+.plan.rec{border:2px solid var(--p);box-shadow:0 12px 30px rgba(20,50,92,.12)}
+.plan h3{font-size:1.25rem}
+.chip{display:inline-block;font-size:.8125rem;font-weight:700;background:var(--acs);color:var(--aci);border-radius:99px;padding:2px 10px;margin-left:8px;vertical-align:middle}
+.price{font-size:2.25rem;font-weight:800;font-family:var(--sans);font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1}
+.per{font-size:.9375rem;color:var(--ink2)}
+.eq{font-size:.875rem;color:var(--ink3);min-height:1.4em}
+.fit{color:var(--ink2);font-size:.9375rem;margin:0}
+.plan ul{list-style:none;padding:0;margin:4px 0 8px;display:grid;gap:6px;font-size:.9375rem}
+.plan li{padding-left:22px;position:relative}.plan li:before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:800}
+.trialline{background:var(--oks);color:var(--ok);font-weight:700;border-radius:10px;padding:8px 12px;font-size:.9375rem}
+.plan .actions{margin-top:auto;display:grid;gap:8px}
+.note{font-size:.875rem;color:var(--ink3);margin:0}
+section{padding:40px 0}
+section h2{font-size:1.75rem;margin-bottom:8px}
+.formula{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:16px 20px;margin:16px 0 0;color:var(--ink2);font-size:1rem}
+.calc{background:#fff;border:1px solid var(--bd);border-radius:20px;padding:24px;display:grid;grid-template-columns:320px 1fr;gap:28px;align-items:start}
+.field label{display:block;font-weight:700;margin-bottom:6px}
+.field input{width:100%;min-height:48px;border:1.5px solid var(--bds);border-radius:12px;padding:10px 14px;font:inherit;font-size:1rem;background:#fff;color:var(--ink)}
+.field input[aria-invalid=true]{border-color:var(--da);background:#FFFBFB}
+.err{color:var(--da);font-size:.9375rem;margin:6px 0 0;font-weight:600}
+.hint{color:var(--ink3);font-size:.875rem;margin:6px 0 0}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rcard{border:1px solid var(--bd);border-radius:14px;padding:14px 16px;background:var(--bg)}
+.rcard h3{font-size:1rem;margin-bottom:6px}
+.amt{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;padding:4px 0}
+.amt .v{font-weight:800;font-size:1.125rem}
+.amt.hl .v{font-size:1.5rem;color:var(--p)}
+.amt.dim{color:var(--ink2)}
+[hidden]{display:none!important}
+.empty{display:flex;gap:14px;align-items:center;background:var(--bg);border:1px dashed var(--bds);border-radius:14px;padding:18px;color:var(--ink2);font-size:1rem}
+.calc-free{grid-column:1/-1;background:var(--oks);color:var(--ok);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-weight:600}
+.calc-free a{color:var(--ok);display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:0 14px}
+.calc-trial{grid-column:1/-1;font-size:.9375rem;color:var(--ink2);margin:0}
+table.cmp{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--bd);border-radius:16px;overflow:hidden}
+.cmp th,.cmp td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--bd);font-size:.9375rem;vertical-align:top}
+.cmp thead th{background:var(--s2);font-size:1rem}
+.cmp tr.sec th{background:var(--ps);color:var(--p)}
+.cmp td.y{color:var(--ok);font-weight:700}
+.cmp td.pd{color:var(--ink3)}
+.cmpm{display:none}
+.after{color:var(--ink2);margin:16px 0 0;font-size:1rem}
+.faq{display:grid;gap:10px}
+.faq details{background:#fff;border:1px solid var(--bd);border-radius:14px}
+.faq summary{list-style:none;cursor:pointer;min-height:56px;padding:14px 52px 14px 18px;font-weight:700;position:relative;display:flex;align-items:center}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary:after{content:"+";position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:1.5rem;color:var(--p)}
+.faq details[open] summary:after{content:"−"}
+.faq .a{padding:0 18px 16px;color:var(--ink2);font-size:1rem}
+.faq .a p{margin:0}
+.faq-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.band{background:var(--p);color:#fff;border-radius:24px;padding:36px;text-align:center}
+.band p{margin:0 auto 18px;max-width:720px;color:#DCE5F1;font-size:1rem}
+.band .btn{background:#fff;color:var(--p)}
+.band a.tl{color:#fff;text-decoration:underline;display:inline-flex;min-height:44px;align-items:center;margin-left:14px}
+footer.site{padding:32px 0 40px;font-size:.9375rem;color:var(--ink3);border-top:1px solid var(--bd);margin-top:40px;background:#fff}
+.fgrid{display:grid;grid-template-columns:1.2fr 1fr 1fr 1.6fr;gap:24px}
+.fgrid b{display:block;color:var(--ink);margin-bottom:4px}
+.fgrid a{display:flex;align-items:center;min-height:44px;text-decoration:underline}
+.legal{margin-top:18px;font-size:.875rem}
+.sticky{display:none}
+@media (max-width:900px){.calc{grid-template-columns:1fr}.fgrid{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){
+ header.site nav{gap:8px}
+ .nav-links,#nav-cta{display:none}
+ .menu-btn{display:inline-flex;align-items:center;margin-left:auto}
+ .mmenu.open{display:block;border-top:1px solid var(--bd);background:#fff;padding:8px 16px 12px}
+ .mmenu a{display:flex;align-items:center;min-height:48px;text-decoration:none;border-bottom:1px solid var(--bd)}
+ .mmenu a[aria-current]{color:var(--p);font-weight:700}
+ .sticky{display:block;position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--bd);padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -6px 18px rgba(27,37,51,.08);z-index:5}
+ .sticky.hide{display:none}
+ body{padding-bottom:84px}
+}
+@media (max-width:600px){
+ .w{padding:0 16px}
+ .hero{padding-top:32px;padding-bottom:16px}.hero h1{font-size:1.875rem}.lead{font-size:1.0625rem}
+ .seg{display:flex;width:100%}.seg button{flex:1;padding:0 8px}
+ .plans{grid-template-columns:1fr;gap:14px}
+ .plan{padding:20px}
+ section{padding:28px 0}section h2{font-size:1.4375rem}
+ .calc{padding:18px}.res{grid-template-columns:1fr}
+ table.cmp{display:none}.cmpm{display:grid;gap:12px}
+ .cmpm .pc{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:16px}
+ .cmpm .pc h3{font-size:1.125rem;margin-bottom:6px}
+ .cmpm dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:.9375rem}
+ .cmpm dt{color:var(--ink3)}.cmpm dd{margin:0;font-weight:600;text-align:right}
+ .band{padding:24px 18px}.band a.tl{margin-left:0;display:flex;justify-content:center}
+ .fgrid{grid-template-columns:1fr}
+}
+#pricing[data-cycle=month] .only-year{display:none}
+#pricing[data-cycle=year] .only-month{display:none}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="w">
+    <nav aria-label="主要導覽">
+      <a class="logo" href="/" aria-label="租多啦 Condola 首頁"><img src="/assets/logo/condola_lockup_horizontal.svg" alt="租多啦 Condola" width="150" height="30"></a>
+      <div class="nav-links">
+        <a href="/">首頁</a>
+        <a href="/how-it-works">怎麼運作</a>
+        <a href="/pricing" aria-current="page">方案價格</a>
+        <a href="/about">關於我們</a>
+        <a href="https://app.condola.app/signup">免費開始使用</a>
+        <a id="nav-cta" class="btn sm" href="/apply">申請成為設計夥伴</a>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="mmenu">選單</button>
+    </nav>
+    <div class="mmenu" id="mmenu">
+      <a href="/">首頁</a>
+      <a href="/how-it-works">怎麼運作</a>
+      <a href="/pricing" aria-current="page">方案價格</a>
+      <a href="/about">關於我們</a>
+      <a href="https://app.condola.app/signup">免費開始使用</a>
+      <a href="/apply">申請成為設計夥伴</a>
+    </div>
+  </div>
+</header>
+
+<main id="pricing" data-cycle="month">
+
+  <section class="hero" aria-labelledby="h1">
+    <div class="w">
+      <h1 id="h1">方案與價格</h1>
+      <p class="lead">免費方案最多 5 戶。第 6 戶起，只計算超過 5 戶的部分，可選標準或進階。</p>
+      <p class="sub">只計算有生效租約的戶或房間。空房與範例公司資料不計費。</p>
+      <div class="seg" role="group" aria-label="計費週期">
+        <button type="button" data-cycle="month" aria-pressed="true">月繳</button>
+        <button type="button" data-cycle="year" aria-pressed="false">年繳（送 1 個月）</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="方案">
+    <div class="w">
+      <div class="plans">
+
+        <div class="plan">
+          <h3>免費</h3>
+          <div class="price">NT$0</div>
+          <div class="per">最多 5 戶</div>
+          <div class="eq">&nbsp;</div>
+          <p class="fit">適合自己管理房屋的屋主（免費戶數以內）</p>
+          <ul><li>1 位管理者（待接受的邀請也計入）</li></ul>
+          <div class="actions">
+            <a class="btn block" href="https://app.condola.app/signup">免費開始</a>
+          </div>
+        </div>
+
+        <div class="plan">
+          <h3>標準</h3>
+          <div class="price"><span class="only-month">NT$39</span><span class="only-year">NT$429</span></div>
+          <div class="per"><span class="only-month">每戶每月</span><span class="only-year">每戶每年（送 1 個月，以 11 個月計）</span></div>
+          <div class="eq"><span class="only-year">相當於每戶每月 NT$39</span><span class="only-month">&nbsp;</span></div>
+          <p class="fit">適合中小型管理公司</p>
+          <ul><li>5 位管理者</li></ul>
+          <div class="trialline">免費試用 3 個月，不需付款資料</div>
+          <div class="actions">
+            <a class="btn block" href="https://app.condola.app/signup?trial=standard">免費試用 3 個月</a>
+            <p class="note">目前試用由內部人員協助開通。按下按鈕會先完成註冊，我們會幫你開啟試用。</p>
+            <a class="tlink" href="https://app.condola.app/pricing/apply?plan=std&amp;from=site">或聯絡我們申請付費</a>
+          </div>
+        </div>
+
+        <div class="plan rec">
+          <h3>進階<span class="chip">推薦</span></h3>
+          <div class="price"><span class="only-month">NT$59</span><span class="only-year">NT$649</span></div>
+          <div class="per"><span class="only-month">每戶每月</span><span class="only-year">每戶每年（送 1 個月，以 11 個月計）</span></div>
+          <div class="eq"><span class="only-year">相當於每戶每月 NT$59</span><span class="only-month">&nbsp;</span></div>
+          <p class="fit">適合多據點、人數較多的團隊</p>
+          <ul><li>管理者人數不限</li></ul>
+          <div class="trialline">免費試用 6 個月，不需付款資料</div>
+          <div class="actions">
+            <a class="btn block" href="https://app.condola.app/signup?trial=premium">免費試用 6 個月</a>
+            <p class="note">目前試用由內部人員協助開通。按下按鈕會先完成註冊，我們會幫你開啟試用。</p>
+            <a class="tlink" href="https://app.condola.app/pricing/apply?plan=pre&amp;from=site">或聯絡我們申請付費</a>
+          </div>
+        </div>
+
+      </div>
+      <p class="formula">第 6 戶起，只計算超過 5 戶的生效租約。例如 8 戶標準方案，每月 (8−5)×NT$39＝NT$117；年繳 NT$1,287（再乘 11 個月）。</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="calc-h">
+    <div class="w">
+      <h2 id="calc-h">價格試算</h2>
+      <form class="calc" id="calc-form">
+        <div>
+          <div class="field">
+            <label for="units">生效租約戶數</label>
+            <input id="units" type="number" inputmode="numeric" min="0" step="1" aria-describedby="calc-hint">
+            <p class="hint" id="calc-hint">5 戶以內為 NT$0。空房與範例公司不計費。</p>
+            <p class="err" id="calc-err" hidden>請填 0 或以上的整數戶數。</p>
+          </div>
+        </div>
+        <div id="calc-out">
+          <div class="empty" id="calc-empty">輸入你的生效租約戶數，看看每月和年繳各要付多少。</div>
+          <div class="res" id="calc-res" hidden>
+            <div class="rcard" data-plan="std">
+              <h3>標準</h3>
+              <div class="amt" data-k="month"><span>每月</span><span class="v" id="std-m"></span></div>
+              <div class="amt" data-k="year"><span>年繳</span><span class="v" id="std-y"></span></div>
+            </div>
+            <div class="rcard" data-plan="pre">
+              <h3>進階</h3>
+              <div class="amt" data-k="month"><span>每月</span><span class="v" id="pre-m"></span></div>
+              <div class="amt" data-k="year"><span>年繳</span><span class="v" id="pre-y"></span></div>
+            </div>
+            <div class="calc-free" id="calc-free" hidden>
+              <span>5 戶以內為 NT$0，可直接免費開始</span>
+              <a href="https://app.condola.app/signup">免費開始</a>
+            </div>
+            <p class="calc-trial" id="calc-trial" hidden>標準方案可免費試用 3 個月，進階方案可免費試用 6 個月；試算金額是試用結束後的費用。</p>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section aria-labelledby="cmp-h">
+    <div class="w">
+      <h2 id="cmp-h">方案比較</h2>
+      <table class="cmp">
+        <thead>
+          <tr><th scope="col">項目</th><th scope="col">免費</th><th scope="col">標準</th><th scope="col">進階</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">每戶每月價格</th><td>NT$0</td><td>NT$39</td><td>NT$59</td></tr>
+          <tr><th scope="row">年繳（送 1 個月）</th><td>—</td><td>每戶每年 NT$429</td><td>每戶每年 NT$649</td></tr>
+          <tr><th scope="row">計費方式</th><td>最多 5 戶免費</td><td>第 6 戶起只計超過 5 戶的部分</td><td>同左</td></tr>
+          <tr><th scope="row">計費戶數</th><td>有生效租約的戶或房間；空房、範例公司不計</td><td>同左</td><td>同左</td></tr>
+          <tr><th scope="row">管理者人數</th><td>1 位管理者（待接受的邀請也計入）</td><td>5 位管理者</td><td>管理者人數不限</td></tr>
+          <tr><th scope="row">免費試用</th><td>—</td><td>3 個月</td><td>6 個月</td></tr>
+
+          <tr class="sec"><th scope="row" colspan="4">功能（各方案相同）</th></tr>
+          <tr><th scope="row">物件、租約與已簽 PDF</th><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+          <tr><th scope="row">租金紀錄與繳款回報</th><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+          <tr><th scope="row">報修與派工</th><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+          <tr><th scope="row">屋主月報與費用對帳</th><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+          <tr><th scope="row">以 LINE 邀請租客</th><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+          <tr><th scope="row">電子簽署進階（順序、進度、重簽）</th><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+          <tr><th scope="row">帳齡與營運指標</th><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+          <tr><th scope="row">完整出帳與月結預覽</th><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+
+          <tr><th scope="row">電子簽月額度</th><td class="pd">待定</td><td class="pd">待定</td><td class="pd">待定</td></tr>
+          <tr><th scope="row">付費通知月額度</th><td class="pd">待定</td><td class="pd">待定</td><td class="pd">待定</td></tr>
+          <tr><th scope="row">對話訊息月額度</th><td class="pd">待定</td><td class="pd">待定</td><td class="pd">待定</td></tr>
+          <tr><th scope="row">AI 月額度</th><td class="pd">待定</td><td class="pd">待定</td><td class="pd">待定</td></tr>
+        </tbody>
+      </table>
+
+      <div class="cmpm" aria-hidden="false">
+        <div class="pc">
+          <h3>免費</h3>
+          <dl>
+            <dt>每戶每月價格</dt><dd>NT$0</dd>
+            <dt>年繳（送 1 個月）</dt><dd>—</dd>
+            <dt>計費方式</dt><dd>最多 5 戶免費</dd>
+            <dt>計費戶數</dt><dd>有生效租約的戶或房間；空房、範例公司不計</dd>
+            <dt>管理者人數</dt><dd>1 位管理者（待接受的邀請也計入）</dd>
+            <dt>免費試用</dt><dd>—</dd>
+            <dt>核心功能</dt><dd>全部有</dd>
+            <dt>月額度</dt><dd>待定</dd>
+          </dl>
+        </div>
+        <div class="pc">
+          <h3>標準</h3>
+          <dl>
+            <dt>每戶每月價格</dt><dd>NT$39</dd>
+            <dt>年繳（送 1 個月）</dt><dd>每戶每年 NT$429</dd>
+            <dt>計費方式</dt><dd>第 6 戶起只計超過 5 戶的部分</dd>
+            <dt>計費戶數</dt><dd>有生效租約的戶或房間；空房、範例公司不計</dd>
+            <dt>管理者人數</dt><dd>5 位管理者</dd>
+            <dt>免費試用</dt><dd>3 個月</dd>
+            <dt>核心功能</dt><dd>全部有</dd>
+            <dt>月額度</dt><dd>待定</dd>
+          </dl>
+        </div>
+        <div class="pc">
+          <h3>進階</h3>
+          <dl>
+            <dt>每戶每月價格</dt><dd>NT$59</dd>
+            <dt>年繳（送 1 個月）</dt><dd>每戶每年 NT$649</dd>
+            <dt>計費方式</dt><dd>第 6 戶起只計超過 5 戶的部分</dd>
+            <dt>計費戶數</dt><dd>有生效租約的戶或房間；空房、範例公司不計</dd>
+            <dt>管理者人數</dt><dd>管理者人數不限</dd>
+            <dt>免費試用</dt><dd>6 個月</dd>
+            <dt>核心功能</dt><dd>全部有</dd>
+            <dt>月額度</dt><dd>待定</dd>
+          </dl>
+        </div>
+      </div>
+
+      <p class="after">三個方案的核心功能相同，差別只在價格與管理者人數。電子簽、付費通知、對話與 AI 的月額度尚未定案，表上標為待定，不構成承諾。</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="faq-h">
+    <div class="w">
+      <div class="faq-head">
+        <h2 id="faq-h">常見問題</h2>
+        <button class="btn o sm" type="button" id="faq-toggle" aria-expanded="false">全部展開</button>
+      </div>
+      <div class="faq">
+        <details><summary>什麼算一戶？</summary><div class="a"><p>有生效租約的戶或房間。已送出但未簽署的租約不計。</p></div></details>
+        <details><summary>超過 5 戶怎麼計費？</summary><div class="a"><p>第 6 戶起，只計算超過 5 戶的生效租約。例如 8 戶標準方案，每月 (8−5)×NT$39＝NT$117。年繳再乘 11 個月（送 1 個月）。</p></div></details>
+        <details><summary>年繳怎麼算？</summary><div class="a"><p>年繳送 1 個月，以 11 個月計。標準每戶每年 NT$429，進階每戶每年 NT$649。同樣只計算超過 5 戶的部分。</p></div></details>
+        <details><summary>怎麼開始或升級？</summary><div class="a"><p>5 戶以內可直接免費開始；標準方案可免費試用 3 個月，進階方案可免費試用 6 個月。若要使用標準或進階付費方案，請填申請表或來信 service@condola.app，我們會先提供匯款資訊與專屬參考碼，確認入帳後 1 個工作天內為你開通。</p></div></details>
+        <details><summary>範例公司要錢嗎？</summary><div class="a"><p>不用。範例公司不計費，也不會傳訊息給真實租客。</p></div></details>
+        <details><summary>管理者人數是什麼？</summary><div class="a"><p>管理者人數是指可以進入管理後台的人數，不是出租戶數。待接受的邀請也計入。免費方案 1 位管理者，標準 5 位，進階則管理者人數不限。</p></div></details>
+        <details><summary>可以開發票嗎？</summary><div class="a"><p>目前提供收據，暫無法開立統一發票。</p></div></details>
+        <details><summary>標準與進階方案可以免費試用嗎？</summary><div class="a"><p>可以。標準方案可免費試用 3 個月，進階方案可免費試用 6 個月，每家公司限試用一次，而且標準或進階只能擇一，用過其中一種就不能再試另一種。註冊後就能立即開始，不需申請，也不需付款資料，試用期間不收費。到期後會自動回到免費方案，資料都會保留；依生效租約起始日最早的 5 戶仍可編輯，其餘改為唯讀。試用期間多出來的管理者帳號都會保留，但後台權限會暫停，只剩原本的管理員能進後台，升級後就會恢復。租客端完全不受影響。</p></div></details>
+        <details><summary>多久可以開始使用？</summary><div class="a"><p>免費方案、標準試用與進階試用在註冊完成後就能立即使用。標準或進階付費方案，我們確認入帳後 1 個工作天內為你開通；這 1 個工作天是從款項入帳當天起算，不是從送出申請日起算（工作天為週一至週五，國定假日除外）。</p></div></details>
+        <details><summary>什麼是設計夥伴？</summary><div class="a"><p>設計夥伴是和我們一起試用新功能、提供回饋的管理公司與屋主。 <a class="tlink" href="/apply">設計夥伴申請</a></p></div></details>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="w">
+      <div class="band" id="band">
+        <h2>先免費開始，或試用標準 3 個月、進階 6 個月</h2>
+        <p>本頁不提供線上結帳。付費方案送出申請後，我們會以信件提供匯款資訊；確認入帳後 1 個工作天內為你開通。來信 service@condola.app，或填寫申請表。</p>
+        <a class="btn" href="https://app.condola.app/signup">免費開始</a>
+        <a class="tl" href="https://app.condola.app/pricing/apply?from=site">填寫申請表</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <div class="w">
+    <div class="fgrid">
+      <div>
+        <a href="/"><img src="/assets/logo/condola_lockup_horizontal.svg" width="150" height="30" alt="租多啦 Condola"></a>
+        <p>當房東不該這麼累。</p>
+      </div>
+      <div>
+        <b>網站</b>
+        <a href="/">首頁</a>
+        <a href="/how-it-works">怎麼運作</a>
+        <a href="/pricing">方案價格</a>
+        <a href="/about">關於我們</a>
+        <a href="/apply">申請成為設計夥伴</a>
+      </div>
+      <div>
+        <b>法遵</b>
+        <a href="https://app.condola.app/terms">服務條款</a>
+        <a href="https://app.condola.app/privacy">隱私權政策</a>
+        <a href="https://app.condola.app/refund">退款政策</a>
+      </div>
+      <div>
+        <b>聯絡我們</b>
+        <p>由艾隆科技 Airon Tech 經營（負責人 施振榮）。</p>
+        <p>Email：<a href="mailto:service@condola.app">service@condola.app</a>｜電話：<a href="tel:+886975317990">+886-975-317-990</a>｜LINE：@644odqoe（租多啦官方客服帳號）｜403 台中市西區府後街38號</p>
+      </div>
+    </div>
+    <p class="legal">本服務為軟體工具，不代為管理物業或收取租金，也不保證法規遵循。</p>
+    <p class="legal">Condola 租多啦是管理軟體，不代管物件；錢不經過租多啦，由租客與屋主／管理方直接處理。</p>
+    <p class="legal">© 2026 艾隆科技 Airon Tech. 保留所有權利。</p>
+  </div>
+</footer>
+
+<div class="sticky" id="sticky">
+  <a class="btn block" href="https://app.condola.app/signup">免費開始</a>
+</div>
+
+<script src="/assets/pricing-calc.js"></script>
+<script>
+(function(){
+  var pricing=document.getElementById('pricing');
+  var seg=document.querySelector('.seg');
+  var segBtns=[].slice.call(seg.querySelectorAll('button'));
+
+  function setCycle(c){
+    pricing.setAttribute('data-cycle',c);
+    segBtns.forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-cycle')===c)); });
+    if(window.__calcEmphasize) window.__calcEmphasize();
+  }
+  seg.addEventListener('click',function(e){ var b=e.target.closest('button'); if(b) setCycle(b.getAttribute('data-cycle')); });
+  seg.addEventListener('keydown',function(e){
+    if(e.key!=='ArrowRight' && e.key!=='ArrowLeft') return;
+    e.preventDefault();
+    var i=segBtns.indexOf(document.activeElement);
+    if(i<0) i=0;
+    var next=e.key==='ArrowRight' ? (i+1)%segBtns.length : (i-1+segBtns.length)%segBtns.length;
+    segBtns[next].focus();
+    setCycle(segBtns[next].getAttribute('data-cycle'));
+  });
+
+  var PC=window.PricingCalc||{};
+  function fmtNT(v){ if(PC && typeof PC.formatNT==='function') return PC.formatNT(v); return 'NT$'+Number(v).toLocaleString('zh-TW'); }
+  var FREE=5, STD=39, PRE=59, YM=11;
+  var input=document.getElementById('units');
+  var err=document.getElementById('calc-err');
+  var empty=document.getElementById('calc-empty');
+  var res=document.getElementById('calc-res');
+  var free=document.getElementById('calc-free');
+  var trial=document.getElementById('calc-trial');
+  var stdM=document.getElementById('std-m'), stdY=document.getElementById('std-y');
+  var preM=document.getElementById('pre-m'), preY=document.getElementById('pre-y');
+
+  function state(s){
+    empty.hidden = s!=='empty';
+    res.hidden = s!=='res';
+    err.hidden = s!=='err';
+    if(s==='err'){ input.setAttribute('aria-invalid','true'); input.setAttribute('aria-describedby','calc-err'); }
+    else { input.removeAttribute('aria-invalid'); input.setAttribute('aria-describedby','calc-hint'); }
+  }
+  function emphasize(){
+    var cyc=pricing.getAttribute('data-cycle');
+    [].forEach.call(document.querySelectorAll('#calc-res .amt'),function(a){
+      var k=a.getAttribute('data-k');
+      a.classList.toggle('hl', k===cyc);
+      a.classList.toggle('dim', k!==cyc);
+    });
+  }
+  window.__calcEmphasize=emphasize;
+
+  function render(){
+    var parsed = (PC && typeof PC.parseUnits==='function') ? PC.parseUnits(input.value) : (function(raw){
+      raw=String(raw==null?'':raw).trim();
+      if(raw==='') return {status:'empty'};
+      if(!/^\d+$/.test(raw)) return {status:'error'};
+      return {status:'ok', n:parseInt(raw,10)};
+    })(input.value);
+    if(parsed.status==='empty'){ state('empty'); return; }
+    if(parsed.status!=='ok'){ state('err'); return; }
+    var n=parsed.n;
+    var std=(PC && typeof PC.amount==='function') ? PC.amount(n, PC.RATES.std) : {month:Math.max(0,n-5)*39, year:Math.max(0,n-5)*39*11};
+    var pre=(PC && typeof PC.amount==='function') ? PC.amount(n, PC.RATES.pre) : {month:Math.max(0,n-5)*59, year:Math.max(0,n-5)*59*11};
+    stdM.textContent=fmtNT(std.month);
+    stdY.textContent=fmtNT(std.year);
+    preM.textContent=fmtNT(pre.month);
+    preY.textContent=fmtNT(pre.year);
+    state('res');
+    if(n<= (PC.FREE_UNITS||5)){ free.hidden=false; trial.hidden=true; } else { free.hidden=true; trial.hidden=false; }
+    emphasize();
+  }
+  input.addEventListener('input',render);
+  var calcForm=document.getElementById('calc-form');
+  if(calcForm){ calcForm.addEventListener('submit',function(e){
+    e.preventDefault();
+    if(String(input.value==null?'':input.value).trim()===''){ free.hidden=true; trial.hidden=true; state('err'); }
+    else { render(); }
+  }); }
+  render();
+
+  var mb=document.querySelector('.menu-btn');
+  var mmenu=document.getElementById('mmenu');
+  mb.addEventListener('click',function(){
+    var open=mmenu.classList.toggle('open');
+    mb.setAttribute('aria-expanded',String(open));
+  });
+
+  var faqToggle=document.getElementById('faq-toggle');
+  faqToggle.addEventListener('click',function(){
+    var dets=document.querySelectorAll('.faq details');
+    var anyClosed=[].some.call(dets,function(d){ return !d.open; });
+    [].forEach.call(dets,function(d){ d.open=anyClosed; });
+    faqToggle.textContent = anyClosed ? '全部收合' : '全部展開';
+    faqToggle.setAttribute('aria-expanded', String(anyClosed));
+  });
+
+  var sticky=document.getElementById('sticky');
+  var band=document.getElementById('band');
+  var foot=document.querySelector('footer.site');
+  if('IntersectionObserver' in window){
+    var vis={};
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ vis[en.target.getAttribute('data-io')] = en.isIntersecting; });
+      var any=Object.keys(vis).some(function(k){ return vis[k]; });
+      sticky.classList.toggle('hide', any);
+    },{threshold:0.01});
+    band.setAttribute('data-io','band'); io.observe(band);
+    if(foot){ foot.setAttribute('data-io','foot'); io.observe(foot); }
+  }
+})();
+</script>
+</body>
+</html>
