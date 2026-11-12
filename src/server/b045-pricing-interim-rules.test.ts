@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   pricingInterimOn,
+  pricingInterimGloballyEnabled,
   pricingInterimAdmitted,
   quoteInterim,
   parseInterimUnits,
@@ -44,6 +45,20 @@ test('pricingInterimOn admits only strict booleans + array allowlist that includ
 test('pricingInterimOn does not treat a different flag as admission', () => {
   assert.equal(pricingInterimOn(goodGlobal, { usage_subscriptions: true }, 'org'), false);
   assert.equal(pricingInterimOn(goodGlobal, { pricing_trial: true }, 'org'), false);
+});
+
+test('pricingInterimGloballyEnabled is true only for a plain object with enabled === true', () => {
+  // true: plain object with strict-boolean enabled; allowed_org_ids is NOT required
+  assert.equal(pricingInterimGloballyEnabled({ enabled: true }), true);
+  assert.equal(pricingInterimGloballyEnabled({ enabled: true, allowed_org_ids: [] }), true);
+  assert.equal(pricingInterimGloballyEnabled(goodGlobal), true);
+
+  // false: bad shapes, non-boolean enabled, enabled false/missing, allowlist-only, empty object
+  for (const value of [null, undefined, [], 'true', 1,
+    { enabled: 'true' }, { enabled: 1 }, { enabled: false },
+    { allowed_org_ids: ['org'] }, {}]) {
+    assert.equal(pricingInterimGloballyEnabled(value), false);
+  }
 });
 
 test('pricingInterimAdmitted rejects null/undefined/empty org even with good global/flags', () => {
@@ -83,6 +98,17 @@ test('parseInterimUnits accepts non-negative base-10 integers after trim', () =>
   for (const raw of ['', '  ', '1.5', '-1', '1e2', '+', 'abc']) {
     assert.deepEqual(parseInterimUnits(raw), { ok: false }, raw);
   }
+});
+
+test('parseInterimUnits enforces the pg integer bound and rejects overflow/non-safe-integer', () => {
+  // upper boundary stays valid
+  assert.deepEqual(parseInterimUnits('2147483647'), { ok: true, value: 2147483647 });
+  // one past the integer bound
+  assert.deepEqual(parseInterimUnits('2147483648'), { ok: false });
+  // very long digit string -> Infinity / non-safe-integer
+  assert.deepEqual(parseInterimUnits('9'.repeat(20)), { ok: false });
+  // 16-digit value exceeding the bound (and non-safe as an integer)
+  assert.deepEqual(parseInterimUnits('9999999999999999'), { ok: false });
 });
 
 // D) validateApplyInput — PLT-30-AC2

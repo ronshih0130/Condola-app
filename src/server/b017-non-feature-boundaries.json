@@ -244,8 +244,16 @@
     "sha256": "a50156ad1ac07ead3a5660aff49d753d5c92e4ff79b11f0649779a5c65ebfe4d"
   },
   "src/server/pricing-apply-actions.ts#actionSubmitPricingApply": {
-    "reason": "Public pricing apply form; no user session required; independent of organization custom grants. Optional session is read only to stamp org/user when present. No outbound.",
-    "sha256": "499e41bae58e7e9f26f810930306d8ab9c8f4793e9f1b8a06c6fd461fbf5871f"
+    "reason": "Public pricing apply form; no user session required; independent of organization custom grants. Flag-off (pricing_interim global enabled !== true) notFound() rejects before insert. Optional session is read only to stamp org/user when present. No outbound.",
+    "sha256": "18a52114f07c4660239cb47b33b66dba7ad9cc0d4ae5f83f36aaefe289df2c0e"
+  },
+  "src/server/pricing-apply-actions.ts#runSubmitPricingApply": {
+    "reason": "Testable core of the public pricing apply form; no user session required; independent of organization custom grants. Flag-off notFound() rejects before insert. Optional session is read only to stamp org/user when present. No outbound.",
+    "sha256": "e9225fdb7c41d2d737bb872fe53023b4d5f20e27b69859e0835824ab6b6db78a"
+  },
+  "src/app/pricing/apply/page.tsx#PricingApplyPage": {
+    "reason": "Public pricing apply page; no user session required; independent of organization custom grants. Flag-off (pricing_interim global enabled !== true) notFound() before render. Queries only the global platform_settings flag via isPricingInterimGloballyEnabled. No outbound.",
+    "sha256": "e18b4df37600c3a5059aeabf28f1a14922c932dfa8863fe8d0bb650f2487cde2"
   },
   "src/server/repair-owner-override.ts#changeOwnerRepairOverride": {
     "reason": "Owner-only portal gateway rejects staff before any query; custom staff grants cannot authorize this operation",

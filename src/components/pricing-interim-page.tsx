@@ -355,6 +355,9 @@ export function PricingInterimPage({
 
       <p>{t.footer_cta}</p>
       <p>{t.legal}</p>
+      <p>
+        <a href={"mailto:" + t.mailto} data-testid="interim-mailto">{t.mailto}</a>
+      </p>
 
       {/* Mobile sticky CTA — free start only; never trial buttons. */}
       {freeCtaHref !== null ? (

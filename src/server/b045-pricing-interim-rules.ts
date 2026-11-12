@@ -32,6 +32,18 @@ export function pricingInterimOn(
 }
 
 /**
+ * Fail-closed public/kill-switch gate used by the /pricing/apply render +
+ * actionSubmitPricingApply. True only when `global` is a plain object (not
+ * null, not array) AND `global.enabled === true` (strict boolean). Missing /
+ * malformed / "true" / 1 / null / undefined / [] => false. Does NOT require
+ * allowed_org_ids — that per-org opt-in belongs to pricingInterimOn.
+ */
+export function pricingInterimGloballyEnabled(global: unknown): boolean {
+  if (!isPlainObject(global)) return false;
+  return global.enabled === true;
+}
+
+/**
  * Caller-facing guard: anonymous / missing org can never be admitted. Returns
  * false unless orgId is a non-empty string, else defers to pricingInterimOn.
  */
@@ -72,14 +84,22 @@ export function quoteInterim(
 /**
  * PLT-30 units parser. Accepts "0" and base-10 non-negative integers after
  * trim, including leading zeros ("08" => 8). Rejects "1.5", "", "-", "-1",
- * "1e2", whitespace-only.
+ * "1e2", whitespace-only. Also enforces the PostgreSQL `integer` bound of
+ * pricing_apply_requests.units (integer NOT NULL CHECK (units >= 0)): after
+ * Number(trimmed) the value must be a finite Number.isSafeInteger and
+ * <= 2147483647, else field-level { ok: false } ("2147483648" and huge digit
+ * strings that overflow/become Infinity are rejected; "2147483647" stays ok).
  */
 export function parseInterimUnits(
   raw: string,
 ): { ok: true; value: number } | { ok: false } {
   const trimmed = raw.trim();
   if (!/^\d+$/.test(trimmed)) return { ok: false };
-  return { ok: true, value: Number(trimmed) };
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value) || value > 2147483647) {
+    return { ok: false };
+  }
+  return { ok: true, value };
 }
 
 // PLT-30 apply form. null / "unsure" render as「還不確定」; "pro" is Premium.
@@ -193,4 +213,24 @@ export function paidApplyHref(plan?: InterimPaidTier | "unsure"): string {
 /** Mirrors billing.formatNt presentation without importing billing.ts. */
 export function formatNtInterim(amount: number): string {
   return `NT$${Math.round(amount).toLocaleString("en-US")}`;
+}
+
+const PAID_RECEIVED_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * True only for a real calendar date in strict YYYY-MM-DD form, validated via
+ * UTC components so impossible dates (2026-02-31, 2026-13-01, 2026-04-31) are
+ * rejected before they reach SQL. Empty / loose / rolled-over values are false.
+ */
+export function isPricingPaidReceivedDate(value: string): boolean {
+  if (!PAID_RECEIVED_DATE_RE.test(value)) {
+    return false;
+  }
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }

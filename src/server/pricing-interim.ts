@@ -4,8 +4,14 @@
 // Q-C: anonymous / no-org callers stay on the old /pricing (no query, no
 // admission) until a separate public GO. UI-only; never touches billing.ts
 // constants, never writes platform_settings or feature_flags, no outbound.
+// B-045 / C3: isPricingInterimGloballyEnabled is the org-independent public
+// kill switch for /pricing/apply — anonymous callers MAY query it, and it
+// fails closed to false (404 / reject) on any error, missing row, or malform.
 import { query } from "./db";
-import { pricingInterimAdmitted } from "./b045-pricing-interim-rules";
+import {
+  pricingInterimAdmitted,
+  pricingInterimGloballyEnabled,
+} from "./b045-pricing-interim-rules";
 
 /**
  * Effective per-org gate: the org must be admitted by both the platform
@@ -29,6 +35,29 @@ export async function isPricingInterimEnabled(
       | undefined;
     if (!row) return false;
     return pricingInterimAdmitted(row.value, row.feature_flags, orgId);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * B-045 / C3 public-page kill switch for the /pricing/apply GET render and
+ * actionSubmitPricingApply (CEO 2026-11-12 03:45 PST: flag OFF => 404 / reject,
+ * no insert). Org-independent: unlike isPricingInterimEnabled, anonymous /
+ * no-org callers ARE allowed to query this. Reads only the platform_settings
+ * row (no organizations join). Fails closed (returns false) on any query error,
+ * a missing row, or a malformed value. Never writes platform_settings or
+ * feature_flags, no outbound.
+ */
+export async function isPricingInterimGloballyEnabled(): Promise<boolean> {
+  try {
+    const result = await query(
+      `SELECT value FROM platform_settings WHERE key='pricing_interim'`,
+      [],
+    );
+    const row = result.rows[0] as { value: unknown } | undefined;
+    if (!row) return false;
+    return pricingInterimGloballyEnabled(row.value);
   } catch {
     return false;
   }

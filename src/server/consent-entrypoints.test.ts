@@ -46,6 +46,7 @@ const openActions: Record<string, Record<string, string>> = {
   },
   "server/pricing-apply-actions.ts": {
     actionSubmitPricingApply: "Public pricing apply form, no user session required",
+    runSubmitPricingApply: "Testable core of the public pricing apply form, no user session required",
   },
 };
 const openPages: Record<string, Record<string, string>> = {
