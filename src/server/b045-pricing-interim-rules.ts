@@ -11,6 +11,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * True only for a clean allowlist: an array whose every element is a string.
+ * A non-array, or any non-string element (number, null, object, boolean,
+ * undefined, or a mixed array like ["org", 1]) => false. Used so membership
+ * cannot be satisfied by a string element living inside a mixed-type array.
+ */
+function isStringAllowlist(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((el) => typeof el === "string");
+}
+
+/**
  * Fail-closed parse of a stored pricing_interim setting. Strings are JSON.parsed
  * and the parsed value returned as { ok: true, value }; any JSON.parse throw =>
  * { ok: false }. Non-string input is passed through untouched as
@@ -35,6 +45,11 @@ export function parsePricingInterimSetting(
  * Per-org admission, fail-closed: the platform allowlist must admit the org and
  * the org's own feature flag must opt in, both as strict booleans. Anything
  * else (null, array, "true", 1, missing, empty orgId) => false.
+ *
+ * Allowlist membership requires allowed_org_ids to be an array whose every
+ * element is a string AND to contain orgId. A mixed-type array (e.g.
+ * ["org", 1]) is rejected wholesale and denies even if orgId appears as a
+ * string element — a bare includes() must not admit from a dirty allowlist.
  */
 export function pricingInterimOn(
   global: unknown,
@@ -44,7 +59,7 @@ export function pricingInterimOn(
   if (!isPlainObject(global) || !isPlainObject(flags)) return false;
   if (global.enabled !== true) return false;
   if (
-    !Array.isArray(global.allowed_org_ids) ||
+    !isStringAllowlist(global.allowed_org_ids) ||
     !global.allowed_org_ids.includes(orgId)
   ) {
     return false;
