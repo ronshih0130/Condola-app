@@ -1,0 +1,133 @@
+/* FILE: src/components/pricing-interim.module.css */
+
+/* Scoped styles for the flag-ON /pricing page, apply form, and usage card.
+   Brand v2 / PRINCIPLES 53: 16px body, 44px min touch targets.
+   Designed for 390px phone and 1280px desktop; 768 tablet is lower priority. */
+
+.root {
+  font-size: 16px;
+  line-height: 1.5;
+  max-width: 960px;
+  margin: 0 auto;
+  /* bottom padding leaves room for the sticky mobile CTA */
+  padding: 16px 16px 96px;
+  color: var(--ink, #1a1a1a);
+  background: var(--bg, #fff);
+}
+
+/* Intro / lead paragraph above the plans */
+.lead {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0 0 24px;
+  color: var(--ink, #1a1a1a);
+}
+
+/* Plan cards: 3 columns on desktop, single column on phone */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* Comparison table — shown on desktop, hidden on phone */
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+
+.compare th,
+.compare td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid var(--line, #e3e3e3);
+  vertical-align: top;
+}
+
+.compare th {
+  font-weight: 600;
+  color: var(--ink, #1a1a1a);
+}
+
+/* Card fallback for the comparison table — hidden on desktop, shown on phone */
+.compareCards {
+  display: none;
+}
+
+/* Sticky mobile CTA bar — only visible on phone, lives at the bottom.
+   The apply success state simply won't render this node. */
+.sticky {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 16px;
+  background: var(--panel, #fff);
+  border-top: 1px solid var(--line, #e3e3e3);
+  z-index: 40;
+}
+
+/* Error text on the apply form */
+.err {
+  color: #c01919;
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 4px 0 0;
+}
+
+/* Free-plan usage card (n/5) */
+.usage {
+  padding: 16px;
+  border: 1px solid var(--line, #e3e3e3);
+  border-radius: 8px;
+  background: var(--panel, #fff);
+  font-size: 16px;
+}
+
+/* Usage proportion bar — rendered only for the free plan; fill width is set inline */
+.bar {
+  height: 8px;
+  width: 100%;
+  margin-top: 8px;
+  background: var(--line, #e3e3e3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: var(--pri, #2b6cff);
+  border-radius: 4px;
+}
+
+/* Touch targets: 44px min-height on buttons and inputs (PRINCIPLES 53) */
+.root button,
+.root input,
+.root select,
+.sticky button,
+.sticky input {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+/* Phone (390px target) */
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compare {
+    display: none;
+  }
+
+  .compareCards {
+    display: block;
+  }
+
+  .sticky {
+    display: block;
+  }
+}

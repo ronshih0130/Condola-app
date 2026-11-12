@@ -1,3 +1,4 @@
+// FILE: src/app/m/admin/page.tsx
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
@@ -6,6 +7,9 @@ import { listFlaggedFirms, listPartnerCodes } from "@/server/partners";
 import { isPlatformAdmin } from "@/server/platform";
 import { actionClearPriceOverride, actionCreatePartnerCode, actionSetPriceOverride } from "@/server/signup-actions";
 import { getSession } from "@/server/session";
+// B-045 C2 / PLT-30: internal-admin-only apply queue with 入帳日 (paid-received) column.
+import { listPricingApplyRequests, actionSetPricingApplyPaidReceived } from "@/server/pricing-apply-actions";
+import { pricingInterimCopy } from "@/i18n/pricing-interim";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +19,9 @@ export default async function PlatformAdminPage({ searchParams }: { searchParams
   if (!isPlatformAdmin(session.email)) notFound();
   const query = await searchParams;
   const t = makeT(session.locale);
-  const [codes, flagged] = await Promise.all([listPartnerCodes(), listFlaggedFirms()]);
+  const copy = pricingInterimCopy(session.locale);
+  // B-045 C2 / PLT-30: only reached by platform admins (notFound above); no notifications sent here.
+  const [codes, flagged, applyRequests] = await Promise.all([listPartnerCodes(), listFlaggedFirms(), listPricingApplyRequests()]);
   return (
     <>
       <PageHeader title={t("i_admin_title")} />
@@ -107,6 +113,61 @@ export default async function PlatformAdminPage({ searchParams }: { searchParams
                 </li>
               ))}
             </ul>
+          ) : (
+            <p className="small muted">{t("i_admin_none")}</p>
+          )}
+        </div>
+        {/* B-045 C2 / PLT-30: internal apply queue + 入帳日 (paid-received) column. Manual-trial, no notifications. */}
+        <div className="card pad" data-testid="admin-apply-queue">
+          <h2>{copy.admin.admin_queue_title}</h2>
+          <p className="small muted">{copy.admin.admin_manual_trial}</p>
+          {applyRequests.length ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>{t("i_admin_partner_name")}</th>
+                  <th>Phone</th>
+                  <th>Units</th>
+                  <th>Plan</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>{copy.admin.admin_paid_on}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {applyRequests.map((req) => (
+                  <tr key={req.id}>
+                    <td>{req.company_name}</td>
+                    <td>{req.phone}</td>
+                    <td>{req.units}</td>
+                    <td>{req.plan}</td>
+                    <td>{req.status}</td>
+                    <td>{req.created_at}</td>
+                    <td>
+                      <form action={actionSetPricingApplyPaidReceived} className="row">
+                        <input type="hidden" name="id" value={req.id} />
+                        <input
+                          type="date"
+                          name="paidReceivedOn"
+                          defaultValue={req.paid_received_on ?? ""}
+                          data-testid={`admin-paid-on-${req.id}`}
+                        />
+                        <button className="btn pri" type="submit">
+                          {copy.admin.admin_paid_save}
+                        </button>
+                      </form>
+                      <form action={actionSetPricingApplyPaidReceived} className="row">
+                        <input type="hidden" name="id" value={req.id} />
+                        <input type="hidden" name="paidReceivedOn" value="" />
+                        <button className="btn" type="submit">
+                          {copy.admin.admin_paid_clear}
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : (
             <p className="small muted">{t("i_admin_none")}</p>
           )}

@@ -1,3 +1,4 @@
+// FILE: src/app/pricing/page.tsx
 import { redirect } from "next/navigation";
 import { upgradeGate } from "@/server/upgrade-gate";
 import { FREE_UNITS } from "@/server/billing";
@@ -13,6 +14,8 @@ import { loadPriceInputs } from "@/server/partners";
 import { countActiveUnits } from "@/server/sandbox";
 import { commercialTier, seatUsage } from "@/server/seats";
 import { readSession, requestPrefs } from "@/server/session";
+import { isPricingInterimEnabled } from "@/server/pricing-interim";
+import { PricingInterimPage } from "@/components/pricing-interim-page";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +32,19 @@ export default async function PricingPage() {
   // Pricing and usage are live even while the navigation selects a sandbox.
   const gate = staff ? await upgradeGate({ ...staff, orgId: staff.liveOrgId, environment: "live", needsSandbox: false }, FREE_UNITS) : null;
   if (gate?.redirectTo) redirect(gate.redirectTo);
+  // B-045 / Q-C: staff interim pricing dual-track. Only a live staff session on an
+  // allowlisted org sees the new page; anonymous / non-allowlisted keep the OFF path below.
+  // Guard with `staff &&` so isPricingInterimEnabled is never called with a null org.
+  if (staff && (await isPricingInterimEnabled(staff.liveOrgId))) {
+    return (
+      <PricingInterimPage
+        locale={prefs.locale}
+        signedIn={true}
+        isAdmin={staff.role === "admin"}
+        freeCtaHref={null}
+      />
+    );
+  }
   const inputs = staff ? await loadPriceInputs(staff.liveOrgId) : null;
   const units = staff ? await countActiveUnits(staff.liveOrgId) : 30;
   const usage = staff ? await seatUsage(staff.liveOrgId) : null;
