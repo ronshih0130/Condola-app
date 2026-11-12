@@ -4,7 +4,6 @@ import Link from "next/link";
 import { requestPrefs } from "@/server/session";
 import { pricingInterimCopy } from "@/i18n/pricing-interim";
 import { PricingApplyForm } from "@/components/pricing-apply-form";
-import styles from "@/components/pricing-interim.module.css";
 
 // PLT-30: public B-045 apply route. Per Q-C / C3, there is no "old" public
 // apply form — the old paid CTA pointed logged-in staff at /m/settings and
@@ -38,7 +37,7 @@ export default async function PricingApplyPage({
 
   if (done) {
     return (
-      <main className={`pricing-page ${styles.root}`} data-testid="apply-success">
+      <main className="pricing-page interim-root" data-testid="apply-success">
         <h1>{copy.apply.success_title}</h1>
         <p>{copy.apply.success_body}</p>
         <p>{copy.apply.success_note}</p>
@@ -50,7 +49,7 @@ export default async function PricingApplyPage({
   }
 
   return (
-    <main className={`pricing-page ${styles.root}`}>
+    <main className="pricing-page interim-root">
       <h1>{copy.apply.title}</h1>
       <p className="lead" data-testid="apply-lead">
         {copy.apply.lead}

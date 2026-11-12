@@ -12,7 +12,6 @@ import Link from "next/link";
 import { pricingInterimCopy } from "@/i18n/pricing-interim";
 import { trialCtaHref, paidApplyHref } from "@/server/b045-pricing-interim-rules";
 import { PricingInterimCalculator } from "./pricing-interim-calculator";
-import styles from "./pricing-interim.module.css";
 
 type PricingInterimPageProps = {
   locale: string;
@@ -124,17 +123,17 @@ export function PricingInterimPage({
   const applyLinkLabel = locale === "zh-TW" ? "申請表" : "application form";
 
   return (
-    <main className={`pricing-page ${styles.root}`} data-testid="interim-pricing">
+    <main className="pricing-page interim-root" data-testid="interim-pricing">
       <header>
         <h1>{t.title}</h1>
-        <p className={styles.lead} data-testid="interim-lead">
+        <p className="interim-lead" data-testid="interim-lead">
           {t.lead}
         </p>
         <p>{t.sub}</p>
       </header>
 
       {/* Plan cards */}
-      <div className={`price-grid ${styles.grid}`}>
+      <div className="price-grid interim-grid">
         {/* Free */}
         <article className="plan-card" data-testid="interim-plan-free">
           <h2>{t.plan_free}</h2>
@@ -200,7 +199,7 @@ export function PricingInterimPage({
       {/* Comparison — desktop table */}
       <section>
         <h2>{t.compare_title}</h2>
-        <table className={styles.compare} data-testid="interim-compare">
+        <table className="interim-compare" data-testid="interim-compare">
           <thead>
             <tr>
               <th scope="col"></th>
@@ -277,7 +276,7 @@ export function PricingInterimPage({
         </table>
 
         {/* Comparison — phone cards (CSS hides one or the other) */}
-        <div className={styles.compareCards} data-testid="interim-compare-cards">
+        <div className="interim-compare-cards" data-testid="interim-compare-cards">
           {planCols.map((c) => (
             <article
               key={c.key}
@@ -359,7 +358,7 @@ export function PricingInterimPage({
 
       {/* Mobile sticky CTA — free start only; never trial buttons. */}
       {freeCtaHref !== null ? (
-        <div className={styles.sticky}>
+        <div className="interim-sticky">
           <Link
             className="btn pri"
             href={freeCtaHref}

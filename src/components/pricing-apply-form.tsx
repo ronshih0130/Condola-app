@@ -12,7 +12,6 @@ import { useActionState, useEffect, useRef } from "react";
 
 import { actionSubmitPricingApply } from "@/server/pricing-apply-actions";
 import { pricingInterimCopy } from "@/i18n/pricing-interim";
-import styles from "./pricing-interim.module.css";
 
 type Props = {
   locale: string;
@@ -78,7 +77,7 @@ export function PricingApplyForm({ locale, defaultPlan }: Props) {
           aria-describedby={errors?.companyName ? "apply-err-company" : undefined}
         />
         {errors?.companyName ? (
-          <p className={styles.err} id="apply-err-company" data-testid="apply-err-company" role="alert">
+          <p className="interim-err" id="apply-err-company" data-testid="apply-err-company" role="alert">
             {copy.apply.err_company}
           </p>
         ) : null}
@@ -101,7 +100,7 @@ export function PricingApplyForm({ locale, defaultPlan }: Props) {
           aria-describedby={errors?.phone ? "apply-err-phone" : undefined}
         />
         {errors?.phone ? (
-          <p className={styles.err} id="apply-err-phone" data-testid="apply-err-phone" role="alert">
+          <p className="interim-err" id="apply-err-phone" data-testid="apply-err-phone" role="alert">
             {copy.apply.err_phone}
           </p>
         ) : null}
@@ -132,7 +131,7 @@ export function PricingApplyForm({ locale, defaultPlan }: Props) {
           {copy.apply.hint_units}
         </p>
         {errors?.units ? (
-          <p className={styles.err} id="apply-err-units" data-testid="apply-err-units" role="alert">
+          <p className="interim-err" id="apply-err-units" data-testid="apply-err-units" role="alert">
             {copy.apply.err_units}
           </p>
         ) : null}
@@ -165,7 +164,7 @@ export function PricingApplyForm({ locale, defaultPlan }: Props) {
       {/* Mobile sticky mirror of the submit button. It lives INSIDE the <form>
           so it submits the same fields; CSS (.sticky) keeps it pinned to the
           bottom on phone and hidden on desktop. */}
-      <div className={styles.sticky}>
+      <div className="interim-sticky">
         <button type="submit" className="btn pri" data-testid="apply-sticky-submit" style={{ minHeight: 44 }}>
           {copy.apply.cta}
         </button>

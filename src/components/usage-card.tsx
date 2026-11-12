@@ -13,7 +13,6 @@
 
 import Link from "next/link";
 import { pricingInterimCopy } from "../i18n/pricing-interim";
-import styles from "./pricing-interim.module.css";
 
 type UsageCardProps = {
   locale: string;
@@ -36,7 +35,7 @@ export function UsageCard({ locale, plan, units }: UsageCardProps) {
   const meters = [copy.meter_esign, copy.meter_notice, copy.meter_msg, copy.meter_ai];
 
   return (
-    <div className={styles.usage} data-testid="usage-card">
+    <div className="interim-usage" data-testid="usage-card">
       <h3>{copy.usage_title}</h3>
 
       {/* MGT-53-AC1 */}
@@ -48,8 +47,8 @@ export function UsageCard({ locale, plan, units }: UsageCardProps) {
           <p data-testid="usage-units">
             {copy.units_label}：{copy.units_free(units)}
           </p>
-          <div className={styles.bar}>
-            <div className={styles.barFill} style={{ width: `${fillPct}%` }} />
+          <div className="interim-bar">
+            <div className="interim-bar-fill" style={{ width: `${fillPct}%` }} />
           </div>
         </>
       ) : (

@@ -14,7 +14,6 @@ import {
   formatNtInterim,
   type InterimPaidTier,
 } from "@/server/b045-pricing-interim-rules";
-import styles from "./pricing-interim.module.css";
 
 type Cycle = "month" | "year";
 
@@ -44,7 +43,7 @@ export function PricingInterimCalculator({ locale }: { locale: string }) {
   };
 
   return (
-    <div className={`card pad ${styles.usage}`}>
+    <div className="card pad interim-usage">
       <h3 className="fg">{copy.calc_title}</h3>
 
       {/* Billing cycle toggle — both figures always show; the toggle marks intent. */}
@@ -81,7 +80,7 @@ export function PricingInterimCalculator({ locale }: { locale: string }) {
       </div>
 
       {!parsed.ok ? (
-        <p className={styles.err} data-testid="interim-calc-err">
+        <p className="interim-err" data-testid="interim-calc-err">
           {copy.calc_err}
         </p>
       ) : (
