@@ -11,6 +11,27 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Fail-closed parse of a stored pricing_interim setting. Strings are JSON.parsed
+ * and the parsed value returned as { ok: true, value }; any JSON.parse throw =>
+ * { ok: false }. Non-string input is passed through untouched as
+ * { ok: true, value: raw } (objects, null, numbers, etc.), since callers already
+ * fail-closed on bad shapes. A successful parse of JSON null/false/[] is a
+ * successful parse — only a thrown JSON.parse is ok:false. Never throws.
+ */
+export function parsePricingInterimSetting(
+  raw: unknown,
+): { ok: true; value: unknown } | { ok: false } {
+  if (typeof raw === "string") {
+    try {
+      return { ok: true, value: JSON.parse(raw) };
+    } catch {
+      return { ok: false };
+    }
+  }
+  return { ok: true, value: raw };
+}
+
+/**
  * Per-org admission, fail-closed: the platform allowlist must admit the org and
  * the org's own feature flag must opt in, both as strict booleans. Anything
  * else (null, array, "true", 1, missing, empty orgId) => false.
@@ -32,11 +53,17 @@ export function pricingInterimOn(
 }
 
 /**
- * Fail-closed public/kill-switch gate used by the /pricing/apply render +
- * actionSubmitPricingApply. True only when `global` is a plain object (not
- * null, not array) AND `global.enabled === true` (strict boolean). Missing /
- * malformed / "true" / 1 / null / undefined / [] => false. Does NOT require
- * allowed_org_ids — that per-org opt-in belongs to pricingInterimOn.
+ * Raw global `enabled === true` kill-switch primitive ONLY. True when `global`
+ * is a plain object (not null, not array) AND `global.enabled === true` (strict
+ * boolean). Missing / malformed / "true" / 1 / null / undefined / [] => false.
+ * Does NOT require allowed_org_ids — that per-org opt-in belongs to
+ * pricingInterimOn.
+ *
+ * This is NOT the /pricing/apply admission gate. `enabled:true` alone must not
+ * open the anonymous form/submit: an internal-only ON (enabled:true,
+ * allowed_org_ids = internal orgs) would wrongly expose the public page. The
+ * apply boundary is pricingInterimPublicEnabled (standalone public GO) +
+ * pricingApplyAccessAllowed (public OR allowlisted staff org).
  */
 export function pricingInterimGloballyEnabled(global: unknown): boolean {
   if (!isPlainObject(global)) return false;
@@ -54,6 +81,44 @@ export function pricingInterimAdmitted(
 ): boolean {
   if (typeof orgId !== "string" || orgId.length === 0) return false;
   return pricingInterimOn(global, flags, orgId);
+}
+
+/**
+ * Standalone public GO for the logged-out /pricing/apply form + submit
+ * (design-note §5; Q-C / §11 steps 5–6; C3). True IFF `global` is a plain
+ * object AND `global.enabled === true` AND `global.public === true`, both strict
+ * booleans. `public` defaults to false (CEO confirmed the field name
+ * 2026-11-12 05:26 PST): a missing `public` field, a non-boolean `public` value,
+ * or a JSON parse failure of the setting (see parsePricingInterimSetting) is
+ * treated as public=false. Missing / malformed / "true" / 1 / absent /
+ * public:false => false.
+ *
+ * Empty allowed_org_ids is NOT public mode: the default seed is
+ * { enabled:false, allowed_org_ids:[] } and pricingInterimOn requires allowlist
+ * membership, so clearing the allowlist must never be the path to going public.
+ * `enabled !== true` => false even if public:true (kill switch wins).
+ */
+export function pricingInterimPublicEnabled(global: unknown): boolean {
+  if (!isPlainObject(global)) return false;
+  if (global.enabled !== true) return false;
+  return global.public === true;
+}
+
+/**
+ * /pricing/apply admission boundary (PLT-30-AC1/AC2, PLT-28-AC1, R11
+ * fail-closed). When the public GO is on, anyone — including anonymous /
+ * missing org — is allowed. Otherwise defer to pricingInterimAdmitted, so a
+ * live staff org must be allowlisted AND carry the org flag. The kill switch
+ * (`enabled !== true`) closes both paths because each underlying primitive
+ * requires enabled === true.
+ */
+export function pricingApplyAccessAllowed(args: {
+  global: unknown;
+  flags: unknown;
+  orgId: string | null | undefined;
+}): boolean {
+  if (pricingInterimPublicEnabled(args.global)) return true;
+  return pricingInterimAdmitted(args.global, args.flags, args.orgId);
 }
 
 // Flag-scoped display rates. ONLY for flag-ON UI; never used to invoice.

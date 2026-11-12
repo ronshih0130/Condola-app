@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 import { isPricingPaidReceivedDate, validateApplyInput } from "./b045-pricing-interim-rules";
 import { query } from "./db";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
-import { isPricingInterimGloballyEnabled } from "@/server/pricing-interim";
+import { canAccessPricingApply } from "@/server/pricing-interim";
 import { requireCurrentConsent } from "./consent-gate";
 import { getSession, readSession } from "./session";
 import { isPlatformAdmin } from "./platform";
@@ -36,25 +36,30 @@ function staffOrgId(session: Awaited<ReturnType<typeof readSession>>): string | 
 /**
  * PLT-30-AC2 submit action, useActionState-compatible.
  *
- * Gated on the pricing_interim global flag:
- *   - flag OFF => notFound() at the very start, before any validation/query:
- *     no insert and no redirect to ?done=1, even for an anonymous, otherwise
- *     valid form. Anonymous submits are allowed ONLY when the global flag is on.
- *   - flag ON  => unchanged behavior: validateApplyInput, optional session (no
- *     login required), staffOrgId, app.submit_pricing_apply, then
+ * Gated on canAccessPricingApply (not the raw pricing_interim enabled flag):
+ *   - flag OFF, or internal-only ON (enabled:true + allowlist, public not true)
+ *     with no allowlisted staff session => notFound() at the very start, before
+ *     any validation/query: no insert and no redirect to ?done=1, even for an
+ *     anonymous, otherwise valid form. An internal-only ON must NOT accept
+ *     anonymous submits (Q-C, R11).
+ *   - public mode (enabled===true AND public===true) => unchanged behavior:
+ *     keeps the current anonymous-submit path — validateApplyInput, optional
+ *     session (no login required), staffOrgId, app.submit_pricing_apply, then
  *     redirect("/pricing/apply?done=1").
+ *   - allowlisted staff of an admitted org may submit during internal-only ON.
  *
  * Validation failures return focus state (no insert); success redirect()s and
  * therefore never returns. Never sends email/SMS/LINE.
  *
- * C3 public cutover still needs Ron's own-words GO before the prod flag-ON.
+ * C3: setting public:true still needs Ron's own-words GO. Cites PLT-30-AC2,
+ * C3, Q-C, R11.
  */
 export async function actionSubmitPricingApply(
   _prev: ApplyActionState | null,
   form: FormData,
 ): Promise<ApplyActionState> {
   return runSubmitPricingApply(form, {
-    isEnabled: isPricingInterimGloballyEnabled,
+    canAccess: canAccessPricingApply,
     readSession,
     query,
   });
@@ -62,18 +67,19 @@ export async function actionSubmitPricingApply(
 
 /**
  * Testable core of actionSubmitPricingApply with its collaborators injected so
- * the flag gate and the ON path can be unit-tested without module mocks.
+ * the access gate and the ON path can be unit-tested without module mocks.
  */
 export async function runSubmitPricingApply(
   form: FormData,
   deps: {
-    isEnabled: () => Promise<boolean>;
+    canAccess: () => Promise<boolean>;
     readSession: () => ReturnType<typeof readSession>;
     query: typeof query;
   },
 ): Promise<ApplyActionState> {
-  // Flag OFF: reject server-side before any validation/query/redirect.
-  if (!(await deps.isEnabled())) {
+  // No access (flag OFF, or internal-only ON without an allowlisted staff
+  // session): reject server-side before any validation/query/redirect.
+  if (!(await deps.canAccess())) {
     notFound();
   }
 

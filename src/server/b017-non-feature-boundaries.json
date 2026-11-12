@@ -240,20 +240,20 @@
     "sha256": "4efbd863fefbdc8a0957ad2194d855cdcb3e75e3ac5e97015f9edfca196f6722"
   },
   "src/app/m/admin/page.tsx#PlatformAdminPage": {
-    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and 入帳日 render only after that same gate; no member-role authority and no outbound.",
+    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and \u5165\u5e33\u65e5 render only after that same gate; no member-role authority and no outbound.",
     "sha256": "a50156ad1ac07ead3a5660aff49d753d5c92e4ff79b11f0649779a5c65ebfe4d"
   },
   "src/server/pricing-apply-actions.ts#actionSubmitPricingApply": {
-    "reason": "Public pricing apply form; no user session required; independent of organization custom grants. Flag-off (pricing_interim global enabled !== true) notFound() rejects before insert. Optional session is read only to stamp org/user when present. No outbound.",
-    "sha256": "18a52114f07c4660239cb47b33b66dba7ad9cc0d4ae5f83f36aaefe289df2c0e"
+    "reason": "Pricing apply form (PLT-30). Independent of organization custom grants. Access is canAccessPricingApply: flag OFF or internal-only ON without an allowlisted staff live org => notFound() before insert; public mode (enabled===true AND public===true) keeps the anonymous submit path; allowlisted staff may submit during internal-only ON. Optional session stamps org/user when present. No outbound.",
+    "sha256": "0bc1b2828b5f8cac906cb13b87a48211b06ed9c15a46c5f12227eb315f685696"
   },
   "src/server/pricing-apply-actions.ts#runSubmitPricingApply": {
-    "reason": "Testable core of the public pricing apply form; no user session required; independent of organization custom grants. Flag-off notFound() rejects before insert. Optional session is read only to stamp org/user when present. No outbound.",
-    "sha256": "e9225fdb7c41d2d737bb872fe53023b4d5f20e27b69859e0835824ab6b6db78a"
+    "reason": "Testable core of the pricing apply form (PLT-30). Independent of organization custom grants. deps.canAccess/notFound() rejects before insert when the caller is not admitted. Public mode keeps the anonymous submit path; allowlisted staff may submit during internal-only ON. Optional session stamps org/user when present. No outbound.",
+    "sha256": "44017f5e4c18399045e4c4351675b89452a2af4fb9a40d7f9d8bc5d967f26a91"
   },
   "src/app/pricing/apply/page.tsx#PricingApplyPage": {
-    "reason": "Public pricing apply page; no user session required; independent of organization custom grants. Flag-off (pricing_interim global enabled !== true) notFound() before render. Queries only the global platform_settings flag via isPricingInterimGloballyEnabled. No outbound.",
-    "sha256": "e18b4df37600c3a5059aeabf28f1a14922c932dfa8863fe8d0bb650f2487cde2"
+    "reason": "Pricing apply page (PLT-30). Independent of organization custom grants. canAccessPricingApply + notFound() before any form/success render: flag OFF or internal-only ON without an allowlisted staff live org => 404; public mode (enabled===true AND public===true) keeps the logged-out form. No redirect. No outbound.",
+    "sha256": "063600677ed7998ba5118bf553a1cfc0dc0355c1888e2787c2df278a79f09fac"
   },
   "src/server/repair-owner-override.ts#changeOwnerRepairOverride": {
     "reason": "Owner-only portal gateway rejects staff before any query; custom staff grants cannot authorize this operation",

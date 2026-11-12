@@ -10,6 +10,8 @@ import {
   pricingInterimOn,
   pricingInterimGloballyEnabled,
   pricingInterimAdmitted,
+  pricingInterimPublicEnabled,
+  pricingApplyAccessAllowed,
   quoteInterim,
   parseInterimUnits,
   validateApplyInput,
@@ -68,6 +70,71 @@ test('pricingInterimAdmitted rejects null/undefined/empty org even with good glo
   }
   // still defers to the fail-closed core for non-empty orgs
   assert.equal(pricingInterimAdmitted(goodGlobal, goodFlags, 'other'), false);
+});
+
+// A2) public-mode detection — PLT-30-AC1, C3, R11: public mode requires BOTH
+// strict-boolean enabled===true AND public===true, independent of the allowlist.
+test('pricingInterimPublicEnabled is true only for strict enabled===true AND public===true', () => {
+  // true: public mode is independent of allowlist contents
+  assert.equal(pricingInterimPublicEnabled({ enabled: true, public: true }), true);
+  assert.equal(pricingInterimPublicEnabled({ enabled: true, public: true, allowed_org_ids: ['org'] }), true);
+
+  // false: bad shapes, non-boolean fields, missing/false public, kill switch, internal-only ON
+  for (const value of [null, undefined, [], 'true', 1, {},
+    { enabled: true },
+    { enabled: true, public: false },
+    { enabled: true, public: 'true' },
+    { enabled: true, public: 1 },
+    { enabled: false, public: true },
+    { enabled: 'true', public: true },
+    { public: true },
+    { enabled: true, allowed_org_ids: [] },
+    { enabled: true, allowed_org_ids: ['org'] }]) {
+    assert.equal(pricingInterimPublicEnabled(value), false);
+  }
+});
+
+// A3) apply-gate access — PLT-30-AC2, C3, R11, Q-C: fail-closed; kill switch wins;
+// public mode is open to all; internal-only mode defers to allowlist + flags.
+test('pricingApplyAccessAllowed gates by kill switch, public mode and allowlist', () => {
+  // OFF: enabled false / missing / malformed => false for anyone (anon or good org)
+  for (const global of [{ enabled: false, allowed_org_ids: ['org'] }, { allowed_org_ids: ['org'] },
+    null, undefined, {}, 'true', []]) {
+    for (const orgId of [null, undefined, '', 'org']) {
+      assert.equal(pricingApplyAccessAllowed({ global, flags: goodFlags, orgId }), false);
+    }
+  }
+
+  // Internal-only ON (no public / public:false) + good flags => allowlist decides
+  for (const global of [{ enabled: true, allowed_org_ids: ['org'] },
+    { enabled: true, public: false, allowed_org_ids: ['org'] }]) {
+    for (const orgId of [null, undefined, '']) {
+      assert.equal(pricingApplyAccessAllowed({ global, flags: goodFlags, orgId }), false);
+    }
+    assert.equal(pricingApplyAccessAllowed({ global, flags: goodFlags, orgId: 'org' }), true);
+    assert.equal(pricingApplyAccessAllowed({ global, flags: goodFlags, orgId: 'other' }), false);
+    // allowlisted org still needs strict-boolean flags
+    for (const flags of [undefined, { pricing_interim: false }, { pricing_interim: 'true' }]) {
+      assert.equal(pricingApplyAccessAllowed({ global, flags, orgId: 'org' }), false);
+    }
+  }
+
+  // Public mode: open path unchanged — everyone passes regardless of allowlist contents
+  for (const global of [{ enabled: true, public: true },
+    { enabled: true, public: true, allowed_org_ids: [] },
+    { enabled: true, public: true, allowed_org_ids: ['org'] }]) {
+    for (const orgId of [null, undefined, '', 'org', 'other']) {
+      assert.equal(pricingApplyAccessAllowed({ global, flags: goodFlags, orgId }), true);
+    }
+  }
+
+  // Kill switch: enabled:false wins even with public:true, anon or listed org
+  for (const orgId of [null, undefined, '', 'org']) {
+    assert.equal(
+      pricingApplyAccessAllowed({ global: { enabled: false, public: true, allowed_org_ids: ['org'] }, flags: goodFlags, orgId }),
+      false,
+    );
+  }
 });
 
 // B) quoteInterim — PLT-26-AC2
