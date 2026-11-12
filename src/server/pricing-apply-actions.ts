@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 
 import { validateApplyInput } from "./b045-pricing-interim-rules";
 import { query } from "./db";
+import { requireCurrentConsent } from "./consent-gate";
 import { getSession, readSession } from "./session";
 import { isPlatformAdmin } from "./platform";
 
@@ -89,6 +90,7 @@ export type PricingApplyRequest = {
  * isPlatformAdmin(email) or notFound() — the queue stays invisible otherwise.
  */
 export async function listPricingApplyRequests(): Promise<PricingApplyRequest[]> {
+  await requireCurrentConsent();
   const session = await getSession();
   // Admin gate.
   if (!session || !isPlatformAdmin(session.email)) {
@@ -113,6 +115,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * to /m/admin?error=invalid.
  */
 export async function actionSetPricingApplyPaidReceived(form: FormData): Promise<void> {
+  await requireCurrentConsent();
   const session = await getSession();
   // Admin gate.
   if (!session || !isPlatformAdmin(session.email)) {

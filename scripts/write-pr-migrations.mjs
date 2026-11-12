@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261112010000_b045_pricing_interim.sql": {
+    addOnly: false,
+    reason: "Seeds default-OFF pricing_interim (enabled false, empty allowlist) with ON CONFLICT DO NOTHING. Adds public.pricing_apply_requests (NOT NULL, CHECK on plan, ENABLE+FORCE RLS) and three app-schema SECURITY DEFINER functions (submit/list/set paid_received) with REVOKE ALL from PUBLIC/anon/authenticated and GRANT to service_role and CURRENT_USER. Not add-only because of new table constraints and privilege changes. No existing-table rewrite, no outbound, no billing.ts / FREE_UNITS change.",
+  },
   "supabase/migrations/20261110220000_b002_move_out_notice_admission.sql": {
     addOnly: true,
     reason: "Seeds default-OFF move_out_notice (enabled false, empty allowlist) with ON CONFLICT DO NOTHING. No functions, tables, grants, constraints, or data backfill. The Worker var MOVE_OUT_NOTICE_ENABLED remains the global kill switch.",

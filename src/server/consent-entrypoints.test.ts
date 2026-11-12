@@ -44,6 +44,9 @@ const openActions: Record<string, Record<string, string>> = {
   "server/consent-actions.ts": {
     actionAcceptReconsent: "Record acceptance", actionAcceptPortalConsent: "Record acceptance",
   },
+  "server/pricing-apply-actions.ts": {
+    actionSubmitPricingApply: "Public pricing apply form, no user session required",
+  },
 };
 const openPages: Record<string, Record<string, string>> = {
   "app/vendor-account/page.tsx": { default: "Public shell only; account API validates auth cookie and current consent before all data and mutations" },
