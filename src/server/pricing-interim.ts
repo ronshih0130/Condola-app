@@ -4,13 +4,20 @@
 // Q-C: anonymous / no-org callers stay on the old /pricing (no query, no
 // admission) until a separate public GO. UI-only; never touches billing.ts
 // constants, never writes platform_settings or feature_flags, no outbound.
-// B-045 / C3: isPricingInterimGloballyEnabled is the org-independent public
-// kill switch for /pricing/apply — anonymous callers MAY query it, and it
-// fails closed to false (404 / reject) on any error, missing row, or malform.
+// B-045 / C3: isPricingInterimGloballyEnabled remains the raw enabled===true
+// primitive (org-independent public kill switch) — it does NOT decide apply
+// access. /pricing/apply GET and actionSubmitPricingApply must use
+// canAccessPricingApply, because enabled:true with an allowlist
+// (internal-only ON) must NOT expose anonymous apply. Public mode is
+// enabled===true AND public===true. C3: do not set public:true without Ron's
+// own-words GO. All helpers fail closed to false (404 / reject) on any error,
+// missing row, or malform.
 import { query } from "./db";
+import { readSession } from "./session";
 import {
   pricingInterimAdmitted,
   pricingInterimGloballyEnabled,
+  pricingInterimPublicEnabled,
 } from "./b045-pricing-interim-rules";
 
 /**
@@ -41,13 +48,14 @@ export async function isPricingInterimEnabled(
 }
 
 /**
- * B-045 / C3 public-page kill switch for the /pricing/apply GET render and
- * actionSubmitPricingApply (CEO 2026-11-12 03:45 PST: flag OFF => 404 / reject,
- * no insert). Org-independent: unlike isPricingInterimEnabled, anonymous /
- * no-org callers ARE allowed to query this. Reads only the platform_settings
- * row (no organizations join). Fails closed (returns false) on any query error,
- * a missing row, or a malformed value. Never writes platform_settings or
- * feature_flags, no outbound.
+ * B-045 / C3 raw enabled===true primitive for the pricing_interim platform
+ * setting. Org-independent: unlike isPricingInterimEnabled, anonymous / no-org
+ * callers ARE allowed to query this. Reads only the platform_settings row (no
+ * organizations join). Fails closed (returns false) on any query error, a
+ * missing row, or a malformed value. NOTE: enabled:true alone does NOT grant
+ * anonymous apply access (internal-only ON has an allowlist) — apply routes
+ * must gate on canAccessPricingApply, not this. Never writes platform_settings
+ * or feature_flags, no outbound.
  */
 export async function isPricingInterimGloballyEnabled(): Promise<boolean> {
   try {
@@ -61,4 +69,68 @@ export async function isPricingInterimGloballyEnabled(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * B-045 apply-gate boundary (C3 / Q-C / PLT-30 / R11): decide whether a caller
+ * may access /pricing/apply (GET render and actionSubmitPricingApply). Testable
+ * core — all I/O is injected. Fail-closed: any throw => false.
+ *
+ * 1. Public mode (enabled===true AND public===true) opens anonymous GET/POST:
+ *    read the global setting and, if pricingInterimPublicEnabled, admit
+ *    immediately without reading the session.
+ * 2. Otherwise the setting is OFF or internal-only ON (allowlist). Read the
+ *    session and require a staff live org: kind==="staff" with a non-empty
+ *    string liveOrgId. Anonymous, tenant/owner, or missing liveOrgId => false.
+ * 3. Defer to the per-org gate for that staff live org. isOrgEnabled is never
+ *    called with a null/empty orgId.
+ */
+export async function runCanAccessPricingApply(deps: {
+  readGlobal: () => Promise<unknown>;
+  isOrgEnabled: (orgId: string) => Promise<boolean>;
+  readSession: () => Promise<{ kind: string; liveOrgId?: string | null } | null>;
+}): Promise<boolean> {
+  try {
+    const global = await deps.readGlobal();
+    if (pricingInterimPublicEnabled(global)) return true;
+
+    const session = await deps.readSession();
+    if (
+      !session ||
+      session.kind !== "staff" ||
+      typeof session.liveOrgId !== "string" ||
+      session.liveOrgId.length === 0
+    ) {
+      return false;
+    }
+
+    return await deps.isOrgEnabled(session.liveOrgId);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Production wrapper: wires runCanAccessPricingApply to the real platform
+ * settings row, the per-org gate, and the request session. Fails closed.
+ */
+export async function canAccessPricingApply(): Promise<boolean> {
+  async function readGlobal(): Promise<unknown> {
+    try {
+      const result = await query(
+        `SELECT value FROM platform_settings WHERE key='pricing_interim'`,
+        [],
+      );
+      const row = result.rows[0] as { value: unknown } | undefined;
+      return row ? row.value : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return runCanAccessPricingApply({
+    readGlobal,
+    isOrgEnabled: isPricingInterimEnabled,
+    readSession,
+  });
 }
