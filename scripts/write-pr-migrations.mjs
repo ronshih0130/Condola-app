@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261112100000_advisor_rls_stop_bleed.sql": {
+    addOnly: false,
+    reason: "ENABLE RLS (no policies, not FORCE) and REVOKE ALL from anon and authenticated on seven existing tables (partner_codes, firm_partner_prices, firm_price_overrides, signup_verifications, signup_drafts, funnel_events, upgrade_requests); adds app.owner_lease_tenants() and CREATE OR REPLACE / ALTER VIEW so owner_lease_tenants and tenant_lease_picker are security_invoker; UPDATE unused signup_verifications.expires_at (never DELETE) plus one audit_log insert. Not add-only because it changes privileges, enables RLS on existing tables, replaces an existing view, and rewrites existing rows. No FORCE RLS, no mail or SMS, no flag or FREE_UNITS change.",
+  },
   "supabase/migrations/20261112010000_b045_pricing_interim.sql": {
     addOnly: false,
     reason: "Seeds default-OFF pricing_interim (enabled false, empty allowlist) with ON CONFLICT DO NOTHING. Adds public.pricing_apply_requests (NOT NULL, CHECK on plan, ENABLE+FORCE RLS) and three app-schema SECURITY DEFINER functions (submit/list/set paid_received) with REVOKE ALL from PUBLIC/anon/authenticated and GRANT to service_role and CURRENT_USER. Not add-only because of new table constraints and privilege changes. No existing-table rewrite, no outbound, no billing.ts / FREE_UNITS change.",
