@@ -44,6 +44,18 @@ test('pricingInterimOn admits only strict booleans + array allowlist that includ
   }
 });
 
+// QA R1 B1 — allowlist membership requires Array.isArray AND every element is a
+// string; a mixed array must DENY (includes() alone would wrongly admit 'org').
+test('pricingInterimOn denies when allowed_org_ids has any non-string element (QA R1 B1)', () => {
+  // required regression: includes('org') is true, but 1 is not a string => DENY
+  assert.equal(pricingInterimOn({ enabled: true, allowed_org_ids: ['org', 1] }, goodFlags, 'org'), false);
+  // other bad element shapes — each must deny 'org'
+  for (const allowed_org_ids of [[1], [1, 'org'], ['org', null], ['org', undefined],
+    ['org', true], ['org', { id: 'org' }], ['Org']]) {
+    assert.equal(pricingInterimOn({ enabled: true, allowed_org_ids }, goodFlags, 'org'), false);
+  }
+});
+
 test('pricingInterimOn does not treat a different flag as admission', () => {
   assert.equal(pricingInterimOn(goodGlobal, { usage_subscriptions: true }, 'org'), false);
   assert.equal(pricingInterimOn(goodGlobal, { pricing_trial: true }, 'org'), false);
