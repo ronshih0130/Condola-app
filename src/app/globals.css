@@ -432,3 +432,98 @@ ol.steps{list-style:none;padding:0;margin:0 0 12px;gap:8px;flex-wrap:nowrap}
 .import-danger{color:var(--bad)}
 .import-warn{color:var(--warn)}
 .import-bad{outline:2px solid var(--bad);background:var(--badbg);border-radius:4px}
+
+/* B-045 interim pricing / apply / usage card. Prefixed to avoid colliding with
+   existing utilities. Loaded globally so Node tests can import the pages
+   without parsing a CSS module (B027 partner-controls integration). */
+.interim-root {
+  font-size: 16px;
+  line-height: 1.5;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px 16px 96px;
+  color: var(--ink, #1a1a1a);
+  background: var(--bg, #fff);
+}
+.interim-lead {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0 0 24px;
+  color: var(--ink, #1a1a1a);
+}
+.interim-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.interim-compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+.interim-compare th,
+.interim-compare td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid var(--line, #e3e3e3);
+  vertical-align: top;
+}
+.interim-compare th {
+  font-weight: 600;
+  color: var(--ink, #1a1a1a);
+}
+.interim-compare-cards {
+  display: none;
+}
+.interim-sticky {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 16px;
+  background: var(--panel, #fff);
+  border-top: 1px solid var(--line, #e3e3e3);
+  z-index: 40;
+}
+.interim-err {
+  color: #c01919;
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 4px 0 0;
+}
+.interim-usage {
+  padding: 16px;
+  border: 1px solid var(--line, #e3e3e3);
+  border-radius: 8px;
+  background: var(--panel, #fff);
+  font-size: 16px;
+}
+.interim-bar {
+  height: 8px;
+  width: 100%;
+  margin-top: 8px;
+  background: var(--line, #e3e3e3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.interim-bar-fill {
+  height: 100%;
+  background: var(--pri, #2b6cff);
+  border-radius: 4px;
+}
+.interim-root button,
+.interim-root input,
+.interim-root select,
+.interim-sticky button,
+.interim-sticky input {
+  min-height: 44px;
+  font-size: 16px;
+}
+@media (max-width: 640px) {
+  .interim-grid { grid-template-columns: 1fr; }
+  .interim-compare { display: none; }
+  .interim-compare-cards { display: block; }
+  .interim-sticky { display: block; }
+}

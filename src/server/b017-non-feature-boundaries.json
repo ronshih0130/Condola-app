@@ -240,8 +240,20 @@
     "sha256": "4efbd863fefbdc8a0957ad2194d855cdcb3e75e3ac5e97015f9edfca196f6722"
   },
   "src/app/m/admin/page.tsx#PlatformAdminPage": {
-    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required",
-    "sha256": "7cf9f4891e7718a5650b7d2c7c3d9b75f1c7f6c00bb150e7f9ef044541861a85"
+    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and 入帳日 render only after that same gate; no member-role authority and no outbound.",
+    "sha256": "a50156ad1ac07ead3a5660aff49d753d5c92e4ff79b11f0649779a5c65ebfe4d"
+  },
+  "src/server/pricing-apply-actions.ts#actionSubmitPricingApply": {
+    "reason": "Public pricing apply form; no user session required; independent of organization custom grants. Flag-off (pricing_interim global enabled !== true) notFound() rejects before insert. Optional session is read only to stamp org/user when present. No outbound.",
+    "sha256": "18a52114f07c4660239cb47b33b66dba7ad9cc0d4ae5f83f36aaefe289df2c0e"
+  },
+  "src/server/pricing-apply-actions.ts#runSubmitPricingApply": {
+    "reason": "Testable core of the public pricing apply form; no user session required; independent of organization custom grants. Flag-off notFound() rejects before insert. Optional session is read only to stamp org/user when present. No outbound.",
+    "sha256": "e9225fdb7c41d2d737bb872fe53023b4d5f20e27b69859e0835824ab6b6db78a"
+  },
+  "src/app/pricing/apply/page.tsx#PricingApplyPage": {
+    "reason": "Public pricing apply page; no user session required; independent of organization custom grants. Flag-off (pricing_interim global enabled !== true) notFound() before render. Queries only the global platform_settings flag via isPricingInterimGloballyEnabled. No outbound.",
+    "sha256": "e18b4df37600c3a5059aeabf28f1a14922c932dfa8863fe8d0bb650f2487cde2"
   },
   "src/server/repair-owner-override.ts#changeOwnerRepairOverride": {
     "reason": "Owner-only portal gateway rejects staff before any query; custom staff grants cannot authorize this operation",

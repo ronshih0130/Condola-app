@@ -1,3 +1,4 @@
+// FILE: src/app/m/settings/page.tsx
 import { upgradeGate } from "@/server/upgrade-gate";
 import { FREE_UNITS } from "@/server/billing";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
@@ -11,6 +12,10 @@ import { isPlatformAdmin } from "@/server/platform";
 import { getSession } from "@/server/session";
 import { PartnerConsentHistory } from "@/components/partner-consent-history";
 import { PayeeSettings } from "@/components/payee-settings";
+import { isPricingInterimEnabled } from "@/server/pricing-interim";
+import { UsageCard } from "@/components/usage-card";
+import { commercialTier } from "@/server/seats";
+import { countActiveUnits } from "@/server/sandbox";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +26,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const gate = await upgradeGate(session, FREE_UNITS);
   const t = makeT(session.locale);
   const mail = can(session, "settings.edit") ? await orgMailSettings(session.orgId) : null;
+  const interimOn = session.environment === "live" && (await isPricingInterimEnabled(session.liveOrgId));
+  const tier = interimOn ? await commercialTier(session.liveOrgId) : null;
   return (
     <>
       <PageHeader title={t("i_nav_settings")} />
@@ -59,7 +66,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {t("i_sandbox_plan")}
           </div>
         ) : null}
-        {gate.redirectTo || session.environment === "sandbox" ? null : (
+        {interimOn ? (
+          <UsageCard
+            locale={session.locale}
+            plan={tier === "standard" || tier === "pro" || tier === "free" ? tier : "free"}
+            units={await countActiveUnits(session.liveOrgId)}
+          />
+        ) : gate.redirectTo || session.environment === "sandbox" ? null : (
           <p data-testid="settings-plan">{t("i_settings_plan")}</p>
         )}
         {isPlatformAdmin(session.email) ? (

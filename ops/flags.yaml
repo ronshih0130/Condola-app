@@ -493,3 +493,12 @@ flags:
     global_kill: "platform_settings.vendor_link enabled must be boolean true and allowed_org_ids must include this organization"
     org_override: "organizations.feature_flags.vendor_link must be true (boolean or the string \"true\", matching SQL ->>'vendor_link'='true')"
     activation: "OFF; release step enables only Ron's 4 internal orgs after release GO"
+
+  pricing_interim:
+    owner: PE
+    expires_at: "2026-12-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.pricing_interim enabled must be boolean true and allowed_org_ids must include this organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.pricing_interim must be boolean true"
+    activation: "OFF by default everywhere; hosted activation permitted ONLY for Ron's 4 allowlisted internal orgs (290b776d, c55c4cd7, abe00ada, f833d997) after per-flag QA verdict + CEO exact-SHA GO; logged-out visitors of /pricing and /apply require a separate public GO that includes Ron's own words; 0 real outbound; do not change billing.ts FREE_UNITS or LIST_* constants; rollback = platform_settings / org override to OFF"
