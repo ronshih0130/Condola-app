@@ -180,7 +180,10 @@ jobs:
           # or a dyld/library error on stderr) is now visible in the job log
           # instead of silently reading as "missing". Success criteria are
           # unchanged: only a candidate with all three tools executable AND an
-          # initdb stdout version matching the same awk 16.* test is accepted.
+          # initdb stdout version whose major component is exactly 16 is
+          # accepted. The version is parsed as the first dotted-numeric token
+          # (e.g. 16.15), so a trailing " (Homebrew)" suffix no longer breaks
+          # the match the way the old `awk '{print $NF}'` 16.* test did.
           PG16_BIN=""
           echo "PostgreSQL 16 probe (diagnostics printed for every candidate):"
           for d in "${PG_CANDS[@]}"; do
@@ -206,16 +209,20 @@ jobs:
               echo "    initdb --version exit=$pg_rc"
               echo "    initdb --version stdout: $(sanitize "$pg_out")"
               echo "    initdb --version stderr: $(sanitize "$pg_err")"
-              pg_ver="$(printf '%s' "$pg_out" | awk '{print $NF}')"
+              # Parse the first dotted-numeric version token from initdb stdout
+              # (acceptance input stays stdout). `grep -oE ... | head -1` yields
+              # e.g. "16.15" from "initdb (PostgreSQL) 16.15 (Homebrew)";
+              # `|| true` guards `set -e` when stdout has no version.
+              pg_ver="$(printf '%s' "$pg_out" | grep -oE '[0-9]+(\.[0-9]+)+' | head -1 || true)"
             fi
 
-            # Accept the first fully-executable, major-16 candidate. Keep
-            # scanning (and printing diagnostics) for the rest regardless.
+            # Accept the first fully-executable candidate whose major version
+            # component is exactly 16. Keep scanning (and printing diagnostics)
+            # for the rest regardless.
             if [ -z "$PG16_BIN" ] \
-              && [ -x "$d/initdb" ] && [ -x "$d/pg_ctl" ] && [ -x "$d/psql" ]; then
-              case "$pg_ver" in
-                16.*) PG16_BIN="$d" ;;
-              esac
+              && [ -x "$d/initdb" ] && [ -x "$d/pg_ctl" ] && [ -x "$d/psql" ] \
+              && [ "${pg_ver%%.*}" = "16" ]; then
+              PG16_BIN="$d"
             fi
           done
           [ -n "$PG16_BIN" ] || \
@@ -291,10 +298,14 @@ jobs:
           for d in "${CANDIDATES[@]}"; do
             [ -n "$d" ] || continue
             if [ -x "$d/initdb" ] && [ -x "$d/pg_ctl" ] && [ -x "$d/psql" ]; then
-              ver="$("$d/initdb" --version | awk '{print $NF}')"
-              case "$ver" in
-                16.*) PG_BIN="$d"; break ;;
-              esac
+              # Parse the first dotted-numeric version token (e.g. 16.15) so a
+              # trailing " (Homebrew)" suffix does not defeat the major-16 check
+              # the way the old `awk '{print $NF}'` 16.* test did. `|| true`
+              # guards `set -e` if --version prints no version.
+              ver="$("$d/initdb" --version | grep -oE '[0-9]+(\.[0-9]+)+' | head -1 || true)"
+              if [ "${ver%%.*}" = "16" ]; then
+                PG_BIN="$d"; break
+              fi
             fi
           done
           if [ -z "$PG_BIN" ]; then
