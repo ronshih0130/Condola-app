@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 
 import { validateApplyInput } from "./b045-pricing-interim-rules";
 import { query } from "./db";
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "./consent-gate";
 import { getSession, readSession } from "./session";
 import { isPlatformAdmin } from "./platform";
@@ -96,6 +97,7 @@ export async function listPricingApplyRequests(): Promise<PricingApplyRequest[]>
   if (!session || !isPlatformAdmin(session.email)) {
     notFound();
   }
+  await guardEffectiveSession(session, null);
 
   const result = await query<PricingApplyRequest>(
     `SELECT * FROM app.list_pricing_apply_requests()`,
@@ -121,6 +123,7 @@ export async function actionSetPricingApplyPaidReceived(form: FormData): Promise
   if (!session || !isPlatformAdmin(session.email)) {
     notFound();
   }
+  await guardEffectiveSession(session, null);
 
   const id = String(form.get("id") ?? "").trim();
   const paidReceivedOn = String(form.get("paidReceivedOn") ?? "").trim();
