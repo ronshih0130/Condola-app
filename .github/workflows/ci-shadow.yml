@@ -1,6 +1,8 @@
-# CI shadow (self-hosted Mac mini) — push-only, non-required, inert until the
-# `condola-macmini` runner is registered by Ron. This mirrors hosted ci.yml for
-# shadow parity but adapts to macOS (no Docker, no apt, no sudo).
+# CI shadow (self-hosted Mac mini) — push-only, non-required. The
+# `condola-macmini` runner is now ONLINE but may have NO toolchain installed.
+# This job NEVER downloads or installs Node/npm/Postgres: it FAILS FAST unless
+# the required tools are already present and match the pins. Mirrors hosted
+# ci.yml for shadow parity but adapts to macOS (no Docker, no apt, no sudo).
 #
 # Version pins are READ AT RUNTIME from ops/toolchain.json (shared config):
 #   node          -> 20.20.2  (repo toolchain: tests / e2e)              # comment only
@@ -94,12 +96,99 @@ jobs:
             echo "NODE_WRANGLER=$NODE_WRANGLER"
           } >> "$GITHUB_ENV"
 
-      # --- Node 20 (repo toolchain) --------------------------------------
-      - name: Setup Node 20 (repo toolchain)
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          # No `cache: npm` — cache write needs a broader actions permission.
+      # --- Require a preinstalled toolchain; FAIL FAST, never install -----
+      # The condola-macmini runner is online but may have no toolchain yet.
+      # This step runs BEFORE npm ci / tests / Postgres start so a missing or
+      # mismatched toolchain fails immediately and can never reach an installer.
+      # It discovers already-present binaries only — it does NOT download them.
+      - name: Require preinstalled toolchain (condola-macmini; no installs)
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            echo "$1" >&2
+            exit 1
+          }
+
+          # Locate a dir whose `node -v` reports exactly v$1. Searches the
+          # common per-user prefixes for `condola-runner` (nvm / volta /
+          # Homebrew node@N) plus PATH. Discovery only — never installs.
+          find_node_bin() {
+            local want="$1" d
+            local cands=(
+              "$HOME/.nvm/versions/node/v${want}/bin"
+              "$HOME/.volta/bin"
+              "/opt/homebrew/opt/node@20/bin"
+              "/opt/homebrew/opt/node@22/bin"
+              "/opt/homebrew/bin"
+              "/usr/local/bin"
+            )
+            if command -v node >/dev/null 2>&1; then
+              cands+=("$(dirname "$(command -v node)")")
+            fi
+            for d in "${cands[@]}"; do
+              if [ -x "$d/node" ] && [ "$("$d/node" -v 2>/dev/null)" = "v${want}" ]; then
+                printf '%s\n' "$d"
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          # Node 20 (repo toolchain: typecheck / lint / unit / rls / e2e).
+          NODE20_BIN="$(find_node_bin "$NODE_VERSION")" || \
+            fail "condola-macmini runner has no (or wrong) preinstalled toolchain. Missing tool: node v${NODE_VERSION} (repo toolchain). This job will NOT install it — provision node v${NODE_VERSION} on the runner (nvm/volta/Homebrew)."
+
+          # npm ships beside that node and must match the pin exactly.
+          if [ ! -x "$NODE20_BIN/npm" ]; then
+            fail "condola-macmini runner has no (or wrong) preinstalled toolchain. Missing tool: npm ${NPM_VERSION} (expected beside node v${NODE_VERSION}). This job will NOT install it."
+          fi
+          NPM_HAVE="$("$NODE20_BIN/npm" -v 2>/dev/null || true)"
+          if [ "$NPM_HAVE" != "$NPM_VERSION" ]; then
+            fail "condola-macmini runner has the wrong preinstalled toolchain. Tool: npm — found '${NPM_HAVE:-none}', expected pin ${NPM_VERSION}. This job will NOT install or upgrade npm."
+          fi
+
+          # Node 22 LTS (wrangler lane: cf:build / test:worker).
+          NODE22_BIN="$(find_node_bin "$NODE_WRANGLER")" || \
+            fail "condola-macmini runner has no (or wrong) preinstalled toolchain. Missing tool: node v${NODE_WRANGLER} (Node 22 LTS for cf:build / test:worker). This job will NOT install it — provision node v${NODE_WRANGLER} on the runner."
+
+          # PostgreSQL 16 (initdb / pg_ctl / psql) — same prefixes the PG
+          # start step uses. Fail here, not after unit tests.
+          PG_CANDS=(
+            "/opt/homebrew/opt/postgresql@16/bin"
+            "/usr/local/opt/postgresql@16/bin"
+            "/Applications/Postgres.app/Contents/Versions/16/bin"
+          )
+          if command -v pg_ctl >/dev/null 2>&1; then
+            PG_CANDS+=("$(dirname "$(command -v pg_ctl)")")
+          fi
+          PG16_BIN=""
+          for d in "${PG_CANDS[@]}"; do
+            if [ -x "$d/initdb" ] && [ -x "$d/pg_ctl" ] && [ -x "$d/psql" ]; then
+              case "$("$d/initdb" --version 2>/dev/null | awk '{print $NF}')" in
+                16.*) PG16_BIN="$d"; break ;;
+              esac
+            fi
+          done
+          [ -n "$PG16_BIN" ] || \
+            fail "condola-macmini runner has no preinstalled toolchain. Missing tool: PostgreSQL 16 (initdb/pg_ctl/psql for major 16). This job will NOT install it — provision Homebrew postgresql@16 or Postgres.app 16."
+
+          echo "Preinstalled toolchain OK (no installs performed):"
+          echo "  node ${NODE_VERSION} -> ${NODE20_BIN}"
+          echo "  npm  ${NPM_VERSION}  (beside node 20)"
+          echo "  node ${NODE_WRANGLER} -> ${NODE22_BIN}"
+          echo "  postgresql 16 -> ${PG16_BIN}"
+
+          # Export discovered locations and make Node 20 the default on PATH.
+          # No actions/setup-node anywhere in this job, so nothing can trigger
+          # a download; later steps switch Node via $NODE22_BIN / $NODE20_BIN.
+          {
+            echo "NODE20_BIN=$NODE20_BIN"
+            echo "NODE22_BIN=$NODE22_BIN"
+            echo "PG16_BIN=$PG16_BIN"
+          } >> "$GITHUB_ENV"
+          echo "$NODE20_BIN" >> "$GITHUB_PATH"
 
       - name: Assert Node 20 / npm pins
         run: |
@@ -141,7 +230,9 @@ jobs:
         run: |
           set -euo pipefail
           # Locate major-16 binaries already on the machine. Do NOT brew install.
+          # Prefer the dir the require step already validated ($PG16_BIN).
           CANDIDATES=(
+            "${PG16_BIN:-}"
             "/opt/homebrew/opt/postgresql@16/bin"
             "/usr/local/opt/postgresql@16/bin"
             "/Applications/Postgres.app/Contents/Versions/16/bin"
@@ -151,6 +242,7 @@ jobs:
           fi
           PG_BIN=""
           for d in "${CANDIDATES[@]}"; do
+            [ -n "$d" ] || continue
             if [ -x "$d/initdb" ] && [ -x "$d/pg_ctl" ] && [ -x "$d/psql" ]; then
               ver="$("$d/initdb" --version | awk '{print $NF}')"
               case "$ver" in
@@ -211,10 +303,11 @@ jobs:
       - run: npm run test:rls
 
       # --- Node 22 LTS (wrangler lane only) ------------------------------
-      - name: Setup Node 22 (wrangler lane)
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ env.NODE_WRANGLER }}
+      # Switch to the preinstalled Node 22 by prepending it to PATH. No
+      # actions/setup-node (that could download) — $NODE22_BIN was validated
+      # by the require step above.
+      - name: Select preinstalled Node 22 (wrangler lane)
+        run: echo "$NODE22_BIN" >> "$GITHUB_PATH"
 
       - name: Assert Node 22 pin
         run: |
@@ -227,11 +320,10 @@ jobs:
       - run: npm run test:worker
 
       # --- Playwright (workflow_dispatch only; back on Node 20) ----------
-      - name: Setup Node 20 for e2e
+      # Re-prepend the preinstalled Node 20 bin so it wins over Node 22.
+      - name: Select preinstalled Node 20 for e2e
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+        run: echo "$NODE20_BIN" >> "$GITHUB_PATH"
 
       - name: Install Playwright Chromium
         if: ${{ github.event_name == 'workflow_dispatch' }}
