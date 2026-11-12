@@ -304,6 +304,26 @@ test("TEN-19-AC3 / R-a6 join GET enforces INVITE_TOKEN_RE boundaries", async () 
   assert.ok(body.includes("<p></p>"));
 });
 
+// FU-RLS-3F / QA B1 / report rls-3f-flake-1112.md: GET /join/[token] never
+// queries the DB — landingHtml reflects a well-formed 43-char base64url token
+// only as the continue-link `<a href="/join/${escapeHtml(token)}">continue</a>`.
+// The leak scan must neutralise THAT expected reflection (so a token that itself
+// contains the "3F" seed label does not self-flag) without erasing token-equal
+// content anywhere else. QA B1 rejected a global `split(token).join("")`: it
+// also deletes leaked metadata that happens to equal the raw token (e.g.
+// `<h1>not-a-real-token</h1>` -> `<h1></h1>`), hiding a real leak. This helper
+// does a single, non-global replacement of the exact continue-link markup
+// landingHtml emits and nothing else; an invalid / non-base64url token is not
+// reflected, so the continue-link is absent and the call is a no-op. A
+// token-equal leak elsewhere on the page therefore survives the strip and still
+// fails the scan (proven by the sibling "continue-link strip keeps a token-equal
+// leak" regression test).
+function stripContinueLink(rawHtml: string, token: string): string {
+  if (token.length === 0) return rawHtml;
+  const continueLink = `<a href="/join/${escapeHtml(token)}">continue</a>`;
+  return rawHtml.replace(continueLink, "");
+}
+
 test("public join GET with invalid, expired, or revoked tokens leaks no org, unit, or name", async () => {
   await flag(true);
   const { unit_id } = await unitAndLease();
@@ -333,14 +353,12 @@ test("public join GET with invalid, expired, or revoked tokens leaks no org, uni
     const res = await joinGet(new Request(`http://localhost/join/${token}`), { params: Promise.resolve({ token }) });
     assert.equal(res.status, 200, label);
     const rawHtml = await res.text();
-    // FU-RLS-3F / report rls-3f-flake-1112.md: "3F" is a seed unit label for the
-    // first ORG_ID unit, and a well-formed base64url token can itself contain "3F"
-    // (P ~ 1%). GET does not look up the invite — landingHtml only reflects the raw
-    // token into <a href="/join/${token}">. So strip every occurrence of the raw
-    // token from a copy of the HTML before the leak check; a token that is not
-    // reflected (invalid, non-base64url) simply leaves the HTML unchanged. The leak
-    // check below is unchanged and still runs on the stripped copy.
-    const html = token.length > 0 ? rawHtml.split(token).join("") : rawHtml;
+    // FU-RLS-3F / QA B1 / report rls-3f-flake-1112.md: remove ONLY the expected
+    // continue-link reflection of the raw token (see stripContinueLink above),
+    // not every occurrence. A global strip would also erase a leak whose value
+    // equals the raw token elsewhere in the page; stripping just the known
+    // continue-link keeps such a leak detectable by the checks below.
+    const html = stripContinueLink(rawHtml, token);
     for (const s of forbidden) {
       assert.equal(html.includes(s), false, `${label} leaked ${JSON.stringify(s)}`);
     }
@@ -360,6 +378,30 @@ test("public join GET with invalid, expired, or revoked tokens leaks no org, uni
   await assertNoLeak(issued.token, "expired");
   await query(`UPDATE app.unit_invite_secrets SET expires_at = now() + interval '14 days', revoked_at = now() WHERE token_hash = $1`, [hashInviteToken(issued.token)]);
   await assertNoLeak(issued.token, "revoked");
+});
+
+test("FU-RLS-3F / QA B1: continue-link strip keeps a token-equal leak elsewhere detectable", () => {
+  // Regression for QA B1 (report rls-3f-flake-1112.md). stripContinueLink must
+  // remove ONLY the expected continue-link reflection, so leaked metadata whose
+  // value equals the raw token in another location (a heading, unit field, ...)
+  // is still caught. A global split(token).join("") would wrongly erase it. No
+  // DB or route call needed — this exercises the exact helper assertNoLeak uses.
+  const base = newInviteToken();
+  const synthetic3F = (base.slice(0, 20) + "3F" + base.slice(20)).slice(0, 43);
+  assert.equal(INVITE_TOKEN_RE.test(synthetic3F), true);
+  for (const token of ["not-a-real-token", synthetic3F]) {
+    const continueLink = `<a href="/join/${escapeHtml(token)}">continue</a>`;
+    // Page carries the legitimate continue-link AND the same token as leaked
+    // content (here a heading, standing in for org/unit/name metadata).
+    const leaked = `<main><h1>${token}</h1>${continueLink}</main>`;
+    const stripped = stripContinueLink(leaked, token);
+    // The expected reflection is gone...
+    assert.equal(stripped.includes(continueLink), false, `${token}: continue-link removed`);
+    // ...but the token-equal leak in the heading survives, so the leak scan in
+    // assertNoLeak would still fire on it.
+    assert.ok(stripped.includes(`<h1>${token}</h1>`), `${token}: heading leak preserved`);
+    assert.ok(stripped.includes(token), `${token}: token-equal leak still detectable`);
+  }
 });
 
 
