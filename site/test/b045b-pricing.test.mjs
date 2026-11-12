@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import calc from '../assets/pricing-calc.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -226,4 +228,96 @@ test('PLT-37-AC8 免費開始 link has 44px tap target (gated on existence)', ()
 
   assert.ok(has44H, '#calc-free must set min-height/min-block-size: 44px');
   assert.ok(has44W, '#calc-free must set min-width/min-inline-size: 44px');
+});
+
+// ---------------------------------------------------------------------------
+// B-045b (S1): secret-scan must detect Wrangler JSON/JSONC "KEY": "value"
+// assignments the same way it detects TOML KEY = value. Previously a high-risk
+// JSONC vars assignment with no token-shaped value PASSed (false negative).
+// These tests scan an isolated temp tree (argv root) so they never touch site/.
+// ---------------------------------------------------------------------------
+
+const SCANNER = join(root, 'scripts', 'secret-scan.mjs');
+const SYNTHETIC = 'synthetic_jsonc_fixture_token_not_real_0001'; // clearly fake, not VALUE_SHAPE
+const runScan = (dir) => {
+  const r = spawnSync(process.execPath, [SCANNER, dir], { encoding: 'utf8' });
+  return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
+};
+
+test('B-045b secret-scan FAILs on JSONC wrangler high-risk var (regression)', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'b045b-jsonc-'));
+  try {
+    const jsonc = [
+      '// wrangler config (test fixture)',
+      '{',
+      '  "name": "b045b-fixture",',
+      '  /* vars block below, with a comment between keys */',
+      '  "vars": {',
+      '    // high-risk assignment, must be detected',
+      `    "CLOUDFLARE_API_TOKEN": "${SYNTHETIC}",`,
+      '    // this placeholder must NOT be the reason for failure',
+      '    "OTHER_TOKEN": "YOUR_TOKEN",',
+      '  },',
+      '}',
+      ''
+    ].join('\n');
+    writeFileSync(join(tmp, 'wrangler.jsonc'), jsonc);
+
+    const { status, out } = runScan(tmp);
+
+    assert.notEqual(status, 0, 'scanner must FAIL (non-zero) on JSONC high-risk var');
+    assert.ok(out.includes('wrangler.jsonc'), 'output names the file');
+    assert.match(out, /wrangler\.jsonc:\d+/, 'output includes a line number');
+    assert.ok(out.includes('CLOUDFLARE_API_TOKEN'), 'output names the key');
+    // Never leak the secret value, and the placeholder must not drive the failure.
+    assert.ok(!out.includes(SYNTHETIC), 'output must NOT contain the synthetic value');
+    assert.ok(!out.includes('YOUR_TOKEN'), 'placeholder must not be the reason');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('B-045b equivalent TOML wrangler high-risk var still FAILs', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'b045b-toml-'));
+  try {
+    const toml = [
+      '# wrangler config (test fixture)',
+      'name = "b045b-fixture"',
+      '[vars]',
+      `CLOUDFLARE_API_TOKEN = "${SYNTHETIC}"`,
+      'OTHER_TOKEN = "YOUR_TOKEN"',
+      ''
+    ].join('\n');
+    writeFileSync(join(tmp, 'wrangler.toml'), toml);
+
+    const { status, out } = runScan(tmp);
+
+    assert.notEqual(status, 0, 'TOML high-risk var must FAIL');
+    assert.ok(out.includes('CLOUDFLARE_API_TOKEN'), 'output names the key');
+    assert.ok(!out.includes(SYNTHETIC), 'output must NOT contain the synthetic value');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('B-045b placeholder-only JSONC wrangler PASSes', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'b045b-pass-'));
+  try {
+    const jsonc = [
+      '{',
+      '  // only placeholders / env refs here',
+      '  "vars": {',
+      '    "CLOUDFLARE_API_TOKEN": "YOUR_TOKEN",',
+      '    "SERVICE_ROLE_SECRET": "${SERVICE_ROLE_SECRET}",',
+      '  },',
+      '}',
+      ''
+    ].join('\n');
+    writeFileSync(join(tmp, 'wrangler.jsonc'), jsonc);
+
+    const { status } = runScan(tmp);
+    assert.equal(status, 0, 'placeholder-only JSONC must PASS');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 });

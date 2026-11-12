@@ -59,6 +59,14 @@ const robotsBlock = `
 if (!headers.includes('/pricing\n  X-Robots-Tag')) headers += robotsBlock;
 writeFileSync(hdrPath, headers);
 
+// Prod sitemap must not advertise non-public /pricing or /apply.
+const sitemapPath = join(dest, 'sitemap.xml');
+if (existsSync(sitemapPath)) {
+  let sm = readFileSync(sitemapPath, 'utf8');
+  sm = sm.replace(/\s*<url>\s*<loc>https:\/\/condola\.app\/(?:pricing|apply)<\/loc>\s*<\/url>/g, '');
+  writeFileSync(sitemapPath, sm);
+}
+
 // Verify prod artifact
 const mustMissing = ['pricing.html', 'apply.html'];
 for (const f of mustMissing) {
@@ -80,6 +88,13 @@ if (/^\/pricing(?:\.html)?\s+/m.test(prodRedir) || /^\/apply(?:\.html)?\s+\//m.t
   console.error('build-prod FAIL: prod _redirects still routes /pricing or /apply');
   process.exit(1);
 }
+if (existsSync(sitemapPath)) {
+  const sm = readFileSync(sitemapPath, 'utf8');
+  if (/condola\.app\/pricing/.test(sm) || /condola\.app\/apply/.test(sm)) {
+    console.error('build-prod FAIL: dist-prod sitemap still lists /pricing or /apply');
+    process.exit(1);
+  }
+}
 if (!existsSync(join(dest, '404.html')) || !existsSync(join(dest, 'index.html'))) {
   console.error('build-prod FAIL: missing 404.html or index.html');
   process.exit(1);
@@ -99,4 +114,4 @@ if (/name=["']robots["'][^>]*noindex/i.test(src) || /X-Robots-Tag/i.test(src)) {
   console.error('build-prod FAIL: noindex must not be baked into source pricing.html');
   process.exit(1);
 }
-console.log('build-prod PASS → dist-prod/ (/pricing and /apply omitted, 404 + noindex headers)');
+console.log('build-prod PASS → dist-prod/ (/pricing and /apply omitted, 404 + noindex, sitemap stripped)');
