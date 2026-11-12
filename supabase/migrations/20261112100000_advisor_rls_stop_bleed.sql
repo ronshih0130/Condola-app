@@ -109,9 +109,34 @@ $$;
 REVOKE ALL ON FUNCTION app.owner_lease_tenants() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION app.owner_lease_tenants() TO authenticated, service_role;
 
+-- CREATE OR REPLACE cannot change typmod: the existing view column
+-- currency is character(3), but SELECT * from a char(3) function
+-- result is typmod-less bpchar. Cast so the column type is unchanged.
 CREATE OR REPLACE VIEW public.owner_lease_tenants
   WITH (security_invoker = true, security_barrier = true) AS
-  SELECT * FROM app.owner_lease_tenants();
+  SELECT
+    lease_id,
+    org_id,
+    property_id,
+    property_name,
+    unit_label,
+    room_label,
+    lease_status,
+    start_date,
+    end_date,
+    currency::character(3) AS currency,
+    rent_amount_minor,
+    deposit_amount_minor,
+    due_day,
+    tenant_contact_id,
+    tenant_name,
+    tenant_role,
+    tenant_phone,
+    phone_visible,
+    open_balance_minor,
+    overdue_invoices,
+    latest_invoice_status
+  FROM app.owner_lease_tenants();
 
 REVOKE ALL ON TABLE public.owner_lease_tenants FROM anon;
 GRANT SELECT ON TABLE public.owner_lease_tenants TO authenticated, service_role;
