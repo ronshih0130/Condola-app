@@ -332,7 +332,15 @@ test("public join GET with invalid, expired, or revoked tokens leaks no org, uni
   async function assertNoLeak(token: string, label: string) {
     const res = await joinGet(new Request(`http://localhost/join/${token}`), { params: Promise.resolve({ token }) });
     assert.equal(res.status, 200, label);
-    const html = await res.text();
+    const rawHtml = await res.text();
+    // FU-RLS-3F / report rls-3f-flake-1112.md: "3F" is a seed unit label for the
+    // first ORG_ID unit, and a well-formed base64url token can itself contain "3F"
+    // (P ~ 1%). GET does not look up the invite — landingHtml only reflects the raw
+    // token into <a href="/join/${token}">. So strip every occurrence of the raw
+    // token from a copy of the HTML before the leak check; a token that is not
+    // reflected (invalid, non-base64url) simply leaves the HTML unchanged. The leak
+    // check below is unchanged and still runs on the stripped copy.
+    const html = token.length > 0 ? rawHtml.split(token).join("") : rawHtml;
     for (const s of forbidden) {
       assert.equal(html.includes(s), false, `${label} leaked ${JSON.stringify(s)}`);
     }
@@ -341,6 +349,13 @@ test("public join GET with invalid, expired, or revoked tokens leaks no org, uni
 
   await assertNoLeak("not-a-real-token", "invalid");
   await assertNoLeak(issued.token, "issued (GET must not look up the invite)");
+  // Regression: a well-formed 43-char base64url token that definitely contains the
+  // "3F" seed unit label must not register as a leak (FU-RLS-3F). No DB needed.
+  const base = newInviteToken();
+  const synthetic3F = (base.slice(0, 20) + "3F" + base.slice(20)).slice(0, 43);
+  assert.equal(INVITE_TOKEN_RE.test(synthetic3F), true);
+  assert.ok(synthetic3F.includes("3F"));
+  await assertNoLeak(synthetic3F, "synthetic token containing 3F");
   await query(`UPDATE app.unit_invite_secrets SET expires_at = now() - interval '1 day' WHERE token_hash = $1`, [hashInviteToken(issued.token)]);
   await assertNoLeak(issued.token, "expired");
   await query(`UPDATE app.unit_invite_secrets SET expires_at = now() + interval '14 days', revoked_at = now() WHERE token_hash = $1`, [hashInviteToken(issued.token)]);
