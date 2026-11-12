@@ -332,6 +332,101 @@ test("runCanAccessPricingApply: readGlobal throws => false (fail-closed)", async
 });
 
 // ---------------------------------------------------------------------------
+// E9 — `public` fail-closed defaulting (CEO confirmed the field name
+//      2026-11-12 05:26 PST). The `public` flag defaults to false whenever it
+//      is absent, non-boolean, or the whole setting fails to parse. In every
+//      one of those shapes an anonymous caller must be denied on BOTH the GET
+//      (runCanAccessPricingApply) and the submit (runSubmitPricingApply) paths:
+//      GET returns false without consulting the per-org gate, and the submit
+//      throws notFound() with no insert and no returned state.
+//
+// Each case drives the real gate decision through runCanAccessPricingApply, and
+// feeds that SAME decision (same readGlobal) into runSubmitPricingApply as its
+// `canAccess` so the submit denial is anchored to the actual access logic.
+// ---------------------------------------------------------------------------
+async function assertPublicFailClosedDenies(
+  readGlobal: () => Promise<unknown>,
+  label: string,
+) {
+  // GET: anonymous access decision denies; per-org gate untouched.
+  const getOrg = orgEnabledSpy(() => true);
+  const access = await runCanAccessPricingApply({
+    readGlobal: readGlobal as never,
+    isOrgEnabled: getOrg.fn,
+    readSession: async () => null,
+  });
+  assert.equal(access, false, `${label}: anonymous GET denied`);
+  assert.equal(getOrg.calls.length, 0, `${label}: GET must not touch the per-org gate`);
+
+  // Submit: the SAME access decision (same readGlobal) gates the submit, which
+  // must throw notFound() with no insert and no returned state.
+  const submitOrg = orgEnabledSpy(() => true);
+  const canAccess = async () =>
+    runCanAccessPricingApply({
+      readGlobal: readGlobal as never,
+      isOrgEnabled: submitOrg.fn,
+      readSession: async () => null,
+    });
+
+  let queryCalls = 0;
+  let returned: unknown;
+  let caught: unknown;
+  let threw = false;
+  try {
+    returned = await runSubmitPricingApply(validForm(), {
+      canAccess,
+      readSession: async () => null,
+      query: asQuery(async () => {
+        queryCalls += 1;
+        return { rows: [{ id: "x" }] };
+      }),
+    });
+  } catch (err) {
+    threw = true;
+    caught = err;
+  }
+
+  assert.equal(queryCalls, 0, `${label}: denied submit must not insert`);
+  assert.ok(threw, `${label}: denied submit must throw (notFound), not return state`);
+  assert.equal(returned, undefined, `${label}: denied submit must not return state`);
+  assert.equal(submitOrg.calls.length, 0, `${label}: submit gate must not touch the per-org gate`);
+  const digest = errorDigest(caught);
+  if (digest) {
+    assert.match(digest, /404|NOT_FOUND/i, `${label}: notFound() 404 digest`);
+  }
+}
+
+// E9a — missing `public` field: enabled:true with an allowlist but no `public`
+// key. `public` defaults to false, so even enabled:true must deny anonymous
+// GET/submit (this is also the internal-only ON hole).
+test("runCanAccessPricingApply/submit: missing `public` field => defaults false, denies anonymous", async () => {
+  await assertPublicFailClosedDenies(
+    async () => ({ enabled: true, allowed_org_ids: ["org"] }),
+    "missing public",
+  );
+});
+
+// E9b — non-boolean `public` value: a string/number `public` is not boolean
+// true, so it defaults to false and must deny anonymous GET/submit.
+test("runCanAccessPricingApply/submit: non-boolean `public` => defaults false, denies anonymous", async () => {
+  for (const value of ["true", 1]) {
+    await assertPublicFailClosedDenies(
+      async () => ({ enabled: true, public: value, allowed_org_ids: ["org"] }),
+      `non-boolean public ${JSON.stringify(value)}`,
+    );
+  }
+});
+
+// E9c — JSON parse failure of the stored setting: a malformed string that
+// JSON.parse throws on must fail closed immediately — deny anonymous GET/submit
+// and never call isOrgEnabled (already asserted inside the helper).
+test("runCanAccessPricingApply/submit: setting fails JSON.parse => fail-closed, denies anonymous", async () => {
+  for (const raw of ["{not json", "{enabled:true,public:true"]) {
+    await assertPublicFailClosedDenies(async () => raw, `parse failure ${JSON.stringify(raw)}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // OFF source-order test for the action file: in runSubmitPricingApply the
 // canAccess/notFound gate must precede any deps.query / submit_pricing_apply,
 // and the OFF branch performs no insert. Runs regardless of import success.

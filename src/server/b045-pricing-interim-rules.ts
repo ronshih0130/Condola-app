@@ -11,6 +11,27 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Fail-closed parse of a stored pricing_interim setting. Strings are JSON.parsed
+ * and the parsed value returned as { ok: true, value }; any JSON.parse throw =>
+ * { ok: false }. Non-string input is passed through untouched as
+ * { ok: true, value: raw } (objects, null, numbers, etc.), since callers already
+ * fail-closed on bad shapes. A successful parse of JSON null/false/[] is a
+ * successful parse — only a thrown JSON.parse is ok:false. Never throws.
+ */
+export function parsePricingInterimSetting(
+  raw: unknown,
+): { ok: true; value: unknown } | { ok: false } {
+  if (typeof raw === "string") {
+    try {
+      return { ok: true, value: JSON.parse(raw) };
+    } catch {
+      return { ok: false };
+    }
+  }
+  return { ok: true, value: raw };
+}
+
+/**
  * Per-org admission, fail-closed: the platform allowlist must admit the org and
  * the org's own feature flag must opt in, both as strict booleans. Anything
  * else (null, array, "true", 1, missing, empty orgId) => false.
@@ -66,7 +87,11 @@ export function pricingInterimAdmitted(
  * Standalone public GO for the logged-out /pricing/apply form + submit
  * (design-note §5; Q-C / §11 steps 5–6; C3). True IFF `global` is a plain
  * object AND `global.enabled === true` AND `global.public === true`, both strict
- * booleans. Missing / malformed / "true" / 1 / absent / public:false => false.
+ * booleans. `public` defaults to false (CEO confirmed the field name
+ * 2026-11-12 05:26 PST): a missing `public` field, a non-boolean `public` value,
+ * or a JSON parse failure of the setting (see parsePricingInterimSetting) is
+ * treated as public=false. Missing / malformed / "true" / 1 / absent /
+ * public:false => false.
  *
  * Empty allowed_org_ids is NOT public mode: the default seed is
  * { enabled:false, allowed_org_ids:[] } and pricingInterimOn requires allowlist

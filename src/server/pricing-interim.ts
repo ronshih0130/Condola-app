@@ -15,6 +15,7 @@
 import { query } from "./db";
 import { readSession } from "./session";
 import {
+  parsePricingInterimSetting,
   pricingInterimAdmitted,
   pricingInterimGloballyEnabled,
   pricingInterimPublicEnabled,
@@ -76,13 +77,19 @@ export async function isPricingInterimGloballyEnabled(): Promise<boolean> {
  * may access /pricing/apply (GET render and actionSubmitPricingApply). Testable
  * core — all I/O is injected. Fail-closed: any throw => false.
  *
- * 1. Public mode (enabled===true AND public===true) opens anonymous GET/POST:
- *    read the global setting and, if pricingInterimPublicEnabled, admit
- *    immediately without reading the session.
- * 2. Otherwise the setting is OFF or internal-only ON (allowlist). Read the
+ * public defaults to false: a missing public field, a non-boolean public, or a
+ * JSON parse failure of the setting => deny (public=false). CEO confirmed the
+ * field name `public` on 2026-11-12 05:26 PST.
+ *
+ * 1. Parse the global setting first. On parse failure, deny immediately
+ *    (public=false): do not read the session and do not call isOrgEnabled.
+ * 2. Public mode (enabled===true AND public===true) opens anonymous GET/POST:
+ *    if pricingInterimPublicEnabled on the parsed value, admit immediately
+ *    without reading the session.
+ * 3. Otherwise the setting is OFF or internal-only ON (allowlist). Read the
  *    session and require a staff live org: kind==="staff" with a non-empty
  *    string liveOrgId. Anonymous, tenant/owner, or missing liveOrgId => false.
- * 3. Defer to the per-org gate for that staff live org. isOrgEnabled is never
+ * 4. Defer to the per-org gate for that staff live org. isOrgEnabled is never
  *    called with a null/empty orgId.
  */
 export async function runCanAccessPricingApply(deps: {
@@ -92,7 +99,9 @@ export async function runCanAccessPricingApply(deps: {
 }): Promise<boolean> {
   try {
     const global = await deps.readGlobal();
-    if (pricingInterimPublicEnabled(global)) return true;
+    const parsed = parsePricingInterimSetting(global);
+    if (!parsed.ok) return false;
+    if (pricingInterimPublicEnabled(parsed.value)) return true;
 
     const session = await deps.readSession();
     if (

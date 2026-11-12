@@ -33,3 +33,5 @@ Empty `allowed_org_ids` is **not** public mode. Reasons:
 **Activation:** Do not set `public: true` in any hosted environment until a public GO that includes Ron’s own words (C3). This addendum does not change prod flags, does not merge, and does not deploy.
 
 **Field-name note for CEO:** `public` on the existing `pricing_interim` JSON is a PE implementation choice so public cutover stays independent of the 4-org allowlist. Setting it to true still requires Ron’s own-words GO (already ruled). No flag change ships in the apply-gate commit.
+
+**CEO confirmation and fail-closed default (2026-11-12 05:26 PST):** CEO confirmed the field name `public` on `pricing_interim`. `public` defaults to false. A missing field, a non-boolean value (`"true"`, `1`, etc.), or a JSON parse failure of the setting is treated as `public=false`. Anonymous GET `/pricing/apply` and `actionSubmitPricingApply` then return 404 with no insert. Setting `public:true` still needs Ron’s own words plus a separate CEO GO and an audit reason; this change does not set it.
