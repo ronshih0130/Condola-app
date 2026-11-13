@@ -88,8 +88,8 @@
     "sha256": "df532d8d0b2e5c78c7c206e8e7ef9d9ae1d270a704a46a51d7b271703737763e"
   },
   "src/server/partners.ts#requestUpgrade": {
-    "reason": "Account upgrade request; action has default-deny custom guard",
-    "sha256": "13024e1cb45622cfa2b227a2b313d8aea243d8ddf4a6ae4ab2510935761e1b32"
+    "reason": "Account upgrade request; action has default-deny custom guard. B-056 PR-2: with pricing_trial ON for the org the settings.plan write is skipped (request + audit only); no new authority, same admin gate.",
+    "sha256": "b63184a881d6ff072248677c1ce64ea3ca1134910f73932fab6ca7913a4ef87e"
   },
   "src/server/sandbox.ts#ensureSandbox": {
     "reason": "Session provisioning infrastructure, before feature entry authority",
