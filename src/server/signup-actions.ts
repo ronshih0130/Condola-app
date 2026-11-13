@@ -18,6 +18,7 @@ import {
   setFirmOverride,
 } from "./partners";
 import { isPlatformAdmin } from "./platform";
+import { FREE_UNITS } from "./billing";
 import { appCookieOptions } from "./public-origin";
 import { getSession, requestPrefs } from "./session";
 import { partnerRequestMeta } from "./partner-consent";
@@ -224,7 +225,7 @@ export async function actionCreatePartnerCode(formData: FormData) {
       partnerName: text(formData.get("partnerName")),
       standardPrice: number("standardPrice", 0),
       proPrice: number("proPrice", 0),
-      freeUnits: number("freeUnits", 4),
+      freeUnits: number("freeUnits", FREE_UNITS),
       trialMonths: number("trialMonths", 3),
       lockMonths: number("lockMonths", 12),
       maxUses: number("maxUses", 1),

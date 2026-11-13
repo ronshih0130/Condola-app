@@ -105,3 +105,11 @@ test("C4: the free-unit threshold has one value across billing, sandbox cap and 
   assert.equal(FREE_ACTIVE_UNITS, FREE_UNITS);
   assert.equal(INTERIM_FREE_UNITS, FREE_UNITS);
 });
+
+test("C4: new partner codes default to FREE_UNITS in the admin form and the server action (Codex QA r1 P1)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const form = readFileSync(new URL("../app/m/admin/page.tsx", import.meta.url), "utf8");
+  const action = readFileSync(new URL("./signup-actions.ts", import.meta.url), "utf8");
+  assert.match(form, /name="freeUnits"[^>]*defaultValue=\{FREE_UNITS\}/);
+  assert.match(action, /freeUnits: number\("freeUnits", FREE_UNITS\)/);
+});
