@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **PROPOSED (Phase 0 draft, needs Ron/CEO review)** |
+| Status | **ACCEPTED with amendments** — CEO ruling 2026-11-13 PT (box `ops/reviews/ceo-review-1113-phase0-batch.md`, relayed by Ron; hub `11-decisions/DECISIONS.md`) |
 | Date | 2026-11-13 PT |
 | App SHA | `1e0a8ab` (GitHub `main`) |
 | Requirement | hub `20-build/MAC-CLAUDE-HANDOFF-1112.md` §2.1, §2.4, §5; hub `11-decisions/DECISIONS.md` (CEO rulings on INC-RLS-1112, 2026-11-12 08:25 PST) |
@@ -128,3 +128,9 @@ Per GLOSSARY "Verify" — observe on the real system, not only a passing test.
    Local limit: functions are superuser-owned locally, so the `definer-only` behaviour check and any definer call inside a `tx` path are **not** proof of hosted behaviour (step 4 is).
 3. **Staging, after a schema PR is applied by box PE** (aggregate output only): `relrowsecurity = true` for the new table; `relforcerowsecurity` equals the declared FORCE decision; table privileges equal the declared set for the path — the exact minimal `authenticated` set for `tx`, none for `anon`/`authenticated` on the other paths; function owner equals the declared owner; the Supabase advisor shows no new finding (box PE reads it).
 4. **Path proof:** the feature's own journey works through its declared path on staging (e.g. the B-056 start-trial action succeeds as Admin and is refused cross-org). For `definer-only` tables and definer functions called inside `tx`, this staging run is the only evidence of the real execution role.
+
+## Amendments (CEO 2026-11-13)
+- Definer-only tables and their functions are owned by the migration role.
+- FORCE RLS with no policies only if staging proves the migration role is `rolsuper` or `rolbypassrls`; otherwise add a named owner policy.
+- `search_path` pinned; `REVOKE EXECUTE … FROM PUBLIC` on every new function.
+- Pre-merge gate for every schema PR: read-only staging catalog proof (owner of `app.submit_pricing_apply` + migration role `rolsuper`/`rolbypassrls`) in hub `20-build/receipts/phase0/adr112-owner-proof.md`.

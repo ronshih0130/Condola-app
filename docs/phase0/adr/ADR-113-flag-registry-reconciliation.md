@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **PROPOSED (Phase 0 draft, needs Ron/CEO review)** |
+| Status | **ACCEPTED** — CEO ruling 2026-11-13 PT (box `ops/reviews/ceo-review-1113-phase0-batch.md`, relayed by Ron; hub `11-decisions/DECISIONS.md`) |
 | Date | 2026-11-13 PT |
 | App SHA | `1e0a8ab` (GitHub `main`) |
 | Requirement | hub `20-build/MAC-CLAUDE-HANDOFF-1112.md` §2.1, §2.4; hub `00-ops/PRINCIPLES.md` 3, 5, 15 (ADR-003, ADR-005) |
@@ -110,3 +110,6 @@ Per GLOSSARY "Verify":
 2. **Hosted CI:** the run page for a PR shows the new steps executing and passing on the exact SHA (link in the PR).
 3. **Evaluator on staging (synthetic org):** with platform setting ON and org flag missing → feature OFF; both strict `true` and org on the allowlist → ON; malformed JSON in the setting → OFF. Observed in the UI of the first adopting feature, 390 px and 1280 px.
 4. **No drift introduced:** before/after read-only inventory by box PE shows identical live flag values (keys and booleans only).
+
+## Notes (CEO 2026-11-13)
+- Expiry question Q1 decided: the 54 flag expiries move to 2026-12-31 (PR #137, merged).

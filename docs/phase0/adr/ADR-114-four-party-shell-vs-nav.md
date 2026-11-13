@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **PROPOSED (Phase 0 draft, needs Ron/CEO review)** |
+| Status | **ACCEPTED** — CEO ruling 2026-11-13 PT (box `ops/reviews/ceo-review-1113-phase0-batch.md`, relayed by Ron; hub `11-decisions/DECISIONS.md`) |
 | Date | 2026-11-13 PT |
 | App SHA | `1e0a8ab` (GitHub `main`) |
 | Requirement | hub `20-build/MAC-CLAUDE-HANDOFF-1112.md` §2.4, §3(b) |

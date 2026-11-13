@@ -22,11 +22,11 @@ Numbered after ADR-109, the highest ID in `docs/DECISIONS.md`. That file is **no
 
 | ADR | Title | Recommended option (one line) |
 |---|---|---|
-| [ADR-110](adr/ADR-110-free-unit-threshold.md) | Free-unit threshold 4 vs 5 | Name two concepts (invoice allowance = 4, Free-plan capacity = 5); converge only under the C4 billing-change GO |
-| [ADR-111](adr/ADR-111-trial-engine-state-machine.md) | Trial engine state machine (B-056) | Dedicated trial record + lazy effective-plan evaluation as truth, idempotent job for side effects |
-| [ADR-112](adr/ADR-112-post-inc-rls-1112-new-table-default.md) | Post-INC-RLS-1112 default for new tables | ENABLE RLS + REVOKE + explicit FORCE decision + declared access path, checked from migration text; catalog check stays with box PE |
-| [ADR-113](adr/ADR-113-flag-registry-reconciliation.md) | Flag registry reconciliation | Reconcile registry + static key check first, then a small shared evaluator for new flags only |
-| [ADR-114](adr/ADR-114-four-party-shell-vs-nav.md) | Four-party shell (B-061) vs nav (B-043) | Shell is presentation only and receives role-filtered nav as data; no permission code touched |
+| [ADR-110](adr/ADR-110-free-unit-threshold.md) | Free-unit threshold 4 vs 5 | **Accepted with amendments:** `FREE_UNITS` = 5 everywhere; invoice allowance and editable capacity stay separate concepts; partner grants unchanged |
+| [ADR-111](adr/ADR-111-trial-engine-state-machine.md) | Trial engine state machine (B-056) | **Accepted with amendments:** dedicated trial record + lazy effective plan; job `0 16 * * *` UTC; persisted `paused`; per-user dismissal; Standard cap 5 incl. admin |
+| [ADR-112](adr/ADR-112-post-inc-rls-1112-new-table-default.md) | Post-INC-RLS-1112 default for new tables | **Accepted with amendments:** RLS on, no client grants, owned by the migration role; FORCE without policies only if staging proves `rolsuper`/`rolbypassrls`, else a named owner policy |
+| [ADR-113](adr/ADR-113-flag-registry-reconciliation.md) | Flag registry reconciliation | **Accepted:** reconcile registry (expiries → 12/31); static key check deferred (OQ-006) |
+| [ADR-114](adr/ADR-114-four-party-shell-vs-nav.md) | Four-party shell (B-061) vs nav (B-043) | **Accepted:** shell is presentation only; role-filtered nav passed as data |
 
 ## Rules that apply to every follow-up PR
 
@@ -34,3 +34,5 @@ Numbered after ADR-109, the highest ID in `docs/DECISIONS.md`. That file is **no
 - Flags default OFF; `FREE_UNITS` stays 4 until the billing-change GO (C4); flag expiries are Ron's.
 - 0 real outbound. Aggregates only from shared databases. Secrets by NAME only.
 - Each ADR lists its OPEN questions with an owner (Ron or CEO). An ADR being merged as PROPOSED decides none of them.
+
+**Phase 0 closed** — CEO ruling 2026-11-13 PT (relayed by Ron). ADR-113 and ADR-114 accepted; ADR-110, ADR-111, ADR-112 accepted with the amendments recorded in each file.

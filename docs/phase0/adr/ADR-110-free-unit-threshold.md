@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **PROPOSED (Phase 0 draft, needs Ron/CEO review)** |
+| Status | **ACCEPTED with amendments** — CEO ruling 2026-11-13 PT (box `ops/reviews/ceo-review-1113-phase0-batch.md`, relayed by Ron; hub `11-decisions/DECISIONS.md`) |
 | Date | 2026-11-13 PT |
 | App SHA | `1e0a8ab` (GitHub `main`) |
 | Requirement | hub `20-build/MAC-CLAUDE-HANDOFF-1112.md` §2.4, §5, §8 R7; hub `20-build/specs/B-056.md` "Billing threshold (C4 / C1)" |
@@ -99,3 +99,8 @@ Per GLOSSARY "Verify" — observe the result in the real interface with real inp
 2. **After PR-4 only:** the same org's quote drops by exactly one unit's rate; an org with a partner snapshot behaves per the Q2 answer.
 3. **Aggregate impact check** (box PE, read-only, counts only): number of live orgs whose monthly quote changes, grouped by delta. No row values printed.
 4. **Read-only capacity** is verified under ADR-111 (unit #6 by lease start is not editable through a direct request, not just hidden).
+
+## Amendments (CEO 2026-11-13)
+- `FREE_UNITS` = 5 everywhere (shipped as PR #138, Ron 01:30 PT 「9全面改成5」).
+- Keep **invoice allowance** and **editable (Free-plan) capacity** as separate named concepts in code and docs, even though both are 5 today.
+- Existing partner grants stay unchanged (Ron 11:09: ANJU2026 stays 4); partner codes affect billing only; the post-trial editable cap is 5.

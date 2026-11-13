@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **PROPOSED (Phase 0 draft, needs Ron/CEO review)** |
+| Status | **ACCEPTED with amendments** — CEO ruling 2026-11-13 PT (box `ops/reviews/ceo-review-1113-phase0-batch.md`, relayed by Ron; hub `11-decisions/DECISIONS.md`) |
 | Date | 2026-11-13 PT |
 | App SHA | `1e0a8ab` (GitHub `main`) |
 | Requirement | hub `20-build/MAC-CLAUDE-HANDOFF-1112.md` §2.4; hub `20-build/specs/B-056.md` (MGT-96…MGT-99) |
@@ -172,3 +172,9 @@ Per GLOSSARY "Verify" — real interface, real input, on staging with synthetic 
 5. Second manager cannot open `/m`; after ops marks paid, access returns without touching a manually suspended member.
 6. Capture sink and `email_log` show zero new sends for the whole run (counts only).
 7. Flag OFF on the same SHA: `/m/settings`, `/m/upgrade`, `requestUpgrade` behave as at `1e0a8ab`.
+
+## Amendments (CEO 2026-11-13)
+- Expiry job cron `0 16 * * *` UTC (00:00 Asia/Taipei).
+- Pause is persisted as `member_status = 'paused'`.
+- Banner dismissal is per user.
+- Standard trial seat cap = 5 including the company admin (Ron 01:30 PT).
