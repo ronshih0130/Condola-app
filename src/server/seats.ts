@@ -1,14 +1,22 @@
 import type { Client } from "pg";
 import { planSnapshot } from "./sandbox-data";
 import { seatLimit } from "./billing";
-import { query } from "./db";
+import { query, withClient } from "./db";
 import { FlowError } from "./errors";
+import { pricingTrialOn } from "./b056-trial-rules";
+import { effectivePlanOn, PRICING_TRIAL_SETTING_SQL } from "./b056-trial";
 
 export async function commercialTier(orgId: string) {
-  const row = await query<{ plan_tier: string; settings: unknown }>(
-    `SELECT plan_tier::text, settings FROM organizations WHERE id = $1`,
+  const row = await query<{ plan_tier: string; settings: unknown; feature_flags: unknown; pricing_trial: unknown }>(
+    `SELECT plan_tier::text, settings, feature_flags, ${PRICING_TRIAL_SETTING_SQL} AS pricing_trial FROM organizations WHERE id = $1`,
     [orgId],
   );
+  // B-056 (flag pricing_trial ON): the effective plan replaces legacy settings.plan / plan_tier.
+  // No second flag read: an error while reading the facts is thrown, never a fallback to legacy.
+  if (row.rows[0] && pricingTrialOn(row.rows[0].pricing_trial, row.rows[0].feature_flags, orgId)) {
+    const effective = await withClient((client) => effectivePlanOn(client, orgId));
+    if (effective) return effective.tier; // null only if SQL now says OFF (flag turned off meanwhile)
+  }
   return planSnapshot(row.rows[0]?.plan_tier, row.rows[0]?.settings ?? null).tier;
 }
 
@@ -30,15 +38,19 @@ export async function seatUsage(orgId: string) {
  * and must acquire this lock before locking an invitation or membership.
  */
 export async function lockSeatOrganization(client: Client, orgId: string) {
-  const result = await client.query<{ environment: "live" | "sandbox"; plan_tier: string; settings: unknown }>(
-    `SELECT environment::text, plan_tier::text, settings FROM organizations WHERE id = $1 FOR UPDATE`,
+  const result = await client.query<{ environment: "live" | "sandbox"; plan_tier: string; settings: unknown; feature_flags: unknown; pricing_trial: unknown }>(
+    `SELECT environment::text, plan_tier::text, settings, feature_flags, ${PRICING_TRIAL_SETTING_SQL} AS pricing_trial
+       FROM organizations WHERE id = $1 FOR UPDATE`,
     [orgId],
   );
   const row = result.rows[0];
   if (!row) throw new FlowError("errors.notFound");
+  // B-056 (flag pricing_trial ON): seat limit follows the effective plan (MGT-97-AC2). Read after
+  // the organizations lock, matching the design lock order (organizations → b056 row).
+  const effective = pricingTrialOn(row.pricing_trial, row.feature_flags, orgId) ? await effectivePlanOn(client, orgId) : null;
   return {
     environment: row.environment,
-    limit: seatLimit(planSnapshot(row.plan_tier, row.settings).tier),
+    limit: effective ? effective.seatLimit : seatLimit(planSnapshot(row.plan_tier, row.settings).tier),
   };
 }
 
