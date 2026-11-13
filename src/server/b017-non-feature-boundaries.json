@@ -241,7 +241,7 @@
   },
   "src/app/m/admin/page.tsx#PlatformAdminPage": {
     "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and \u5165\u5e33\u65e5 render only after that same gate; no member-role authority and no outbound.",
-    "sha256": "a50156ad1ac07ead3a5660aff49d753d5c92e4ff79b11f0649779a5c65ebfe4d"
+    "sha256": "a5d784a60085c2b40d3cc2a7b55fc73b91e0a518e108b91828d8ff694febcaf5"
   },
   "src/server/pricing-apply-actions.ts#actionSubmitPricingApply": {
     "reason": "Pricing apply form (PLT-30). Independent of organization custom grants. Access is canAccessPricingApply: flag OFF or internal-only ON without an allowlisted staff live org => notFound() before insert; public mode (enabled===true AND public===true) keeps the anonymous submit path; allowlisted staff may submit during internal-only ON. Optional session stamps org/user when present. No outbound.",
