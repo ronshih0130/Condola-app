@@ -2,6 +2,7 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { Client } from "pg";
 import { ORG_ID, USERS } from "../src/server/ids";
 import { disposableDbUrl } from "../src/server/test-disposable-db";
+import { insertTestAuthSession } from "../src/server/test-auth-session";
 import { prepareUtilityRun } from "../src/server/utility-posting";
 import type { Session } from "../src/server/types";
 import { ACCOUNTS, signIn } from "./session";
@@ -78,7 +79,8 @@ test("statement and close preview",async ({page},info)=>{
     try { if(new URL(route.request().url()).origin === origin) { await route.continue(); return; } } catch { /* reject malformed URL */ }
     errors.push("off-origin request"); await route.abort();
   });
-  let snapshot: Snapshot | undefined, primary: string | undefined, restoration: string | undefined;
+  let snapshot: Snapshot | undefined, primary: string | undefined, restoration: string | undefined, sessionCleanup: string | undefined;
+  let adminSessionId: string | undefined;
   try {
     await reset(page); snapshot=await capture(); await establishOff();
 
@@ -114,7 +116,8 @@ test("statement and close preview",async ({page},info)=>{
   const statementId=new URL(page.url()).pathname.split("/").at(-1)!;
   const amount=await db(async(c)=>(await c.query(`SELECT expenses_minor::text AS value FROM owner_statements WHERE id=$1`,[statementId])).rows[0].value);
   expect(Number(amount)).toBe(20000);
-  const run=await prepareUtilityRun(admin,{unitId:fixture.unit,periodStart:"2099-07-01",periodEnd:"2099-07-31",rateMajor:4,totalKwh:null,billTotalMajor:100,overrideReason:"",readings:[]});
+  adminSessionId=await db(c=>insertTestAuthSession(c,USERS.admin));
+  const run=await prepareUtilityRun({...admin,sessionId:adminSessionId},{unitId:fixture.unit,periodStart:"2099-07-01",periodEnd:"2099-07-31",rateMajor:4,totalKwh:null,billTotalMajor:100,overrideReason:"",readings:[]});
   await db((c)=>c.query(`UPDATE utility_allocation_lines SET amount_minor=amount_minor+100 WHERE id=(SELECT id FROM utility_allocation_lines WHERE run_id=$1 ORDER BY id LIMIT 1)`,[run.runId]));
   await page.goto("/m/close?month=2099-07");
   await expect(page.getByTestId("utility-reconciliation")).toContainText("Unexplained difference");
@@ -126,5 +129,6 @@ test("statement and close preview",async ({page},info)=>{
   expect(errors).toEqual([]);
   } catch (error) { primary=safeFailure("preview journey",error); }
   if (snapshot) try { await restore(snapshot); } catch (error) { restoration=safeFailure("control restoration",error); }
-  if (primary || restoration) throw new Error([primary,restoration].filter(Boolean).join("; "));
+  if (adminSessionId) { const sid=adminSessionId; try { await db(c=>c.query(`DELETE FROM auth_sessions WHERE id=$1`,[sid])); } catch (error) { sessionCleanup=safeFailure("auth session cleanup",error); } }
+  if (primary || restoration || sessionCleanup) throw new Error([primary,restoration,sessionCleanup].filter(Boolean).join("; "));
 });

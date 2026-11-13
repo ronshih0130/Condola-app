@@ -186,8 +186,18 @@ for (const scenario of scenarios) {
                   c.observed->>'currency' AS currency,j.code AS source
              FROM rule_check_results c JOIN jurisdiction_rules r ON r.id=c.rule_id JOIN jurisdictions j ON j.id=r.jurisdiction_id
             WHERE c.org_id=$1 AND c.entity_table='leases' AND c.entity_id=$2 AND (c.observed->>'deposit_months')::numeric=4`, [ORG_ID, leaseId]);
-        expect(evidence.rows).toHaveLength(1);
-        expect(evidence.rows[0]).toMatchObject({ outcome: scenario.state === "reason" ? "overridden" : scenario.state === "warn" ? "warn" : "pass", actor: scenario.state === "reason" ? USERS.admin : null, reason: scenario.state === "reason" ? "B007 edited reason" : null, amount: "4000000", rent: "1000000", currency: scenario.currency, source: scenario.jurisdiction });
+        if (scenario.name === "off-us") {
+          // Regional hints OFF + US has no deposit.max_months rule, so the DB
+          // trigger records the legacy override on the lease row (asserted
+          // above) but inserts no rule_check_results row — effective_rule()
+          // returns no id to join. Assert the jurisdiction-sourced evidence
+          // row is genuinely absent rather than demanding a US rule_check row
+          // that must not exist.
+          expect(evidence.rows).toHaveLength(0);
+        } else {
+          expect(evidence.rows).toHaveLength(1);
+          expect(evidence.rows[0]).toMatchObject({ outcome: scenario.state === "reason" ? "overridden" : scenario.state === "warn" ? "warn" : "pass", actor: scenario.state === "reason" ? USERS.admin : null, reason: scenario.state === "reason" ? "B007 edited reason" : null, amount: "4000000", rent: "1000000", currency: scenario.currency, source: scenario.jurisdiction });
+        }
       expect(errors).toEqual([]);
     } catch (error) { primary = safeFailure("deposit journey", error); }
     if (db && snapshot) try { await restore(db, snapshot); } catch (error) { restoration = safeFailure("control restoration", error); }

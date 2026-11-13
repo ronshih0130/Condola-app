@@ -56,7 +56,7 @@ test("manager and tenant preserve independently replied handover evidence",async
   await moveOut.getByRole("button",{name:"Publish version"}).click();
   await expect(moveOut.getByText("Version 1")).toBeVisible();
   await expect(page.getByText("Original move-in condition").first()).toBeVisible();
-  await expect(page.getByText("synthetic-condition.png").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "synthetic-condition.png" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath("manager-handover.png"),fullPage:true});
   const state=await db(async client => (await client.query(`SELECT (SELECT count(*)::int FROM app.handover_records WHERE lease_id=$1) AS records,(SELECT count(*)::int FROM app.handover_replies WHERE lease_id=$1 AND actor_id=$2) AS tenant_replies,(SELECT count(*)::int FROM app.handover_replies WHERE lease_id=$1 AND actor_id=$3) AS staff_replies`,[lease,USERS.tenant,USERS.admin])).rows[0]);

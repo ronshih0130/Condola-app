@@ -6,6 +6,7 @@ import { Client } from "pg";
 import { buildStoredConsent } from "../src/server/consent";
 import { ORG_ID, USERS } from "../src/server/ids";
 import { disposableDbUrl } from "../src/server/test-disposable-db";
+import { insertTestAuthSession } from "../src/server/test-auth-session";
 import { EsignFlow } from "../src/server/esign/flow";
 import type { Session } from "../src/server/types";
 import { ACCOUNTS, resetDemo, signIn } from "./session";
@@ -14,12 +15,16 @@ const url=disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPO
 test.use({channel:"chromium"});
 if(process.env.DEMO_MODE!=="true" || process.env.ESIGN_ENABLED!=="true") throw new Error("Disposable e-sign mode required");
 if(process.env.ESIGN_ASSET_ORIGIN!=="http://127.0.0.1:43123") throw new Error("Local signing asset origin required");
-const base:Session={userId:USERS.admin,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",sessionId:"synthetic-fixture",
+const base:Omit<Session,"sessionId">={userId:USERS.admin,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",
   kind:"staff",role:"admin",locale:"zh-TW",calendar:"gregorian",leaseId:null,email:"",name:"Synthetic",consent:buildStoredConsent("reconsent")};
-const owner:Session={...base,userId:USERS.owner,kind:"owner",role:null};
-const tenant:Session={...base,userId:USERS.tenant,kind:"tenant",role:null};
+const owner:Omit<Session,"sessionId">={...base,userId:USERS.owner,kind:"owner",role:null};
+const tenant:Omit<Session,"sessionId">={...base,userId:USERS.tenant,kind:"tenant",role:null};
 
-async function setup(db:Client,zero:boolean) {
+async function setup(db:Client,zero:boolean,sessionIds:string[]) {
+  const adminS:Session={...base,sessionId:await insertTestAuthSession(db,USERS.admin)};
+  const ownerS:Session={...owner,sessionId:await insertTestAuthSession(db,USERS.owner)};
+  const tenantS:Session={...tenant,sessionId:await insertTestAuthSession(db,USERS.tenant)};
+  sessionIds.push(adminS.sessionId,ownerS.sessionId,tenantS.sessionId);
   const property=randomUUID(),unit=randomUUID(),lease=randomUUID();
   await db.query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=$1`,[ORG_ID]);
   await db.query(`INSERT INTO properties(id,org_id,name,country_code,currency,timezone) VALUES ($1,$2,'Synthetic signing','TW','TWD','Asia/Taipei')`,[property,ORG_ID]);
@@ -36,10 +41,10 @@ async function setup(db:Client,zero:boolean) {
   const messages:{text:string}[]=[];
   const flow=new EsignFlow({enabled:()=>true,font:async()=>localFont,secret:"synthetic-browser-only-secret-32-bytes",
     mail:async message=>{messages.push({text:message.text});return {ok:true,messageId:"synthetic",provider:"cloudflare"};}});
-  await flow.execute(base,{type:"create",leaseId:lease,pdf:await pdf.save(),ownerId:USERS.owner,tenantId:USERS.tenant,
+  await flow.execute(adminS,{type:"create",leaseId:lease,pdf:await pdf.save(),ownerId:USERS.owner,tenantId:USERS.tenant,
     ownerDocument:false,tenantDocument:false,order:"parallel",deadline:new Date(Date.now()+86400000).toISOString()});
-  const version=(await flow.list(base,lease)).versions[0],target={caseId:version.caseId,versionId:version.id};
-  for(const actor of [owner,tenant]) {
+  const version=(await flow.list(adminS,lease)).versions[0],target={caseId:version.caseId,versionId:version.id};
+  for(const actor of [ownerS,tenantS]) {
     await flow.execute(actor,{...target,type:"consent"});
     await flow.execute(actor,{...target,type:"email"});
     const token=messages.at(-1)?.text.match(/[a-f0-9]{32}$/)?.[0];
@@ -113,9 +118,10 @@ for(const width of [390,1280]) for(const zero of [false,true]) test(`real e-sign
     if(loopback || pdfViewer) await route.continue();else {errors.push("unexpected external request");await route.abort();}
   });
   await resetDemo(page); const db=new Client({connectionString:url});await db.connect();
+  const sessionIds:string[]=[];
   const original=(await db.query<{feature_flags:unknown}>("SELECT feature_flags FROM organizations WHERE id=$1",[ORG_ID])).rows[0].feature_flags;
   try {
-    const {lease,caseId,versionId}=await setup(db,zero);
+    const {lease,caseId,versionId}=await setup(db,zero,sessionIds);
     const sample=await page.request.post("/api/demo/id-sample",{data:{leaseId:lease}});
     expect(sample.ok()).toBe(true);
     const first=zero?"tenant":"owner",last=zero?"owner":"tenant",finalActor=zero?USERS.owner:USERS.tenant;
@@ -153,5 +159,5 @@ for(const width of [390,1280]) for(const zero of [false,true]) test(`real e-sign
     await visitSigner(page,"tenant",lease);
     await expect(page.getByTestId("esign-flow")).toHaveCount(0);await expect(page.getByRole("heading",{name:"我的租約"})).toBeVisible();
     expect(errors).toEqual([]);
-  } finally {await db.query("UPDATE organizations SET feature_flags=$2 WHERE id=$1",[ORG_ID,original]);await db.end();}
+  } finally {if(sessionIds.length) await db.query("DELETE FROM auth_sessions WHERE id=ANY($1::uuid[])",[sessionIds]);await db.query("UPDATE organizations SET feature_flags=$2 WHERE id=$1",[ORG_ID,original]);await db.end();}
 });
