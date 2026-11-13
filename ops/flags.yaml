@@ -2,7 +2,7 @@
 flags:
   unit_qr_signup:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.unit_qr_signup enabled must be boolean true and allowed_org_ids an array containing this organization"
@@ -11,7 +11,7 @@ flags:
 
   ESIGN_ENABLED:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "existing ESIGN_ENABLED unset or not exactly true"
@@ -20,7 +20,7 @@ flags:
 
   IMPORT_ERROR_DETAILS_ENABLED:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "IMPORT_ERROR_DETAILS_ENABLED unset or not exactly true"
@@ -29,7 +29,7 @@ flags:
 
   payee_details:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.payee_details enabled must be boolean true and allowed_org_ids must include this organization"
@@ -38,7 +38,7 @@ flags:
 
   deposit_rule_hints:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.deposit_rule_hints enabled must be boolean true and allowed_org_ids must include this organization"
@@ -47,7 +47,7 @@ flags:
 
   TENANT_SIGNED_PDF_ENABLED:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "runtime TENANT_SIGNED_PDF_ENABLED absent or not exactly true"
@@ -56,7 +56,7 @@ flags:
 
   PAPER_LEASE_VERSIONS_ENABLED:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "runtime PAPER_LEASE_VERSIONS_ENABLED absent or not exactly true"
@@ -65,7 +65,7 @@ flags:
 
   onboarding_progress:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.onboarding_progress enabled must be boolean true and allowed_org_ids must include this organization"
@@ -74,7 +74,7 @@ flags:
 
   billing_previews:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.billing_previews enabled must be boolean true and allowed_org_ids must include this organization"
@@ -83,7 +83,7 @@ flags:
 
   monthly_rent_posting:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "Reserved and unprovisioned; future platform_settings.monthly_rent_posting requires strict boolean enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -92,7 +92,7 @@ flags:
 
   bank_matching:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.bank_matching enabled must be boolean true and allowed_org_ids must include this organization"
@@ -101,7 +101,7 @@ flags:
 
   MOVE_OUT_NOTICE_ENABLED:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "existing runtime MOVE_OUT_NOTICE_ENABLED absent or not exactly true"
@@ -110,7 +110,7 @@ flags:
 
   move_out_notice:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.move_out_notice enabled must be boolean true and allowed_org_ids must include this organization; also requires runtime MOVE_OUT_NOTICE_ENABLED exactly true"
@@ -119,7 +119,7 @@ flags:
 
   rent_reminders_v2:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.rent_reminders_v2 enabled must be boolean true and allowed_org_ids must include this organization"
@@ -128,7 +128,7 @@ flags:
 
   payment_results_v2:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.payment_results_v2 enabled must be boolean true and allowed_org_ids must include this organization"
@@ -137,7 +137,7 @@ flags:
 
   handover_records:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.handover_records enabled must be boolean true and allowed_org_ids must include this organization"
@@ -146,7 +146,7 @@ flags:
 
   lease_renewal:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.lease_renewal requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -155,7 +155,7 @@ flags:
 
   notification_center_v2:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.notification_center_v2 enabled must be boolean true and allowed_org_ids must include this organization"
@@ -164,7 +164,7 @@ flags:
 
   tenant_directory_edit:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.tenant_directory_edit enabled must be boolean true and allowed_org_ids must include this organization"
@@ -173,7 +173,7 @@ flags:
 
   repair_approvals:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.repair_approvals enabled must be boolean true and allowed_org_ids must include this organization"
@@ -182,7 +182,7 @@ flags:
 
   INVITE_RESEND_RESULTS:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.INVITE_RESEND_RESULTS requires strict boolean enabled and an explicit allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -191,7 +191,7 @@ flags:
 
   tenant_thread_create:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.tenant_thread_create requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -200,7 +200,7 @@ flags:
 
   tenant_account_settings:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.tenant_account_settings requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -209,7 +209,7 @@ flags:
 
   owner_receipt_title:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.owner_receipt_title requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -218,7 +218,7 @@ flags:
 
   id_sign_gate_v2:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.id_sign_gate_v2 requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -227,7 +227,7 @@ flags:
 
   owner_report_replies:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.owner_report_replies requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -236,7 +236,7 @@ flags:
 
   owner_net_ledger:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.owner_net_ledger requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -245,7 +245,7 @@ flags:
 
   monthly_report_delivery:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.monthly_report_delivery requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -254,7 +254,7 @@ flags:
 
   deposit_settlement:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.deposit_settlement requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -263,7 +263,7 @@ flags:
 
   owner_transfers:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.owner_transfers requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -272,7 +272,7 @@ flags:
 
   record_archive:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.record_archive requires boolean true enabled and a valid allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -281,7 +281,7 @@ flags:
 
   company_profile_edit:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.company_profile_edit enabled must be boolean true and allowed_org_ids must include this organization"
@@ -290,7 +290,7 @@ flags:
 
   tenant_payment_history:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.tenant_payment_history requires strict boolean enabled and a valid allowed_org_ids array containing the selected organization; absent or malformed is OFF"
@@ -299,7 +299,7 @@ flags:
 
   partner_pricing_hide:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.partner_pricing_hide requires strict boolean enabled and a valid allowed_org_ids array containing the selected organization; absent or malformed is OFF"
@@ -308,7 +308,7 @@ flags:
 
   partner_unit_override:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.partner_unit_override requires strict boolean enabled and a valid allowed_org_ids array containing the selected organization; absent or malformed is OFF"
@@ -317,7 +317,7 @@ flags:
 
   partner_consent_gate:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "PARTNER_CONSENT_GATE: platform_settings.partner_consent_gate requires strict boolean enabled and valid allowed_org_ids containing the canonical live company; missing or malformed is OFF"
@@ -326,7 +326,7 @@ flags:
 
   vendor_estimates:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.vendor_estimates enabled must be boolean true and allowed_org_ids must contain the organization; missing/malformed is OFF"
@@ -335,7 +335,7 @@ flags:
 
   vendor_account:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.vendor_account requires boolean true enabled and allowed_org_ids array containing the organization; absent/malformed is OFF"
@@ -344,7 +344,7 @@ flags:
 
   notification_delivery_v2:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.notification_delivery_v2 requires strict boolean enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -353,7 +353,7 @@ flags:
 
   line_platform:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "LINE_PLATFORM_ENABLED must be exactly true; platform_settings.line_platform requires strict boolean enabled and allowed_org_ids array containing the organization; missing/malformed is OFF"
@@ -362,7 +362,7 @@ flags:
 
   line_push:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "LINE_PLATFORM_ENABLED must be exactly true; platform_settings.line_push requires strict boolean enabled and allowed_org_ids array containing the organization; missing/malformed is OFF"
@@ -371,7 +371,7 @@ flags:
 
   line_rent_push:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "LINE_PLATFORM_ENABLED must be exactly true; platform_settings.line_rent_push requires strict boolean enabled and allowed_org_ids array containing the organization; line_platform, line_push and notification_delivery_v2 also required; missing/malformed is OFF"
@@ -380,7 +380,7 @@ flags:
 
   line_tenant_portal:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.line_tenant_portal requires enabled=true and organization allowlist; LINE_PLATFORM_ENABLED and line_platform also required; absent or malformed is OFF"
@@ -389,7 +389,7 @@ flags:
 
   line_vendor_portal:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.line_vendor_portal requires enabled=true and organization allowlist; LINE_PLATFORM_ENABLED and line_platform also required; absent or malformed is OFF"
@@ -398,7 +398,7 @@ flags:
 
   line_owner_portal:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.line_owner_portal requires enabled=true and organization allowlist; LINE_PLATFORM_ENABLED and line_platform also required; absent or malformed is OFF"
@@ -407,7 +407,7 @@ flags:
 
   line_dispatch_push:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.line_dispatch_push requires strict boolean enabled and allowed_org_ids array containing the organization; LINE_PLATFORM_ENABLED, line_platform, line_push, notification_delivery_v2 and line_vendor_portal also required; absent or malformed is OFF"
@@ -416,7 +416,7 @@ flags:
 
   line_repair_push:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "LINE_PLATFORM_ENABLED must be exactly true; platform_settings.line_repair_push requires strict boolean enabled and allowed_org_ids array containing the organization; line_platform, line_push and notification_delivery_v2 must also be ON; missing/malformed is OFF"
@@ -425,7 +425,7 @@ flags:
 
   vendor_documents:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.vendor_documents requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -434,7 +434,7 @@ flags:
 
   usage_events:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.usage_events requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -443,7 +443,7 @@ flags:
 
   usage_subscriptions:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.usage_subscriptions requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -452,7 +452,7 @@ flags:
 
   custom_roles:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "CUSTOM_ROLES_ORG_ALLOWLIST absent/malformed/without selected org disables runtime admission without SQL; admitted orgs additionally require platform_settings.custom_roles.enabled strict boolean true and valid allowed_org_ids containing selected org"
@@ -461,7 +461,7 @@ flags:
 
   notification_events_v2:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.notification_events_v2 requires strict boolean enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
@@ -471,7 +471,7 @@ flags:
 
   upload_recovery:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.upload_recovery requires strict boolean enabled and a valid allowed_org_ids array containing the selected organization; absent or malformed is OFF"
@@ -487,7 +487,7 @@ flags:
     activation: "OFF by default everywhere; hosted activation permitted ONLY for Ron's 4 allowlisted internal orgs (290b776d, c55c4cd7, abe00ada, f833d997); requires per-flag QA Class B verdict + CEO GO + T+0/T+15 checks; LINE bind only, in-app notice only, 0 outbound (no email/LINE/SMS); no other org, design partner or GA; rollback = platform_settings/org override to OFF; per CEO 2026-11-10 09:02 PT"
   vendor_link:
     owner: Ron
-    expires_at: "2026-11-24T18:00:00-08:00 PT (America/Los_Angeles)"
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
     default: false
     ring: internal
     global_kill: "platform_settings.vendor_link enabled must be boolean true and allowed_org_ids must include this organization"
