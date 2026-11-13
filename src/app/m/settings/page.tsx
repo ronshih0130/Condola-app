@@ -16,10 +16,13 @@ import { isPricingInterimEnabled } from "@/server/pricing-interim";
 import { UsageCard } from "@/components/usage-card";
 import { commercialTier } from "@/server/seats";
 import { countActiveUnits } from "@/server/sandbox";
+import { trialCardState } from "@/server/b056-trial";
+import { formatTrialDate, parseTrialPlan, previewTrialEnd } from "@/server/b056-trial-rules";
+import { TrialConfirm } from "@/components/b056-trial-confirm";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; trial?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const query = await searchParams;
   const session = await guardEffectiveSession(await getSession(), "settings.edit");
@@ -27,7 +30,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const t = makeT(session.locale);
   const mail = can(session, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   const interimOn = session.environment === "live" && (await isPricingInterimEnabled(session.liveOrgId));
-  const tier = interimOn ? await commercialTier(session.liveOrgId) : null;
+  const trial = await trialCardState(session);
+  const tier = trial ? trial.plan.tier : interimOn ? await commercialTier(session.liveOrgId) : null;
+  const confirmPlan = trial?.offer === "admin" ? parseTrialPlan(query.trial) : null;
   return (
     <>
       <PageHeader title={t("i_nav_settings")} />
@@ -66,11 +71,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {t("i_sandbox_plan")}
           </div>
         ) : null}
-        {interimOn ? (
+        {interimOn || trial ? (
           <UsageCard
             locale={session.locale}
             plan={tier === "standard" || tier === "pro" || tier === "free" ? tier : "free"}
             units={await countActiveUnits(session.liveOrgId)}
+            trial={trial?.plan.kind === "trial" && trial.plan.trial ? {
+              plan: trial.plan.trial.plan,
+              endsOn: formatTrialDate(trial.plan.trial.endsAt),
+              daysLeft: trial.daysLeft!,
+            } : null}
+            offer={trial?.offer}
           />
         ) : gate.redirectTo || session.environment === "sandbox" ? null : (
           <p data-testid="settings-plan">{t("i_settings_plan")}</p>
@@ -92,6 +103,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </p>
         </div>
       ) : null}
+      {confirmPlan ? <TrialConfirm locale={session.locale} plan={confirmPlan} endsOn={formatTrialDate(previewTrialEnd(confirmPlan, new Date()))} /> : null}
     </>
   );
 }
