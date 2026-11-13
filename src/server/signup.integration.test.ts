@@ -46,6 +46,12 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
     );
     assert.equal(seeded.rows[0]?.standard_price, 20);
     assert.equal(seeded.rows[0]?.free_units, 4);
+    // C4 (Ron 2026-11-13): new partner codes default to 5 free units; the issued ANJU2026 allowance stays as negotiated (OQ-005).
+    const freeDefault = await query<{ column_default: string | null }>(
+      `SELECT column_default FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'partner_codes' AND column_name = 'free_units'`,
+    );
+    assert.equal(freeDefault.rows[0]?.column_default, "5");
     assert.equal(await goLiveLocked(), false);
 
     const first = await startSignup({

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  FREE_UNITS,
   firmDisplayName,
   formatNt,
   monthlyAmount,
@@ -9,21 +10,23 @@ import {
   seatLimit,
   yearlyAmount,
 } from "./billing";
+import { FREE_ACTIVE_UNITS } from "./sandbox-data";
+import { INTERIM_FREE_UNITS } from "./b045-pricing-interim-rules";
 
 const now = new Date("2026-10-20T00:00:00Z");
 
 test("list prices match the published examples", () => {
-  assert.equal(monthlyAmount({ units: 30, rate: 30 }), 780);
-  assert.equal(monthlyAmount({ units: 150, rate: 30 }), 4380);
-  assert.equal(monthlyAmount({ units: 600, rate: 30 }), 17880);
-  assert.equal(monthlyAmount({ units: 600, rate: 40 }), 23840);
-  assert.equal(yearlyAmount(17880), 196680);
+  assert.equal(monthlyAmount({ units: 30, rate: 30 }), 750);
+  assert.equal(monthlyAmount({ units: 150, rate: 30 }), 4350);
+  assert.equal(monthlyAmount({ units: 600, rate: 30 }), 17850);
+  assert.equal(monthlyAmount({ units: 600, rate: 40 }), 23800);
+  assert.equal(yearlyAmount(17850), 196350);
   const standard = quoteMonthly({ units: 600, tier: "standard", cycle: "month", now });
   const pro = quoteMonthly({ units: 600, tier: "pro", cycle: "year", now });
-  assert.equal(standard.monthly, 17880);
+  assert.equal(standard.monthly, 17850);
   assert.equal(standard.source, "list");
-  assert.equal(pro.monthly, 23840);
-  assert.equal(pro.due, 262240);
+  assert.equal(pro.monthly, 23800);
+  assert.equal(pro.due, 261800);
 });
 
 test("a partner rate applies to every billable unit", () => {
@@ -62,7 +65,7 @@ test("a manual per-firm rate overrides the partner snapshot", () => {
     snapshot: { standardPrice: 20, proPrice: 30, freeUnits: 4, lockedUntil: "2020-01-01T00:00:00Z" },
   });
   assert.equal(expired.source, "list");
-  assert.equal(expired.monthly, 780);
+  assert.equal(expired.monthly, 750);
 });
 
 test("seat caps and firm names", () => {
@@ -76,4 +79,29 @@ test("seat caps and firm names", () => {
   assert.equal(normalizePartnerCode(" anju2026 "), "ANJU2026");
   assert.equal(normalizePartnerCode("no"), null);
   assert.equal(normalizePartnerCode(""), "");
+});
+
+// C4 (Ron 2026-11-13 01:30 PT, hub DECISIONS): free units = 5 everywhere; only units above 5 are billed.
+test("C4: the first 5 units are free and billing starts at the 6th unit", () => {
+  assert.equal(FREE_UNITS, 5);
+  assert.equal(monthlyAmount({ units: 0, rate: 30 }), 0);
+  assert.equal(monthlyAmount({ units: 5, rate: 30 }), 0);
+  assert.equal(monthlyAmount({ units: 6, rate: 30 }), 30);
+  assert.equal(monthlyAmount({ units: 6, rate: 40 }), 40);
+  const list = quoteMonthly({ units: 5, tier: "standard", cycle: "month", now });
+  assert.equal(list.source, "list");
+  assert.equal(list.freeUnits, 5);
+  assert.equal(list.monthly, 0);
+  // A partner snapshot's negotiated allowance still wins over the list default.
+  const partner = quoteMonthly({
+    units: 6, tier: "standard", cycle: "month", now,
+    snapshot: { standardPrice: 20, proPrice: 30, freeUnits: 4, lockedUntil: "2027-10-20T00:00:00Z" },
+  });
+  assert.equal(partner.freeUnits, 4);
+  assert.equal(partner.monthly, 40);
+});
+
+test("C4: the free-unit threshold has one value across billing, sandbox cap and interim display", () => {
+  assert.equal(FREE_ACTIVE_UNITS, FREE_UNITS);
+  assert.equal(INTERIM_FREE_UNITS, FREE_UNITS);
 });
