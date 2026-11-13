@@ -105,6 +105,19 @@ test("PR-1: flag seeded OFF; tables definer-only with RLS forced; EXECUTE only f
   await assert.rejects(asService(db, "SELECT * FROM app.b056_org_trials"), /permission denied/);
 });
 
+test("PR-1: global enabled + org flag but NOT on the allowlist stays OFF (Codex PR-1 r1 次要)", async () => {
+  await makeOrg(true); // another org on the allowlist, so platform_settings.pricing_trial.enabled is true
+  const enabled = (await db.query(`SELECT value->'enabled' = 'true'::jsonb AS on FROM platform_settings WHERE key = 'pricing_trial'`)).rows[0].on;
+  assert.equal(enabled, true);
+  const outside = await makeOrg(false);
+  await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"pricing_trial":true}' WHERE id = $1`, [outside.orgId]);
+  assert.equal((await asService<{ e: boolean }>(db, "SELECT app.b056_enabled($1) AS e", [outside.orgId]))[0].e, false);
+  await assert.rejects(start(db, outside.orgId, outside.admin, "standard"), /b056_disabled/);
+  assert.equal((await asService(db, "SELECT * FROM app.b056_plan_facts($1)", [outside.orgId])).length, 0);
+  assert.equal(Number((await db.query(`SELECT count(*) FROM app.b056_org_trials WHERE org_id = $1`, [outside.orgId])).rows[0].count), 0);
+  assert.equal(await auditCount(outside.orgId), 0);
+});
+
 test("PR-1: flag gate needs enabled=true, the allowlist and the org flag (fail closed)", async () => {
   const off = await makeOrg(false);
   assert.equal((await asService<{ e: boolean }>(db, "SELECT app.b056_enabled($1) AS e", [off.orgId]))[0].e, false);
