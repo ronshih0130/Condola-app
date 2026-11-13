@@ -26,14 +26,17 @@ on:
 permissions:
   contents: read
 
-# Keep queued shadow jobs from piling up while the runner is unregistered.
-concurrency:
-  group: ci-shadow-${{ github.repository }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   shadow:
     name: shadow (self-hosted macOS)
+    # One ci-shadow at a time on the single Mac mini: group per-repository and
+    # NOT per-ref, so two shadows can never run on the same machine at once.
+    # cancel-in-progress is false: the flag is evaluated for the incoming run,
+    # so a push to main would otherwise cancel a running workflow_dispatch
+    # parity run in this group. Runs serialize; they do not supersede.
+    concurrency:
+      group: ci-shadow-${{ github.repository }}
+      cancel-in-progress: false
     # Forks never run this job; only this repo on push or manual dispatch.
     if: >-
       github.repository == 'ronshih0130/Condola-app' &&
@@ -49,6 +52,10 @@ jobs:
       - name: Pre-job cleanup (non-ephemeral runner)
         run: |
           set -uo pipefail
+          # Leftover disposable PG from a prior run lives in the $RUNNER_TEMP
+          # datadir below and listens on port 25432 (never 5432). Cleanup here
+          # stops it by datadir (-D "$PGDATA"), not by port, so it can never
+          # touch any other Postgres the Mac is running on 5432.
           PGDATA="${RUNNER_TEMP}/condola-pg16-data"
           PGSOCK="${RUNNER_TEMP}/condola-pg16-sock"
           # Stop any leftover disposable Postgres from a prior run (best-effort).
@@ -277,7 +284,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run copy:check
-      - run: npm run test:unit
+      # Cap Node test concurrency at 4 to leave CPU/RAM for Ron's interactive
+      # Claude Code work on this same Mac. `test:unit` is one `tsx --test` run
+      # over many files with no built-in cap; the appended `--` arg flows to
+      # the tsx test runner (NODE_OPTIONS=--test-concurrency is rejected by
+      # Node, so it must be a CLI arg, not an env var). package.json unchanged.
+      - run: npm run test:unit -- --test-concurrency=4
 
       # --- Disposable PostgreSQL 16 (macOS, no Docker) -------------------
       - name: Start disposable PostgreSQL 16
@@ -358,7 +370,10 @@ jobs:
       - name: Check function execute privileges
         run: bash scripts/check-function-privileges.sh
 
-      - run: npm run test:rls
+      # Cap Node test concurrency at 4 to share the Mac with interactive Claude
+      # Code work (appended `--` arg; harmless if the file is already
+      # --test-concurrency=1 or a single file). NODE_OPTIONS can't carry it.
+      - run: npm run test:rls -- --test-concurrency=4
 
       # --- Node 22 LTS (wrangler lane only) ------------------------------
       # Switch to the preinstalled Node 22 by prepending it to PATH. No
@@ -375,7 +390,9 @@ jobs:
       # Dual-Node: deps were installed under Node 20 by `npm ci` above.
       # cf:build / test:worker run under Node 22 WITHOUT re-running npm ci.
       - run: npm run cf:build
-      - run: npm run test:worker
+      # Cap Node test concurrency at 4 to share the Mac with interactive Claude
+      # Code work (appended `--` arg; harmless for a single-file suite).
+      - run: npm run test:worker -- --test-concurrency=4
 
       # --- Playwright (workflow_dispatch only; back on Node 20) ----------
       # Re-prepend the preinstalled Node 20 bin so it wins over Node 22.
@@ -390,6 +407,10 @@ jobs:
 
       - name: Run end-to-end tests
         if: ${{ github.event_name == 'workflow_dispatch' }}
+        # Playwright worker cap is 2. The runner is already within it: the
+        # repo configs pin workers: 1 and scripts/run-e2e.ts runs one spec per
+        # Playwright invocation. Do NOT pass args here — any argv makes
+        # run-e2e.ts skip its per-spec batching path. Keep this bare.
         run: npm run test:e2e
 
       # --- End-of-job cleanup (always) -----------------------------------
