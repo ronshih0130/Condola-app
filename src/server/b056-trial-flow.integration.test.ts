@@ -6,6 +6,9 @@ import { FlowError } from "./errors";
 import { requestUpgrade } from "./partners";
 import { commercialTier, lockSeatOrganization } from "./seats";
 import { effectivePlan, startTrial } from "./b056-trial";
+import { governCustomRole } from "./b017-custom-role-governance";
+import { sessionTokenHash } from "./session";
+import { randomUUID } from "node:crypto";
 import { disposableDbUrl } from "./test-disposable-db";
 import type { Session } from "./types";
 
@@ -133,4 +136,62 @@ test("start uses the session's live org only and re-checks the admin in SQL", as
   const forged = { ...session(a.admin, b.orgId, "admin") };
   assert.equal(await errorKey(startTrial(forged, "standard")), "errors.forbidden");
   assert.equal((await effectivePlan(b.orgId))?.kind, "free");
+});
+
+test("Codex PR-2 r1 阻塞: settings.edit revoked while start waits on the org lock → the trial and its audit roll back", async () => {
+  const o = await makeOrg(true);
+  const a2 = (await db.query<{ id: string }>(
+    `INSERT INTO auth.users (id, email, raw_user_meta_data, email_confirmed_at, role, aud)
+     VALUES (gen_random_uuid(), $1, '{}'::jsonb, now(), 'authenticated', 'authenticated') RETURNING id`, [`b056race.${Date.now()}@example.com`])).rows[0].id;
+  await db.query(`UPDATE org_members SET is_billing_owner = true WHERE org_id = $1 AND user_id = $2`, [o.orgId, o.admin]);
+  await db.query(`INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, 'admin', 'active')`, [o.orgId, a2]);
+  const savedEnv = process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
+  const savedFlag = (await db.query(`SELECT value FROM platform_settings WHERE key = 'custom_roles'`)).rows[0]?.value ?? null;
+  process.env.CUSTOM_ROLES_ORG_ALLOWLIST = JSON.stringify([o.orgId]);
+  await db.query(`INSERT INTO platform_settings(key, value) VALUES ('custom_roles', jsonb_build_object('enabled', true, 'allowed_org_ids', jsonb_build_array($1::text)))
+                  ON CONFLICT (key) DO UPDATE SET value = excluded.value`, [o.orgId]);
+  await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"custom_roles":true}' WHERE id = $1`, [o.orgId]);
+  const withSession = async (userId: string): Promise<Session> => {
+    const s = session(userId, o.orgId, "admin");
+    s.sessionId = randomUUID();
+    await db.query(`INSERT INTO auth_sessions(id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '1 day')`, [s.sessionId, userId, sessionTokenHash(randomUUID())]);
+    return s;
+  };
+  const owner = await withSession(o.admin);
+  const racer = await withSession(a2);
+  const lock = new Client({ connectionString: process.env.DATABASE_URL });
+  await lock.connect();
+  try {
+    const full = (await governCustomRole(owner, { operation: "create", grants: ["settings.edit"], requestId: randomUUID() })).roleId!;
+    const narrow = (await governCustomRole(owner, { operation: "create", grants: ["props.view"], requestId: randomUUID() })).roleId!;
+    const memberId = (await db.query(`SELECT id FROM org_members WHERE org_id = $1 AND user_id = $2`, [o.orgId, a2])).rows[0].id;
+    await governCustomRole(owner, { operation: "assign", roleId: full, memberId, requestId: randomUUID() });
+
+    await lock.query("BEGIN");
+    await lock.query(`SELECT 1 FROM organizations WHERE id = $1 FOR UPDATE`, [o.orgId]);
+    const pending = startTrial(racer, "pro").then(() => "ok", (e) => (e instanceof FlowError ? e.key : String(e)));
+    let waiting = false;
+    for (let i = 0; i < 200 && !waiting; i++) {
+      waiting = (await db.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%b056_start_trial%'`)).rows[0].n > 0;
+      if (!waiting) await new Promise((r) => setTimeout(r, 50));
+    }
+    assert.ok(waiting, "start must be waiting on the organizations lock after passing the pre-check");
+    // revoke settings.edit for the racer (fixture DML; bypasses governance triggers that would wait on the same lock)
+    await db.query("BEGIN");
+    await db.query("SET LOCAL session_replication_role = replica");
+    await db.query(`UPDATE app.b017_assignments SET role_id = $3, revision = 1 WHERE org_id = $1 AND user_id = $2`, [o.orgId, a2, narrow]);
+    await db.query("COMMIT");
+    await lock.query("COMMIT");
+    assert.equal(await pending, "errors.forbidden");
+    assert.equal(Number((await db.query(`SELECT count(*) FROM app.b056_org_trials WHERE org_id = $1 AND trial_plan IS NOT NULL`, [o.orgId])).rows[0].count), 0);
+    assert.equal(Number((await db.query(`SELECT count(*) FROM audit_log WHERE org_id = $1 AND table_name = 'b056_org_trials'`, [o.orgId])).rows[0].count), 0);
+    // control: the owner (native admin, no custom role) can still start
+    assert.ok((await startTrial(owner, "standard")).endsAt instanceof Date);
+  } finally {
+    await lock.query("ROLLBACK").catch(() => undefined);
+    await lock.end();
+    if (savedEnv === undefined) delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST; else process.env.CUSTOM_ROLES_ORG_ALLOWLIST = savedEnv;
+    if (savedFlag === null) await db.query(`UPDATE platform_settings SET value = '{"enabled":false,"allowed_org_ids":[]}'::jsonb WHERE key = 'custom_roles'`);
+    else await db.query(`UPDATE platform_settings SET value = $1 WHERE key = 'custom_roles'`, [savedFlag]);
+  }
 });

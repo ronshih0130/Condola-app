@@ -8,7 +8,7 @@ import type { Client } from "pg";
 import { svc, withClient } from "./db";
 import { FlowError } from "./errors";
 import { assertStaff, type Session } from "./types";
-import { guardEffectiveSession } from "./b017-custom-role-governance";
+import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { pricingTrialOn, resolveEffectivePlan, type EffectivePlan, type PlanFacts, type TrialPlan } from "./b056-trial-rules";
 
 type Queryable = Pick<Client, "query">;
@@ -17,16 +17,14 @@ type Queryable = Pick<Client, "query">;
 export const PRICING_TRIAL_SETTING_SQL = `(SELECT value FROM platform_settings WHERE key = 'pricing_trial')`;
 
 /** Flag check on any client that can read platform_settings and organizations (owner or service_role). */
+/** A query error is thrown, never read as OFF: an org whose flag is ON must not fall back to the
+ *  legacy plan because a read failed (Codex PR-2 r1 重要). */
 export async function pricingTrialOnFor(client: Queryable, orgId: string): Promise<boolean> {
-  try {
-    const row = (await client.query<{ value: unknown; feature_flags: unknown }>(
-      `SELECT ${PRICING_TRIAL_SETTING_SQL} AS value, feature_flags FROM organizations WHERE id = $1`,
-      [orgId],
-    )).rows[0];
-    return row ? pricingTrialOn(row.value, row.feature_flags, orgId) : false;
-  } catch {
-    return false;
-  }
+  const row = (await client.query<{ value: unknown; feature_flags: unknown }>(
+    `SELECT ${PRICING_TRIAL_SETTING_SQL} AS value, feature_flags FROM organizations WHERE id = $1`,
+    [orgId],
+  )).rows[0];
+  return row ? pricingTrialOn(row.value, row.feature_flags, orgId) : false;
 }
 
 /** Facts from app.b056_plan_facts; null when the flag is OFF for the org (the function returns no row). */
@@ -74,16 +72,19 @@ export async function startTrial(session: Session, plan: TrialPlan): Promise<{ e
   assertStaff(session, ["admin"], "settings.edit");
   const orgId = session.liveOrgId;
   if (!orgId) throw new FlowError("errors.forbidden");
-  const result = await svc(session.userId, async (client) => {
-    try {
-      return (await client.query<{ started: boolean; refusal: string | null; trial_ends_at: Date | null }>(
-        `SELECT started, refusal, trial_ends_at FROM app.b056_start_trial($1, $2, $3)`,
-        [orgId, session.userId, plan],
-      )).rows[0];
-    } catch (error) {
-      return mapDbError(error);
-    }
-  });
+  // B-017 authority is re-validated in the same transaction after the SQL has waited for and taken
+  // its locks; a permission revoked meanwhile rolls back the trial and its audit (Codex PR-2 r1 阻塞).
+  const result = await svc(session.userId, async (client) =>
+    withEffectiveAuthority(client, session, "settings.edit", async () => {
+      try {
+        return (await client.query<{ started: boolean; refusal: string | null; trial_ends_at: Date | null }>(
+          `SELECT started, refusal, trial_ends_at FROM app.b056_start_trial($1, $2, $3)`,
+          [orgId, session.userId, plan],
+        )).rows[0];
+      } catch (error) {
+        return mapDbError(error);
+      }
+    }));
   if (!result?.started || !result.trial_ends_at) throw new FlowError("errors.forbidden");
   return { endsAt: result.trial_ends_at };
 }

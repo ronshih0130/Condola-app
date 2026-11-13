@@ -1,10 +1,10 @@
 import type { Client } from "pg";
 import { planSnapshot } from "./sandbox-data";
 import { seatLimit } from "./billing";
-import { query } from "./db";
+import { query, withClient } from "./db";
 import { FlowError } from "./errors";
 import { pricingTrialOn } from "./b056-trial-rules";
-import { effectivePlan, effectivePlanOn, PRICING_TRIAL_SETTING_SQL } from "./b056-trial";
+import { effectivePlanOn, PRICING_TRIAL_SETTING_SQL } from "./b056-trial";
 
 export async function commercialTier(orgId: string) {
   const row = await query<{ plan_tier: string; settings: unknown; feature_flags: unknown; pricing_trial: unknown }>(
@@ -12,9 +12,10 @@ export async function commercialTier(orgId: string) {
     [orgId],
   );
   // B-056 (flag pricing_trial ON): the effective plan replaces legacy settings.plan / plan_tier.
+  // No second flag read: an error while reading the facts is thrown, never a fallback to legacy.
   if (row.rows[0] && pricingTrialOn(row.rows[0].pricing_trial, row.rows[0].feature_flags, orgId)) {
-    const effective = await effectivePlan(orgId);
-    if (effective) return effective.tier;
+    const effective = await withClient((client) => effectivePlanOn(client, orgId));
+    if (effective) return effective.tier; // null only if SQL now says OFF (flag turned off meanwhile)
   }
   return planSnapshot(row.rows[0]?.plan_tier, row.rows[0]?.settings ?? null).tier;
 }
