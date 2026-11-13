@@ -103,7 +103,7 @@ export function StaffInvitePanel({ data, screen, origin, opts = {} }: {
         {count >= 4 && <section data-full><h2>{text("full")}</h2><p>{text("fullHelp")}</p>{link(tenants, text("tenants"))}</section>}
         {joinedLine && <p className="si-joined" role="status" data-live-joined>{joinedLine}</p>}
         <p className="si-muted">{text("liveHelp")}</p>
-        <div className="si-stack">{link(base, text("done"), true)}</div>
+        <div className="si-stack">{link(tenants, text("done"), true)}</div>
       </>}
       {screen === "print" && <>
         <h1>{text("cardTitle", { firm: data.firm })}</h1><p>{data.place}</p>{qr}

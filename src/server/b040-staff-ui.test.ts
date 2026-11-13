@@ -94,6 +94,15 @@ test("MGT-39 / MGT-51: M4 status shows n/4, validity and the approved non-sendin
   assert.doesNotMatch(html("panel", { ...fixture, invite: null }), /<svg/);
 });
 
+test("MGT-52 / mockup unified-invite M4-Q: 完成 goes to M6 (joined tenants), and only the 已加入 chip shows", () => {
+  const out = html("qr");
+  const done = out.match(/<a[^>]*href="([^"]+)"[^>]*>完成<\/a>/);
+  assert.ok(done, "完成 link present");
+  assert.match(done[1], /\/invite\/tenants$/);
+  assert.doesNotMatch(out, /有效到/);
+  assert.doesNotMatch(out, /返回邀請面板/);
+});
+
 test("MGT-52-AC2: M4-Q at 4/4 has a grey placeholder and no scannable QR", () => {
   const full = { ...fixture, bindings: Array.from({ length: 4 }, (_, i) => ({ ...fixture.bindings[0], id: String(i) })) };
   assert.match(html("qr", full), /aria-disabled="true"/);
