@@ -3,7 +3,7 @@ import { validPartnerTerm, validPartnerUnits, type PartnerOverride } from "./par
 
 export const LIST_STANDARD = 30;
 export const LIST_PRO = 40;
-export const FREE_UNITS = 4;
+export const FREE_UNITS = 5;
 
 /**
  * A unit counts for billing when its lease is active and either executed
