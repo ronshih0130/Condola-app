@@ -16,7 +16,7 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 const added = {
   "supabase/migrations/20261113220000_b042_today_home_schema.sql": {
     addOnly: false,
-    reason: "B-042 PR-1 (narrowed): ALTER TYPE room_type ADD VALUE 'unspecified' (unused until PR-4a); seeds default-OFF today_home and today_dash with ON CONFLICT DO NOTHING; adds app.b042_first_logins and app.b042_invite_shares (CHECKs, ENABLE+FORCE RLS, no policies, REVOKE ALL incl. service_role = definer-only) and five app-schema functions (flag check, first-login record/seen, invite-share record, org-shared) with EXECUTE to service_role only. Not add-only because of the enum value, constraints and privilege statements. No existing-table, B-040, B-028 or funnel change; no outbound; no delete.",
+    reason: "B-042 PR-1 (narrowed): seeds default-OFF today_home and today_dash with ON CONFLICT DO NOTHING; adds app.b042_first_logins and app.b042_invite_shares (CHECKs, ENABLE+FORCE RLS, no policies, REVOKE ALL incl. service_role = definer-only) and six app-schema functions (flag check, session-pin check, first-login record/seen, invite-share record, org-shared; sample_marks excluded) with EXECUTE to service_role only. Not add-only because of constraints and privilege statements. No existing-table, B-040, B-028 or funnel change; no outbound; no delete.",
   },
   "supabase/migrations/20261112100000_advisor_rls_stop_bleed.sql": {
     addOnly: false,

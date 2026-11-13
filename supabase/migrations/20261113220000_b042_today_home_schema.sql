@@ -1,12 +1,12 @@
 -- FILE: supabase/migrations/20261113220000_b042_today_home_schema.sql
 -- B-042 PR-1 (narrowed): today-home foundation. Stories: MGT-36-AC5 (first-login landing is
 -- recorded once), MGT-44-AC1 (setup step 3 = an invite shared by share / copy / QR / print —
--- Ron 2026-11-13 01:34 PT), MGT-79 (room type left unchosen is stored as 'unspecified' —
--- Ron 01:34 PT, OQ-B042-08). Design note: condola-hub 20-build/specs/B-042-design.md r2.
+-- Ron 2026-11-13 01:34 PT). Design note: condola-hub 20-build/specs/B-042-design.md r2.
+-- The room_type value 'unspecified' (Ron 01:34 PT, OQ-B042-08) ships in PR-4a together with every
+-- reader/writer that must handle it (Codex PR-1 r1: an unused value is still writable).
 --
 -- Additive only. Flags today_home and today_dash seeded OFF. Nothing in the app reads these
--- objects yet; while today_home is OFF every recorder refuses. No row uses the new room_type
--- value until the quick-create PR (PR-4a), which also adds its display (未指定).
+-- objects yet; while today_home is OFF every recorder refuses.
 -- No change to organizations, properties, units, rooms, B-040 tables/functions, funnel_events,
 -- usage_events or B-028. No outbound. No deletes.
 --
@@ -22,9 +22,6 @@
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';
-
--- Room type left unchosen at quick create (Ron 01:34 PT). Not used by any row in this PR.
-ALTER TYPE public.room_type ADD VALUE IF NOT EXISTS 'unspecified';
 
 -- Flags: effective only when platform_settings.<key>.enabled is boolean true AND allowed_org_ids
 -- is an all-string array containing the org AND organizations.feature_flags.<key> is boolean true.
@@ -47,6 +44,15 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
        AND f.value->'allowed_org_ids' @> jsonb_build_array(p_org::text)
        AND jsonb_typeof(o.feature_flags) = 'object'
        AND o.feature_flags->p_key = 'true'::jsonb)
+$$;
+
+-- SQL second line of defence (design note: "re-checks org, role, live environment and
+-- sample_marks"): when the caller's transaction is pinned (app.env / app.active_org_id, see
+-- 20261020180000_sandbox.sql), it must be pinned to this live org.
+CREATE FUNCTION app.b042_session_pin_ok(p_org uuid) RETURNS boolean
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
+  SELECT coalesce(nullif(current_setting('app.env', true), ''), 'live') = 'live'
+     AND coalesce(nullif(current_setting('app.active_org_id', true), ''), p_org::text) = p_org::text
 $$;
 
 -- MGT-36-AC5: first sign-in per user per live org after today_home is ON (no backfill, OQ-B042-18).
@@ -76,7 +82,7 @@ ALTER TABLE app.b042_invite_shares ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.b042_invite_shares FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON app.b042_invite_shares FROM PUBLIC, anon, authenticated, service_role;
 
--- Record the first sign-in of an active staff member in a live org. Idempotent: returns true
+-- Record the first sign-in of an active, non-sample staff member in a live org. Idempotent: returns true
 -- only for the call that stored it. Refuses while today_home is OFF for the org.
 CREATE FUNCTION app.b042_record_first_login(p_org uuid, p_user uuid) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
@@ -85,9 +91,11 @@ BEGIN
   IF NOT app.b042_flag_on('today_home', p_org) THEN
     RAISE EXCEPTION 'b042_disabled' USING ERRCODE = '55000';
   END IF;
-  IF NOT EXISTS (
+  IF NOT app.b042_session_pin_ok(p_org) OR NOT EXISTS (
     SELECT 1 FROM public.org_members m JOIN public.organizations o ON o.id = m.org_id
      WHERE m.org_id = p_org AND m.user_id = p_user AND m.status = 'active' AND o.environment = 'live'
+       AND NOT EXISTS (SELECT 1 FROM public.sample_marks sm
+                        WHERE sm.org_id = p_org AND sm.entity_table = 'org_members' AND sm.entity_id = m.id)
   ) THEN
     RAISE EXCEPTION 'b042_forbidden' USING ERRCODE = '42501';
   END IF;
@@ -123,10 +131,12 @@ BEGIN
   IF NOT app.b042_flag_on('today_home', p_org) THEN
     RAISE EXCEPTION 'b042_disabled' USING ERRCODE = '55000';
   END IF;
-  IF NOT EXISTS (
+  IF NOT app.b042_session_pin_ok(p_org) OR NOT EXISTS (
     SELECT 1 FROM public.org_members m JOIN public.organizations o ON o.id = m.org_id
      WHERE m.org_id = p_org AND m.user_id = p_actor AND m.status = 'active'
        AND m.role IN ('admin', 'manager') AND o.environment = 'live'
+       AND NOT EXISTS (SELECT 1 FROM public.sample_marks sm
+                        WHERE sm.org_id = p_org AND sm.entity_table = 'org_members' AND sm.entity_id = m.id)
   ) THEN
     RAISE EXCEPTION 'b042_forbidden' USING ERRCODE = '42501';
   END IF;
@@ -135,6 +145,17 @@ BEGIN
      WHERE s.id = p_secret AND s.org_id = p_org AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
   ) THEN
     RAISE EXCEPTION 'b042_not_found' USING ERRCODE = '42704';
+  END IF;
+  -- Sample data never counts toward real setup progress (unit, its property, or the secret).
+  IF EXISTS (
+    SELECT 1 FROM app.unit_invite_secrets s JOIN public.units u ON u.id = s.unit_id
+      JOIN public.sample_marks sm ON sm.org_id = p_org
+       AND ((sm.entity_table = 'units' AND sm.entity_id = u.id)
+         OR (sm.entity_table = 'properties' AND sm.entity_id = u.property_id)
+         OR (sm.entity_table = 'unit_invite_secrets' AND sm.entity_id = s.id))
+     WHERE s.id = p_secret
+  ) THEN
+    RAISE EXCEPTION 'b042_sample' USING ERRCODE = '42501';
   END IF;
   INSERT INTO app.b042_invite_shares (org_id, secret_kind, secret_id, channel, reported_by)
   VALUES (p_org, p_kind, p_secret, p_channel, p_actor)
@@ -156,6 +177,7 @@ DECLARE f text;
 BEGIN
   FOREACH f IN ARRAY ARRAY[
     'app.b042_flag_on(text, uuid)',
+    'app.b042_session_pin_ok(uuid)',
     'app.b042_record_first_login(uuid, uuid)',
     'app.b042_first_login_seen(uuid, uuid)',
     'app.b042_record_invite_share(uuid, uuid, text, uuid, text)',

@@ -5,12 +5,13 @@ import { Client } from "pg";
 import { disposableDbUrl } from "./test-disposable-db";
 
 // B-042 PR-1 (narrowed) schema. Stories: MGT-36-AC5, MGT-44-AC1 (Ron 01:34 PT: only share /
-// copy / QR / print count), MGT-79 room type 'unspecified' (Ron 01:34 PT). Synthetic data only.
+// copy / QR / print count). Synthetic data only. room_type 'unspecified' ships in PR-4a.
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 const MIGRATION = readFileSync(new URL("../../supabase/migrations/20261113220000_b042_today_home_schema.sql", import.meta.url), "utf8");
 const FUNCTIONS = [
   "app.b042_flag_on(text, uuid)",
+  "app.b042_session_pin_ok(uuid)",
   "app.b042_record_first_login(uuid, uuid)",
   "app.b042_first_login_seen(uuid, uuid)",
   "app.b042_record_invite_share(uuid, uuid, text, uuid, text)",
@@ -54,10 +55,11 @@ async function secret(orgId: string, unitId: string, opts: { revoked?: boolean; 
      VALUES ($1, $2, md5(random()::text), now() + CASE WHEN $3 THEN interval '-1 day' ELSE interval '14 days' END, CASE WHEN $4 THEN now() END) RETURNING id`,
     [orgId, unitId, !!opts.expired, !!opts.revoked])).rows[0].id;
 }
-async function asService<T>(sql: string, params: unknown[] = []): Promise<T[]> {
+async function asService<T>(sql: string, params: unknown[] = [], pin?: { env: string; org: string }): Promise<T[]> {
   await db.query("BEGIN");
   try {
     await db.query("SET LOCAL ROLE service_role");
+    if (pin) await db.query(`SELECT set_config('app.env', $1, true), set_config('app.active_org_id', $2, true)`, [pin.env, pin.org]);
     const r = await db.query(sql, params);
     await db.query("COMMIT");
     return r.rows as T[];
@@ -66,16 +68,15 @@ async function asService<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     throw e;
   }
 }
-const share = (o: { orgId: string }, actor: string, sec: string, channel = "copy", kind = "unit") =>
-  asService<{ r: boolean }>("SELECT app.b042_record_invite_share($1,$2,$3,$4,$5) AS r", [o.orgId, actor, kind, sec, channel]).then((x) => x[0].r);
+const share = (o: { orgId: string }, actor: string, sec: string, channel = "copy", kind = "unit", pin?: { env: string; org: string }) =>
+  asService<{ r: boolean }>("SELECT app.b042_record_invite_share($1,$2,$3,$4,$5) AS r", [o.orgId, actor, kind, sec, channel], pin).then((x) => x[0].r);
 const shared = (orgId: string) => asService<{ r: boolean }>("SELECT app.b042_org_invite_shared($1) AS r", [orgId]).then((x) => x[0].r);
 
-test("PR-1: flags seeded OFF; room_type has 'unspecified'; tables definer-only; EXECUTE service_role only", async () => {
+test("PR-1: flags seeded OFF; tables definer-only; EXECUTE service_role only; room_type unchanged", async () => {
   assert.match(MIGRATION, /'today_home', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb/);
   assert.match(MIGRATION, /'today_dash', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb/);
   const values = (await db.query<{ v: string }>(`SELECT unnest(enum_range(NULL::room_type))::text AS v`)).rows.map((r) => r.v);
-  assert.ok(values.includes("unspecified"));
-  for (const v of ["suite", "shared_bath", "studio", "other", "whole_home"]) assert.ok(values.includes(v), v);
+  assert.equal(values.includes("unspecified"), false, "the enum value ships with PR-4a and its readers");
   for (const t of TABLES) {
     const r = (await db.query(`SELECT relrowsecurity AS rls, relforcerowsecurity AS force FROM pg_class WHERE oid = $1::regclass`, [t])).rows[0];
     assert.deepEqual(r, { rls: true, force: true }, t);
@@ -167,8 +168,40 @@ test("MGT-44-AC1 refusals: wrong role, outsider, other org's secret, revoked/exp
 
 test("PR-1 boundary: no outbound, no change to B-040/B-028/funnel/existing tables, no deletes", () => {
   const sql = MIGRATION.replace(/--.*$/gm, "");
-  for (const banned of [/\bNOTIFY\b/i, /pg_notify/i, /\bnet\.http/i, /ALTER\s+TABLE\s+(public\.|app\.)?(organizations|properties|units|rooms|org_members|unit_invite_secrets|unit_bindings|funnel_events|usage_events|b028_)/i, /\bDELETE\s+FROM\b/i, /\bDROP\b/i, /CREATE\s+OR\s+REPLACE/i]) {
+  for (const banned of [/ALTER\s+TYPE/i, /\bNOTIFY\b/i, /pg_notify/i, /\bnet\.http/i, /ALTER\s+TABLE\s+(public\.|app\.)?(organizations|properties|units|rooms|org_members|unit_invite_secrets|unit_bindings|funnel_events|usage_events|b028_)/i, /\bDELETE\s+FROM\b/i, /\bDROP\b/i, /CREATE\s+OR\s+REPLACE/i]) {
     assert.doesNotMatch(sql, banned);
   }
   for (const word of ["房東", "房客", "收款", "收租"]) assert.equal(MIGRATION.includes(word), false);
+});
+
+test("Codex PR-1 r1: sample data never counts — sample unit, sample property, sample secret, sample member", async () => {
+  const o = await makeOrg(true);
+  const mark = (table: string, id: string) => db.query(`INSERT INTO sample_marks (org_id, entity_table, entity_id) VALUES ($1, $2, $3)`, [o.orgId, table, id]);
+  const u1 = await newUnit(o.orgId, o.prop);
+  await mark("units", u1);
+  await assert.rejects(share(o, o.admin, await secret(o.orgId, u1)), /b042_sample/);
+  const p2 = (await db.query<{ id: string }>(`INSERT INTO properties (org_id, name, country_code, currency, timezone) VALUES ($1, 'sample-p', 'TW', 'TWD', 'Asia/Taipei') RETURNING id`, [o.orgId])).rows[0].id;
+  await mark("properties", p2);
+  await assert.rejects(share(o, o.admin, await secret(o.orgId, await newUnit(o.orgId, p2))), /b042_sample/);
+  const s3 = await secret(o.orgId, await newUnit(o.orgId, o.prop));
+  await mark("unit_invite_secrets", s3);
+  await assert.rejects(share(o, o.admin, s3), /b042_sample/);
+  assert.equal(await shared(o.orgId), false);
+  const memberId = (await db.query(`SELECT id FROM org_members WHERE org_id = $1 AND user_id = $2`, [o.orgId, o.manager])).rows[0].id;
+  await mark("org_members", memberId);
+  await assert.rejects(asService("SELECT app.b042_record_first_login($1,$2)", [o.orgId, o.manager]), /b042_forbidden/);
+  await assert.rejects(share(o, o.manager, await secret(o.orgId, await newUnit(o.orgId, o.prop))), /b042_forbidden/);
+});
+
+test("Codex PR-1 r1: a transaction pinned to sandbox or to another org cannot record for this live org", async () => {
+  const o = await makeOrg(true);
+  const other = await makeOrg(true);
+  const sec = await secret(o.orgId, o.unit);
+  await assert.rejects(share(o, o.admin, sec, "copy", "unit", { env: "sandbox", org: o.orgId }), /b042_forbidden/);
+  await assert.rejects(share(o, o.admin, sec, "copy", "unit", { env: "live", org: other.orgId }), /b042_forbidden/);
+  await assert.rejects(asService("SELECT app.b042_record_first_login($1,$2)", [o.orgId, o.admin], { env: "sandbox", org: o.orgId }), /b042_forbidden/);
+  await assert.rejects(asService("SELECT app.b042_record_first_login($1,$2)", [o.orgId, o.admin], { env: "live", org: other.orgId }), /b042_forbidden/);
+  assert.equal(await shared(o.orgId), false);
+  // pinned to this live org: allowed
+  assert.equal(await share(o, o.admin, sec, "copy", "unit", { env: "live", org: o.orgId }), true);
 });
