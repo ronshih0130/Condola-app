@@ -223,12 +223,14 @@ export function StatementForm({
   month,
   canGenerate = true,
   deniedReason = "",
+  primary = true,
 }: {
   owners: { id: string; name: string }[];
   existing: { ownerId: string; month: string }[];
   month: string;
   canGenerate?: boolean;
   deniedReason?: string;
+  primary?: boolean;
 }) {
   const t = useT();
   const [owner, setOwner] = useState("");
@@ -253,7 +255,7 @@ export function StatementForm({
       </div>
       <p className="hint">{t("i_regenerate_hint")}</p>
       <button
-        className="btn pri"
+        className={primary ? "btn pri" : "btn"}
         type="submit"
         data-testid="submit-statement"
         disabled={!owner || !canGenerate}
@@ -281,7 +283,7 @@ export function PreviewGenerateForm({ ownerId, month, label, fingerprint }: { ow
   );
 }
 
-export function BankImport({ sample }: { sample: string }) {
+export function BankImport({ sample, primary = true }: { sample: string; primary?: boolean }) {
   const t = useT();
   const [csv, setCsv] = useState("");
   return (
@@ -293,7 +295,7 @@ export function BankImport({ sample }: { sample: string }) {
         <button className="btn" type="button" data-testid="fill-sample" disabled={!sample} onClick={() => setCsv(sample)}>
           {t("i_sample")}
         </button>
-        <button className="btn pri" type="submit" data-testid="submit-import">
+        <button className={primary ? "btn pri" : "btn"} type="submit" data-testid="submit-import">
           {t("i_import")}
         </button>
       </div>

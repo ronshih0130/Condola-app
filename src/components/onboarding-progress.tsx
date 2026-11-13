@@ -1,30 +1,27 @@
-import { onboardingStrings } from "@/i18n/onboarding-progress";
-import { actionSaveOnboardingChoices } from "@/server/onboarding-progress-actions";
-import { readOnboarding } from "@/server/onboarding-progress";
-import { onboardingGroups } from "@/server/onboarding-progress-rules";
-import type { Session } from "@/server/types";
+import React from "react";
+import { makeT, type Locale } from "@/i18n";
+import type { EmptyCta } from "@/lib/empty-cta";
+import type { SetupProgress } from "@/server/onboarding-progress";
+import { EmptyPrimary } from "./empty-state";
 
-export async function OnboardingProgress({ session }: { session: Session }) {
-  const progress = await readOnboarding(session);
-  if (!progress) return null;
-  const s = onboardingStrings(session.locale);
-  const state = (done: boolean) => done ? s.done : s.incomplete;
-  return <section className="card pad" data-testid="live-onboarding" style={{ marginBottom: 16 }}>
-    <h2>{s.title}</h2>
-    <ul>
-      <li>{s.property}: {state(progress.counts.properties > 0)}</li>
-      <li>{s.lease}: {state(progress.counts.leases > 0)} ({s.drafts}: {progress.counts.drafts})</li>
-      <li>{s.bill}: {state(progress.counts.bills > 0)}</li>
-      {onboardingGroups.map((group) => {
-        const status = progress.groups?.[group];
-        const label = status === "complete" ? s.done : status === "skipped" ? s.skipped : status === "incomplete" ? s.incomplete : s.decision;
-        return <li key={group}>{s[group]}: {label} ({s.counts}: {progress.counts[`${group}_ready`]} / {progress.counts[`${group}_total`]}); {s.pending}: {progress.counts[`${group}_pending`]}; {s.expired}: {progress.counts[`${group}_expired`]}</li>;
-      })}
-    </ul>
-    <form action={actionSaveOnboardingChoices}>
-      <p>{s.decision}</p><p className="hint">{s.help}</p>
-      {onboardingGroups.map((group) => <label className="row" key={group}><input type="checkbox" name={group} defaultChecked={progress.policy?.required[group] ?? false} /> {s[group]} — {s.required}</label>)}
-      <button className="btn" type="submit">{s.save}</button>
-    </form>
+export function OnboardingProgress({ progress, locale, cta }: { progress: SetupProgress; locale: Locale; cta: EmptyCta }) {
+  const checklist = progress.checklist;
+  if (!checklist || !progress.checklistOn) return null;
+  const t = makeT(locale);
+  const steps = <ol className="setup-steps">{checklist.steps.map((step, index) =>
+    <li key={step.id} className={step.done ? "done" : step.index === progress.step ? "current" : ""}
+      aria-current={!step.done && step.index === progress.step ? "step" : undefined}>
+      <span className="setup-number" aria-hidden="true">{step.done ? "✓" : index + 1}</span><span>{t(step.key)}
+        {step.index === 3 && progress.step === 3 ? <small>{t("es_setup_wait")}</small> : null}</span>
+    </li>)}</ol>;
+  if (checklist.completedAt) return <details className="setup-checklist setup-complete" data-testid="live-onboarding">
+    <summary><span aria-hidden="true">✓ </span><strong>{t("es_setup_done")}</strong>・{t("es_setup_collapsed")} <span className="es-view">{t("es_setup_view")}</span></summary>
+    {steps}
+  </details>;
+  return <section className="setup-checklist" data-testid="live-onboarding">
+    <h2>{t("es_setup_title")} <span>{checklist.completed}／{checklist.total}</span></h2>
+    <progress max={checklist.total || 1} value={checklist.completed} aria-label={t("es_setup_title")} />
+    {steps}
+    {progress.hasUnits && progress.step >= 2 && progress.step < 4 && cta.primary ? <EmptyPrimary action={cta.primary} locale={locale} /> : null}
   </section>;
 }

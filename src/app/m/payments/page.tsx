@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
@@ -36,7 +37,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       <ErrorBanner t={t} error={params.error} />
       <div className="card">
         {rows.length === 0 ? (
-          <div className="empty">{t("i_none_pending")}</div>
+          <ManagementEmptyState session={session} page="PAY" />
         ) : (
           <table className="t rf">
             <thead>

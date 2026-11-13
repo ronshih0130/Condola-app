@@ -1,18 +1,24 @@
-export const onboardingGroups = ["tenant", "owner", "team"] as const;
-export type OnboardingGroup = typeof onboardingGroups[number];
-export type OnboardingChoices = Record<OnboardingGroup, boolean>;
-export type OnboardingPolicy = { version: 1; required: OnboardingChoices; actor: string; decided_at: string };
+import type { PermKey } from "./perms";
 
-export function readOnboardingPolicy(value: unknown): OnboardingPolicy | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  if (row.version !== 1 || typeof row.actor !== "string" || !row.actor || typeof row.decided_at !== "string" || !Number.isFinite(Date.parse(row.decided_at))) return null;
-  if (!row.required || typeof row.required !== "object" || Array.isArray(row.required)) return null;
-  const required = row.required as Record<string, unknown>;
-  if (!onboardingGroups.every((group) => typeof required[group] === "boolean")) return null;
-  return row as OnboardingPolicy;
+export const SETUP_STEPS = [
+  { id: "company", key: "es_setup_company", perm: "settings.edit" },
+  { id: "unit", key: "es_UNIT_action", perm: "props.edit" },
+  { id: "invite", key: "es_TEN_action", perm: "props.edit" },
+  { id: "joined", key: "es_setup_joined", perm: "props.edit" },
+] as const satisfies readonly { id: string; key: string; perm: PermKey }[];
+export type SetupDone = readonly [boolean, boolean, boolean, boolean];
+export function firstIncompleteStep(done: SetupDone): 0 | 1 | 2 | 3 | 4 {
+  const index = done.findIndex(value => !value);
+  return (index === -1 ? 4 : index) as 0 | 1 | 2 | 3 | 4;
 }
-
-export function groupState(required: boolean, total: number, ready: number): "skipped" | "incomplete" | "complete" {
-  return !required ? "skipped" : total > 0 && total === ready ? "complete" : "incomplete";
+export function setupChecklist(done: SetupDone, completedAt: string | null, can: (key: PermKey) => boolean) {
+  const steps = SETUP_STEPS.flatMap((step, index) => can(step.perm) ? [{ ...step, index, done: done[index] }] : []);
+  return { steps, completed: steps.filter(step => step.done).length, total: steps.length, completedAt };
+}
+export function readCompletedAt(settings: unknown): string | null {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return null;
+  const progress = (settings as Record<string, unknown>).onboarding_progress;
+  if (!progress || typeof progress !== "object" || Array.isArray(progress)) return null;
+  const value = (progress as Record<string, unknown>).completed_at;
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
 }

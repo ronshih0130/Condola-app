@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -83,9 +84,7 @@ export default async function AuditPage({
         <Link href="/m/audit">{t("i_audit_clear")}</Link>
       </form>
         {page.entries.length === 0 ? (
-          <div className="empty" data-testid="audit-empty">
-            {t("i_audit_empty")}
-          </div>
+          <ManagementEmptyState session={session} page="SRCH" actionHref="/m/audit" />
         ) : (
           <AuditRows entries={page.entries} t={t} testId="audit-list" demoLine={demoLine} />
         )}

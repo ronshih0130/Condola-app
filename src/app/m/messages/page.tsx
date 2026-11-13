@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -18,7 +19,7 @@ export default async function MessagesPage() {
       <PageHeader title={t("i_nav_msg")} />
       <div className="card">
         {threads.length === 0 ? (
-          <div className="empty">{t("i_empty")}</div>
+          <ManagementEmptyState session={session} page="MSG" />
         ) : (
           <table className="t rf">
             <tbody>
