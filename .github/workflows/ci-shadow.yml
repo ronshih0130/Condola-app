@@ -31,11 +31,12 @@ jobs:
     name: shadow (self-hosted macOS)
     # One ci-shadow at a time on the single Mac mini: group per-repository and
     # NOT per-ref, so two shadows can never run on the same machine at once.
-    # cancel-in-progress only on push (a newer push supersedes an older one);
-    # a manual workflow_dispatch run is never cancelled.
+    # cancel-in-progress is false: the flag is evaluated for the incoming run,
+    # so a push to main would otherwise cancel a running workflow_dispatch
+    # parity run in this group. Runs serialize; they do not supersede.
     concurrency:
       group: ci-shadow-${{ github.repository }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+      cancel-in-progress: false
     # Forks never run this job; only this repo on push or manual dispatch.
     if: >-
       github.repository == 'ronshih0130/Condola-app' &&
