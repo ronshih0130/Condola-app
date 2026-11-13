@@ -9,6 +9,8 @@ import {
 } from "./billing";
 import { query, withClient } from "./db";
 import { FlowError } from "./errors";
+import { pricingTrialOn } from "./b056-trial-rules";
+import { PRICING_TRIAL_SETTING_SQL } from "./b056-trial";
 import { assertStaff, type Session } from "./types";
 
 export type PartnerPreview =
@@ -313,7 +315,13 @@ export async function requestUpgrade(session: Session, tier: PaidTier, rawCode: 
             AND coalesce(target_room_id, target_unit_id) IS NOT NULL`,
         [orgId],
       );
-      await client.query(
+      // B-056 (flag pricing_trial ON): the request is recorded only; it grants no tier or trial
+      // (pay-then-activate, design decision 10). Flag OFF: unchanged.
+      const trialFlag = (await client.query<{ value: unknown; feature_flags: unknown }>(
+        `SELECT ${PRICING_TRIAL_SETTING_SQL} AS value, feature_flags FROM organizations WHERE id = $1`,
+        [orgId],
+      )).rows[0];
+      if (!trialFlag || !pricingTrialOn(trialFlag.value, trialFlag.feature_flags, orgId)) await client.query(
         `UPDATE organizations
             SET settings = coalesce(settings, '{}'::jsonb) || jsonb_build_object(
                   'plan', jsonb_build_object(
