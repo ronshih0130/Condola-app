@@ -62,6 +62,20 @@ export function baselineProblems(names: unknown, pin: Pin, original: readonly st
   return [];
 }
 
+/** anon and authenticated, plus every role either can SET ROLE to (directly or through a chain,
+ *  including SET-only memberships). Inherited privileges need no extra entry: has_table_privilege
+ *  on the base role already includes them. A membership with INHERIT FALSE and SET FALSE gives no
+ *  usable privilege and is not followed. */
+export async function reachableRoles(db: Client): Promise<{ roles: string[]; labels: string[] }> {
+  const { rows } = await db.query<{ role: string; label: string }>(
+    `SELECT m.rolname AS role, CASE WHEN m.rolname = b.r THEN b.r ELSE b.r || ' via ' || m.rolname END AS label
+       FROM unnest($1::text[]) b(r) JOIN pg_roles m ON m.rolname = b.r OR pg_has_role(b.r, m.oid, 'SET')
+      ORDER BY 2`,
+    [[...ROLES]],
+  );
+  return { roles: rows.map((r) => r.role), labels: rows.map((r) => r.label) };
+}
+
 type Finding = { table: string; problem: string };
 
 /** Catalog check. `baseline` holds "schema.table" names that are exempt. Returns findings sorted by table. */
@@ -71,16 +85,7 @@ export async function rlsDefaultFindings(db: Client, baseline: ReadonlySet<strin
   const columnPrivs = ["SELECT", "INSERT", "UPDATE", "REFERENCES"];
   // r = table, p = partitioned table, f = foreign table, m = materialized view. Views, sequences,
   // indexes, composite types and TOAST are not tables and are left to other checks.
-  // Every role that anon or authenticated can reach through membership — inherited or SET-only,
-  // direct or indirect — is checked as well, since a session can SET ROLE to it.
-  const reach = await db.query<{ role: string; label: string }>(
-    `SELECT m.rolname AS role, CASE WHEN m.rolname = b.r THEN b.r ELSE b.r || ' via ' || m.rolname END AS label
-       FROM unnest($1::text[]) b(r) JOIN pg_roles m ON pg_has_role(b.r, m.oid, 'MEMBER')
-      ORDER BY 2`,
-    [[...ROLES]],
-  );
-  const roles = reach.rows.map((r) => r.role);
-  const labels = reach.rows.map((r) => r.label);
+  const { roles, labels } = await reachableRoles(db);
   // r = table, p = partitioned table, f = foreign table, m = materialized view. Views, sequences,
   // indexes, composite types and TOAST are not tables and are left to other checks.
   const { rows } = await db.query<{ name: string; relkind: string; rls: boolean; parent: string | null; table_privs: string[]; column_privs: string[] }>(
@@ -167,6 +172,10 @@ test("every table in public and app that is not on the baseline has RLS on and n
 
 test("self-test: non-compliant new tables are reported and compliant ones are not (rolled back)", async () => {
   const baseline = new Set(readBaseline());
+  // Labels of roles already reachable in this database, so the PUBLIC-grant expectation does not
+  // depend on memberships that exist outside the probe (Codex r4).
+  const ambient = (await reachableRoles(db)).labels;
+  const publicDelete = [...ambient, "authenticated via phase0_probe_reader"].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).map((l) => `${l} DELETE`).join(", ");
   await db.query("BEGIN");
   try {
     await db.query(`
@@ -210,6 +219,13 @@ test("self-test: non-compliant new tables are reported and compliant ones are no
       GRANT SELECT ON public.phase0_probe_via_role TO phase0_probe_reader;
       GRANT phase0_probe_reader TO authenticated WITH INHERIT FALSE, SET TRUE;
 
+      CREATE ROLE phase0_probe_blocked NOLOGIN;
+      CREATE TABLE public.phase0_probe_blocked (id int);
+      ALTER TABLE public.phase0_probe_blocked ENABLE ROW LEVEL SECURITY;
+      REVOKE ALL ON public.phase0_probe_blocked FROM PUBLIC, anon, authenticated;
+      GRANT SELECT ON public.phase0_probe_blocked TO phase0_probe_blocked;
+      GRANT phase0_probe_blocked TO authenticated WITH ADMIN FALSE, INHERIT FALSE, SET FALSE;
+
       CREATE MATERIALIZED VIEW public.phase0_probe_matview AS SELECT 1 AS id;
       REVOKE ALL ON public.phase0_probe_matview FROM PUBLIC, anon, authenticated;
 
@@ -219,7 +235,7 @@ test("self-test: non-compliant new tables are reported and compliant ones are no
     const { findings } = await rlsDefaultFindings(db, baseline);
     assert.deepEqual(findings.map((f) => f.problem), [
       "app.phase0_probe_no_rls: row level security is not enabled",
-      "app.phase0_probe_public_grant: table privileges still held — anon DELETE, authenticated DELETE, authenticated via phase0_probe_reader DELETE",
+      `app.phase0_probe_public_grant: table privileges still held — ${publicDelete}`,
       "public.phase0_probe_anon: table privileges still held — anon SELECT",
       "public.phase0_probe_child (child of public.phase0_probe_ok): table privileges still held — authenticated TRUNCATE",
       "public.phase0_probe_column: column privileges still held — authenticated UPDATE",
