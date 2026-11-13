@@ -502,3 +502,12 @@ flags:
     global_kill: "platform_settings.pricing_interim enabled must be boolean true and allowed_org_ids must include this organization; missing or malformed is OFF"
     org_override: "organizations.feature_flags.pricing_interim must be boolean true"
     activation: "OFF by default everywhere; hosted activation permitted ONLY for Ron's 4 allowlisted internal orgs (290b776d, c55c4cd7, abe00ada, f833d997) after per-flag QA verdict + CEO exact-SHA GO; logged-out visitors of /pricing and /apply require a separate public GO that includes Ron's own words; anonymous /pricing/apply GET and submit open only when platform_settings.pricing_interim has enabled===true AND public===true (strict booleans); public defaults to false (CEO confirmed the field name 2026-11-12 05:26 PST); a missing public field, a non-boolean value, or a JSON parse failure of the setting is treated as public=false; empty allowed_org_ids is not public mode; do not set public:true without that GO; 0 real outbound; do not change billing.ts FREE_UNITS or LIST_* constants; rollback = platform_settings / org override to OFF"
+
+  pricing_trial:
+    owner: PE
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.pricing_trial enabled must be boolean true and allowed_org_ids must include this organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.pricing_trial must be boolean true"
+    activation: "B-056 in-app trial engine. OFF by default everywhere; hosted activation permitted ONLY for Ron's 4 allowlisted internal orgs (290b776d, c55c4cd7, abe00ada, f833d997) after C-0 legacy classification is reviewed, per-flag QA verdict and CEO exact-SHA GO; app.b056_* entries refuse or return nothing while OFF (b056_trial_end is pure date arithmetic); 0 real outbound; no plan_tier change; no deletion of trial, membership or lease data; rollback = platform_settings / org override to OFF (rows kept). Owner and expiry are assumptions pending Ron (OQ-B056-24)"
