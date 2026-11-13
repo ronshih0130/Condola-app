@@ -69,6 +69,13 @@ test("C-0: past trialUntil, a paid-looking tier, an upgrade request or an unread
     [{ plan: { tier: "pro", trialUntil: null } }, {}, "pro"],
     [{}, { requested: true }, "standard"],
     [{ plan: { trialUntil: "not a date" } }, {}, "standard"],
+    // Codex C-0 r1: non-string, special and timezone-less values are evidence, never an active trial
+    [{ plan: { trialUntil: 1704067200000 } }, {}, "standard"],
+    [{ plan: { trialUntil: { at: "2099-01-01" } } }, {}, "standard"],
+    [{ plan: { tier: "pro", trialUntil: "infinity" } }, {}, "pro"],
+    [{ plan: { trialUntil: "tomorrow" } }, {}, "standard"],
+    [{ plan: { trialUntil: "2099-03-10T18:00:00" } }, {}, "standard"],
+    [{ plan: { trialUntil: "2099-03-10" } }, {}, "standard"],
   ];
   for (const [settings, opts, plan] of cases) {
     const o = await org(settings, opts);
@@ -100,4 +107,89 @@ test("C-0 privileges: EXECUTE for service_role only; unknown org refused", async
   }
   assert.equal((await db.query(`SELECT has_function_privilege('service_role', 'app.b056_classify_legacy(uuid, uuid)', 'EXECUTE') AS h`)).rows[0].h, true);
   await assert.rejects(classify("00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000000"), /b056_forbidden/);
+});
+
+test("C-0 result does not depend on the session TimeZone (offset-qualified input only)", async () => {
+  const ends: string[] = [];
+  for (const tz of ["UTC", "Asia/Taipei", "America/Los_Angeles"]) {
+    await db.query(`SET TIME ZONE '${tz}'`);
+    try {
+      const o = await org({ plan: { tier: "pro", trialUntil: "2099-03-10T18:00:00+00:00" } });
+      assert.equal(await classify(o.id, o.admin), "active_legacy_trial");
+      ends.push((await row(o.id)).ends_taipei);
+      const naive = await org({ plan: { tier: "pro", trialUntil: "2099-03-10T18:00:00" } });
+      assert.equal(await classify(naive.id, naive.admin), "trial_used_not_paid");
+    } finally {
+      await db.query("RESET TIME ZONE");
+    }
+  }
+  assert.deepEqual(ends, ["2099-03-12 00:00", "2099-03-12 00:00", "2099-03-12 00:00"]);
+});
+
+async function flagOn(orgId: string) {
+  await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"pricing_trial":true}' WHERE id = $1`, [orgId]);
+  await db.query(`UPDATE platform_settings SET value = jsonb_build_object('enabled', true,
+     'allowed_org_ids', coalesce(value->'allowed_org_ids', '[]'::jsonb) || jsonb_build_array($1::text)) WHERE key = 'pricing_trial'`, [orgId]);
+}
+async function start(c: Client, orgId: string, actor: string) {
+  await c.query("BEGIN");
+  try {
+    await c.query("SET LOCAL ROLE service_role");
+    const r = (await c.query("SELECT started, refusal FROM app.b056_start_trial($1, $2, 'standard')", [orgId, actor])).rows[0];
+    await c.query("COMMIT");
+    return r as { started: boolean; refusal: string | null };
+  } catch (e) {
+    await c.query("ROLLBACK");
+    throw e;
+  }
+}
+
+test("MGT-96-AC4 end to end: after C-0 a used legacy trial blocks a new start; never_trialled may start once", async () => {
+  const used = await org({ plan: { tier: "standard", trialUntil: "2026-01-01T00:00:00Z" } });
+  await classify(used.id, used.admin);
+  await flagOn(used.id);
+  assert.deepEqual(await start(db, used.id, used.admin), { started: false, refusal: "trial_used" });
+  const fresh = await org({});
+  await classify(fresh.id, fresh.admin);
+  await flagOn(fresh.id);
+  assert.deepEqual(await start(db, fresh.id, fresh.admin), { started: true, refusal: null });
+  assert.deepEqual(await start(db, fresh.id, fresh.admin), { started: false, refusal: "trial_used" });
+});
+
+test("C-0 never overwrites a paid record", async () => {
+  const o = await org({ plan: { tier: "pro", trialUntil: "2099-01-01T00:00:00Z" } });
+  const req = (await db.query<{ id: string; created_at: Date }>(
+    `INSERT INTO pricing_apply_requests (org_id, user_id, company_name, phone, units, plan, status, paid_received_on)
+     VALUES ($1, $2, 'synthetic', '0000', 1, 'pro', 'activated', current_date) RETURNING id, created_at`, [o.id, o.admin])).rows[0];
+  await db.query(`INSERT INTO app.b056_org_trials (org_id, paid_plan, paid_activated_at, paid_apply_request_id, paid_request_created_at)
+                  VALUES ($1, 'pro', now(), $2, $3)`, [o.id, req.id, req.created_at]);
+  assert.equal(await classify(o.id, o.admin), "paid");
+  const r = (await db.query(`SELECT paid_plan, trial_plan, legacy_class FROM app.b056_org_trials WHERE org_id = $1`, [o.id])).rows[0];
+  assert.deepEqual(r, { paid_plan: "pro", trial_plan: null, legacy_class: null });
+  assert.equal(await audits(o.id), 0);
+});
+
+test("C-0 and a trial start racing on the same org serialize (organizations → trial row); exactly one row, no lost update", async () => {
+  for (let i = 0; i < 4; i++) {
+    const o = await org({});
+    await flagOn(o.id);
+    const a = new Client({ connectionString: process.env.DATABASE_URL });
+    const b = new Client({ connectionString: process.env.DATABASE_URL });
+    await a.connect(); await b.connect();
+    try {
+      const classifyOn = async (c: Client) => {
+        await c.query("BEGIN"); await c.query("SET LOCAL ROLE service_role");
+        const r = (await c.query("SELECT app.b056_classify_legacy($1, $2) AS c", [o.id, o.admin])).rows[0].c;
+        await c.query("COMMIT"); return r as string;
+      };
+      const [cls, st] = await Promise.all([classifyOn(a), start(b, o.id, o.admin)]);
+      const r = (await db.query(`SELECT trial_plan, legacy_class FROM app.b056_org_trials WHERE org_id = $1`, [o.id])).rows;
+      assert.equal(r.length, 1);
+      assert.equal(st.started, true, "never_trialled or no row: the start must succeed either way");
+      assert.equal(r[0].trial_plan, "standard");
+      assert.ok(cls === "b056_trial" || (cls === "never_trialled" && r[0].legacy_class === "never_trialled"), cls);
+    } finally {
+      await a.end(); await b.end();
+    }
+  }
 });

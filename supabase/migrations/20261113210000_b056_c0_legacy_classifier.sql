@@ -14,9 +14,10 @@
 --   * legacy settings.plan.trialUntil in the future → 'active_legacy_trial': the legacy trial
 --     becomes the org's one trial and ends at 00:00 Asia/Taipei on the day after trialUntil's
 --     Taipei date (never shortens it; OQ-B056-27);
---   * any other legacy trace — trialUntil in the past, a settings.plan.tier of standard/pro/
---     business, or an upgrade_requests row → 'trial_used_not_paid': trial used, already ended
---     (at trialUntil when known, else now), so the org is Free-after-trial once the flag is ON;
+--   * any other legacy trace — a trialUntil that is in the past, not a string, not an absolute
+--     ISO-8601 timestamp with an offset/Z, or not finite; a settings.plan.tier of standard/pro/
+--     business; or an upgrade_requests row → 'trial_used_not_paid': trial used, already ended
+--     (at trialUntil when readable, else now), so the org is Free-after-trial once the flag is ON;
 --   * otherwise → 'never_trialled' (row with no trial; the admin may start one trial later).
 -- The legacy trial plan is 'pro' when the legacy tier is pro or business, else 'standard'.
 
@@ -34,6 +35,7 @@ DECLARE
   v_tier text;
   v_until timestamptz;
   v_until_raw text;
+  v_has_until boolean;
   v_requested boolean;
   v_now timestamptz := clock_timestamp();
   v_class text;
@@ -57,13 +59,20 @@ BEGIN
 
   v_tier := CASE WHEN jsonb_typeof(v_settings->'plan') = 'object' AND jsonb_typeof(v_settings->'plan'->'tier') = 'string'
                  THEN v_settings->'plan'->>'tier' END;
-  v_until_raw := CASE WHEN jsonb_typeof(v_settings->'plan') = 'object' AND jsonb_typeof(v_settings->'plan'->'trialUntil') = 'string'
+  -- Any non-null trialUntil (string, number, object…) is evidence that a trial was used.
+  v_has_until := jsonb_typeof(v_settings->'plan') = 'object'
+                 AND coalesce(jsonb_typeof(v_settings->'plan'->'trialUntil'), 'null') <> 'null';
+  v_until_raw := CASE WHEN v_has_until AND jsonb_typeof(v_settings->'plan'->'trialUntil') = 'string'
                       THEN v_settings->'plan'->>'trialUntil' END;
-  IF v_until_raw IS NOT NULL THEN
+  -- Only an absolute ISO-8601 timestamp with an explicit offset or Z is read as a date, so the
+  -- result never depends on the session TimeZone; special values (infinity, tomorrow, …) and
+  -- anything else stay evidence of a used trial but grant no active trial.
+  IF v_until_raw ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]{1,6})?)?(Z|[+-][0-9]{2}(:?[0-9]{2})?)$' THEN
     BEGIN
       v_until := v_until_raw::timestamptz;
+      IF NOT isfinite(v_until) THEN v_until := NULL; END IF;
     EXCEPTION WHEN others THEN
-      v_until := NULL;  -- unreadable date: treated as a past legacy trace below
+      v_until := NULL;
     END;
   END IF;
   v_requested := EXISTS (SELECT 1 FROM public.upgrade_requests u WHERE u.org_id = p_org);
@@ -73,7 +82,7 @@ BEGIN
     v_class := 'active_legacy_trial';
     -- 00:00 Asia/Taipei of the day after trialUntil's Taipei date (never shorter than legacy)
     v_ends := (((v_until AT TIME ZONE 'Asia/Taipei')::date + 1)::timestamp) AT TIME ZONE 'Asia/Taipei';
-  ELSIF v_until_raw IS NOT NULL OR v_tier IN ('standard', 'pro', 'business') OR v_requested THEN
+  ELSIF v_has_until OR v_tier IN ('standard', 'pro', 'business') OR v_requested THEN
     v_class := 'trial_used_not_paid';
     v_ends := least(coalesce(v_until, v_now), v_now);
   ELSE
