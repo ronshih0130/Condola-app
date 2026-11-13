@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261113220000_b042_today_home_schema.sql": {
+    addOnly: false,
+    reason: "B-042 PR-1 (narrowed): ALTER TYPE room_type ADD VALUE 'unspecified' (unused until PR-4a); seeds default-OFF today_home and today_dash with ON CONFLICT DO NOTHING; adds app.b042_first_logins and app.b042_invite_shares (CHECKs, ENABLE+FORCE RLS, no policies, REVOKE ALL incl. service_role = definer-only) and five app-schema functions (flag check, first-login record/seen, invite-share record, org-shared) with EXECUTE to service_role only. Not add-only because of the enum value, constraints and privilege statements. No existing-table, B-040, B-028 or funnel change; no outbound; no delete.",
+  },
   "supabase/migrations/20261112100000_advisor_rls_stop_bleed.sql": {
     addOnly: false,
     reason: "ENABLE RLS (no policies, not FORCE) and REVOKE ALL from anon and authenticated on seven existing tables (partner_codes, firm_partner_prices, firm_price_overrides, signup_verifications, signup_drafts, funnel_events, upgrade_requests); adds app.owner_lease_tenants() and CREATE OR REPLACE / ALTER VIEW so owner_lease_tenants and tenant_lease_picker are security_invoker; UPDATE unused signup_verifications.expires_at (never DELETE) plus one audit_log insert. Not add-only because it changes privileges, enables RLS on existing tables, replaces an existing view, and rewrites existing rows. No FORCE RLS, no mail or SMS, no flag or FREE_UNITS change.",
