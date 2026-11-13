@@ -414,5 +414,15 @@
   "src/server/unit-line-invite.ts#listInvites": "leases.edit",
   "src/server/unit-line-invite-api.ts#handleStaffLive": "leases.edit",
   "src/server/unit-line-invite-api.ts#handleStaffIssue": "leases.edit",
-  "src/server/unit-line-invite-api.ts#handleStaffRotate": "leases.edit"
+  "src/server/unit-line-invite-api.ts#handleStaffRotate": "leases.edit",
+  "src/server/b040-staff-ui.ts#staffInviteVisible": "leases.edit",
+  "src/server/b040-staff-ui.ts#requireStaffInviteUnit": "leases.edit",
+  "src/server/b040-staff-ui.ts#staffInviteEntries": "leases.edit",
+  "src/server/b040-staff-ui.ts#staffInviteLive": "leases.edit",
+  "src/server/b040-staff-ui.ts#staffInvitePage": "leases.edit",
+  "src/server/b040-staff-ui.ts#staffInviteData": "leases.edit",
+  "src/server/b040-staff-ui.ts#mutateStaffInvite": "leases.edit",
+  "src/server/b040-staff-ui-http.ts#serveStaffInvite": "leases.edit",
+  "src/app/api/m/units/[unitId]/staff-invite/[[...view]]/route.ts#GET": "leases.edit",
+  "src/app/api/m/units/[unitId]/staff-invite/[[...view]]/route.ts#POST": "leases.edit"
 }
