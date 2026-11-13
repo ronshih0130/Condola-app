@@ -66,6 +66,27 @@ if step.get("if") != "github.event_name == 'push' && github.ref == 'refs/heads/m
     raise SystemExit("guard step is not limited to main pushes")
 if "exit 0" not in step.get("run", ""):
     raise SystemExit("guard step must not fail the existing check job")
+if "git diff --no-renames --name-only" not in step.get("run", ""):
+    raise SystemExit("guard diff must list renames as separate paths")
 print("depot-guard-ok")
 PY
+
+rename_dir=$(mktemp -d)
+git init -q -b main "$rename_dir"
+git -C "$rename_dir" config user.email test@example.com
+git -C "$rename_dir" config user.name test
+mkdir -p "$rename_dir/src"
+printf 'product\n' >"$rename_dir/src/app.ts"
+git -C "$rename_dir" add src/app.ts
+git -C "$rename_dir" commit -q -m base
+mkdir -p "$rename_dir/docs"
+git -C "$rename_dir" mv src/app.ts docs/pg17-synthetic-rehearsal.md
+git -C "$rename_dir" commit -q -m rename
+plain=$(git -C "$rename_dir" diff --name-only HEAD~1 HEAD | bash "$guard")
+listed=$(git -C "$rename_dir" diff --no-renames --name-only HEAD~1 HEAD | bash "$guard")
+rm -rf "$rename_dir"
+if [[ "$plain" != skip || "$listed" != deploy ]]; then
+  printf 'rename fixture expected skip then deploy, got %s then %s\n' "$plain" "$listed" >&2
+  exit 1
+fi
 printf 'guard-ok\n'
