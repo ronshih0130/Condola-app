@@ -156,7 +156,7 @@ test("MGT-54-AC6/AC7 MGT-55-AC4/AC5 MGT-56-AC9/AC10: invitation routes and B-040
   await db.query(`INSERT INTO platform_settings(key,value) VALUES('unit_line_invite',jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)))
     ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value`, [f.org]);
   await db.query(`UPDATE organizations SET feature_flags=feature_flags || '{"unit_line_invite":true}'::jsonb WHERE id=$1`, [f.org]);
-  p = await f.read(); assert.equal(p.inviteMode, "m4"); assert.equal(p.inviteHref, `/m/units?invite=${space.unit}`);
+  p = await f.read(); assert.equal(p.inviteMode, "m4"); assert.equal(p.inviteHref, `/m/units/${space.unit}/invite`);
   await f.unit(); assert.equal((await f.read()).inviteHref, "/m/units");
   await db.query(`UPDATE invitations SET status='revoked' WHERE org_id=$1`, [f.org]);
   assert.equal((await f.read()).step, 2);

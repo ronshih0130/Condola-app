@@ -36,7 +36,7 @@ function oracle(page: EmptyPage, p: number, role: typeof ROLE_KEYS[number], flag
 for (const page of EMPTY_PAGES) for (const step of [0, 1, 2, 3, 4] as const) for (const role of ROLE_KEYS) for (const flag of [false, true]) {
   test(`MGT-55-AC1/AC2/AC3/AC6 MGT-56-AC1–AC10 oracle: ${page} step=${step} ${role} flag=${flag}`, () => {
     for (const inviteMode of ["m4", "lease", "no_lease"] as const) for (const hasUnits of [false, true]) {
-      const setup: EmptySetup = { step, checklistOn: flag, hasUnits, inviteMode, inviteHref: inviteMode === "m4" ? "/m/units?invite=unit" : "/m/leases/lease" };
+      const setup: EmptySetup = { step, checklistOn: flag, hasUnits, inviteMode, inviteHref: inviteMode === "m4" ? "/m/units/unit/invite" : "/m/leases/lease" };
       const result = resolveEmptyCta({ page, setup, can: key => can(role, key) });
       const expected = oracle(page, step, role, flag, inviteMode, hasUnits);
       assert.equal(result.primary?.key ?? null, expected.primary ? A[expected.primary as keyof typeof A].key : null);
