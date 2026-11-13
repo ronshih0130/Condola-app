@@ -17,8 +17,17 @@ Three layers exist and are not unified.
 | Layer | Where | Evidence |
 |---|---|---|
 | Registry | `ops/flags.yaml` — **56 keys**; **54 expire 2026-11-24 18:00 PT**, 2 (`unit_line_invite`, `pricing_interim`) on 2026-12-10 18:00 PT; owner Ron. Line 1: "older source registry reconciliation remains incomplete" | `ops/flags.yaml` (counted at `1e0a8ab`) |
-| Runtime, DB | `platform_settings.<key>` = `{"enabled":bool,"allowed_org_ids":[…]}` **and** `organizations.feature_flags.<key> === true`; both strict | e.g. `pricingInterimOn`, `src/server/b045-pricing-interim-rules.ts:54-68`; SQL twin `app.b030_enabled` |
+| Runtime, DB | `platform_settings.<key>` and/or `organizations.feature_flags.<key>`. **Not one universal scheme** — see "Evaluation patterns" below | per-feature readers |
 | Runtime, env | Worker vars read via `process.env` (`ESIGN_ENABLED`, `MOVE_OUT_NOTICE_ENABLED`, `TENANT_SIGNED_PDF_ENABLED`, `LINE_PLATFORM_ENABLED`, `BRAND_V2`, …) plus allowlists (`CUSTOM_ROLES_ORG_ALLOWLIST`, `TEAM_INVITES_ORG_ALLOWLIST`) | `wrangler.jsonc`; architecture-map §7 |
+
+**Evaluation patterns (several coexist; the list is not exhaustive).**
+
+| Pattern | Rule | Example |
+|---|---|---|
+| Strict platform + allowlist + org (**one pattern, not the rule for every flag**) | `{"enabled":true,"allowed_org_ids":[…]}` with the org on the list **and** `feature_flags.<key> === true`; malformed = OFF | `pricingInterimOn`, `src/server/b045-pricing-interim-rules.ts:54-68`; SQL twin `app.b030_enabled` |
+| Three-state platform value | `"off" \| "org" \| "on"`; `"on"` admits every org unless the org override is `false`; `"org"` admits only an org override of `true` | partner consent, `src/server/partner-consent-rules.ts:30-36` |
+| Env **OR** org opt-in | `BRAND_V2 === "true"` **or** `feature_flags.brand_v2 === true`; the env var is not a kill switch for opted-in orgs | `src/server/brand-v2.ts:25-49` |
+| Env switch and/or env allowlist | per feature | `ESIGN_ENABLED`, `CUSTOM_ROLES_ORG_ALLOWLIST`, … |
 
 Problems found:
 
@@ -30,6 +39,7 @@ Problems found:
 6. **Expiry check coverage.** `scripts/gate.sh:224-265` runs step `flag-expiry` using `scripts/flag-expiry-policy.cjs`. **Hosted `.github/workflows/ci.yml` has no flag-expiry step** — the required check does not see expiry at all.
 7. **Policy drift.** PRINCIPLES 5: expired flags **warn** first and CI **fails only after 7 days past expiry**. `flag-expiry-policy.cjs` warns in the 7 days **before** expiry and **fails at expiry** (`expires <= now`). On the current registry, `gate.sh` starts warning 2026-11-17 and fails for all 54 keys from 2026-11-24 18:00 PT.
 8. Mismatch lists in 2–3 come from the Phase 0 inventory, spot-checked — not a complete audit.
+9. **No per-flag record of which evaluation pattern applies.** A shared evaluator built on the strict pattern alone would change behaviour for the exceptions (partner consent `"on"` admits by default; `brand_v2` is OR, not AND). A per-flag pattern inventory must exist **before** any existing reader adopts a shared evaluator.
 
 ## Decision drivers
 
@@ -46,7 +56,7 @@ Complete the registry (add the 5 missing keys, mark SQL/test-only keys, record e
 Consequence: cheap, no runtime risk, closes "incomplete". Does not stop the next feature copying a reader with a subtle difference (e.g. non-strict boolean).
 
 **Option B — Small shared evaluator, adopted incrementally.**
-One server module: given org id, org flags and the platform setting, return ON/OFF with strict-boolean, allowlist and optional env-kill semantics; keys typed from the registry. **New** features use it; existing readers migrate only when their file is touched anyway.
+One server module: given org id, org flags and the platform setting, return ON/OFF with strict-boolean, allowlist and optional env-kill semantics; keys typed from the registry. **New** features use it; existing readers migrate only when their file is touched anyway, and only after the per-flag pattern inventory (problem 9) shows the reader follows the strict pattern — the known exceptions (partner consent, `brand_v2`) keep their own readers unless a separate decision changes their semantics.
 Consequence: stops divergence going forward. Two styles coexist for a long time; a subtle mismatch with an existing reader's semantics is possible if migrated carelessly — each migration must prove flag-OFF and flag-ON equality.
 
 **Option C — Both (recommended).**

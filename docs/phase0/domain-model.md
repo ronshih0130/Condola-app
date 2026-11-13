@@ -175,7 +175,9 @@ Billing constants: `LIST_STANDARD=30`, `LIST_PRO=40`, `FREE_UNITS=4` (`billing.t
 | B-030 state transitions (e.g. `trialing` → `active`/`grace`/`canceled`), unique provider sequence per org, immutable events | DB function + triggers |
 | B-030 tables unreachable by `anon`/`authenticated`/`service_role` directly | DB REVOKE + `SECURITY DEFINER` |
 | Interim pricing admission is fail-closed (strict booleans, clean allowlist) | Server (`pricingInterimOn`) |
-| Public `/pricing` / `/apply` need `public === true` | Server (`pricing-interim.ts`); `public:true` needs Ron's words + CEO GO (C3) |
+| `/pricing` is reachable anonymously **with or without** `public:true`. Anonymous visitors and non-admitted staff get the existing page; the interim version is rendered only for a staff session whose live org is admitted | Server (`src/app/pricing/page.tsx:27-48`) |
+| `/pricing/apply` (the application form — not `/apply`): an anonymous visitor is admitted only when the setting has **both** `enabled === true` and `public === true`; with `public` off it is internal-only — a staff session whose live org is admitted still gets in. Any parse error = refused | Server (`runCanAccessPricingApply`, `src/server/pricing-interim.ts:95-116`; `pricingInterimPublicEnabled`, `b045-pricing-interim-rules.ts:116-120`); submission goes only through `app.submit_pricing_apply` and returns to `/pricing/apply?done=1` (`pricing-apply-actions.ts:107-112`) |
+| Turning on `public:true` | Ron's words + CEO GO (C3) — not a code rule |
 
 **Gaps (all verified by reading code at `1e0a8ab` unless marked).**
 
@@ -282,7 +284,9 @@ Billing constants: `LIST_STANDARD=30`, `LIST_PRO=40`, `FREE_UNITS=4` (`billing.t
 
 - Class B with security review; schema/RLS change needs non-author QA **and** a CEO exact-SHA GO before any staging apply.
 - New tables follow the post-INC-RLS-1112 default: `ENABLE RLS`, `REVOKE` from `anon`/`authenticated`, decide `FORCE` explicitly, never restore grants (`architecture-map.md` §5).
-- Decide the data-access helper per call (`tx` vs `svc` vs owner path) and state it; read-only enforcement must hold on every write path, including `svc()` and owner-path writes that RLS does not cover.
+- Decide the data-access helper per call (`tx` vs `svc` vs owner path) and state it; read-only enforcement must hold on every write path, including `svc()` and owner-path writes that RLS does not cover. For each path state both the caller role and, for any `SECURITY DEFINER` function, the function-owner role (`architecture-map.md` §4; ADR-112).
+- **Integrate with the existing authority recheck boundary (B-017).** Staff writes check authority at two points: `guardEffectiveSession` at request entry and `withEffectiveAuthority` inside the transaction, after the business work and before `COMMIT` (`src/server/b017-custom-role-governance.ts:139-163`; example `createProperty`, `src/server/domain.ts:315-344`). The design note must decide how trial-expiry, read-only and manager-pause checks compose with both points — including a request that **begins before 00:00 Asia/Taipei and commits after** — and must not rely on the B-017 functions themselves, which are no-ops for orgs without custom roles (ADR-111 O24).
+- Zero outbound is proven with fake transports and provider isolation, never by "it ran locally" (`architecture-map.md` §9).
 - Concurrency and idempotency tests are required: two Admins starting a trial at once; expiry job run twice; expiry racing a paid activation; a lease starting during expiry.
 - Flag OFF must leave today's behaviour byte-for-byte unchanged; first ON is Ron's 4 internal orgs only, after QA and a CEO exact-SHA GO.
 

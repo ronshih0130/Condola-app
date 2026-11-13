@@ -26,7 +26,7 @@ Docs only. No component, route, permission or flag is changed.
 
 | Fact | Evidence |
 |---|---|
-| Management nav and permissions live in **one module**: `MANAGER_NAV` (sections/links, each with a `perm`), `visibleNav(role)`, `permForPath(pathname)`, `assertPerm`, `roleHome` | `src/server/perms.ts:62-196` |
+| Management nav and permissions live in **one module** but in **separate structures**: `MANAGER_NAV` (sidebar sections/links, each with an optional `perm`, filtered by `visibleNav(role)`) and `ROUTE_PERM` (path prefix → permission, the only thing `permForPath(pathname)` reads); plus `assertPerm`, `roleHome` | `src/server/perms.ts:62-114`, `154-192` |
 | Nav is still the pre-B-043 sidebar ("Admin sees 19" links in sections) | `perms.ts:61-102` |
 | Layouts exist per app for `/m`, `/o`, `/t`; **no `/v` layout** (vendor pages are token pages) | `src/app/m/layout.tsx`, `src/app/o/layout.tsx`, `src/app/t/layout.tsx` |
 | Shared chrome and owner nav components exist | `src/components/chrome.tsx`, `src/components/owner-nav.tsx` |
@@ -34,7 +34,7 @@ Docs only. No component, route, permission or flag is changed.
 | `middleware.ts` does no auth; authorization is in server modules | architecture-map §2 |
 | None of `nav_six_areas*`, `four_party_shell*` is in `ops/flags.yaml` | grep at `1e0a8ab` |
 
-**Risk.** Because the nav list and the permission map are the same data structure, a "visual" rewrite of the sidebar can silently change which roles see which links, or tempt a rewrite of `permForPath`. The company switcher in the header also looks like chrome but changes the active org — a security-relevant action.
+**Risk.** The nav list and the route-permission map are two structures in the same file, kept in step by hand. A "visual" rewrite of the sidebar edits `MANAGER_NAV`, whose `perm` fields decide which roles **see** which links; it does not change `ROUTE_PERM`, which decides which paths a role may **open**. So a nav rewrite can silently change link visibility, let the two structures drift apart (a link shown for a path the role cannot open, or the reverse), or tempt a rewrite of `permForPath` because it sits next door. The company switcher in the header also looks like chrome but changes the active org — a security-relevant action.
 
 ## Decision drivers
 

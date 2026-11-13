@@ -41,26 +41,36 @@ Existing pieces that conflict:
 
 ## Proposed state machine (per org)
 
+Two **independent** facts are kept per org. The diagram shows only the first.
+
+| Fact | Values | Changes when |
+|---|---|---|
+| Current plan | `Free`, `TrialStandard`, `TrialPremium`, `Paid` | transitions in the diagram |
+| `ever_trialled` (working name) | `false` → `true`, never back | **only** when a trial starts. A paid activation or a paid plan ending never changes it |
+
 ```mermaid
 stateDiagram-v2
-  [*] --> FreeNeverTrialled
-  FreeNeverTrialled --> TrialStandard: Admin starts (+3 Taipei months)
-  FreeNeverTrialled --> TrialPremium: Admin starts (+6 Taipei months)
-  FreeNeverTrialled --> Paid: payment recorded, ops activates
+  [*] --> Free
+  Free --> TrialStandard: Admin starts, allowed only while ever_trialled is false (+3 Taipei months), sets ever_trialled true
+  Free --> TrialPremium: Admin starts, allowed only while ever_trialled is false (+6 Taipei months), sets ever_trialled true
+  TrialStandard --> Free: now >= ends_at (00:00 Taipei)
+  TrialPremium --> Free: now >= ends_at (00:00 Taipei)
+  Free --> Paid: payment recorded, ops activates
   TrialStandard --> Paid: payment recorded, ops activates
   TrialPremium --> Paid: payment recorded, ops activates
-  TrialStandard --> FreeAfterTrial: now >= ends_at (00:00 Taipei)
-  TrialPremium --> FreeAfterTrial: now >= ends_at (00:00 Taipei)
-  FreeAfterTrial --> Paid: payment recorded, ops activates
-  Paid --> FreeAfterTrial: paid plan ends (OPEN O16)
-  note right of FreeAfterTrial
-    trial used = true (permanent)
-    units beyond earliest 5: read-only
-    extra managers: paused
+  Paid --> Free: paid plan ends (rules OPEN O16)
+  note right of Free
+    Reached by trial expiry (approved, B-056)
+    units beyond earliest 5 are read-only
+    extra managers are paused
+    Reached from Paid - rules OPEN (O16)
   end note
 ```
 
-"Trial used" is a permanent fact set on the first start; no transition leads back to `FreeNeverTrialled`. Reminder thresholds (14/3/1) and banner dismissals are **presentation state**, not machine states.
+- `ever_trialled` is a permanent fact set on the first trial start, and by nothing else. An org that goes `Free → Paid → Free` without ever starting a trial still has `ever_trialled = false`; the diagram no longer routes it into a "trial used" state.
+- **Whether such a paid-never-trialled org may start a trial later is OPEN (O22).** This ADR does not decide it; the engine must be able to enforce either answer.
+- Nothing at `1e0a8ab` records trial history: signup writes `tier: free, trialUntil: null` (`src/server/signup.ts:653`) and `requestUpgrade` overwrites the JSON (`src/server/partners.ts:316-325`).
+- Reminder thresholds (14/3/1) and banner dismissals are **presentation state**, not machine states.
 
 ## Options — expiry mechanism
 
@@ -68,7 +78,19 @@ stateDiagram-v2
 
 **B. Lazy evaluation only.** Effective plan = pure function of stored `ends_at` and `now`, computed on every read and every guarded write; no job. Consequence: always correct at the instant; but nothing "happens" at expiry — no audit row, no manager pause record, and B-056 AC wording ("a server job returns the org to Free") is not literally met.
 
-**C. Both (recommended).** Lazy evaluation is the **source of truth** for access; an idempotent job only **materialises** side effects (audit row, pause record, expired-banner state). Job trigger is OPEN: new 16:00 UTC cron, or piggyback on the existing 03:00 / 09:00 crons (up to 3–9 h late, harmless because access is already lazy).
+**C. Both (recommended).** Lazy evaluation is the **source of truth** for access; an idempotent job only **materialises** side effects (audit row, pause record, expired-banner state). Job trigger is OPEN (O4): new 16:00 UTC cron, or piggyback on the existing 03:00 / 09:00 crons.
+
+What a late job does and does not delay under C:
+
+| Effect | Depends on the job? | Rule proposed here |
+|---|---|---|
+| Access rules (Free cap, read-only, manager pause) | No — lazy, from `ends_at` | correct from 00:00 Asia/Taipei |
+| **Expired banner on the first `/m` load after expiry** (MGT-99-AC4) | **Must not** | rendered from the lazy effective plan, so it shows **even before the job has run**. "Shown once" must hold whether the load or the job comes first — the two share one idempotent marker |
+| Usage card back to 「{n} / 5 戶」 | No — lazy | same load |
+| Audit row, materialised pause record, any other stored side effect | **Yes** | written when the job next runs **successfully** |
+
+- **Deferred side effects are not assumed harmless.** Between expiry and the next successful job run there is no audit row and no stored pause record, and MGT-99-AC1 says "a server job returns the org to Free". Accepting that gap — and that wording — needs an explicit yes (O23).
+- **"3–9 h late" is not a maximum.** It is the gap to the next 03:00 / 09:00 trigger **if that run succeeds**. The dispatcher skips the run when `CRON_SECRET` is missing and has no retry (`custom-worker.mjs:26-58`); a failed or skipped run pushes the side effects to the next successful one. The design note must state a detection path for a missed run.
 
 ## Options — where trial state lives
 
@@ -83,8 +105,10 @@ Expiry **C**, storage **2**, and:
 - **Effective-plan resolver in one place** (Free / trial-with-paid-rules / paid), used by seat cap, unit guard, usage card and banners. Replaces scattered `planSnapshot` / `hasPlanOrTrial` / `seatLimit` reads **only when the flag is ON**.
 - **`requestUpgrade` unchanged when the flag is OFF.** With the flag ON it must neither set a paid tier nor write `trialUntil`; paid activation comes only from the ops queue after 入帳 (`pricing_apply_requests.paid_received_on`).
 - **Read-only via one server guard** called by every management-side write that targets a unit or its leases; tenant app paths never call it (MGT-99-AC3). Whether a DB trigger backs it up is OPEN (O17).
+- **Composition with the existing authority recheck is OPEN (O24).** Staff writes already check authority twice: `guardEffectiveSession` at request entry and `withEffectiveAuthority` inside the transaction, after the business work and before `COMMIT` (`src/server/b017-custom-role-governance.ts:139-163`; call pair in `src/server/domain.ts:315-344`). The design note must say where the expiry / read-only / manager-pause checks sit relative to those two points, and what happens to a request that **starts before 00:00 Asia/Taipei and commits after**. Both B-017 functions are no-ops for orgs without custom roles, so B-056 cannot simply rely on them.
 - **Manager pause computed from the effective plan**, not by mutating `org_members.status`, so a manually deactivated member is never "resumed" by an upgrade.
-- **Reminders are render-time banners** from `ends_at`; dismissals stored per org/threshold. No call into `mail.ts`, LINE transport or the reminders cron.
+- **Reminders are render-time banners** from `ends_at`. Dismissals are stored per threshold; **the scope of a dismissal is OPEN (O21)** — per user, per org, or another scope. MGT-98-AC1 says only that each threshold, once dismissed, does not reappear; it does not say for whom. Per org would let one member dismiss the reminder for everyone, and nothing in the code today sets an org-wide rule (the session and its presentation context are per user, `src/server/session.ts:54-85`). This ADR does not choose.
+- **No outbound.** No call into `mail.ts`, LINE transport or the reminders cron; tests prove it with fake transports and provider isolation, not by running locally (`architecture-map.md` §9).
 - **Independent of B-030**; plan key for Premium stays `pro` internally unless Q-H says otherwise; `plan_tier` enum untouched.
 
 ## Consequences
@@ -98,11 +122,11 @@ Expiry **C**, storage **2**, and:
 
 | Area | Cases |
 |---|---|
-| Concurrency | two Admins start at once (exactly one row, one audit); start racing paid activation; job run twice / overlapping; expiry racing a paid activation at 00:00; a lease starting or ending while the editable set is computed; `requestUpgrade` (old path) racing the new start |
+| Concurrency | two Admins start at once (exactly one row, one audit); start racing paid activation; job run twice / overlapping; expiry racing a paid activation at 00:00; a lease starting or ending while the editable set is computed; `requestUpgrade` (old path) racing the new start; **a management write that passes the entry check before 00:00 Asia/Taipei and reaches `COMMIT` after** (O24); first `/m` load after expiry racing the job (expired banner exactly once) |
 | Permission | non-Admin start (403, server); sandbox vs live org; cross-org org id in the request; platform admin activating paid; paused manager with a live session at expiry; "original Admin" with several admins |
 | Failure | job fails mid-batch (resume, no double side effects); DB error during start (nothing written, no banner); clock/timezone (DB session TZ ≠ Asia/Taipei); flag turned OFF mid-trial (old behaviour returns; state kept, not deleted); `?trial=` with an invalid or repeated value; signup with `trial=` for an already-trialled org (MGT-96-AC4) |
 | Read-only | direct POST/server-action to edit unit #6; new lease on a read-only unit; export still allowed; `svc()` and owner-path writers; tie on lease start date |
-| Outbound | every path asserts zero sends (capture sink empty) |
+| Outbound | every path asserts zero sends (capture sink empty), with a fake mail transport, provider isolation and the LINE transport mock in place |
 
 ## What this ADR does NOT decide
 
@@ -119,13 +143,17 @@ Carries `domain-model.md` §11.3 O1–O15 unchanged (owners there). Additional:
 | O18 | Month-end arithmetic for +3/+6 calendar months | CEO (confirm with Ron if user-visible) |
 | O19 | Does a partner code's `trial_months` still apply, and does it consume the one trial | Ron, via CEO |
 | O20 | Names: table/columns/functions, flag key under `pricing_trial*` | CEO, in design-note review |
+| O21 | **Banner-dismissal scope:** per user, per org, or another scope (e.g. per Admin). MGT-98-AC1 does not fix it | **Ron, via CEO** |
+| O22 | May an org that became paid without ever trialling start a trial after its paid plan ends? (`ever_trialled` stays `false` for it) | Ron, via CEO |
+| O23 | Accept deferred side effects under expiry option C (audit row and pause record written only at the next successful job run; "a server job returns the org to Free" met lazily), or require a dedicated 00:00 trigger? | Ron, via CEO (AC wording); CEO with box PE (trigger) |
+| O24 | Where expiry / read-only / manager-pause checks sit relative to `guardEffectiveSession` (entry) and `withEffectiveAuthority` (before commit); outcome for a request that starts before 00:00 Asia/Taipei and commits after | CEO (security review), in design-note review |
 
 ## Implementation sketch
 
 | PR | Content | Gate |
 |---|---|---|
 | PR-0 | P37 design note (answers O-items, production checklist, call-site inventory) | CEO review before any code |
-| PR-1 **schema/RLS** | trial record + dismissal state; additive only | **non-author QA + CEO exact-SHA GO before any staging apply**; box PE orders migrations |
+| PR-1 **schema/RLS** | trial record + dismissal state (shape follows O21); additive only | **non-author QA + CEO exact-SHA GO before any staging apply**; box PE orders migrations |
 | PR-2 | effective-plan resolver + start action + flag registration (default OFF) | Class B + security review |
 | PR-3 | read-only guard + manager pause | Class B + security review |
 | PR-4 | expiry job (idempotent) — any cron change is shared config | box PE + CEO GO |
@@ -139,7 +167,8 @@ Per GLOSSARY "Verify" — real interface, real input, on staging with synthetic 
 
 1. Admin starts a Standard trial on `/m/settings`; card shows the end date; a second start (either plan, UI or direct request) is refused.
 2. Set the synthetic org's end to the past: without running the job, a direct edit request for unit #6 is refused and units 1–5 by lease start succeed; the tenant app for unit #6 still reports a payment.
-3. Run the job twice: one audit row, one expired banner, no duplicate pause effect.
-4. Second manager cannot open `/m`; after ops marks paid, access returns without touching a manually suspended member.
-5. Capture sink and `email_log` show zero new sends for the whole run (counts only).
-6. Flag OFF on the same SHA: `/m/settings`, `/m/upgrade`, `requestUpgrade` behave as at `1e0a8ab`.
+3. Still without running the job: the first `/m` load shows the expired banner and the usage card reads 「{n} / 5 戶」; a second load does not show the banner again.
+4. Run the job twice: one audit row, no second expired banner, no duplicate pause effect.
+5. Second manager cannot open `/m`; after ops marks paid, access returns without touching a manually suspended member.
+6. Capture sink and `email_log` show zero new sends for the whole run (counts only).
+7. Flag OFF on the same SHA: `/m/settings`, `/m/upgrade`, `requestUpgrade` behave as at `1e0a8ab`.

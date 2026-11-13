@@ -2,6 +2,8 @@
 
 **Status: DRAFT notes / PROPOSED ADRs — for CEO and Ron review.** App SHA `1e0a8ab` (GitHub `main`), written 2026-11-13 PT on branch `feat/mac/phase0-arch`.
 
+**Review history:** Codex r1 FAIL (5 阻塞/8 低優先) → fix round 1.
+
 **Nothing in this folder changes behaviour.** Docs only: no code, migration, RLS, flag, registry expiry, secret, CI or Worker config is changed, and nothing here authorizes such a change. Schema statements are from migrations and docs, not a live schema dump; items marked "unverified" need a live read by box PE.
 
 Requirement: hub `20-build/MAC-CLAUDE-HANDOFF-1112.md` §2. Read hub `INDEX.md` § "Do NOT build" (`INDEX.md#do-not-build`) before building anything.
@@ -10,7 +12,7 @@ Requirement: hub `20-build/MAC-CLAUDE-HANDOFF-1112.md` §2. Read hub `INDEX.md` 
 
 | File | What it is |
 |---|---|
-| [`architecture-map.md`](architecture-map.md) | Runtime, surfaces, data-access paths and when RLS applies, migrations, flags, CI; gaps G1–G15 |
+| [`architecture-map.md`](architecture-map.md) | Runtime, surfaces, data-access paths and when RLS applies, migrations, flags, CI; gaps G1–G16 |
 | [`domain-model.md`](domain-model.md) | Ten domains with invariants and where each is enforced; proposed target for plans/trials (§11) |
 | [`test-infra.md`](test-infra.md) | Local Mac + disposable PG16; how to run the QA-STANDARD gates; evidence a PR must carry |
 
