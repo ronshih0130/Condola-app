@@ -131,6 +131,15 @@ test("PR-1: flag gate needs enabled=true, the allowlist and the org flag (fail c
   assert.equal((await asService<{ e: boolean }>(db, "SELECT app.b056_enabled($1) AS e", [off.orgId]))[0].e, false);
   await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"pricing_trial":true}' WHERE id = $1`, [off.orgId]);
   assert.equal((await asService<{ e: boolean }>(db, "SELECT app.b056_enabled($1) AS e", [off.orgId]))[0].e, true);
+  // a mixed-type allowlist admits nobody, even an org listed as a string
+  const before = (await db.query(`SELECT value FROM platform_settings WHERE key = 'pricing_trial'`)).rows[0].value;
+  await db.query(`UPDATE platform_settings SET value = jsonb_set(value, '{allowed_org_ids}', (value->'allowed_org_ids') || '[1]'::jsonb) WHERE key = 'pricing_trial'`);
+  try {
+    assert.equal((await asService<{ e: boolean }>(db, "SELECT app.b056_enabled($1) AS e", [off.orgId]))[0].e, false);
+  } finally {
+    await db.query(`UPDATE platform_settings SET value = $1 WHERE key = 'pricing_trial'`, [before]);
+  }
+  assert.equal((await asService<{ e: boolean }>(db, "SELECT app.b056_enabled($1) AS e", [off.orgId]))[0].e, true);
   // global enabled=false switches it off again for every org
   const saved = (await db.query(`SELECT value FROM platform_settings WHERE key = 'pricing_trial'`)).rows[0].value;
   await db.query(`UPDATE platform_settings SET value = jsonb_set(value, '{enabled}', 'false') WHERE key = 'pricing_trial'`);

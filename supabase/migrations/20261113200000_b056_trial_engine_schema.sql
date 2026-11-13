@@ -23,7 +23,8 @@ SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';
 
 -- Flag: effective only when platform_settings.pricing_trial.enabled is boolean true AND
--- allowed_org_ids contains the org AND organizations.feature_flags.pricing_trial is boolean true.
+-- allowed_org_ids is an all-string array containing the org (a mixed-type allowlist admits
+-- nobody, same rule as the TS twin) AND organizations.feature_flags.pricing_trial is boolean true.
 INSERT INTO public.platform_settings(key, value, description)
 VALUES (
   'pricing_trial',
@@ -40,6 +41,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
        AND jsonb_typeof(f.value) = 'object'
        AND f.value->'enabled' = 'true'::jsonb
        AND jsonb_typeof(f.value->'allowed_org_ids') = 'array'
+       AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(f.value->'allowed_org_ids') e WHERE jsonb_typeof(e) <> 'string')
        AND f.value->'allowed_org_ids' @> jsonb_build_array(p_org::text)
        AND jsonb_typeof(o.feature_flags) = 'object'
        AND o.feature_flags->'pricing_trial' = 'true'::jsonb)
