@@ -18,6 +18,10 @@ const added = {
     addOnly: false,
     reason: "B-056 PR-1: seeds default-OFF pricing_trial (enabled false, empty allowlist) with ON CONFLICT DO NOTHING; adds app.b056_org_trials and app.b056_banner_dismissals (CHECK constraints, ENABLE+FORCE RLS, no policies, REVOKE ALL from PUBLIC/anon/authenticated/service_role = definer-only) and six app-schema functions (flag check, plan facts, trial end, start trial, dismiss banner, dismissed kinds) with EXECUTE to service_role only; start writes one audit_log row. Not add-only because of new table constraints and privilege statements. No existing-table, enum, plan_tier or FREE_UNITS change; no outbound; no delete.",
   },
+  "supabase/migrations/20261113100000_c4_free_units_default_5.sql": {
+    addOnly: false,
+    reason: "C4 billing change (Ron 2026-11-13): ALTER partner_codes.free_units DEFAULT 4 -> 5 for newly inserted partner codes only. No existing row rewritten (issued partner allowances keep their stored value), no privilege/RLS/policy/flag change, no outbound. Not add-only because it alters an existing column default.",
+  },
   "supabase/migrations/20261112100000_advisor_rls_stop_bleed.sql": {
     addOnly: false,
     reason: "ENABLE RLS (no policies, not FORCE) and REVOKE ALL from anon and authenticated on seven existing tables (partner_codes, firm_partner_prices, firm_price_overrides, signup_verifications, signup_drafts, funnel_events, upgrade_requests); adds app.owner_lease_tenants() and CREATE OR REPLACE / ALTER VIEW so owner_lease_tenants and tenant_lease_picker are security_invoker; UPDATE unused signup_verifications.expires_at (never DELETE) plus one audit_log insert. Not add-only because it changes privileges, enables RLS on existing tables, replaces an existing view, and rewrites existing rows. No FORCE RLS, no mail or SMS, no flag or FREE_UNITS change.",
