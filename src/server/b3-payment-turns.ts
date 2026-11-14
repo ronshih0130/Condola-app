@@ -123,19 +123,18 @@ type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx 
  * Staff reader (MGT-125, MGT-126, PLT-53-AC6). A complete authorization boundary of its own:
  * staff session + effective pay.record in TypeScript, and current staff membership checked
  * in the database inside the same snapshot. A refusal is errors.forbidden, never an empty list.
- * Any other failure is "unavailable", never zero (MGT-125-AC3).
+ * Any other failure, at any step including admission, is "unavailable", never zero (MGT-125-AC3).
  */
 export async function staffPaymentTurns(session: Session, deps: Deps = {}): Promise<StaffPaymentTurns> {
   const v3 = deps.v3 ?? brandV3EnabledForOrg;
   const transaction = deps.transaction ?? tx;
-  if (!(await v3(session.orgId))) return { state: "off" };
-  // Resolves the current custom-role authority when custom roles are on; passes native and
-  // non-staff sessions through unchanged, so it is not a boundary by itself.
-  session = await guardEffectiveSession(session, "pay.record");
-  // Staff identity and the native (and, for a custom role, effective) permission.
-  assertPerm(session, "pay.record");
-  const admitted = session;
   try {
+    if (!(await v3(session.orgId))) return { state: "off" };
+    // Resolves the current custom-role authority when custom roles are on (a database read);
+    // passes native and non-staff sessions through unchanged, so it is not a boundary by itself.
+    const admitted = await guardEffectiveSession(session, "pay.record");
+    // Staff identity and the native (and, for a custom role, effective) permission.
+    assertPerm(admitted, "pay.record");
     return await transaction(admitted.userId, async (client) => {
       await client.query("SET LOCAL statement_timeout = '2s'");
       // Planner hint, this transaction only. Under row-level security the status filters below
@@ -167,6 +166,8 @@ export async function staffPaymentTurns(session: Session, deps: Deps = {}): Prom
       });
     }, requireOrgScope(admitted), { isolation: "repeatable read", readOnly: true });
   } catch (error) {
+    // A refusal stays a refusal. Everything else — the flag lookup, the custom-role lookup,
+    // a timeout, a lost connection — is "unavailable"; it is never reported as zero.
     if (error instanceof FlowError && error.key === "errors.forbidden") throw error;
     logServerError("b3_staff_payment_turns", error);
     return { state: "unavailable" };

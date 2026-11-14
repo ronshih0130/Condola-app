@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { COUNTS_SQL_FOR_TEST, LISTS_SQL_FOR_TEST, PAYMENT_TURN_LIST_LIMIT, staffPaymentTurns, tenantPaymentTurn } from "./b3-payment-turns";
-import { governCustomRole } from "./b017-custom-role-governance";
+import { governCustomRole, guardEffectiveSession } from "./b017-custom-role-governance";
 import { buildStoredConsent } from "./consent";
 import { query, tx } from "./db";
 import { FlowError } from "./errors";
@@ -329,19 +329,69 @@ test("MGT-125-AC3: a statement timeout after an earlier statement succeeded is '
   const o = await makeOrg();
   const t = await makeTenant(o.orgId);
   await pay(await makeLease(o, [t]), t, "submitted");
+  const seen = { counts: 0, lists: 0, cancelled: null as { code?: string; message?: string } | null };
   const slow: typeof tx = (userId, fn, scope, opts) => tx(userId, async (client) => {
-    const run = client.query.bind(client) as (...a: unknown[]) => Promise<unknown>;
+    const run = client.query.bind(client) as (...a: unknown[]) => Promise<{ rows: unknown[] }>;
     (client as unknown as { query: unknown }).query = async (...a: unknown[]) => {
-      if (a[0] === LISTS_SQL_FOR_TEST) await run("SELECT pg_sleep(3)"); // the reader's own 2s statement timeout cancels this
-      return run(...a);
+      if (a[0] === LISTS_SQL_FOR_TEST) {
+        seen.lists += 1;
+        // longer than the reader's own 2-second statement timeout, which must cancel it
+        try { await run("SELECT pg_sleep(30)"); } catch (e) { seen.cancelled = e as { code?: string; message?: string }; throw e; }
+      }
+      const out = await run(...a);
+      if (a[0] === COUNTS_SQL_FOR_TEST) { seen.counts += 1; assert.equal((out.rows as { count: number }[])[0]?.count, 1, "the count statement succeeded first"); }
+      return out;
     };
     return fn(client);
   }, scope, opts);
   const started = Date.now();
   assert.deepEqual(await staffPaymentTurns(o.staff.admin, { ...ON, transaction: slow }), { state: "unavailable" });
-  assert.ok(Date.now() - started < 2900, "cancelled by the 2-second statement timeout, not after the full sleep");
+  assert.deepEqual({ counts: seen.counts, lists: seen.lists }, { counts: 1, lists: 1 }, "counts completed, then the list statement was reached");
+  assert.equal(seen.cancelled?.code, "57014");
+  assert.match(seen.cancelled?.message ?? "", /statement timeout/);
+  assert.ok(Date.now() - started < 20_000, "cancelled by the statement timeout, long before the 30-second sleep");
   // a refusal inside the same path is still a refusal, not "unavailable"
   await assert.rejects(staffPaymentTurns(o.staff.maintenance, { ...ON, transaction: slow }), forbidden);
+});
+
+test("MGT-125-AC3: a failure during admission is 'unavailable'; a refusal during admission is still a refusal", async () => {
+  const o = await makeOrg();
+  let opened = 0;
+  const counting: typeof tx = (...a) => { opened += 1; return tx(...a); };
+  // the flag lookup fails operationally: unavailable, not "off" and not an exception
+  assert.deepEqual(await staffPaymentTurns(o.staff.admin, { v3: async () => { throw new Error("flag lookup failed"); }, transaction: counting }), { state: "unavailable" });
+  assert.equal(opened, 0);
+  // the transaction failing to start
+  assert.deepEqual(await staffPaymentTurns(o.staff.admin, { ...ON, transaction: (async () => { throw new Error("no connection"); }) as unknown as typeof tx }), { state: "unavailable" });
+  // a FlowError that is not a refusal does not escape either
+  assert.deepEqual(await staffPaymentTurns(o.staff.admin, { ...ON, transaction: (async () => { throw new FlowError("errors.notFound"); }) as unknown as typeof tx }), { state: "unavailable" });
+
+  // The real custom-role lookup (guardEffectiveSession → a database read) failing operationally.
+  // Custom roles are switched on for this org, and the session carries a session id the database
+  // cannot parse, so the lookup itself raises; nothing is injected into the reader.
+  await query(`UPDATE org_members SET is_billing_owner = true WHERE org_id = $1 AND user_id = $2`, [o.orgId, o.staff.admin.userId]);
+  const savedEnv = process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
+  const saved = (await query<{ value: unknown }>(`SELECT value FROM platform_settings WHERE key = 'custom_roles'`)).rows[0]?.value ?? null;
+  try {
+    process.env.CUSTOM_ROLES_ORG_ALLOWLIST = JSON.stringify([o.orgId]);
+    await query(`INSERT INTO platform_settings (key, value) VALUES ('custom_roles', jsonb_build_object('enabled', true, 'allowed_org_ids', jsonb_build_array($1::text)))
+                 ON CONFLICT (key) DO UPDATE SET value = excluded.value`, [o.orgId]);
+    await query(`UPDATE organizations SET feature_flags = feature_flags || '{"custom_roles":true}'::jsonb WHERE id = $1`, [o.orgId]);
+    opened = 0;
+    await ready(o.staff.admin, { ...ON, transaction: counting }); // positive control: the lookup works with a real session id
+    assert.equal(opened, 1);
+    const broken = { ...o.staff.admin, sessionId: "not-a-uuid" };
+    await assert.rejects(guardEffectiveSession(broken, "pay.record"), (e: unknown) => !(e instanceof FlowError && e.key === "errors.forbidden"), "the lookup fails with a non-refusal error");
+    assert.deepEqual(await staffPaymentTurns(broken, { ...ON, transaction: counting }), { state: "unavailable" });
+    assert.equal(opened, 1, "no payment-turn transaction was opened after the failed lookup");
+  } finally {
+    if (savedEnv === undefined) delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST; else process.env.CUSTOM_ROLES_ORG_ALLOWLIST = savedEnv;
+    if (saved === null) await query(`DELETE FROM platform_settings WHERE key = 'custom_roles'`);
+    else await query(`UPDATE platform_settings SET value = $1::jsonb WHERE key = 'custom_roles'`, [JSON.stringify(saved)]);
+    await query(`UPDATE organizations SET feature_flags = feature_flags - 'custom_roles' WHERE id = $1`, [o.orgId]);
+  }
+  // and the unmodified path still works
+  assert.equal((await ready(o.staff.admin)).yourTurn, 0);
 });
 
 async function enableHistory(orgId: string) {
@@ -351,8 +401,8 @@ async function enableHistory(orgId: string) {
        '{allowed_org_ids}', coalesce(platform_settings.value->'allowed_org_ids', '[]'::jsonb) || jsonb_build_array($1::text))`, [orgId]);
   await query(`UPDATE organizations SET feature_flags = feature_flags || '{"tenant_payment_history":true}'::jsonb WHERE id = $1`, [orgId]);
 }
-async function turnOf(t: Tenant, lease: string, options: { view?: "current" | "ended"; reportId?: string } = {}) {
-  const h = await tenantPaymentHistory(t.s, lease, { view: options.view ?? "current", ...(options.reportId ? { reportId: options.reportId } : {}), turn: true });
+async function turnOf(t: Tenant, lease: string, options: { view?: "current" | "ended"; reportId?: string; cursor?: string } = {}) {
+  const h = await tenantPaymentHistory(t.s, lease, { view: options.view ?? "current", ...(options.reportId ? { reportId: options.reportId } : {}), ...(options.cursor ? { cursor: options.cursor } : {}), turn: true });
   assert.equal(h.state, "ready", `history ${h.state}`);
   if (h.state !== "ready") throw new Error("not ready");
   assert.ok(h.turn, "turn summary present when asked");
@@ -389,6 +439,38 @@ test("TEN-51-AC1/AC2: the tenant summary does not depend on the page, the cursor
   const byId = await turnOf(t, b.lease, { reportId: old });
   assert.deepEqual(byId.history.reports.map((r) => r.id), [old]);
   assert.deepEqual(byId.line, { kind: "waiting", amountMinor: 3200000, currency: "TWD" });
+});
+
+test("TEN-51-AC1/AC2: the summary is the same on page two (cursor) as on page one", async () => {
+  const o = await makeOrg(); await enableHistory(o.orgId);
+  const t = await makeTenant(o.orgId);
+  const bulk = (lease: string, from: string) => query(
+    `INSERT INTO payments (org_id, property_id, lease_id, payer_contact_id, currency, amount_minor, paid_on, method, status, source, submitted_by, submitted_at, confirmed_by, confirmed_at)
+     SELECT $1, $2, $3, $4, 'TWD', 10, '2090-01-10', 'bank_transfer', 'confirmed', 'tenant_portal', $5, $6::timestamptz + n * interval '1 minute', $5, now()
+       FROM generate_series(1, 60) n`, [o.orgId, o.property, lease, t.contact, t.userId, from]);
+  // waiting: the NEWEST report is pending, so on page two it lies above the cursor
+  const a = await makeLease(o, [t]);
+  await bulk(a.lease, "2090-01-02T00:00:00Z");
+  const newest = await pay(a, t, "submitted", { at: "2090-06-01T00:00:00Z", amount: 4100000 });
+  const page1 = await turnOf(t, a.lease);
+  assert.equal(page1.history.reports[0].id, newest);
+  assert.ok(page1.history.nextCursor, "there is a second page");
+  const page2 = await turnOf(t, a.lease, { cursor: page1.history.nextCursor! });
+  assert.ok(page2.history.reports.length > 0 && !page2.history.reports.some((r) => r.id === newest), "page two does not contain the pending report");
+  assert.notDeepEqual(page2.history.reports.map((r) => r.id), page1.history.reports.map((r) => r.id));
+  assert.deepEqual(page1.summary, { waiting: { amountMinor: 4100000, currency: "TWD" }, reReport: false });
+  assert.deepEqual(page2.summary, page1.summary, "same summary on both pages");
+  assert.deepEqual(page2.line, page1.line);
+  // re-report: the NEWEST report is the rejected one, also above the cursor on page two
+  const b = await makeLease(o, [t]);
+  await bulk(b.lease, "2090-01-02T00:00:00Z");
+  const rejected = await pay(b, t, "rejected", { at: "2090-06-01T00:00:00Z" });
+  const q1 = await turnOf(t, b.lease);
+  assert.equal(q1.history.reports[0].id, rejected);
+  const q2 = await turnOf(t, b.lease, { cursor: q1.history.nextCursor! });
+  assert.ok(!q2.history.reports.some((r) => r.id === rejected));
+  assert.deepEqual(q1.summary, { waiting: null, reReport: true });
+  assert.deepEqual(q2.summary, q1.summary);
 });
 
 test("TEN-51-AC2: zero balance, a pending report and an ended lease show no 「輪到你」", async () => {
