@@ -61,12 +61,21 @@ for (const group of PAGES) {
         expect(v3Sheet, `${id}: v3 stylesheet`).toBe(1);
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         expect(overflow, `${id}: no horizontal overflow`).toBeLessThanOrEqual(0);
-        const solid = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".main .btn.pri")]
-          .filter(el => el.offsetParent !== null && getComputedStyle(el).backgroundColor === "rgb(20, 50, 92)").length);
-        expect(solid, `${id}: at most one solid primary`).toBeLessThanOrEqual(1);
-        const small = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".main a.btn, .main button.btn")]
-          .filter(el => el.offsetParent !== null && el.getBoundingClientRect().height < 44).length);
-        expect(small, `${id}: 44px minimum touch height on buttons`).toBe(0);
+        // Every navy-filled action in the page body counts, whatever its class (review r1: not only .btn.pri).
+        const solid = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("a, button, input[type=submit]")]
+          .filter(el => el.offsetParent !== null && !el.closest("header.top, .side, footer, nav, dialog, [role=dialog]")
+            && getComputedStyle(el).backgroundColor === "rgb(20, 50, 92)").map(el => (el.textContent ?? "").trim().slice(0, 12)));
+        expect(solid.length, `${id}: at most one solid primary (${solid.join(" | ")})`).toBeLessThanOrEqual(1);
+        // Ron: 44px minimum touch. Buttons, the menu toggle, the language switch and bottom-navigation actions.
+        const small = await page.evaluate(() => {
+          const bottomNav = (el: Element) => { for (let p = el.parentElement; p; p = p.parentElement) {
+            const st = getComputedStyle(p); if ((st.position === "fixed" || st.position === "sticky") && p.getBoundingClientRect().bottom >= innerHeight - 2 && p.getBoundingClientRect().top > innerHeight / 2) return true; } return false; };
+          return [...document.querySelectorAll<HTMLElement>(".main a.btn, .main button.btn, header.top .btn, header.top .nav-toggle, header.top .seg a, a, button")]
+            .filter(el => el.offsetParent !== null && (el.matches(".btn, .nav-toggle, .seg a") || bottomNav(el)))
+            .filter(el => el.getBoundingClientRect().height < 43.5)
+            .map(el => `${(el.textContent ?? "").trim().slice(0, 10) || el.className}:${Math.round(el.getBoundingClientRect().height)}`);
+        });
+        expect([...new Set(small)], `${id}: 44px minimum touch height`).toEqual([]);
         // A pill is wider than it is tall, and a short label stays on one line (B-046 empty-state CTAs may wrap).
         const shapes = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("header.top .btn, .main a.btn, .main button.btn, .side .btn")]
           .filter(el => el.offsetParent !== null && (el.textContent ?? "").trim().length > 0).map(el => {
