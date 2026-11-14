@@ -70,6 +70,46 @@ export function parseTrialPlan(raw: unknown): TrialPlan | null {
   return null;
 }
 
+const taipeiCalendar = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+/** Calendar dates are always Taipei dates, regardless of the server's timezone. */
+export function taipeiDay(d: Date): string {
+  const parts = taipeiCalendar.formatToParts(d);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+export function formatTrialDate(d: Date): string {
+  return taipeiDay(d).replace(/-/g, "/");
+}
+
+/** SQL app.b056_trial_end: add calendar months, clamp, then midnight in Taipei. */
+export function previewTrialEnd(plan: TrialPlan, now: Date): Date {
+  const [year, month, day] = taipeiDay(now).split("-").map(Number);
+  const targetMonth = month - 1 + (plan === "standard" ? 3 : 6);
+  const lastDay = new Date(Date.UTC(year, targetMonth + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, targetMonth, Math.min(day, lastDay), -8));
+}
+
+export function trialDaysLeft(endsAt: Date, now: Date): number {
+  return (Date.parse(`${taipeiDay(endsAt)}T00:00:00Z`) - Date.parse(`${taipeiDay(now)}T00:00:00Z`)) / 86_400_000;
+}
+
+export function trialBannerKind(plan: EffectivePlan, now: Date): "d14" | "d3" | "d1" | null {
+  if (plan.kind !== "trial" || !plan.trial) return null;
+  const days = trialDaysLeft(plan.trial.endsAt, now);
+  return days <= 1 ? "d1" : days <= 3 ? "d3" : days <= 14 ? "d14" : null;
+}
+
+export function safeReturnPath(raw: unknown): string {
+  return typeof raw === "string" && raw.length <= 512 && /^\/m(?:[/?#]|$)/.test(raw)
+    && !raw.includes("//") && !raw.includes("\\")
+    && !Array.from(raw).some((c) => c.charCodeAt(0) <= 31 || (c.charCodeAt(0) >= 127 && c.charCodeAt(0) <= 159))
+    ? raw : "/m";
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

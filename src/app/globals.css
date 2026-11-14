@@ -527,3 +527,20 @@ ol.steps{list-style:none;padding:0;margin:0 0 12px;gap:8px;flex-wrap:nowrap}
   .interim-compare-cards { display: block; }
   .interim-sticky { display: block; }
 }
+/* B-056: mockup dialog/banner classes are absent above; scope all additions to trial UI. */
+:is([data-testid="trial-confirm"],[data-testid="trial-banner"],[data-testid="trial-start-actions"]){--pri:#14325c;--pri-hover:#0f2748;--panel:#fff;--line:#dde3ea;--warn:#935c0f;--warnbg:#f8eedb;color:#1b2533}
+[data-testid="trial-start-actions"]{display:grid;gap:8px;margin-top:12px}
+[data-testid="trial-confirm"]{position:fixed;inset:0;z-index:100;background:rgba(11,31,58,.45);display:grid;place-items:center;padding:20px;overflow:auto;font-size:1rem;line-height:1.65}
+[data-testid="trial-confirm"] .panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:24px;width:100%;max-width:460px;max-height:calc(100dvh - 40px);overflow:auto;overflow-wrap:anywhere}
+[data-testid="trial-confirm"] h1{font-size:1.25rem;margin-bottom:8px}
+[data-testid="trial-confirm"] .acts{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:18px}
+[data-testid="trial-banner"]{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--warnbg);color:var(--warn);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:14px 0 16px;font-size:.9375rem;overflow-wrap:anywhere}
+[data-testid="trial-banner"]>span:first-child{flex:1 1 260px;min-width:0}
+[data-testid="trial-banner"]>span:last-child{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+[data-testid="trial-banner"] .x{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;border:0;background:transparent;color:inherit;font-size:24px;cursor:pointer}
+:is([data-testid="trial-confirm"],[data-testid="trial-banner"],[data-testid="trial-start-actions"]) .btn{min-height:44px;white-space:normal;text-align:center;background:var(--pri);border-color:var(--pri);color:#fff;border-radius:12px;padding:8px 16px;font-size:.9375rem;font-weight:700;text-decoration:none}
+[data-testid="trial-start-actions"] .btn{min-height:48px;font-size:1rem}
+:is([data-testid="trial-confirm"],[data-testid="trial-start-actions"]) .btn.o{background:var(--panel);color:var(--pri)}
+:is([data-testid="trial-confirm"],[data-testid="trial-banner"],[data-testid="trial-start-actions"]) .btn:hover{background:var(--pri-hover);color:#fff}
+
+@media(max-width:640px){[data-testid="trial-confirm"] .panel{padding:18px}}

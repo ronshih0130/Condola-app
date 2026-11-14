@@ -7,8 +7,8 @@ import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "./consent-gate";
 import { FlowError } from "./errors";
 import { getSession } from "./session";
-import { parseTrialPlan } from "./b056-trial-rules";
-import { pricingTrialOnFor, startTrial } from "./b056-trial";
+import { parseTrialPlan, safeReturnPath } from "./b056-trial-rules";
+import { dismissTrialBanner, pricingTrialOnFor, startTrial } from "./b056-trial";
 import { withClient } from "./db";
 
 function isRedirect(error: unknown) {
@@ -35,4 +35,17 @@ export async function actionStartTrial(formData: FormData) {
   } catch (error) {
     bounce(error);
   }
+}
+
+export async function actionDismissTrialBanner(formData: FormData) {
+  await requireCurrentConsent();
+  const next = safeReturnPath(formData.get("next"));
+  try {
+    const session = await guardEffectiveSession(await getSession(), null);
+    const kind = formData.get("kind");
+    if (kind === "d14" || kind === "d3" || kind === "d1") await dismissTrialBanner(session, kind);
+  } catch {
+    // Best-effort dismissal: return to the page even if persistence is unavailable.
+  }
+  redirect(next);
 }
