@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Client } from "pg";
 import { tx } from "./db";
+import { FlowError } from "./errors";
 import { resolveStaffOrg } from "./org-scope";
 import { disposableDbUrl } from "./test-disposable-db";
 
@@ -162,38 +163,89 @@ test("persisted status remains authoritative: a suspended kept admin is not resu
   assert.deepEqual(await access(o.a2, o.orgId), { member: true, admin: true });
 });
 
-// Classified inventory of every function anon/authenticated can effectively EXECUTE whose body
-// reads org_members (catalog has_function_privilege: direct, PUBLIC and inherited grants).
-const PREDICATE_APPLIED = ["app.b010_confirmation_audit", "app.b010_lock_payment_context", "app.b017_denied_orgs", "app.has_role", "app.is_member"];
-const STATUS_AGNOSTIC_DENY_ONLY = ["app.b027_any_org_member"]; // used only as NOT any_org_member
-const VIA_IS_MEMBER = ["app.prop04_my_consent_records"]; // calls app.is_member; its inline read matches m.id/user only
+// Classified inventory (r3-final #4, Codex PR-3a r1): every function that anon/authenticated
+// can effectively EXECUTE (direct, PUBLIC, inherited) or reach — through calls from those
+// functions or from triggers on tables those roles can write — and whose body reads
+// org_members. Expected guarded counts are per function, so any new inline check fails here.
+const PREDICATE_APPLIED: Record<string, number> = {
+  "app.is_member": 2, "app.has_role": 1, "app.b010_confirmation_audit": 1, "app.b010_lock_payment_context": 2,
+  "app.b017_denied_orgs": 2, "app.b008_capture_first_period": 1, "app.b017_effective": 1,
+  "app.b017_invite_guard": 2, "app.b017_member_guard": 1, "app.b027_scope": 1,
+};
+// Membership used only to EXCLUDE staff from owner/tenant paths: a paused member stays excluded.
+const STAFF_EXCLUSION_ONLY = ["app.b027_any_org_member", "app.b022_my_owner_contact", "app.b022_reply_statement"];
+// Last-usable-native-admin invariant (raises when none would remain); not an access grant.
+const INVARIANT_ONLY = ["app.b017_preserve_admin"];
+// Gate through app.is_member; their inline reads match m.id/user only.
+const VIA_IS_MEMBER = ["app.prop04_my_consent_records"];
+// No active-membership test of their own (lock, bootstrap, read-only lookups), or the predicate itself.
+const NO_ACTIVE_TEST_OK = (src: string) => !/status\s*=\s*'active'/i.test(src);
 
-test("inventory: every API-executable function that reads org_members is classified and carries the predicate", async () => {
-  const rows = (await db.query<{ fn: string; src: string }>(
-    `SELECT n.nspname || '.' || p.proname AS fn, p.prosrc AS src
-       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'auth', 'storage', 'extensions')
-        AND (has_function_privilege('anon', p.oid, 'EXECUTE') OR has_function_privilege('authenticated', p.oid, 'EXECUTE'))
-        AND p.prosrc ~* 'org_members'
-      ORDER BY 1`)).rows;
-  const known = new Set([...PREDICATE_APPLIED, ...STATUS_AGNOSTIC_DENY_ONLY, ...VIA_IS_MEMBER]);
-  assert.deepEqual(rows.map((r) => r.fn).filter((f) => !known.has(f)), [], "unclassified inline-membership function");
+const REACHABLE_SQL = `
+WITH RECURSIVE fn AS (
+  SELECT p.oid, n.nspname, p.proname, n.nspname || '.' || p.proname AS q, p.prosrc
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname IN ('public', 'app')),
+roots AS (
+  SELECT oid FROM fn WHERE has_function_privilege('anon', oid, 'EXECUTE') OR has_function_privilege('authenticated', oid, 'EXECUTE')
+  UNION
+  SELECT t.tgfoid FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+   WHERE NOT t.tgisinternal AND (
+     has_table_privilege('authenticated', c.oid, 'INSERT') OR has_table_privilege('authenticated', c.oid, 'UPDATE') OR has_table_privilege('authenticated', c.oid, 'DELETE')
+     OR has_table_privilege('anon', c.oid, 'INSERT') OR has_table_privilege('anon', c.oid, 'UPDATE') OR has_table_privilege('anon', c.oid, 'DELETE'))),
+edges AS (
+  SELECT a.oid AS src, b.oid AS dst FROM fn a JOIN fn b ON a.oid <> b.oid
+   AND (a.prosrc ~ ('\\m' || b.nspname || '\\.' || b.proname || '\\s*\\(')
+        OR (b.nspname = 'public' AND a.prosrc ~ ('(^|[^.\\w])' || b.proname || '\\s*\\(')))),
+reach AS (
+  SELECT oid FROM roots
+  UNION
+  SELECT e.dst FROM reach r JOIN edges e ON e.src = r.oid)
+SELECT DISTINCT f.q AS fn, f.prosrc AS src FROM reach r JOIN fn f ON f.oid = r.oid
+ WHERE f.prosrc ~* 'org_members' ORDER BY 1`;
+
+test("inventory: every API-reachable function that reads org_members is classified and carries the predicate", async () => {
+  const rows = (await db.query<{ fn: string; src: string }>(REACHABLE_SQL)).rows;
+  const fns = rows.map((r) => r.fn);
+  for (const f of [...Object.keys(PREDICATE_APPLIED), "app.b027_scope", "app.b017_effective"]) assert.ok(fns.includes(f), `${f} not found reachable`);
+  const known = new Set([...Object.keys(PREDICATE_APPLIED), ...STAFF_EXCLUSION_ONLY, ...INVARIANT_ONLY, ...VIA_IS_MEMBER, "app.b056_member_paused"]);
+  const unclassified = rows.filter((r) => !known.has(r.fn) && !NO_ACTIVE_TEST_OK(r.src)).map((r) => r.fn);
+  assert.deepEqual(unclassified, [], "unclassified API-reachable inline active-membership function");
   for (const r of rows) {
-    const activeTests = r.src.match(/m\.status\s*=\s*'active'/g)?.length ?? 0;
-    const guarded = r.src.match(/m\.status\s*=\s*'active'\s+AND NOT app\.b056_member_paused\(m\.org_id, m\.user_id\)/g)?.length ?? 0;
-    if (PREDICATE_APPLIED.includes(r.fn)) {
-      assert.ok(activeTests > 0, `${r.fn} lost its active-membership test`);
-      assert.equal(guarded, activeTests, `${r.fn}: every m.status='active' test carries the pause predicate`);
-    } else if (STATUS_AGNOSTIC_DENY_ONLY.includes(r.fn)) {
-      assert.equal(/status/i.test(r.src), false, `${r.fn} became status-aware; reclassify it`);
-    } else {
+    const guarded = r.src.match(/status\s*=\s*'active'\s+AND NOT app\.b056_member_paused\(/g)?.length ?? 0;
+    if (r.fn in PREDICATE_APPLIED) {
+      assert.equal(guarded, PREDICATE_APPLIED[r.fn], `${r.fn}: guarded active-membership tests`);
+    } else if (VIA_IS_MEMBER.includes(r.fn)) {
       assert.match(r.src, /app\.is_member\(/, `${r.fn} must gate through app.is_member`);
-      assert.equal(activeTests, 0, `${r.fn} gained an inline active test; reclassify it`);
+      assert.equal(/status\s*=\s*'active'/i.test(r.src), false, `${r.fn} gained an inline active test; reclassify it`);
+    } else if (STAFF_EXCLUSION_ONLY.includes(r.fn)) {
+      assert.equal(guarded, 0, `${r.fn} must not treat a paused member as non-staff`);
     }
   }
   const usage = (await db.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM pg_policies WHERE qual ~ 'b027_any_org_member' AND qual !~ 'NOT app\\.b027_any_org_member'`)).rows[0].n;
   assert.equal(usage, 0, "b027_any_org_member is only ever used negated");
+});
+
+test("indirect paths: a paused member is refused by b027_read_controls and gets no b017 permissions", async () => {
+  const o = await makeOrg();
+  const read = (userId: string) => tx(userId, async (c) => (await c.query(`SELECT app.b027_read_controls($1) AS r`, [o.orgId])).rows[0].r, { orgId: o.orgId, environment: "live" });
+  assert.ok(await read(o.a1));
+  // tx() maps the function's 42501 to FlowError errors.forbidden
+  const forbidden = (e: unknown) => e instanceof FlowError && e.key === "errors.forbidden";
+  await assert.rejects(read(o.a2), forbidden);
+  await assert.rejects(read(o.mgr), forbidden);
+  const eff = async (userId: string) => (await db.query<{ e: string[] | null }>(`SELECT app.b017_effective($1, $2) AS e`, [o.orgId, userId])).rows[0].e;
+  assert.notEqual(await eff(o.a1), null);
+  assert.equal(await eff(o.a2), null);
+  assert.equal(await eff(o.mgr), null);
+});
+
+test("C-0 legacy trial_used_not_paid org: non-kept members are paused once the flag is ON", async () => {
+  const o = await makeOrg({ endsInMs: null });
+  await db.query(
+    `INSERT INTO app.b056_org_trials (org_id, trial_plan, trial_source, trial_ends_at, legacy_class)
+     VALUES ($1, 'standard', 'legacy', now() - interval '30 days', 'trial_used_not_paid')`, [o.orgId]);
+  assert.deepEqual([await paused(o.orgId, o.a1), await paused(o.orgId, o.a2), await paused(o.orgId, o.mgr)], [false, true, true]);
 });
 
 test("app.b056_member_paused is definer-only, pinned and non-recursive", async () => {
@@ -224,8 +276,10 @@ test("attempted calls: anon and authenticated calling any app.b056_* function ge
       try {
         await db.query(`SELECT set_config('request.jwt.claim.sub', gen_random_uuid()::text, true)`);
         await db.query(`SET LOCAL ROLE ${role}`);
+        // ACL denial (function EXECUTE, or schema USAGE for anon), not an exception raised inside the
+        // function (e.g. classify_legacy raises 42501 for a missing org)
         await assert.rejects(db.query(`SELECT ${name(f.sig)}(${f.args})`),
-          (e: { code?: string }) => e.code === "42501", `${role} → ${f.sig}`);
+          (e: { code?: string; message?: string }) => e.code === "42501" && /^permission denied for (function|schema) /.test(e.message ?? ""), `${role} → ${f.sig}`);
       } finally {
         await db.query("ROLLBACK");
       }

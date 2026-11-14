@@ -15,14 +15,19 @@
 --      Asia/Taipei of the end date) for every member except the kept one, while no paid plan is
 --      recorded. A sandbox org resolves to its live org, so the live-org pause applies there too.
 --   4. CREATE OR REPLACE of app.is_member, app.has_role and every other function that anon or
---      authenticated can effectively EXECUTE and that checks active membership inline
+--      authenticated can effectively EXECUTE or reach, and that checks active membership inline
 --      (b010_confirmation_audit, b010_lock_payment_context, b017_denied_orgs). Each body is the
 --      current definition with `AND NOT app.b056_member_paused(m.org_id, m.user_id)` appended to
 --      its `m.status = 'active'` test; nothing else changes. Owner and grants are kept by
---      CREATE OR REPLACE. app.b027_any_org_member is status-agnostic and only used as
---      NOT any_org_member (it excludes staff from tenant paths), so a paused member stays
---      excluded; app.prop04_my_consent_records already calls app.is_member. The PR-3a inventory
---      test enumerates these from the catalog (has_function_privilege), not rpc-allowlist.txt.
+--      CREATE OR REPLACE. The same applies to the definer helpers those functions, or triggers
+--      on API-writable tables, reach (call-graph closure): b008_capture_first_period,
+--      b017_effective, b017_invite_guard, b017_member_guard and b027_scope (behind
+--      b027_read_controls). Not changed, by design: app.b027_any_org_member,
+--      app.b022_my_owner_contact and app.b022_reply_statement use membership only to EXCLUDE
+--      staff from owner/tenant paths, so a paused member stays excluded (stricter);
+--      app.b017_preserve_admin is the last-usable-admin invariant; app.prop04_my_consent_records
+--      already calls app.is_member. The PR-3a inventory test computes the closure from the
+--      catalog (has_function_privilege + pg_trigger), not rpc-allowlist.txt.
 --
 -- With the flag OFF (seed: enabled false, empty allowlist) every changed function returns
 -- exactly what it returned before. Additive; no deletes; no outbound; no grant to anon or
@@ -294,5 +299,184 @@ AS $function$
  ELSE true END
 $function$
 ;
+
+-- Definer helpers reached indirectly from API-executable functions or from triggers on
+-- API-writable tables (call-graph closure; Codex PR-3a r1). Same rule: current body plus the
+-- pause predicate on each active-membership test that grants access.
+-- app.b008_capture_first_period: current definition + pause predicate
+CREATE OR REPLACE FUNCTION app.b008_capture_first_period(p_lease uuid, p_prorate boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+  v_user uuid := auth.uid();
+  v_org uuid;
+  v_env text;
+  v_global jsonb;
+  v_flags jsonb;
+  v_lease public.leases;
+  v_enabled boolean;
+  v_basis jsonb;
+BEGIN
+  IF current_setting('transaction_isolation') <> 'read committed' THEN RAISE EXCEPTION 'Retry transaction' USING ERRCODE='40001'; END IF;
+  IF v_user IS NULL OR p_prorate IS NULL THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  BEGIN
+    v_org := nullif(current_setting('app.active_org_id',true),'')::uuid;
+    v_env := nullif(current_setting('app.env',true),'');
+  EXCEPTION WHEN invalid_text_representation THEN
+    RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501';
+  END;
+  IF v_org IS NULL OR v_env NOT IN ('live','sandbox') THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+
+  SELECT value INTO v_global FROM public.platform_settings WHERE key='billing_previews' FOR SHARE;
+  SELECT o.feature_flags INTO v_flags
+    FROM public.organizations o
+    JOIN public.organizations live ON live.id=coalesce(o.live_org_id,o.id) AND live.environment='live'
+    JOIN public.org_members m ON m.org_id=live.id AND m.user_id=v_user AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id) AND m.role IN ('admin','manager')
+   WHERE o.id=v_org AND o.environment::text=v_env
+     AND ((o.environment='live' AND o.id=live.id) OR (o.environment='sandbox' AND o.live_org_id=live.id))
+   FOR SHARE OF o,live,m;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  v_enabled := coalesce(v_global->'enabled'='true'::jsonb,false)
+    AND jsonb_typeof(v_global->'allowed_org_ids')='array'
+    AND (v_global->'allowed_org_ids') @> jsonb_build_array(v_org::text)
+    AND coalesce(v_flags->'billing_previews'='true'::jsonb,false);
+  v_enabled := coalesce(v_enabled,false);
+
+  SELECT * INTO v_lease FROM public.leases WHERE id=p_lease AND org_id=v_org FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not found' USING ERRCODE='42501'; END IF;
+  IF NOT v_enabled AND (v_lease.first_period_basis IS NULL OR (v_lease.first_period_basis->'prorateFirstPeriod') IS DISTINCT FROM to_jsonb(p_prorate)) THEN
+    RAISE EXCEPTION 'Feature unavailable' USING ERRCODE='42501';
+  END IF;
+  IF v_lease.rent_frequency::text <> 'monthly' OR v_lease.currency NOT IN ('TWD','USD') THEN
+    RAISE EXCEPTION 'Unsupported billing source' USING ERRCODE='23514';
+  END IF;
+  -- B001 case writers already lock the case, and case creation locks this lease.
+  PERFORM 1 FROM public.esign_cases c WHERE c.org_id=v_org AND c.lease_id=p_lease ORDER BY c.id FOR UPDATE;
+  -- Existing legacy signature rows can also be updated directly by staff.
+  -- New rows' foreign key checks are fenced by the lease lock above.
+  PERFORM 1 FROM public.lease_signatures s WHERE s.org_id=v_org AND s.lease_id=p_lease ORDER BY s.id FOR UPDATE;
+  IF v_lease.status NOT IN ('draft','pending_signature') OR v_lease.esign_status NOT IN ('not_sent','sent') OR v_lease.signed_at IS NOT NULL
+    OR EXISTS (SELECT 1 FROM public.lease_signatures s WHERE s.lease_id=p_lease AND s.status='signed')
+    OR EXISTS (SELECT 1 FROM public.esign_cases c JOIN public.esign_versions v ON v.case_id=c.id JOIN public.esign_signers s ON s.version_id=v.id WHERE c.org_id=v_org AND c.lease_id=p_lease AND s.signed_at IS NOT NULL)
+    OR EXISTS (SELECT 1 FROM public.esign_cases c JOIN public.esign_versions v ON v.case_id=c.id JOIN public.esign_signature_images i ON i.version_id=v.id WHERE c.org_id=v_org AND c.lease_id=p_lease)
+    -- A disposal tombstone does not prove that no partial signature existed.
+    OR EXISTS (SELECT 1 FROM public.esign_disposals d WHERE d.org_id=v_org AND d.lease_id=p_lease)
+    OR EXISTS (SELECT 1 FROM public.invoices i WHERE i.org_id=v_org AND i.lease_id=p_lease AND i.source='move_in') THEN
+    RAISE EXCEPTION 'Billing source is locked' USING ERRCODE='23514';
+  END IF;
+  v_basis := jsonb_build_object('version','monthly-30-v1','startDate',v_lease.start_date::text,
+    'endDate',v_lease.end_date::text,'monthlyRentMinor',v_lease.rent_amount_minor,
+    'currency',btrim(v_lease.currency),'rentFrequency',v_lease.rent_frequency::text,
+    'prorateFirstPeriod',p_prorate,'actor',v_user::text,'capturedAt',clock_timestamp());
+  UPDATE public.leases SET first_period_basis=v_basis,prorate_first_period=p_prorate WHERE id=p_lease AND org_id=v_org;
+  RETURN v_basis;
+END $function$;
+
+-- app.b017_effective: current definition + pause predicate
+CREATE OR REPLACE FUNCTION app.b017_effective(p_org uuid, p_user uuid)
+ RETURNS text[]
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public', 'app'
+AS $function$
+DECLARE m public.org_members; a app.b017_assignments; keys text[];
+BEGIN
+ SELECT * INTO m FROM public.org_members WHERE org_id=p_org AND user_id=p_user AND status='active' AND NOT app.b056_member_paused(p_org, p_user);
+ IF NOT FOUND THEN RETURN NULL; END IF;
+ IF NOT app.b017_enabled(p_org) THEN RETURN app.b017_native(m.role::text); END IF;
+ SELECT * INTO a FROM app.b017_assignments WHERE org_id=p_org AND user_id=p_user;
+ IF NOT FOUND OR a.role_id IS NULL THEN RETURN app.b017_native(m.role::text); END IF;
+ SELECT v.grants INTO keys FROM app.b017_roles r JOIN app.b017_role_revisions v
+ ON (v.org_id,v.role_id,v.revision)=(r.org_id,r.id,r.current_revision)
+ WHERE r.org_id=p_org AND r.id=a.role_id AND NOT r.retired AND r.current_revision=a.revision;
+ RETURN CASE WHEN keys IS NULL THEN NULL ELSE ARRAY(SELECT k FROM unnest(keys) k WHERE k=ANY(app.b017_native(m.role::text))) END;
+END $function$;
+
+-- app.b017_invite_guard: current definition + pause predicate
+CREATE OR REPLACE FUNCTION app.b017_invite_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public', 'app'
+AS $function$
+DECLARE ceiling text[];
+BEGIN
+ IF TG_OP='UPDATE' AND (NEW.org_id,NEW.invited_by) IS DISTINCT FROM (OLD.org_id,OLD.invited_by)
+   AND (app.b017_enabled(OLD.org_id) OR app.b017_enabled(NEW.org_id))
+ THEN RAISE EXCEPTION 'B017 immutable invitation scope' USING ERRCODE='42501'; END IF;
+ IF NEW.kind<>'team_member' OR NEW.status NOT IN ('pending','accepted') OR NOT app.b017_enabled(NEW.org_id) THEN RETURN NEW; END IF;
+ -- Existing invite writers may hold the org/invitation already. NOWAIT fences
+ -- that inversion; a caller retries the complete operation, never a partial write.
+ PERFORM 1 FROM public.platform_settings WHERE key='custom_roles' FOR SHARE NOWAIT;
+ PERFORM 1 FROM public.organizations WHERE id=NEW.org_id FOR UPDATE NOWAIT;
+ PERFORM 1 FROM public.org_members WHERE org_id=NEW.org_id ORDER BY (role='admin') DESC,id FOR UPDATE NOWAIT;
+ PERFORM 1 FROM app.b017_roles WHERE org_id=NEW.org_id ORDER BY id FOR UPDATE NOWAIT;
+ PERFORM 1 FROM app.b017_assignments WHERE org_id=NEW.org_id ORDER BY user_id FOR UPDATE NOWAIT;
+ IF NEW.status='pending' AND (auth.uid() IS NULL OR
+   (NOT EXISTS(SELECT 1 FROM public.org_members WHERE org_id=NEW.org_id AND user_id=auth.uid() AND role='admin' AND status='active' AND NOT app.b056_member_paused(org_members.org_id, org_members.user_id))
+    OR NOT coalesce(app.b017_effective(NEW.org_id,auth.uid()) @> ARRAY['team.manage'],false)
+    OR NOT coalesce(app.b017_native(NEW.role::text) <@ app.b017_effective(NEW.org_id,auth.uid()),false))
+)
+ THEN RAISE EXCEPTION 'B017 invitation actor ceiling' USING ERRCODE='42501'; END IF;
+ ceiling:=app.b017_effective(NEW.org_id,NEW.invited_by);
+ IF NOT EXISTS(SELECT 1 FROM public.org_members WHERE org_id=NEW.org_id AND user_id=NEW.invited_by AND role='admin' AND status='active' AND NOT app.b056_member_paused(org_members.org_id, org_members.user_id))
+  OR NOT coalesce('team.manage'=ANY(ceiling),false)
+  OR NOT coalesce(app.b017_native(NEW.role::text) <@ ceiling,false)
+ THEN RAISE EXCEPTION 'B017 invitation grant ceiling' USING ERRCODE='42501'; END IF;
+ -- Acceptance runs after the member update, in the same transaction and locks.
+ -- Check resulting authority, including any retained assignment, not just role.
+ IF NEW.status='accepted' AND (NEW.accepted_by IS NULL OR
+   NOT coalesce(app.b017_effective(NEW.org_id,NEW.accepted_by) <@ ceiling,false))
+ THEN RAISE EXCEPTION 'B017 retained invitation grant ceiling' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END $function$;
+
+-- app.b017_member_guard: current definition + pause predicate
+CREATE OR REPLACE FUNCTION app.b017_member_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public', 'app'
+AS $function$
+DECLARE org uuid; actor uuid:=auth.uid(); ceiling text[];
+BEGIN
+ org:=CASE WHEN TG_OP='DELETE' THEN OLD.org_id ELSE NEW.org_id END;
+ IF TG_OP='UPDATE' AND (NEW.org_id,NEW.user_id) IS DISTINCT FROM (OLD.org_id,OLD.user_id)
+   AND (app.b017_enabled(OLD.org_id) OR app.b017_enabled(NEW.org_id))
+ THEN RAISE EXCEPTION 'B017 immutable member scope' USING ERRCODE='42501'; END IF;
+ IF NOT app.b017_enabled(org) THEN RETURN NULL; END IF;
+ IF TG_OP<>'INSERT' AND OLD.is_billing_owner AND
+   (TG_OP='DELETE' OR NOT NEW.is_billing_owner OR NEW.status<>'active' OR NEW.role<>'admin')
+ THEN RAISE EXCEPTION 'B017 billing owner protection' USING ERRCODE='42501'; END IF;
+ IF actor IS NOT NULL THEN
+   ceiling:=app.b017_effective(org,actor);
+   IF NOT EXISTS(SELECT 1 FROM public.org_members WHERE org_id=org AND user_id=actor AND role='admin' AND status='active' AND NOT app.b056_member_paused(org_members.org_id, org_members.user_id))
+     OR NOT coalesce('team.manage'=ANY(ceiling),false)
+   THEN RAISE EXCEPTION 'B017 native governance denied' USING ERRCODE='42501'; END IF;
+   IF TG_OP<>'DELETE' AND NOT coalesce(app.b017_effective(org,NEW.user_id) <@ ceiling, NEW.status<>'active')
+   THEN RAISE EXCEPTION 'B017 native grant ceiling' USING ERRCODE='42501'; END IF;
+ END IF;
+ PERFORM app.b017_preserve_admin(org);
+ RETURN NULL;
+END $function$;
+
+-- app.b027_scope: current definition + pause predicate
+CREATE OR REPLACE FUNCTION app.b027_scope(p_org uuid, p_admin boolean)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public', 'app'
+AS $function$
+  SELECT EXISTS (SELECT 1 FROM public.organizations o JOIN public.org_members m
+    ON m.org_id=coalesce(o.live_org_id,o.id) AND m.user_id=auth.uid() AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id)
+    WHERE o.id=p_org AND current_setting('app.active_org_id',true)=o.id::text
+      AND current_setting('app.env',true)=o.environment::text
+      AND ((o.environment='live' AND o.live_org_id IS NULL)
+        OR (o.environment='sandbox' AND o.live_org_id IS NOT NULL))
+      AND (NOT p_admin OR m.role='admin'));
+$function$;
 
 COMMIT;
