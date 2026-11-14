@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261114100000_b042_fix_forward.sql": {
+    addOnly: false,
+    reason: "B-042 fix-forward (CEO GO on #143): CREATE OR REPLACE of app.b042_flag_on and app.b042_session_pin_ok with the same signatures; today_dash now also requires today_home, and the recorders require a transaction pinned to the live org (a missing pin was accepted before). Privileges re-asserted (REVOKE ALL, EXECUTE to service_role only). No table, column, policy, enum or flag-value change; flags stay OFF and nothing in the app calls these functions yet. Not add-only: it tightens existing function behavior.",
+  },
   "supabase/migrations/20261113220000_b042_today_home_schema.sql": {
     addOnly: false,
     reason: "B-042 PR-1 (narrowed): seeds default-OFF today_home and today_dash with ON CONFLICT DO NOTHING; adds app.b042_first_logins and app.b042_invite_shares (CHECKs, ENABLE+FORCE RLS, no policies, REVOKE ALL incl. service_role = definer-only) and six app-schema functions (flag check, session-pin check, first-login record/seen, invite-share record, org-shared; sample_marks excluded) with EXECUTE to service_role only. Not add-only because of constraints and privilege statements. No existing-table, B-040, B-028 or funnel change; no outbound; no delete.",
