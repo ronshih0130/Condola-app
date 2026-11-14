@@ -47,6 +47,10 @@ test("the staging wrangler env names secrets and keeps demo mode off", () => {
   assert.ok(staging);
   assert.ok(staging.compatibility_flags?.includes("nodejs_compat"));
   assert.equal(staging.vars?.CONDOLA_ENV, "staging");
+  // Ron 2026-11-14 12:24 PT: staging mirrors production's Brand v2. Config only; no other flag.
+  assert.equal(staging.vars?.BRAND_V2, "true");
+  assert.equal(parseJsonc(raw).env?.production?.vars?.BRAND_V2, "true");
+  assert.equal("BRAND_V3" in (staging.vars ?? {}), false, "brand_v3 has no environment switch");
   assert.equal(staging.vars?.CONDOLA_SITE_URL, "https://staging.condola.app");
   assert.equal(staging.vars?.DEMO_MODE, "false");
   assert.equal(staging.vars?.LINE_LOGIN_ENABLED, "false");

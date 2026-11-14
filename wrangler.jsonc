@@ -33,6 +33,7 @@
       },
       "vars": {
         "CONDOLA_ENV": "staging",
+        "BRAND_V2": "true",
         "CONDOLA_SITE_URL": "https://staging.condola.app",
         "DEMO_MODE": "false",
         "LINE_LOGIN_ENABLED": "false",
