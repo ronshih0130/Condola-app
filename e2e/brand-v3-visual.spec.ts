@@ -20,7 +20,7 @@ const PAGES: { account: string | null; shots: Shot[] }[] = [
     { name: "m-noperm", path: "/m/noperm?need=admin" }, { name: "not-found", path: "/brand-v3-visual-missing-page" },
   ] },
   // tenant2 has one lease in the seeded org, so /t is the tenant home and not the lease picker.
-  { account: ACCOUNTS.tenant2, shots: [{ name: "t-home", path: "/t" }, { name: "t-pay", path: "/t/pay" }] },
+  { account: ACCOUNTS.tenant2, shots: [{ name: "t-home", path: "/t" }, { name: "t-pay", path: "/t/pay" }, { name: "t-pay-done", path: "/t/pay?done=1" }] },
   { account: ACCOUNTS.owner, shots: [{ name: "o-home", path: "/o" }] },
 ];
 

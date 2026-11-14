@@ -1,4 +1,5 @@
 import { CompletionCheck } from "./v3/completion-check";
+import { WaitMark } from "./v3/wait-mark";
 import Link from 'next/link';
 import { tenantPaymentHistoryCopy } from '@/i18n/tenant-payment-history';
 import { makeT, type Locale } from '@/i18n';
@@ -43,7 +44,7 @@ export function TenantPaymentHistory({ data, locale, pathname, cursor, selectedR
     <h2 id="tenant-payment-history-title">{t.title}</h2>
     <p className="small">{t.currentBillNote}</p>
     {data.reports.length === 0 ? <p>{t.empty}</p> : <ol>{data.reports.map(report => <li key={report.id} id={`report-${report.id}`} style={{ overflowWrap: 'anywhere' }}>
-      <p>{v3 && report.status === 'confirmed' ? <CompletionCheck /> : null}<strong>{({ submitted: t.submitted, confirmed: t.confirmed, rejected: t.rejected, reversed: t.reversed })[report.status]}</strong></p>
+      <p>{v3 && report.status === 'confirmed' ? <CompletionCheck /> : null}{v3 && report.status === 'submitted' ? <WaitMark /> : null}<strong>{({ submitted: t.submitted, confirmed: t.confirmed, rejected: t.rejected, reversed: t.reversed })[report.status]}</strong></p>
       <p>{t.recordedAmount}: {amount(report.current.amountMinor, report.current.currency, locale)}</p>
       <p>{t.recordedPaidOn}: <time dateTime={report.current.paidOn}>{report.current.paidOn}</time></p>
       <p>{t.submittedAt}: <time dateTime={report.submittedAt}>{report.submittedAt}</time></p>

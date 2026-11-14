@@ -95,7 +95,7 @@ test("empty-state illustration slot leaves OFF markup identical", () => {
   }
 });
 
-test("tenant completion is confirmed-only and flag OFF preserves the payment view", () => {
+test("PLT-51: tick only when confirmed, clock only when submitted; flag OFF preserves the payment view", () => {
   type Ready = Parameters<typeof TenantPaymentHistory>[0]["data"];
   const data: Ready = {
     state: "ready", lease: { id: "lease", status: "active", currency: "TWD", canReport: false, legacyPayeeVisible: false },
@@ -110,7 +110,10 @@ test("tenant completion is confirmed-only and flag OFF preserves the payment vie
     const off = renderToStaticMarkup(<TenantPaymentHistory data={data} locale="en" pathname="/t/pay" v3={false} />);
     const on = renderToStaticMarkup(<TenantPaymentHistory data={data} locale="en" pathname="/t/pay" v3 />);
     assert.equal(off, baseline);
-    assert.doesNotMatch(off, /v3-check/);
+    assert.doesNotMatch(off, /v3-check|v3-wait/);
     assert.equal(on.includes('class="v3-check"'), status === "confirmed");
+    // PLT-51-AC2: a report handed to the company shows the clock, never the tick; nothing else gets either mark.
+    assert.equal(on.includes('class="v3-wait"'), status === "submitted");
+    if (status === "submitted") assert.match(on, /<span class="v3-wait" aria-hidden="true">/);
   }
 });

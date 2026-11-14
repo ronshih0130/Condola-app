@@ -1,4 +1,5 @@
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { WaitMark } from "@/components/v3/wait-mark";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
@@ -54,7 +55,7 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
     <div>
       <h2>{t("i_rich_pay")}</h2>
       <ErrorBanner t={t} error={params.error} />
-      {params.done ? <div className="alert ok">{t("i_pay_submitted")}</div> : null}
+      {params.done ? <div className="alert ok">{v3 ? <WaitMark /> : null}{t("i_pay_submitted")}</div> : null}
       <p>
         {displaySampleName(money.lease.place)}
       </p>
