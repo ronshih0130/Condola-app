@@ -284,12 +284,14 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run copy:check
-      # Cap Node test concurrency at 4 to leave CPU/RAM for Ron's interactive
-      # Claude Code work on this same Mac. `test:unit` is one `tsx --test` run
-      # over many files with no built-in cap; the appended `--` arg flows to
-      # the tsx test runner (NODE_OPTIONS=--test-concurrency is rejected by
-      # Node, so it must be a CLI arg, not an env var). package.json unchanged.
-      - run: npm run test:unit -- --test-concurrency=4
+      # Do not append `-- --test-concurrency=4`. `test:unit` is a chain of
+      # `tsx --test` batches, so npm puts the extra arg on the last batch;
+      # after `--`, tsx treats it as a file path (run 43363912849:
+      # `Could not find '.../--test-concurrency=4'`). NODE_OPTIONS also
+      # rejects `--test-concurrency` (`is not allowed in NODE_OPTIONS`).
+      # package.json and hosted ci.yml stay unchanged; default Node
+      # concurrency applies on this runner.
+      - run: npm run test:unit
 
       # --- Disposable PostgreSQL 16 (macOS, no Docker) -------------------
       - name: Start disposable PostgreSQL 16
@@ -370,10 +372,11 @@ jobs:
       - name: Check function execute privileges
         run: bash scripts/check-function-privileges.sh
 
-      # Cap Node test concurrency at 4 to share the Mac with interactive Claude
-      # Code work (appended `--` arg; harmless if the file is already
-      # --test-concurrency=1 or a single file). NODE_OPTIONS can't carry it.
-      - run: npm run test:rls -- --test-concurrency=4
+      # Same passthrough bug as test:unit: do not append
+      # `-- --test-concurrency=4` (file path on the last chained batch).
+      # package.json already sets `--test-concurrency=1` per RLS file.
+      # Hosted ci.yml unchanged.
+      - run: npm run test:rls
 
       # --- Node 22 LTS (wrangler lane only) ------------------------------
       # Switch to the preinstalled Node 22 by prepending it to PATH. No
@@ -390,9 +393,10 @@ jobs:
       # Dual-Node: deps were installed under Node 20 by `npm ci` above.
       # cf:build / test:worker run under Node 22 WITHOUT re-running npm ci.
       - run: npm run cf:build
-      # Cap Node test concurrency at 4 to share the Mac with interactive Claude
-      # Code work (appended `--` arg; harmless for a single-file suite).
-      - run: npm run test:worker -- --test-concurrency=4
+      # Same passthrough bug as test:unit: do not append
+      # `-- --test-concurrency=4` (would become a file path after `--`).
+      # Single-file suite; hosted ci.yml unchanged.
+      - run: npm run test:worker
 
       # --- Playwright (workflow_dispatch only; back on Node 20) ----------
       # Re-prepend the preinstalled Node 20 bin so it wins over Node 22.
