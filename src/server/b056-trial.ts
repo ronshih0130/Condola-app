@@ -9,7 +9,8 @@ import { svc, withClient } from "./db";
 import { FlowError } from "./errors";
 import { assertStaff, type Session } from "./types";
 import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
-import { pricingTrialOn, resolveEffectivePlan, type EffectivePlan, type PlanFacts, type TrialPlan } from "./b056-trial-rules";
+import { canOfferTrial, pricingTrialOn, resolveEffectivePlan, trialBannerKind, trialDaysLeft, type EffectivePlan, type PlanFacts, type TrialPlan } from "./b056-trial-rules";
+import { can } from "./perms";
 
 type Queryable = Pick<Client, "query">;
 
@@ -46,6 +47,61 @@ export async function effectivePlanOn(client: Queryable, orgId: string): Promise
 /** Owner-path convenience for pages and loaders. Null when the flag is OFF. */
 export async function effectivePlan(orgId: string): Promise<EffectivePlan | null> {
   return withClient(async (client) => ((await pricingTrialOnFor(client, orgId)) ? effectivePlanOn(client, orgId) : null));
+}
+
+export async function trialCardState(session: Session): Promise<null | {
+  plan: EffectivePlan; offer: "admin" | "non_admin" | null; daysLeft: number | null;
+}> {
+  // Same key the settings page already requires, so no custom-role user who can open the page is
+  // refused here (flag OFF parity); the guard precedes every DB read (B-017 scanner).
+  session = await guardEffectiveSession(session, "settings.edit");
+  if (session.environment !== "live") return null;
+  if (!await withClient((client) => pricingTrialOnFor(client, session.liveOrgId))) return null;
+  const plan = await withClient((client) => effectivePlanOn(client, session.liveOrgId));
+  if (!plan) return null;
+  return {
+    plan,
+    offer: canOfferTrial(plan) ? (session.role === "admin" && can(session, "settings.edit") ? "admin" : "non_admin") : null,
+    daysLeft: plan.kind === "trial" && plan.trial ? trialDaysLeft(plan.trial.endsAt, new Date()) : null,
+  };
+}
+
+/** Display-only: an unavailable reminder must never break the manager shell. */
+export async function trialBannerFor(session: Session): Promise<null | {
+  kind: "d14" | "d3" | "d1"; plan: TrialPlan; endsAt: Date; daysLeft: number;
+}> {
+  try {
+    // Custom-role sessions are refused by the null key and simply get no banner (caught below).
+    session = await guardEffectiveSession(session, null);
+    if (session.environment !== "live") return null;
+    if (!await withClient((client) => pricingTrialOnFor(client, session.liveOrgId))) return null;
+    const plan = await withClient((client) => effectivePlanOn(client, session.liveOrgId));
+    if (!plan) return null;
+    const now = new Date();
+    const kind = trialBannerKind(plan, now);
+    if (!kind || !plan.trial) return null;
+    const dismissed = await withClient(async (client) => (await client.query<{ kinds: string[] }>(
+      "SELECT app.b056_banner_dismissed_kinds($1,$2) AS kinds", [session.liveOrgId, session.userId],
+    )).rows[0]?.kinds ?? []);
+    if (dismissed.includes(kind)) return null;
+    return { kind, plan: plan.trial.plan, endsAt: plan.trial.endsAt, daysLeft: trialDaysLeft(plan.trial.endsAt, now) };
+  } catch {
+    return null;
+  }
+}
+
+export async function dismissTrialBanner(session: Session, kind: "d14" | "d3" | "d1"): Promise<void> {
+  session = await guardEffectiveSession(session, null);
+  try {
+    await svc(session.userId, (client) => client.query(
+      "SELECT app.b056_dismiss_banner($1,$2,$3)", [session.liveOrgId, session.userId, kind],
+    ));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "b056_disabled") throw new FlowError("errors.notFound");
+    if (["b056_forbidden", "b056_no_trial", "b056_invalid_banner"].includes(message)) throw new FlowError("errors.forbidden");
+    throw error;
+  }
 }
 
 const DB_REFUSALS: Record<string, string> = {
