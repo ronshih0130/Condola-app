@@ -431,5 +431,6 @@
   "src/server/b040-staff-ui-http.ts#serveStaffInvite": "leases.edit",
   "src/app/api/m/units/[unitId]/staff-invite/[[...view]]/route.ts#GET": "leases.edit",
   "src/app/api/m/units/[unitId]/staff-invite/[[...view]]/route.ts#POST": "leases.edit",
-  "src/server/brand-v3.ts#brandV3EnabledForOrg": null
+  "src/server/brand-v3.ts#brandV3EnabledForOrg": null,
+  "src/server/b3-payment-turns.ts#staffPaymentTurns": "pay.record"
 }

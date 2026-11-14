@@ -10,7 +10,9 @@ import { monthlyDuePeriods, type MonthlyDuePeriod } from './tenant-monthly-due-r
 import type { Session } from './types';
 
 export type TenantPaymentReport = { id:string; status:'submitted'|'confirmed'|'rejected'|'reversed'; current:{amountMinor:number;currency:string;paidOn:string}; submittedAt:string; confirmedAt:string|null; rejectionReason:string|null; reversalReason:'unavailable'; original:{state:'unavailable'}|{state:'available';amountMinor:number;currency:string;paidOn:string} };
-export type TenantPaymentHistory = {state:'off'}|{state:'unavailable'}|{state:'ready';lease:{id:string;status:string;currency:string;canReport:boolean;legacyPayeeVisible:boolean};bill:{state:BillState;overdue:boolean;pending:boolean;balanceMinor:number;paidMinor:number;currency:string;lines:TenantBillLine[]};monthlyDue:MonthlyDuePeriod[];reports:TenantPaymentReport[];nextCursor:string|null};
+export type TenantPaymentHistory = {state:'off'}|{state:'unavailable'}|{state:'ready';lease:{id:string;status:string;currency:string;canReport:boolean;legacyPayeeVisible:boolean};bill:{state:BillState;overdue:boolean;pending:boolean;balanceMinor:number;paidMinor:number;currency:string;lines:TenantBillLine[]};monthlyDue:MonthlyDuePeriod[];reports:TenantPaymentReport[];nextCursor:string|null;turn?:TenantPaymentTurnSummary};
+/** Brand 3.0 Batch 3a (TEN-51): whose turn, over ALL reports, independent of cursor, reportId and the page size. */
+export type TenantPaymentTurnSummary = { waiting:{amountMinor:number;currency:string}|null; reReport:boolean };
 type ReportRow={id:string;status:TenantPaymentReport['status'];amount:string;currency:string;paid_on:string;submitted_at:string;confirmed_at:string|null;rejected_reason:string|null;payer_contact_id:string|null};
 type InvoiceRow={id:string;status:string;total:string;paid:string;balance:string;due_on:string;currency:string};
 type LineRow={invoice_id:string;charge_type:string;amount:string;description:string;period_start:string|null;line_no:number;invoice_number:string};
@@ -23,7 +25,7 @@ const party=`app.is_lease_tenant(l.id) AND EXISTS (SELECT 1 FROM public.lease_pa
 const personal=`p.org_id=$1::uuid AND p.lease_id=$3::uuid AND p.source='tenant_portal' AND p.submitted_by=$2::uuid AND (p.payer_contact_id IS NULL OR EXISTS (SELECT 1 FROM public.contacts pc JOIN public.lease_parties pp ON pp.org_id=pc.org_id AND pp.contact_id=pc.id AND pp.lease_id=p.lease_id WHERE pc.org_id=p.org_id AND pc.id=p.payer_contact_id AND pc.user_id=$2::uuid AND pc.is_tenant AND pc.archived_at IS NULL AND pp.role IN ('primary','co_tenant','occupant')))`;
 function encodeCursor(id:string):string { return id; }
 /** Only selected-lease UUIDs and an own-report cursor or exact own report are accepted. */
-export async function tenantPaymentHistory(s:Session,leaseId:string,options:{view:'current'|'ended';cursor?:string;reportId?:string}):Promise<TenantPaymentHistory> {
+export async function tenantPaymentHistory(s:Session,leaseId:string,options:{view:'current'|'ended';cursor?:string;reportId?:string;turn?:boolean}):Promise<TenantPaymentHistory> {
   s = await guardEffectiveSession(s, null);
  if(!valid(s)||!options||!['current','ended'].includes(options.view)||!isUuid(leaseId)||(options?.cursor!==undefined&&!isUuid(options.cursor))||(options?.reportId!==undefined&&!isUuid(options.reportId))||(options?.cursor&&options?.reportId))return unavailable;
  try{return await tx(s.userId,async c=>withEffectiveAuthority(c, s, null, async () => {
@@ -59,6 +61,17 @@ export async function tenantPaymentHistory(s:Session,leaseId:string,options:{vie
   const reports=await c.query<ReportRow>(`SELECT ${select} FROM public.payments p WHERE ${personal} AND ($4::uuid IS NULL OR p.id=$4::uuid) AND ($5::timestamptz IS NULL OR (p.submitted_at,p.id)<($5::timestamptz,$6::uuid)) ORDER BY p.submitted_at DESC,p.id DESC LIMIT 51`,[s.orgId,s.userId,leaseId,options?.reportId??null,cursorDate,options?.cursor??null]);
   if(options?.reportId&&reports.rowCount!==1)return unavailable;
   const pendingResult=await c.query<{pending:boolean}>(`SELECT EXISTS(SELECT 1 FROM public.payments p WHERE ${personal} AND p.status='submitted') pending`,[s.orgId,s.userId,leaseId]);
+  // TEN-51 turn summary, only when asked (brand_v3). Runs as the tenant, before the audit-role
+  // switch below. waiting = the caller's own newest submitted report. reReport = the lease's most
+  // recently submitted rejected report is the caller's own and the lease has no submitted report
+  // (lease-wide, as staff see it); the open balance and reportability are applied at return.
+  let turnWaiting:{amount:string;currency:string}|null=null,turnLatestRejectedOwn=false;
+  if(options.turn===true){
+   const waiting=await c.query<{amount:string;currency:string}>(`SELECT p.amount_minor::text amount,p.currency::text FROM public.payments p WHERE ${personal} AND p.status='submitted' ORDER BY p.submitted_at DESC,p.id DESC LIMIT 1`,[s.orgId,s.userId,leaseId]);
+   turnWaiting=waiting.rows[0]??null;
+   const redo=await c.query<{own:boolean}>(`SELECT EXISTS(SELECT 1 FROM (SELECT x.org_id,x.lease_id,x.source,x.submitted_by,x.payer_contact_id FROM public.payments x WHERE x.org_id=$1::uuid AND x.lease_id=$3::uuid AND x.source='tenant_portal' AND x.status='rejected' ORDER BY x.submitted_at DESC,x.id DESC LIMIT 1) p WHERE ${personal} AND NOT EXISTS(SELECT 1 FROM public.payments q WHERE q.org_id=$1::uuid AND q.lease_id=$3::uuid AND q.source='tenant_portal' AND q.status='submitted')) own`,[s.orgId,s.userId,leaseId]);
+   turnLatestRejectedOwn=redo.rows[0]?.own===true;
+  }
   const selected=reports.rows.slice(0,50);
   // Existing service role has SELECT on audit_log. This fixed projection runs only after
   // tenant/session/lease admission and returns no raw audit row or extra tenant data.
@@ -72,6 +85,8 @@ export async function tenantPaymentHistory(s:Session,leaseId:string,options:{vie
    if(snapshots.length===1&&a.actor===s.userId&&a.embedded_id===p.id&&a.embedded_org===s.orgId&&a.source==='tenant_portal'&&a.lease_id===leaseId&&a.submitted_by===s.userId&&a.payer===p.payer_contact_id&&a.amount&&a.currency===p.currency&&a.paid_on&&/^\d{4}-\d{2}-\d{2}$/.test(a.paid_on)) {try{const amountMinor=safeMinor(a.amount);if(amountMinor>0)evidence={state:'available',amountMinor,currency:a.currency,paidOn:a.paid_on};}catch{/* legacy evidence unavailable */}}
    return {id:p.id,status:p.status,current:{amountMinor:safeMinor(p.amount),currency:p.currency,paidOn:p.paid_on},submittedAt:p.submitted_at,confirmedAt:p.confirmed_at,rejectionReason:p.status==='rejected'?p.rejected_reason:null,reversalReason:'unavailable',original:evidence};
   });
-  return {state:'ready',lease:{id:leaseId,status:lease.status,currency:lease.currency,canReport:options.view==='current'&&['active','pending_signature'].includes(lease.status)&&bill.balanceMinor>0,legacyPayeeVisible:options.view==='current'&&tenantPayeeVisible(lease.status,lines.length===0,lines)},bill:{...bill,pending:pendingResult.rows[0]?.pending===true,currency:lease.currency,lines},monthlyDue,reports:result,nextCursor:reports.rows.length>50?encodeCursor(selected[selected.length-1].id):null};
+  const canReport=options.view==='current'&&['active','pending_signature'].includes(lease.status)&&bill.balanceMinor>0;
+  const turn:TenantPaymentTurnSummary|undefined=options.turn===true?{waiting:turnWaiting?{amountMinor:safeMinor(turnWaiting.amount),currency:turnWaiting.currency}:null,reReport:turnLatestRejectedOwn&&canReport}:undefined;
+  return {state:'ready',lease:{id:leaseId,status:lease.status,currency:lease.currency,canReport,legacyPayeeVisible:options.view==='current'&&tenantPayeeVisible(lease.status,lines.length===0,lines)},bill:{...bill,pending:pendingResult.rows[0]?.pending===true,currency:lease.currency,lines},monthlyDue,reports:result,nextCursor:reports.rows.length>50?encodeCursor(selected[selected.length-1].id):null,...(turn?{turn}:{})};
  }),{orgId:s.orgId,environment:s.environment},{isolation:'repeatable read',readOnly:true});}catch(error){logServerError('tenant_payment_history',error);return unavailable;}
 }
