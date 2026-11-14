@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { connection } from "next/server";
@@ -129,7 +130,7 @@ export default async function UtilityPostingPage({
         <p className="small" data-testid="utility-period">{formPeriod.start} – {formPeriod.end}</p>
         <button className="btn sm" type="submit">{t("i_utility_month_apply")}</button>
       </form>
-      {units.size === 0 ? <div className="empty" data-testid="utility-empty">{t("i_utility_empty")}</div> : null}
+      {units.size === 0 ? <ManagementEmptyState session={session} page="UTIL" /> : null}
       {board.page > 1 || board.hasMore ? (
         <div className="row" style={{ margin: "8px 0" }}>
           {board.page > 1 ? (
@@ -291,7 +292,7 @@ export default async function UtilityPostingPage({
           {board.runHasMore && <Link className="btn sm" href={utilityHref({month, unit: selected?.id, historyUnit: params.historyUnit, runPage: board.runPage + 1})}>{t("i_utility_next")}</Link>}
         </div>
         {board.runs.length === 0 ? (
-          <div className="empty">{t("i_empty")}</div>
+          units.size > 0 ? <ManagementEmptyState session={session} page="UTIL" actionHref={selected ? `/m/properties/${selected.propertyId}/edit` : undefined} /> : null
         ) : (
           <table className="t">
             <tbody>

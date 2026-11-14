@@ -1,3 +1,5 @@
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { WaitMark } from "@/components/v3/wait-mark";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
@@ -18,6 +20,7 @@ export const dynamic = "force-dynamic";
 export default async function TenantPayPage({ searchParams }: { searchParams: Promise<{ error?: string; done?: string; cursor?: string | string[]; reportId?: string | string[] }> }) {
   await requireCurrentConsent(undefined, "page");
   const { session, lease } = await selectedLease();
+  const v3 = await brandV3EnabledForOrg(session.orgId);
   const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
@@ -36,7 +39,7 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
       <TenantBillSummary data={history} locale={session.locale} showLines />
       {history.lease.legacyPayeeVisible && <TenantPayee session={session} leaseId={lease.lease_id} />}
       {history.lease.canReport && <div id="report-payment"><PayDialog leaseId={lease.lease_id} dueMinor={history.bill.balanceMinor} currency={history.bill.currency} label={t("i_report_pay")} returnTo="tenant" /></div>}
-      <TenantPaymentHistory data={history} locale={session.locale} pathname="/t/pay" cursor={cursor} selectedReport={reportId} />
+      <TenantPaymentHistory v3={v3} data={history} locale={session.locale} pathname="/t/pay" cursor={cursor} selectedReport={reportId} />
       <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
     </div>;
   }
@@ -52,7 +55,7 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
     <div>
       <h2>{t("i_rich_pay")}</h2>
       <ErrorBanner t={t} error={params.error} />
-      {params.done ? <div className="alert ok">{t("i_pay_submitted")}</div> : null}
+      {params.done ? <div className="alert ok">{v3 ? <WaitMark /> : null}{t("i_pay_submitted")}</div> : null}
       <p>
         {displaySampleName(money.lease.place)}
       </p>

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Locale } from "@/i18n";
 import { bankMatchingStrings } from "@/i18n/bank-matching";
 import { actionDecideBankMatch, actionImportBankFile } from "@/server/bank-matching-actions";
@@ -6,7 +7,7 @@ import { BANK_MATCH_REASON_CODES } from "@/server/bank-matching-rules";
 import { moneyLabel } from "@/server/format";
 
 type Board = NonNullable<Awaited<ReturnType<typeof bankBoard>>>;
-export function BankMatching({data,locale}:{data:Board;locale:Locale}) {
+export function BankMatching({data,locale,empty}:{data:Board;locale:Locale;empty?:ReactNode}) {
   const s = bankMatchingStrings(locale);
   const amountLabel = (amount: string, currency: string) => {
     const number = Number(amount);
@@ -15,15 +16,15 @@ export function BankMatching({data,locale}:{data:Board;locale:Locale}) {
     return `${currency} ${negative ? "-" : ""}${absolute / BigInt(100)}.${String(absolute % BigInt(100)).padStart(2,"0")}`;
   };
   return <div data-testid="bank-matching">
-    <form action={actionImportBankFile} className="card pad">
+    <form id="bank-import" action={actionImportBankFile} className="card pad">
       <h2>{s.title}</h2>
       {data.accounts.length ? <><label className="fg">{s.account}<select className="inp" name="account" required>{data.accounts.map(a => <option value={a.id} key={a.id}>{a.nickname} · {a.currency}</option>)}</select></label>
       <label className="fg">{s.csv}<input className="inp" type="file" name="file" accept=".csv,text/csv" required /></label>
       <label className="fg">{s.encoding}<select className="inp" name="encoding"><option value="utf-8">UTF-8</option><option value="big5">Big5</option></select></label>
-      <label className="fg">{s.dateFormat}<select className="inp" name="dateFormat"><option value="iso">YYYY-MM-DD</option><option value="roc">ROC/MM/DD</option></select></label><button className="btn pri">{s.upload}</button></> : <p>{s.noAccounts}</p>}
+      <label className="fg">{s.dateFormat}<select className="inp" name="dateFormat"><option value="iso">YYYY-MM-DD</option><option value="roc">ROC/MM/DD</option></select></label><button className={data.lines.length ? "btn pri" : "btn"}>{s.upload}</button></> : <p>{s.noAccounts}</p>}
     </form>
     <section className="card pad"><h2>{s.rows}</h2><p className="hint">{s.positive}</p>
-      {!data.lines.length ? <p>{s.noRows}</p> : data.lines.map(line => {
+      {!data.lines.length ? empty ?? <p>{s.noRows}</p> : data.lines.map(line => {
         const options = data.payments.filter(p => p.amount === line.amount && p.currency === line.currency && (!line.account_property || line.account_property === p.property_id) && BigInt(line.amount)>BigInt(0) && BigInt(line.amount)<=BigInt(Number.MAX_SAFE_INTEGER));
         const suggestions = data.suggestions.filter(item => item.bank === line.id);
         return <article key={line.id} className="card pad" data-testid="bank-line">

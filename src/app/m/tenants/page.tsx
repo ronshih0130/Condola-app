@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { tenantDirectory } from "@/server/tenant-directory";
@@ -17,7 +18,7 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
   const raw = await searchParams;
   const t = makeT(session.locale);
   const directory=await tenantDirectory(session,raw);
-  if(directory.state==="enabled") return <TenantDirectoryList locale={session.locale} result={directory}/>;
+  if(directory.state==="enabled") return <TenantDirectoryList locale={session.locale} result={directory} empty={<ManagementEmptyState session={session} page={directory.q || directory.page > 1 ? "SRCH" : "TEN"} actionHref={directory.q || directory.page > 1 ? "/m/tenants" : undefined} />}/>;
   if(directory.state==="unavailable") return <DirectoryUnavailable locale={session.locale} path="/m/tenants"/>;
   const result = await searchTenants(session, raw);
   const { rows, q, page, hasNext, total, from, to } = result;
@@ -33,6 +34,7 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
           placeholder={t("i_search_ph_tenants")}
           clearLabel={t("i_search_clear")}
         />
+        {rows.length === 0 ? <ManagementEmptyState session={session} page={q || page > 1 ? "SRCH" : "TEN"} actionHref={q || page > 1 ? "/m/tenants" : undefined} /> : (
         <table className="t rf" data-testid="tenant-list">
           <thead>
             <tr>
@@ -42,11 +44,6 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={3}>{q ? t("i_search_none") : t("i_empty")}</td>
-              </tr>
-            ) : null}
             {rows.map((lease) => (
               <tr key={lease.id} className="click">
                 <td>
@@ -68,6 +65,7 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
             ))}
           </tbody>
         </table>
+        )}
       </div>
       <ListPager
         path="/m/tenants"

@@ -69,6 +69,7 @@ const nextConfig: NextConfig = {
       { source: "/join", headers: INVITE_HEADERS },
       { source: "/accept/:path*", headers: INVITE_HEADERS },
       { source: "/m/team", headers: INVITE_HEADERS },
+      { source: "/m/units/:unitId/invite/:path*", headers: INVITE_HEADERS },
     ];
   },
 };

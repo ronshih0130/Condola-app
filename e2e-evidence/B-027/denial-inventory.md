@@ -95,6 +95,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/line/vendor-job/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/webhook/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/m/units/[unitId]/invite/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/m/units/[unitId]/staff-invite/[[...view]]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/mock-subscription/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/monthly-rent-issue/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/notification-center/mark/route.ts:1 | Enumerated only; outside representative selection |

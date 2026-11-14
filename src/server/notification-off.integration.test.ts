@@ -46,6 +46,8 @@ function view<T>(path: string, session: Session): T {
     "@/server/repair-rules": requireLocal("./repair-rules"),
     "@/i18n/lanes/notification-center": requireLocal("../i18n/lanes/notification-center"),
     "@/components/notification-center": {NotificationCenter: () => null, NotificationCenterBusy: () => null},
+    // B-046: presentation only; passed as the `empty` slot after admission and the item read.
+    "@/components/management-empty-state": {ManagementEmptyState: () => null},
     "next/link": {default: () => null},
     "next/navigation": {notFound: () => { throw Object.assign(new Error("Not found"), {digest:"NEXT_HTTP_ERROR_FALLBACK;404"}); }},
     "react/jsx-runtime": requireLocal("react/jsx-runtime"),

@@ -1,3 +1,6 @@
+import { CompletionCheck } from "@/components/v3/completion-check";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
@@ -14,6 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  const v3 = await brandV3EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   const rows = await listPayments(session);
@@ -36,7 +40,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       <ErrorBanner t={t} error={params.error} />
       <div className="card">
         {rows.length === 0 ? (
-          <div className="empty">{t("i_none_pending")}</div>
+          <ManagementEmptyState session={session} page="PAY" />
         ) : (
           <table className="t rf">
             <thead>
@@ -62,6 +66,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                     {moneyLabel(Number(row.amount), row.currency, session.locale)}
                   </td>
                   <td data-label={t("i_status")}>
+                    {v3 && row.status === "confirmed" ? <CompletionCheck /> : null}
                     <span className={`chip ${statusClass(row.status)}`}>{t(statusKey(row.status))}</span>
                   </td>
                   <td className="r">

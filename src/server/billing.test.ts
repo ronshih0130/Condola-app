@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   FREE_UNITS,
+  LIST_PRO,
+  LIST_STANDARD,
   firmDisplayName,
   formatNt,
   monthlyAmount,
@@ -16,17 +18,18 @@ import { INTERIM_FREE_UNITS } from "./b045-pricing-interim-rules";
 const now = new Date("2026-10-20T00:00:00Z");
 
 test("list prices match the published examples", () => {
-  assert.equal(monthlyAmount({ units: 30, rate: 30 }), 750);
-  assert.equal(monthlyAmount({ units: 150, rate: 30 }), 4350);
-  assert.equal(monthlyAmount({ units: 600, rate: 30 }), 17850);
-  assert.equal(monthlyAmount({ units: 600, rate: 40 }), 23800);
-  assert.equal(yearlyAmount(17850), 196350);
+  // C4b (Ron 11:09 PT, NT$39/59): (units - 5 free) x list rate; yearly = 11 x monthly
+  assert.equal(monthlyAmount({ units: 30, rate: LIST_STANDARD }), 975);
+  assert.equal(monthlyAmount({ units: 150, rate: LIST_STANDARD }), 5655);
+  assert.equal(monthlyAmount({ units: 600, rate: LIST_STANDARD }), 23205);
+  assert.equal(monthlyAmount({ units: 600, rate: LIST_PRO }), 35105);
+  assert.equal(yearlyAmount(23205), 255255);
   const standard = quoteMonthly({ units: 600, tier: "standard", cycle: "month", now });
   const pro = quoteMonthly({ units: 600, tier: "pro", cycle: "year", now });
-  assert.equal(standard.monthly, 17850);
+  assert.equal(standard.monthly, 23205);
   assert.equal(standard.source, "list");
-  assert.equal(pro.monthly, 23800);
-  assert.equal(pro.due, 261800);
+  assert.equal(pro.monthly, 35105);
+  assert.equal(pro.due, 386155);
 });
 
 test("a partner rate applies to every billable unit", () => {
@@ -65,7 +68,7 @@ test("a manual per-firm rate overrides the partner snapshot", () => {
     snapshot: { standardPrice: 20, proPrice: 30, freeUnits: 4, lockedUntil: "2020-01-01T00:00:00Z" },
   });
   assert.equal(expired.source, "list");
-  assert.equal(expired.monthly, 750);
+  assert.equal(expired.monthly, 975);
 });
 
 test("seat caps and firm names", () => {
@@ -112,4 +115,20 @@ test("C4: new partner codes default to FREE_UNITS in the admin form and the serv
   const action = readFileSync(new URL("./signup-actions.ts", import.meta.url), "utf8");
   assert.match(form, /name="freeUnits"[^>]*defaultValue=\{FREE_UNITS\}/);
   assert.match(action, /freeUnits: number\("freeUnits", FREE_UNITS\)/);
+});
+
+test("C4b: the engine's list prices equal the published plan card (NT$39 / NT$59)", async () => {
+  const { INTERIM_LIST_STANDARD, INTERIM_LIST_PREMIUM } = await import("./b045-pricing-interim-rules");
+  assert.equal(LIST_STANDARD, 39);
+  assert.equal(LIST_PRO, 59);
+  assert.equal(LIST_STANDARD, INTERIM_LIST_STANDARD);
+  assert.equal(LIST_PRO, INTERIM_LIST_PREMIUM);
+  const { readFileSync } = await import("node:fs");
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8"));
+  const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8"));
+  const next = FREE_UNITS + 1;
+  assert.equal(zh.i_price_std_amt, "第 " + next + " 戶起每戶每月 NT$" + LIST_STANDARD);
+  assert.equal(zh.i_price_pro_amt, "第 " + next + " 戶起每戶每月 NT$" + LIST_PRO);
+  assert.equal(en.i_price_std_amt, "NT$" + LIST_STANDARD + " per unit each month from the " + next + "th unit");
+  assert.equal(en.i_price_pro_amt, "NT$" + LIST_PRO + " per unit each month from the " + next + "th unit");
 });

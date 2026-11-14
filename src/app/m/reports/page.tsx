@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { archiveCopy } from "@/i18n/record-archive";
@@ -75,7 +76,7 @@ export default async function IncomeExpenseReportPage({
         </p>
       ) : null}
       <ErrorBanner t={t} error={errorKey} />
-      <form className="card pad" method="get" data-testid="report-filters" style={{ margin: "16px 0", maxWidth: 960 }}>
+      <form className="card pad" method="get" id="report-filters" data-testid="report-filters" style={{ margin: "16px 0", maxWidth: 960 }}>
         <div className="row" style={{ gap: 12, alignItems: "end", flexWrap: "wrap" }}>
           <div className="fg" style={{ minWidth: 140 }}>
             <label className="f">{t("i_report_mode")}</label>
@@ -125,9 +126,7 @@ export default async function IncomeExpenseReportPage({
       </form>
       <div className="card">
         {rows.length === 0 ? (
-          <div className="empty" data-testid="report-empty">
-            {t("i_report_empty")}
-          </div>
+          <ManagementEmptyState session={session} page="RPT" />
         ) : (
           <RfTable testId="report-list">
             <thead>

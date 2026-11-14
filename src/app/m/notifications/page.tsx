@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { notFound } from "next/navigation";
 import { NotificationCenter, NotificationCenterBusy } from "@/components/notification-center";
 import { requireCurrentConsent } from "@/server/consent-gate";
@@ -21,5 +22,5 @@ export default async function Page({searchParams}:{searchParams:Promise<{cursor?
     if(error instanceof CenterBusyError) return <NotificationCenterBusy locale={session.locale} retryHref={retryHref}/>;
     if(error instanceof CenterDeniedError) notFound(); throw error;
   }
-  return <NotificationCenter page={items} locale={session.locale} kind="human"/>;
+  return <NotificationCenter page={items} locale={session.locale} kind="human" empty={<ManagementEmptyState session={session} page="NOTI" />}/>;
 }

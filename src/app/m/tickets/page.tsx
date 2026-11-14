@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -134,15 +135,14 @@ export default async function TicketsPage({
               {tickets.length === 0 ? (
                 <tr>
                   <td data-testid="repair-empty">
-                    <p>{t("i_repair_empty")}</p>
-                    <p className="small muted">{t("i_repair_empty_hint")}</p>
+                    <ManagementEmptyState session={session} page="TIX" />
                   </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
         </div>
-        <form className="card pad" action={canWrite ? actionTicket : undefined}>
+        <form id="new-ticket" className="card pad" action={canWrite ? actionTicket : undefined}>
           <input type="hidden" name="returnTo" value="staff" />
           <div className="fg">
             <label className="f">{t("i_select_lease")}</label>
@@ -175,7 +175,7 @@ export default async function TicketsPage({
             <textarea className="inp" name="description" defaultValue="" disabled={!canWrite} />
           </div>
           <button
-            className="btn pri"
+            className={tickets.length === 0 ? "btn" : "btn pri"}
             type="submit"
             disabled={!canWrite}
             aria-disabled={!canWrite}

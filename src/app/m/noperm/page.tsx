@@ -1,3 +1,5 @@
+import { Illustration } from "@/components/v3/illustrations";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -10,6 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function NoPermPage({ searchParams }: { searchParams: Promise<{ need?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  const v3 = await brandV3EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   const need = (params.need ?? "") as PermKey;
@@ -34,6 +37,7 @@ export default async function NoPermPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader title={t("i_noperm_title")} />
+      {v3 ? <Illustration name="26" /> : null}
       <div className="alert bad" data-testid="forbidden">
         <div>
           <p>{t("i_noperm_body", { roles: roles || t("i_role_admin") })}</p>

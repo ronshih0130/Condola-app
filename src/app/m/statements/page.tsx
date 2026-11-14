@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { ownerTransferView } from "@/server/owner-transfers";
 import { ownerTransferCopy } from "@/i18n/owner-transfer";
 import { requireCurrentConsent } from "@/server/consent-gate";
@@ -55,6 +56,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         existing={statements.map((row) => ({ ownerId: row.owner_id, month: row.period_start }))}
         month={month}
         canGenerate={canGenerate}
+        primary={roster.length > 0}
         deniedReason={denied}
       />
       {canExpense ? (
@@ -89,7 +91,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             <label className="f">{t("i_receipt")}</label>
             <input className="inp" name="receipt" data-testid="expense-receipt" required />
           </div>
-          <button className="btn pri" type="submit">
+          <button className={roster.length ? "btn pri" : "btn"} type="submit">
             {t("i_add_expense")}
           </button>
         </form>
@@ -100,7 +102,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
           <h3>{t("i_statement_list")}</h3>
         </div>
         {roster.length === 0 ? (
-          <div className="empty">{t("i_statement_empty")}</div>
+          <ManagementEmptyState session={session} page="STMT" />
         ) : (
           <RfTable testId="statement-list">
             <thead>

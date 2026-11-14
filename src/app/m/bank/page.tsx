@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { BankMatching } from "@/components/bank-matching";
@@ -20,7 +21,7 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
   if (await bankMatchingEnabled(session)) {
     const board = await bankBoard(session);
     if (!board) throw new Error("Bank matching unavailable");
-    return <><PageHeader title={t("i_nav_bank")} crumb={t("s_01cca89")} /><ErrorBanner t={t} error={params.error} /><BankMatching data={board} locale={session.locale} /></>;
+    return <><PageHeader title={t("i_nav_bank")} crumb={t("s_01cca89")} /><ErrorBanner t={t} error={params.error} /><BankMatching data={board} locale={session.locale} empty={<ManagementEmptyState session={session} page="BANK" />} /></>;
   }
   const [payment, matches] = await Promise.all([latestUnmatchedPayment(session), listMatches(session)]);
   const sample = payment
@@ -36,13 +37,13 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
       <PageHeader title={t("i_nav_bank")} crumb={t("s_01cca89")} />
       <ErrorBanner t={t} error={params.error} />
       <div className="grid2">
-        <BankImport sample={sample} />
+        <div id="bank-import"><BankImport sample={sample} primary={matches.length > 0} /></div>
         <div className="card">
           <div className="hd">
             <h3>{t("i_match")}</h3>
           </div>
           {matches.length === 0 ? (
-            <div className="empty">{t("i_bank_empty")}</div>
+            <ManagementEmptyState session={session} page="BANK" />
           ) : (
             <table className="t rf">
               <tbody>
