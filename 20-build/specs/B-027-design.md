@@ -69,7 +69,9 @@ Raw local logs are under `/private/tmp/b027s2-*.log`; final normal and opt-in re
 Reproduce with the provided local environment (never print its contents), then:
 
 ```sh
-export DATABASE_URL="$DISPOSABLE_DB_URL"   # Mac-owned local disposable cluster, database condola_b027s2
+# $DISPOSABLE_DB_BASE = the Mac-owned local disposable cluster (scheme://user:…@127.0.0.1:55432), from a local env file; never paste its value.
+case "$DISPOSABLE_DB_BASE" in *@127.0.0.1:55432) ;; *) echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1 ;; esac
+export DATABASE_URL="$DISPOSABLE_DB_BASE/condola_b027s2"
 export CONDOLA_RLS_DISPOSABLE=YES
 npx tsx --test --test-concurrency=1 src/server/b027-denial-inventory.integration.test.ts
 # Intentionally nonzero until separately approved fixes:
@@ -117,7 +119,9 @@ The ten partner integration cases cover actual server-page redirects; default/ma
 
 ```sh
 # Source the authorized local environment without printing it first.
-export DATABASE_URL="$DISPOSABLE_DB_URL"   # Mac-owned local disposable cluster, database condola_b027s3
+# $DISPOSABLE_DB_BASE = the Mac-owned local disposable cluster (scheme://user:…@127.0.0.1:55432), from a local env file; never paste its value.
+case "$DISPOSABLE_DB_BASE" in *@127.0.0.1:55432) ;; *) echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1 ;; esac
+export DATABASE_URL="$DISPOSABLE_DB_BASE/condola_b027s3"
 export CONDOLA_RLS_DISPOSABLE=YES
 npx tsx --test --test-concurrency=1 src/server/b027-partner-controls.integration.test.ts src/server/b027-denial-inventory.integration.test.ts
 ```
@@ -193,7 +197,9 @@ New cases cover seed replay without overwrite; strict OFF matrix; legacy control
 
 ```sh
 # Source the authorized local environment without printing it.
-export DATABASE_URL="$DISPOSABLE_DB_URL"   # Mac-owned local disposable cluster, database condola_b027s4
+# $DISPOSABLE_DB_BASE = the Mac-owned local disposable cluster (scheme://user:…@127.0.0.1:55432), from a local env file; never paste its value.
+case "$DISPOSABLE_DB_BASE" in *@127.0.0.1:55432) ;; *) echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1 ;; esac
+export DATABASE_URL="$DISPOSABLE_DB_BASE/condola_b027s4"
 export CONDOLA_RLS_DISPOSABLE=YES
 npx tsx --test --test-concurrency=1 src/server/b027-partner-consent-gate.integration.test.ts src/server/b027-partner-controls.integration.test.ts src/server/consents.integration.test.ts
 ```
