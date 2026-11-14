@@ -28,6 +28,12 @@
 --      app.b017_preserve_admin is the last-usable-admin invariant; app.prop04_my_consent_records
 --      already calls app.is_member. The PR-3a inventory test computes the closure from the
 --      catalog (has_function_privilege + pg_trigger), not rpc-allowlist.txt.
+--   5. r3 (Codex PR-3a r2): the inventory now resolves unqualified calls, treats every trigger
+--      function and every function named in a policy, view or column default as a root, fails
+--      closed on dynamic EXECUTE, and pins each classified body. That surfaced two more inline
+--      checks of the ACTING user: app.b015_edit_context and public.esign_version_guard; both get
+--      the predicate. app.b028_center_recipient_valid validates the RECIPIENT of a notification
+--      row, not the caller, and is left unchanged (classified in the test).
 --
 -- With the flag OFF (seed: enabled false, empty allowlist) every changed function returns
 -- exactly what it returned before. Additive; no deletes; no outbound; no grant to anon or
@@ -477,6 +483,174 @@ AS $function$
       AND ((o.environment='live' AND o.live_org_id IS NULL)
         OR (o.environment='sandbox' AND o.live_org_id IS NOT NULL))
       AND (NOT p_admin OR m.role='admin'));
+$function$;
+
+-- Actor checks surfaced by the r3 inventory (Codex PR-3a r2: unqualified calls, every trigger
+-- function, policy/view/default expressions). Both authorise the ACTING user as an active
+-- admin or manager inline, so the same rule applies: current body plus the pause predicate.
+-- app.b015_edit_context: current definition + pause predicate (two tests)
+CREATE OR REPLACE FUNCTION app.b015_edit_context(p_org uuid, p_live uuid, p_env text, p_session uuid)
+ RETURNS TABLE(actor_role text, enabled boolean)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public', 'app', 'pg_temp'
+AS $function$
+DECLARE v_actor uuid:=auth.uid(); v_role text; v_count integer; v_expected integer;
+BEGIN
+ IF v_actor IS NULL OR p_env NOT IN ('live','sandbox') OR NOT EXISTS (
+  SELECT 1 FROM public.organizations o
+  JOIN public.organizations live ON live.id=p_live AND live.environment='live' AND live.live_org_id IS NULL
+  JOIN public.org_members m ON m.org_id=live.id AND m.user_id=v_actor AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id) AND m.role IN ('admin','manager')
+  JOIN public.auth_sessions s ON s.id=p_session AND s.user_id=v_actor AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+  WHERE o.id=p_org AND o.environment::text=p_env AND
+   ((p_env='live' AND o.id=p_live AND o.live_org_id IS NULL) OR (p_env='sandbox' AND o.live_org_id=p_live))
+ ) THEN RAISE EXCEPTION 'Directory operation unavailable' USING ERRCODE='42501'; END IF;
+ PERFORM app.lock_tables_bounded(ARRAY['public.platform_settings']::regclass[], 'SHARE');
+ PERFORM 1 FROM public.organizations o WHERE o.id IN(p_org,p_live) ORDER BY o.id FOR SHARE NOWAIT;
+ GET DIAGNOSTICS v_count=ROW_COUNT;
+ v_expected:=CASE WHEN p_org=p_live THEN 1 ELSE 2 END;
+ IF v_count<>v_expected THEN RAISE EXCEPTION 'Directory operation unavailable' USING ERRCODE='42501'; END IF;
+ SELECT m.role::text INTO v_role FROM public.org_members m
+  WHERE m.org_id=p_live AND m.user_id=v_actor AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id) AND m.role IN ('admin','manager') FOR SHARE NOWAIT;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Directory operation unavailable' USING ERRCODE='42501'; END IF;
+ PERFORM 1 FROM public.auth_sessions s WHERE s.id=p_session AND s.user_id=v_actor AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() FOR SHARE NOWAIT;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Directory operation unavailable' USING ERRCODE='42501'; END IF;
+ PERFORM 1 FROM auth.users u WHERE u.id=v_actor FOR KEY SHARE NOWAIT;
+ IF NOT FOUND OR NOT EXISTS (
+  SELECT 1 FROM public.organizations o JOIN public.organizations live ON live.id=p_live AND live.environment='live' AND live.live_org_id IS NULL
+  WHERE o.id=p_org AND o.environment::text=p_env AND
+   ((p_env='live' AND o.id=p_live AND o.live_org_id IS NULL) OR (p_env='sandbox' AND o.live_org_id=p_live))
+ ) THEN RAISE EXCEPTION 'Directory operation unavailable' USING ERRCODE='42501'; END IF;
+ RETURN QUERY SELECT v_role,coalesce((SELECT o.feature_flags->'tenant_directory_edit'='true'::jsonb
+   AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array'
+   AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)
+  FROM public.organizations o JOIN public.platform_settings f ON f.key='tenant_directory_edit' WHERE o.id=p_org),false);
+ -- Last read of wall-clock authority follows all relationship and flag reads.
+ -- This is a validation boundary, not an unforceable durable-commit clock hook.
+ IF NOT EXISTS(SELECT 1 FROM public.auth_sessions s WHERE s.id=p_session AND s.user_id=v_actor
+   AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()) THEN
+  RAISE EXCEPTION 'Directory operation unavailable' USING ERRCODE='42501';
+ END IF;
+END $function$;
+
+-- public.esign_version_guard: current definition + pause predicate (void requires an active admin)
+CREATE OR REPLACE FUNCTION public.esign_version_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+  keep_until timestamptz;
+  predecessor public.esign_versions;
+  marker text;
+BEGIN
+  SELECT retention_until INTO STRICT keep_until
+    FROM public.esign_cases WHERE id = NEW.case_id FOR UPDATE;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status <> 'draft' OR NEW.final_digest IS NOT NULL
+      OR NEW.completed_at IS NOT NULL OR NEW.voided_at IS NOT NULL THEN
+      RAISE EXCEPTION 'New versions start as drafts' USING ERRCODE = '23514';
+    END IF;
+    NEW.retention_until := keep_until;
+    IF NEW.supersedes_version_id IS NOT NULL THEN
+      SELECT * INTO STRICT predecessor FROM public.esign_versions
+        WHERE id = NEW.supersedes_version_id AND case_id = NEW.case_id;
+      IF predecessor.status <> 'fully_signed' THEN
+        RAISE EXCEPTION 'Predecessor is not effective' USING ERRCODE = '23514';
+      END IF;
+      marker := '本版取代 ' ||
+        to_char(predecessor.completed_at AT TIME ZONE 'Asia/Taipei', 'YYYY-MM-DD') ||
+        ' 簽署之前版';
+      IF NEW.replacement_text IS DISTINCT FROM marker OR NOT EXISTS (
+        SELECT 1 FROM regexp_split_to_table(NEW.body, E'\r?\n') AS line
+          WHERE trim(line) = marker
+      ) THEN
+        RAISE EXCEPTION 'Replacement text required' USING ERRCODE = '23514';
+      END IF;
+    ELSIF NEW.replacement_text IS NOT NULL THEN
+      RAISE EXCEPTION 'Replacement text requires a predecessor' USING ERRCODE = '23514';
+    END IF;
+  ELSE
+    IF (to_jsonb(NEW) - ARRAY[
+      'status','state','final_pdf_bytes','final_digest','completed_at',
+      'void_reason','voided_by','voided_at'
+    ]) IS DISTINCT FROM (to_jsonb(OLD) - ARRAY[
+      'status','state','final_pdf_bytes','final_digest','completed_at',
+      'void_reason','voided_by','voided_at'
+    ]) THEN
+      RAISE EXCEPTION 'Document content and retention are immutable' USING ERRCODE = '23514';
+    END IF;
+
+    IF OLD.status IN ('voided','superseded') THEN
+      RAISE EXCEPTION 'Old version is read-only' USING ERRCODE = '23514';
+    END IF;
+
+    IF OLD.status = 'fully_signed' THEN
+      IF NEW.status <> 'superseded' OR
+        (to_jsonb(NEW) - ARRAY['status','state']) IS DISTINCT FROM
+        (to_jsonb(OLD) - ARRAY['status','state']) OR
+        (NEW.state - ARRAY['status','effect']) IS DISTINCT FROM
+        (OLD.state - ARRAY['status','effect']) OR NOT EXISTS (
+          SELECT 1 FROM public.esign_versions v
+          WHERE v.case_id = OLD.case_id AND v.supersedes_version_id = OLD.id
+            AND v.status = 'fully_signed'
+        ) THEN
+        RAISE EXCEPTION 'Both parties must complete the replacement first'
+          USING ERRCODE = '23514';
+      END IF;
+    ELSIF NEW.status = 'superseded' THEN
+      RAISE EXCEPTION 'Only a fully signed version can be superseded' USING ERRCODE = '23514';
+    ELSIF NEW.status <> 'voided' AND NOT (
+      (OLD.status = 'draft' AND NEW.status IN ('draft','sent')) OR
+      (OLD.status = 'sent' AND NEW.status IN ('sent','partially_signed','fully_signed')) OR
+      (OLD.status = 'partially_signed' AND NEW.status IN ('partially_signed','fully_signed'))
+    ) THEN
+      RAISE EXCEPTION 'Invalid version transition' USING ERRCODE = '23514';
+    END IF;
+
+    IF NEW.status = 'voided' AND NOT EXISTS (
+      SELECT 1 FROM public.esign_cases c JOIN public.org_members m ON m.org_id = c.org_id
+      WHERE c.id = NEW.case_id AND m.user_id = NEW.voided_by
+        AND m.role = 'admin' AND m.status = 'active' AND NOT app.b056_member_paused(m.org_id, m.user_id)
+    ) THEN
+      RAISE EXCEPTION 'Company admin required to void' USING ERRCODE = '42501';
+    END IF;
+
+    IF NEW.status = 'fully_signed' AND OLD.status <> 'fully_signed' THEN
+      IF EXISTS (
+        SELECT 1 FROM public.esign_signers s
+        WHERE s.version_id = NEW.id AND
+          (s.signed_at IS NULL OR s.email_step_state <> 'completed' OR NOT EXISTS (
+            SELECT 1 FROM public.esign_signature_images i
+            WHERE i.version_id = s.version_id AND i.signer_id = s.id
+              AND i.document_digest = NEW.content_digest
+          ))
+      ) OR NOT EXISTS (
+        SELECT 1 FROM public.esign_signers WHERE version_id = NEW.id AND party_role = 'owner'
+      ) OR NOT EXISTS (
+        SELECT 1 FROM public.esign_signers WHERE version_id = NEW.id AND party_role = 'tenant'
+      ) THEN
+        RAISE EXCEPTION 'Both parties must sign' USING ERRCODE = '23514';
+      END IF;
+    ELSIF OLD.status <> 'fully_signed' AND
+      (NEW.final_digest IS NOT NULL OR NEW.completed_at IS NOT NULL) THEN
+      RAISE EXCEPTION 'Final artifact requires both signatures' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+
+  IF NEW.state->>'id' IS DISTINCT FROM NEW.id::text OR
+    NEW.state->>'body' IS DISTINCT FROM NEW.body OR
+    NEW.state->>'documentDigest' IS DISTINCT FROM NEW.content_digest OR
+    NEW.state->>'status' IS DISTINCT FROM (CASE NEW.status
+      WHEN 'fully_signed' THEN 'completed'
+      WHEN 'partially_signed' THEN 'signing'
+      ELSE NEW.status END) THEN
+    RAISE EXCEPTION 'Domain state mismatch' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
 $function$;
 
 COMMIT;
