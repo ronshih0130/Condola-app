@@ -130,3 +130,32 @@ html[data-brand="v2"][data-brand-v3] .main:has(.setup-checklist .es-primary) .em
 /* A modal form may be mounted inside its triggering table row. */
 html[data-brand="v2"][data-brand-v3] :is(dialog, [role="dialog"]) .btn.pri { background: var(--c-primary); color: var(--c-on-primary); border-color: var(--c-primary); }
 html[data-brand="v2"][data-brand-v3] :is(dialog, [role="dialog"]) .btn.pri:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+
+/* B-070 3a: one holder and one sentence; the monthly figure follows the groups. */
+html[data-brand="v2"][data-brand-v3] .v3-turn-groups { margin-block-end: 16px; }
+html[data-brand="v2"][data-brand-v3] .v3-turn-group h2 { margin: 0; padding: 16px 20px; font-size: 1rem; }
+html[data-brand="v2"][data-brand-v3] .v3-turn-group ul { list-style: none; margin: 0; padding: 0; }
+html[data-brand="v2"][data-brand-v3] .v3-turn-group li { border-top: 1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .v3-turn-row { display: flex; align-items: center; gap: 12px; min-height: 44px; min-width: 44px; padding: 16px 20px; color: var(--c-text); text-decoration: none; }
+html[data-brand="v2"][data-brand-v3] .v3-turn-row > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-turn-row:hover { background: var(--c-surface-2); }
+html[data-brand="v2"][data-brand-v3] .v3-turn-row:focus-visible { outline-offset: -3px; }
+html[data-brand="v2"][data-brand-v3] .v3-confirmed-bills { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); align-items: center; gap: 24px; padding: 20px; margin-block-end: 16px; }
+html[data-brand="v2"][data-brand-v3] .v3-confirmed-bills p { margin: 0; overflow-wrap: anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-bill-amount { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+html[data-brand="v2"][data-brand-v3] .v3-bill-source { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; color: var(--c-brand-ink); }
+html[data-brand="v2"][data-brand-v3] .v3-bill-progress { appearance: none; display: block; width: 100%; height: 8px; border: 0; border-radius: 0; background: var(--c-surface-2); color: var(--c-primary); margin-block-end: 12px; }
+html[data-brand="v2"][data-brand-v3] .v3-bill-progress::-webkit-progress-bar { background: var(--c-surface-2); }
+html[data-brand="v2"][data-brand-v3] .v3-bill-progress::-webkit-progress-value { background: var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-bill-progress::-moz-progress-bar { background: var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-payment-holder { display: flex; align-items: center; gap: 12px; overflow-wrap: anywhere; }
+/* The tag is one label: it never breaks across lines (PLT one-line labels). */
+html[data-brand="v2"][data-brand-v3] .v3-payment-holder { flex-wrap: nowrap; }
+/* Card layout: the label takes only its own width here, so the avatar and its tag fit on one line. */
+html[data-brand="v2"][data-brand-v3] table.t.rf td.v3-payment-holder-cell[data-label]::before { flex: 0 0 auto; max-width: none; }
+html[data-brand="v2"][data-brand-v3] .v3-payment-holder .turn-tag,
+html[data-brand="v2"][data-brand-v3] .v3-turn-row .turn-tag { white-space: nowrap; }
+/* A finished row has nobody to name: in the card layout its empty 輪到誰 line is not drawn. */
+html[data-brand="v2"][data-brand-v3] td.v3-payment-holder-cell:empty { display: none; }
+html[data-brand="v2"][data-brand-v3] .btn.v3-confirm-payment { background: var(--c-surface); color: var(--c-primary); border: 1px solid var(--c-primary); border-radius: var(--r-btn); min-width: 44px; min-height: 44px; }
+html[data-brand="v2"][data-brand-v3] .btn.v3-confirm-payment:hover { background: var(--c-surface-2); }

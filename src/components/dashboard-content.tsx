@@ -1,13 +1,15 @@
 import React from "react";
 import Link from "next/link";
-import { dictionary, makeT } from "@/i18n";
+import { dictionary, makeT, translate } from "@/i18n";
+import { brandV3Copy } from "@/i18n/lanes/brand-v3";
+import { ConfirmedBills, PaymentTurnGroups, type BillRow } from "./v3/payment-turns";
+import type { StaffPaymentTurns } from "@/server/b3-payment-turns";
 import { OnboardingProgress } from "./onboarding-progress";
 import { EmptyState } from "./empty-state";
 import { FooterNote } from "./chrome";
 import { Cell, RfTable } from "./rf";
 import { PageHeader } from "./ui";
 import { EMPTY_ACTIONS, emptyActionAllowed, type EmptyCta } from "@/lib/empty-cta";
-import { can } from "@/server/perms";
 import { showDemoLineCopy } from "@/server/demo";
 import { formatDate, moneyLabel } from "@/server/format";
 import type { dashboard } from "@/server/queries";
@@ -15,16 +17,22 @@ import type { SetupProgress } from "@/server/onboarding-progress";
 import type { Session } from "@/server/types";
 import { displaySampleName } from "@/server/sandbox-data";
 
-export function DashboardContent({ session, data, setup, cta, query, v2, notificationEntry }: {
+export function DashboardContent({ session, data, setup, cta, query, v2, notificationEntry, v3 = false, turns, bills, month }: {
   session: Session; data: Awaited<ReturnType<typeof dashboard>>; setup: SetupProgress; cta: EmptyCta;
   query: { dupFirm?: string; code?: string }; v2: boolean; notificationEntry?: React.ReactNode;
+  v3?: boolean; turns?: StaffPaymentTurns; bills?: BillRow[]; month?: number;
 }) {
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
   const money = (minor: number | string, currency = "TWD") => moneyLabel(minor, currency, session.locale);
+  const paymentV3 = v3 && setup.hasUnits && turns?.state !== "off";
   return (
     <>
-      <PageHeader title={t("i_morning", { name: session.name })} />
+      <PageHeader title={paymentV3 && turns?.state === "ready" && turns.yourTurn >= 1
+        ? (session.name?.trim()
+            ? translate(brandV3Copy(session.locale), "todayTurns", { name: session.name, count: turns.yourTurn })
+            : translate(brandV3Copy(session.locale), "todayTurnsNoName", { count: turns.yourTurn }))
+        : t("i_morning", { name: session.name })} />
       <OnboardingProgress progress={setup} locale={session.locale} cta={cta} />
       {notificationEntry}
       {query.dupFirm === "1" ? (
@@ -39,8 +47,10 @@ export function DashboardContent({ session, data, setup, cta, query, v2, notific
       ) : null}
       {!setup.hasUnits ? <div data-testid="dashboard-empty"><EmptyState id="DASH" locale={session.locale} cta={cta} /></div> : (
       <>
+      {paymentV3 && turns && <PaymentTurnGroups turns={turns} locale={session.locale} />}
+      {paymentV3 && bills && month !== undefined && <ConfirmedBills rows={bills} month={month} locale={session.locale} />}
       <div className="grid5" style={{ marginBottom: 16 }} data-v2-page={v2 ? "m-home" : undefined} data-v2-section={v2 ? "stats" : undefined}>
-        {Number(data.received) > 0 ? (
+        {!(paymentV3 && bills) && Number(data.received) > 0 ? (
         <Link className="card kpi" href="/m/rent">
           <div className="lbl">{t("i_paid")}</div>
           <div className="val" data-testid="dash-received">{money(data.received)}</div>
@@ -53,7 +63,7 @@ export function DashboardContent({ session, data, setup, cta, query, v2, notific
           <div className="sub">{t("i_tenant_count", { count: data.owingCount })}</div>
         </Link>
         ) : null}
-        {data.pending > 0 ? (
+        {!(paymentV3 && turns?.state === "ready") && data.pending > 0 ? (
         <Link className="card kpi" href="/m/payments">
           <div className="lbl">{t("i_pending_pay")}</div>
           <div className="val">{data.pending}</div>

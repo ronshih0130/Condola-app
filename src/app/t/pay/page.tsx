@@ -11,7 +11,9 @@ import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";
 import { TenantPayee } from "@/components/tenant-payee";
-import { TenantBillSummary, TenantPaymentHistory } from "@/components/tenant-payment-history";
+import { TenantPayReadyContent } from "@/components/tenant-payment-history";
+import { tenantPaymentTurn } from "@/server/b3-payment-turns";
+import { currentPaymentHistoryOptions } from "@/lib/b3-payment-ui";
 import { tenantPaymentHistoryCopy } from "@/i18n/tenant-payment-history";
 import { tenantPaymentHistory } from "@/server/tenant-payment-history";
 
@@ -27,21 +29,16 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
   if (!lease) return <p>{t("i_empty")}</p>;
   const cursor = Array.isArray(params.cursor) ? '!' : params.cursor;
   const reportId = Array.isArray(params.reportId) ? '!' : params.reportId;
-  const initialHistory = await tenantPaymentHistory(session, lease.lease_id, { view: 'current' });
+  const initialHistory = await tenantPaymentHistory(session, lease.lease_id, currentPaymentHistoryOptions(v3));
   const history = initialHistory.state === 'ready' && (cursor !== undefined || reportId !== undefined)
-    ? await tenantPaymentHistory(session, lease.lease_id, { view: 'current', cursor, reportId }) : initialHistory;
+    ? await tenantPaymentHistory(session, lease.lease_id, currentPaymentHistoryOptions(v3, { cursor, reportId })) : initialHistory;
   if (history.state === 'unavailable') return <div><h2>{t("i_rich_pay")}</h2><p role="status">{tenantPaymentHistoryCopy(session.locale).unavailable}</p></div>;
   if (history.state === 'ready') {
-    return <div>
-      <h2>{t("i_rich_pay")}</h2>
-      <ErrorBanner t={t} error={params.error} />
-      <p>{displaySampleName([lease.property_name, lease.unit_label, lease.room_label].filter(Boolean).join(' '))}</p>
-      <TenantBillSummary data={history} locale={session.locale} showLines />
-      {history.lease.legacyPayeeVisible && <TenantPayee session={session} leaseId={lease.lease_id} />}
-      {history.lease.canReport && <div id="report-payment"><PayDialog leaseId={lease.lease_id} dueMinor={history.bill.balanceMinor} currency={history.bill.currency} label={t("i_report_pay")} returnTo="tenant" /></div>}
-      <TenantPaymentHistory v3={v3} data={history} locale={session.locale} pathname="/t/pay" cursor={cursor} selectedReport={reportId} />
-      <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
-    </div>;
+    return <TenantPayReadyContent data={history} locale={session.locale} error={params.error} cursor={cursor} reportId={reportId}
+      place={displaySampleName([lease.property_name, lease.unit_label, lease.room_label].filter(Boolean).join(' '))}
+      v3={v3} turn={v3 ? tenantPaymentTurn(history) : undefined} firm={lease.firm_name}
+      payee={history.lease.legacyPayeeVisible && <TenantPayee session={session} leaseId={lease.lease_id} />}
+      report={history.lease.canReport && <div id="report-payment"><PayDialog leaseId={lease.lease_id} dueMinor={history.bill.balanceMinor} currency={history.bill.currency} label={t("i_report_pay")} returnTo="tenant" /></div>} />;
   }
   const money = await tenantLeaseMoney(session, lease.lease_id);
   if (!money) return <p>{t("i_empty")}</p>;

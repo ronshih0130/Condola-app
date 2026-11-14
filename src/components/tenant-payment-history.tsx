@@ -1,13 +1,43 @@
+import type { ReactNode } from 'react';
 import { CompletionCheck } from "./v3/completion-check";
 import { WaitMark } from "./v3/wait-mark";
 import Link from 'next/link';
 import { tenantPaymentHistoryCopy } from '@/i18n/tenant-payment-history';
-import { makeT, type Locale } from '@/i18n';
-import { chargeKey } from '@/components/ui';
+import { makeT, translate, type Locale } from '@/i18n';
+import { brandV3Copy } from '@/i18n/lanes/brand-v3';
+import type { TenantPaymentTurn } from '@/server/b3-payment-turns';
+import { chargeKey, ErrorBanner } from '@/components/ui';
 import { electricityMonthLabel } from '@/server/format';
 import type { tenantPaymentHistory } from '@/server/tenant-payment-history';
 
 type Ready = Extract<Awaited<ReturnType<typeof tenantPaymentHistory>>, { state: 'ready' }>;
+
+/** The current-history branch, with existing server-rendered payee and report controls as slots. */
+export function TenantPayReadyContent({ data, locale, place, error, cursor, reportId, payee, report, v3 = false, turn, firm }: {
+  data: Ready; locale: Locale; place: string; error?: string; cursor?: string; reportId?: string;
+  payee?: ReactNode; report?: ReactNode; v3?: boolean; turn?: TenantPaymentTurn; firm: string;
+}) {
+  const t = makeT(locale);
+  return <div>
+    <h2>{t('i_rich_pay')}</h2>
+    <ErrorBanner t={t} error={error} />
+    <TenantPaymentTurnLine v3={v3} turn={turn} firm={firm} locale={locale} />
+    <p>{place}</p>
+    <TenantBillSummary data={data} locale={locale} showLines />
+    {payee}
+    {report}
+    <TenantPaymentHistory v3={v3} data={data} locale={locale} pathname="/t/pay" cursor={cursor} selectedReport={reportId} />
+    <p className="fn">{t('i_pay_direct', { brand: t('i_brand') })}</p>
+  </div>;
+}
+
+export function TenantPaymentTurnLine({ v3 = false, turn, firm, locale }: { v3?: boolean; turn?: TenantPaymentTurn; firm: string; locale: Locale }) {
+  if (!v3 || !turn) return null;
+  const copy = brandV3Copy(locale);
+  return <p className="v3-tenant-turn" data-testid="tenant-payment-turn">{turn.kind === 'waiting'
+    ? <><WaitMark />{makeT(locale)('i_reported_wait', { amount: amount(turn.amountMinor, turn.currency, locale), firm })}</>
+    : translate(copy, 'yourTurnStep', { step: copy.reReport })}</p>;
+}
 
 function amount(value: number | string, currency: string, locale: Locale) {
   // Format integer minor units directly, avoiding floating-point rounding for large values.
