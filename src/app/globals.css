@@ -527,6 +527,44 @@ ol.steps{list-style:none;padding:0;margin:0 0 12px;gap:8px;flex-wrap:nowrap}
   .interim-compare-cards { display: block; }
   .interim-sticky { display: block; }
 }
+
+/* B-046 approved empty states and org setup checklist. */
+.empty-state{width:100%;box-sizing:border-box;min-width:0;text-align:center;padding:40px 24px;color:#14325C;overflow-wrap:anywhere}
+.empty-state h2{font-size:20px;margin:16px 0 8px;line-height:1.4}
+.empty-state p{max-width:540px;margin:8px auto 16px;color:var(--ink2);font-size:16px;line-height:1.6}
+.empty-state svg{display:block;margin:auto;flex-shrink:0}
+.empty-state.es-compact{padding:24px 16px}
+.empty-state.es-compact h2{font-size:18px}
+.es-primary{margin-top:20px}
+.es-primary .btn{min-height:48px;padding:12px 24px;white-space:normal;line-height:1.5;box-sizing:border-box;background:#14325C;color:white;border-color:#14325C}
+.es-links{display:flex;justify-content:center;align-items:center;gap:8px 24px;flex-wrap:wrap;margin-top:8px}
+.es-links a,.es-view{display:inline-flex;align-items:center;min-height:44px;color:#14325C;text-decoration:underline}
+.setup-checklist{padding:20px;border:1px solid #14325C;border-radius:14px;background:var(--panel);margin-bottom:16px;color:#14325C;min-width:0}
+.setup-checklist h2{margin:0 0 12px;font-size:18px;display:flex;gap:12px;align-items:center}
+.setup-checklist h2 span{background:#E3EAF3;border-radius:16px;padding:2px 10px;font-size:14px}
+.setup-checklist progress{display:block;width:100%;height:6px;accent-color:#14325C;border:0;border-radius:8px;overflow:hidden}
+.setup-checklist progress::-webkit-progress-bar{background:#E3EAF3}
+.setup-checklist progress::-webkit-progress-value{background:#14325C}
+.setup-steps{list-style:none;padding:0;margin:16px 0 0;display:flex;gap:20px;flex-wrap:wrap}
+.setup-steps li{display:flex;gap:8px;align-items:flex-start;color:var(--ink2);min-width:0}
+.setup-steps li.current{font-weight:700;color:#14325C}
+.setup-number{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex-shrink:0;border:1px solid var(--ink3);border-radius:50%}
+.setup-steps .done .setup-number{background:#2A7254;color:white;border-color:#2A7254}
+.setup-steps .current .setup-number{background:#14325C;color:white;border-color:#14325C}
+.setup-steps small{display:block;margin-top:4px;font-size:14px;font-weight:400}
+.setup-complete summary{cursor:pointer;min-height:44px;line-height:1.6}
+.setup-complete summary .es-view{margin-left:12px}
+@media(max-width:600px){
+  .empty-state{padding:28px 16px}
+  .setup-steps{flex-direction:column;gap:10px}
+  .es-primary{position:fixed;bottom:calc(var(--m-bottom-nav-height,0px) + env(safe-area-inset-bottom,0px));left:0;right:0;z-index:39;margin:0;padding:12px 16px;background:var(--panel);border-top:1px solid var(--line)}
+  .es-primary .btn{display:flex;width:100%;justify-content:center}
+  .main:has(.es-primary){padding-bottom:calc(120px + var(--m-bottom-nav-height,0px) + env(safe-area-inset-bottom,0px))}
+  table.t.rf td:has(>.empty-state){display:block;text-align:center;width:100%}
+}
+
+.main:has(.empty-state) :is(a,button,summary,select,input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])){min-height:44px}
+.main:has(.empty-state) a{display:inline-flex;align-items:center}
 /* B-056: mockup dialog/banner classes are absent above; scope all additions to trial UI. */
 :is([data-testid="trial-confirm"],[data-testid="trial-banner"],[data-testid="trial-start-actions"]){--pri:#14325c;--pri-hover:#0f2748;--panel:#fff;--line:#dde3ea;--warn:#935c0f;--warnbg:#f8eedb;color:#1b2533}
 [data-testid="trial-start-actions"]{display:grid;gap:8px;margin-top:12px}

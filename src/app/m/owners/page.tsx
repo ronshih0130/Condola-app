@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -20,7 +21,7 @@ export default async function OwnersPage() {
       <PageHeader
         title={t("i_owners_title")}
         actions={
-          editable ? (
+          editable && rows.length > 0 ? (
             <Link className="btn pri" href="/m/owners/new" data-testid="new-owner">
               + {t("i_owner_new")}
             </Link>
@@ -28,6 +29,7 @@ export default async function OwnersPage() {
         }
       />
       <div className="card">
+        {rows.length === 0 ? <ManagementEmptyState session={session} page="OWN" /> : (
         <table className="t rf" data-testid="owner-list">
           <thead>
             <tr>
@@ -39,11 +41,6 @@ export default async function OwnersPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={5}>{t("i_empty")}</td>
-              </tr>
-            ) : null}
             {rows.map((row) => (
               <tr key={row.id} data-testid={`owner-row-${row.email ?? row.id}`}>
                 <td>
@@ -63,6 +60,7 @@ export default async function OwnersPage() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
     </>
   );

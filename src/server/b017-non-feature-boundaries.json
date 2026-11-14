@@ -240,7 +240,7 @@
     "sha256": "4efbd863fefbdc8a0957ad2194d855cdcb3e75e3ac5e97015f9edfca196f6722"
   },
   "src/app/m/admin/page.tsx#PlatformAdminPage": {
-    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and \u5165\u5e33\u65e5 render only after that same gate; no member-role authority and no outbound.",
+    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and 入帳日 render only after that same gate; no member-role authority and no outbound.",
     "sha256": "a5d784a60085c2b40d3cc2a7b55fc73b91e0a518e108b91828d8ff694febcaf5"
   },
   "src/server/pricing-apply-actions.ts#actionSubmitPricingApply": {
@@ -506,5 +506,17 @@
   "src/server/unit-line-invite-api.ts#handleAcceptExisting": {
     "reason": "Existing-account unit invite accept; the session user binds only themselves under the same 4-seat cap; no staff authority",
     "sha256": "045966ea2326243622c0d997dc5d7a2215a95564b95a09653e3d7ac3331d0ca3"
+  },
+  "src/server/onboarding-progress.ts#readSetupStepOn": {
+    "reason": "Aggregate setup reader shared by every staff page, not a feature grant: resolves current custom role, requires an existing effective native-ceiling permission, validates active membership/session and effective permission in a lock-free read-only snapshot, and filters steps and returned permissions with can. Only flagged live admin/manager completion opens a separate write transaction, revalidating authority and completion conditions under the existing rollout/org/member/session locks before one audited write. No caller-selected permission or mutation input.",
+    "sha256": "2278bffca9275589fa3f8557956564411307bdd71a73fd51fb9280cfb31e162d"
+  },
+  "src/server/onboarding-progress.ts#readSetupStep": {
+    "reason": "Connection wrapper only; readSetupStepOn owns identity, membership, effective-permission and completion-write authorization. No business SQL before that reader.",
+    "sha256": "f6aacd09dd20517f74faa326fc9850986865ae16262394c49dae92f255553ab6"
+  },
+  "src/components/management-empty-state.tsx#ManagementEmptyState": {
+    "reason": "Presentation adapter only; readSetupStep validates current staff authority and returns effective permissions. Resolves CTA with those permissions; no server action or independent business SQL.",
+    "sha256": "ca8ff8a5cea8a9ed138b3cd7073d52452bec151c46deaf19bdb0821d221fccb0"
   }
 }

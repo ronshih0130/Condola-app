@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { staffInviteVisible, staffInviteEntries, staffInvitePath } from "@/server/b040-staff-ui";
 import { staffInviteCopy } from "@/i18n/staff-invite";
 import { requireCurrentConsent } from "@/server/consent-gate";
@@ -36,16 +37,17 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader
         title={t("i_units_title")}
-        actions={
+        actions={rows.length > 0 ?
           <><Link className="btn" href="/m/archive">{archiveCopy(session.locale).entry}</Link>{editable ? (
             <Link className="btn pri" href="/m/units/new" data-testid="new-space">
               + {t("i_space_new")}
             </Link>
-          ) : null}</>
+          ) : null}</> : null
         }
       />
       <div className="card">
         <ListSearch action="/m/units" q={q} label={t("i_search")} placeholder={t("i_search_ph_units")} clearLabel={t("i_search_clear")} />
+        {rows.length === 0 ? <ManagementEmptyState session={session} page={q || page > 1 ? "SRCH" : "UNIT"} actionHref={q || page > 1 ? "/m/units" : undefined} /> : (
         <table className="t rf" data-testid="space-list">
           <thead>
             <tr>
@@ -62,11 +64,6 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={10}>{q ? t("i_search_none") : t("i_empty")}</td>
-              </tr>
-            ) : null}
             {rows.map((row) => (
               <tr key={`${row.kind}-${row.id}`} data-testid={`space-row-${row.floor}-${row.room_label ?? "unit"}`}>
                 <td>
@@ -110,6 +107,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
             ))}
           </tbody>
         </table>
+        )}
       </div>
       <ListPager
         path="/m/units"
