@@ -175,55 +175,84 @@ test("persisted status remains authoritative: a suspended kept admin is not resu
 //         + every function named in a policy (USING or WITH CHECK), a view or a column default;
 //   edges = a call to another public/app function, schema-qualified or not (an unqualified
 //           name is resolved against both schemas whatever the caller's search_path is).
+//
+// Accepted limits (Codex PR-3a r3 finding 3; none of these forms exists in this codebase, and
+// r4 was bounded by Ron 2026-11-14 14:09 PT): callees outside public/app; calls written with a
+// comment between name and parenthesis, quoted or upper-case identifiers; BEGIN ATOMIC bodies;
+// functions reached only through a CHECK constraint, index expression, rule, event trigger,
+// operator, cast or aggregate; and a '--' inside a string literal, which the comment stripper
+// would cut. A change that introduces one of these needs a manual review of this inventory.
 type Cls = "predicate" | "staff_exclusion" | "invariant" | "via_is_member" | "not_a_caller_grant";
-type Entry = { cls: Cls; active: number; guarded: number; md5: string };
-// active  = number of 'active' literals in the body (comments stripped);
-// guarded = number of "status = 'active' AND NOT app.b056_member_paused(" tests.
+type Entry = { cls: Cls; active: number; guarded: number; fp: string };
+// active  = number of 'active' literals in the body (comments stripped), whatever the spelling
+//           of the comparison (=, ::text =, = ANY (ARRAY[...]));
+// guarded = number of "status = 'active' AND NOT app.b056_member_paused(" tests;
+// fp      = fingerprint of the body AND its execution context: language, SECURITY DEFINER,
+//           volatility, strictness, leakproofness, parallel safety, result and argument types,
+//           argument defaults, function-local settings (search_path and any other SET),
+//           whether the owner is the owner of the core tables, and the ACL (r3 finding 2).
 const CLASSIFIED: Record<string, Entry> = {
   // predicate: every test that authorises the ACTING user carries the pause predicate
-  "app.is_member(p_org uuid)": { cls: "predicate", active: 2, guarded: 2, md5: "d24486d16914fe4b7a4c8a9aab1fecf2" },
-  "app.has_role(p_org uuid, p_roles org_role[])": { cls: "predicate", active: 1, guarded: 1, md5: "01a183769a07bf61f5d33c8c71024114" },
-  "app.b008_capture_first_period(p_lease uuid, p_prorate boolean)": { cls: "predicate", active: 1, guarded: 1, md5: "a39ecdf50984eafcc439eb008f7e70b7" },
-  "app.b010_confirmation_audit(p_payment uuid)": { cls: "predicate", active: 1, guarded: 1, md5: "db6337b21f0dc78010d4684c7c013ae3" },
-  "app.b010_lock_payment_context(p_org uuid, p_live_org uuid, p_environment text, p_session uuid, p_lease uuid, p_role text)": { cls: "predicate", active: 2, guarded: 2, md5: "a2553378dcc73006ef5c7244cee31b67" },
-  "app.b015_edit_context(p_org uuid, p_live uuid, p_env text, p_session uuid)": { cls: "predicate", active: 2, guarded: 2, md5: "ef52d8a0379f33de0cd22b89d5a9585e" },
-  "app.b017_denied_orgs(p_floor text)": { cls: "predicate", active: 2, guarded: 2, md5: "e40aff661f306fbdeb2f6e6b2ce0e554" },
-  "app.b017_effective(p_org uuid, p_user uuid)": { cls: "predicate", active: 1, guarded: 1, md5: "d6e41b74aabf7e2bc14e1bd62a430ad4" },
-  "app.b017_invite_guard()": { cls: "predicate", active: 2, guarded: 2, md5: "44abf7792a3c83403d1e837635b8d120" },
+  "app.is_member(p_org uuid)": { cls: "predicate", active: 2, guarded: 2, fp: "5e60f05eb17e1042108637f6decb7c93" },
+  "app.has_role(p_org uuid, p_roles org_role[])": { cls: "predicate", active: 1, guarded: 1, fp: "d39cc93141dd5be91b562f655feea2be" },
+  "app.b008_capture_first_period(p_lease uuid, p_prorate boolean)": { cls: "predicate", active: 1, guarded: 1, fp: "46d1d088dcc415301460ce89ddd41268" },
+  "app.b010_confirmation_audit(p_payment uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "6d7861ff96a878550c700431a2ac8a01" },
+  "app.b010_lock_payment_context(p_org uuid, p_live_org uuid, p_environment text, p_session uuid, p_lease uuid, p_role text)": { cls: "predicate", active: 2, guarded: 2, fp: "fec4040ecb05330d7a1878370a89a6c5" },
+  "app.b015_edit_context(p_org uuid, p_live uuid, p_env text, p_session uuid)": { cls: "predicate", active: 2, guarded: 2, fp: "a3f302f43b0f84d10a47814b54a603da" },
+  "app.b017_denied_orgs(p_floor text)": { cls: "predicate", active: 2, guarded: 2, fp: "7794cb0d349f61f81d01c47ad4476308" },
+  "app.b017_effective(p_org uuid, p_user uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "aa76329d838bbd0babee9e690f779b7b" },
+  "app.b017_invite_guard()": { cls: "predicate", active: 2, guarded: 2, fp: "18616f8a77624103f2ec18c2b5269a22" },
   // 1 guarded actor test; the other two literals are NEW.status <> 'active' on the TARGET row
   // (billing-owner protection, grant ceiling), not a test of the acting user.
-  "app.b017_member_guard()": { cls: "predicate", active: 3, guarded: 1, md5: "067d179c2ab16d313497a97d269436ae" },
-  "app.b027_scope(p_org uuid, p_admin boolean)": { cls: "predicate", active: 1, guarded: 1, md5: "f5ebcacc67dc91f4ad72f962070a4076" },
-  "public.esign_version_guard()": { cls: "predicate", active: 1, guarded: 1, md5: "15c662018bb15cd50837e26b38691999" },
+  "app.b017_member_guard()": { cls: "predicate", active: 3, guarded: 1, fp: "9a4895ec8975c485c423f54ece68a629" },
+  "app.b027_scope(p_org uuid, p_admin boolean)": { cls: "predicate", active: 1, guarded: 1, fp: "8212772573e428b9ede73cef700ed579" },
+  "public.esign_version_guard()": { cls: "predicate", active: 1, guarded: 1, fp: "6636cf6909de18fee55375941117e81e" },
   // staff_exclusion: membership is used only to EXCLUDE staff from owner/tenant paths, so a
   // paused member must stay excluded (adding the predicate would weaken these).
-  "app.b027_any_org_member(p_org uuid)": { cls: "staff_exclusion", active: 0, guarded: 0, md5: "5766683c4c5d224dd73a07c49bbcf482" },
-  "app.b022_my_owner_contact(p_org uuid)": { cls: "staff_exclusion", active: 1, guarded: 0, md5: "779efd07e0eadf8189561187b3887a6e" },
-  "app.b022_reply_statement(p_statement uuid, p_owner_only boolean)": { cls: "staff_exclusion", active: 1, guarded: 0, md5: "b6a10112cc493a89186fcf34ab96af27" },
+  "app.b027_any_org_member(p_org uuid)": { cls: "staff_exclusion", active: 0, guarded: 0, fp: "1b9bf76b8d06ae67333040631c7bfddf" },
+  "app.b022_my_owner_contact(p_org uuid)": { cls: "staff_exclusion", active: 1, guarded: 0, fp: "c770c4fee4ff23305eccef9fb02dc242" },
+  "app.b022_reply_statement(p_statement uuid, p_owner_only boolean)": { cls: "staff_exclusion", active: 1, guarded: 0, fp: "07cd9fa96df22319050eb7fe5e267fd1" },
   // invariant: raises when no usable native admin would remain; grants nothing. It calls the
   // guarded app.b017_effective, so a paused admin does not count as usable.
-  "app.b017_preserve_admin(p_org uuid)": { cls: "invariant", active: 2, guarded: 0, md5: "0576d01301056b01c6bc012ad8cc61c1" },
+  "app.b017_preserve_admin(p_org uuid)": { cls: "invariant", active: 2, guarded: 0, fp: "72a5c3894d932f4237641990e8abd570" },
   // via_is_member: gated by app.is_member; the inline reads match ids only.
-  "app.prop04_my_consent_records()": { cls: "via_is_member", active: 0, guarded: 0, md5: "149f1ab9d94cda1a25c762f9607056c0" },
+  "app.prop04_my_consent_records()": { cls: "via_is_member", active: 0, guarded: 0, fp: "510a4e2facce1e9c1770390e51630b9d" },
   // not_a_caller_grant: reads org_members without authorising the acting user.
-  "app.b017_member_admission()": { cls: "not_a_caller_grant", active: 0, guarded: 0, md5: "c022b78b4bb8f4a46fa205dfacf36d3c" }, // admission bookkeeping on the member row itself
-  "app.b028_center_recipient_valid()": { cls: "not_a_caller_grant", active: 1, guarded: 0, md5: "ce85236ab0b94c8399d520ff22f1aa8d" }, // validates the RECIPIENT of a notification row
-  "app.b056_member_paused(p_org uuid, p_user uuid)": { cls: "not_a_caller_grant", active: 1, guarded: 0, md5: "8051a593cf630c80e08c5b5f5a79828d" }, // the predicate itself (kept-member lookup)
-  "public.fn_org_bootstrap()": { cls: "not_a_caller_grant", active: 1, guarded: 0, md5: "2a5e6484c926e1728b818b9aa20178e9" }, // inserts the creator's own row with the literal 'active'
+  "app.b017_member_admission()": { cls: "not_a_caller_grant", active: 0, guarded: 0, fp: "c25177c671fef6e891ba318675911afa" }, // admission bookkeeping on the member row itself
+  "app.b028_center_recipient_valid()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "1951148071b32a18c0db8e8c8fc1eacd" }, // validates the RECIPIENT of a notification row
+  "app.b056_member_paused(p_org uuid, p_user uuid)": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "a215c7c91ac62ec41c412bb595c285d9" }, // the predicate itself (kept-member lookup)
+  "public.fn_org_bootstrap()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "671e4d6b923121f1bdcd06c4e92449c7" }, // inserts the creator's own row with the literal 'active'
 };
 // Reachable plpgsql functions that run dynamic SQL. Each was read: the statement is a fixed
 // LOCK TABLE over regclass arguments and can call no function. Pinned, so a change re-opens it.
 const DYNAMIC_SQL_REVIEWED: Record<string, string> = {
-  "app.lock_tables_bounded(p_tables regclass[], p_mode text)": "d91a6cac864dc270114628401f7177e7",
-  "app.lock_tables_nowait_retry(p_tables regclass[], p_mode text)": "d70bc58a5548db81e8abad1400c2f449",
+  "app.lock_tables_bounded(p_tables regclass[], p_mode text)": "db9f433cd32dd94262cfb8825ccecccb",
+  "app.lock_tables_nowait_retry(p_tables regclass[], p_mode text)": "7dc8dd7c96f91b59b7580895c6170b23",
 };
 // Policy / view / column-default expressions that read org_members inline. profiles_teammates
 // is safe because its subquery runs as the querying user under org_members' own policies
-// (pinned in ORG_MEMBERS_POLICIES): a paused user sees only their own row there, so the EXISTS
-// can only be true for their own profile.
+// (pinned in ORG_MEMBERS_POLICIES): through an org in which the user is paused they see only
+// their own member row, so that org contributes no teammate. (They still see teammates of any
+// other org in which they are not paused.)
 const INLINE_EXPR_REVIEWED: Record<string, string> = {
   "policy public.profiles.profiles_teammates": "942ba8d308ec3535c57874c6c8893ef5",
 };
+// Every use of the staff-EXCLUSION helper app.b027_any_org_member, anywhere: policy expressions
+// (USING and WITH CHECK), views, column defaults and function bodies, whether or not they mention
+// org_members. It returns true for a paused member too (it must: it keeps staff out of
+// owner/tenant paths), so a POSITIVE use would grant a paused member access. Each use below was
+// read and is negated (NOT app.b027_any_org_member(org_id)); the full expression is pinned, so
+// any edit, or any new use, has to be reviewed here (Codex PR-3a r3 finding 1).
+const EXCLUSION_HELPER = "b027_any_org_member";
+const EXCLUSION_HELPER_USES: Record<string, string> = {
+  "policy public.files.portal_files_insert": "1ec002f169a762b176e49e5229d1920b",
+  "policy public.files.portal_files_own_read": "02e119a0dee4700bd6ae1d52339d9496",
+  "policy public.files.portal_ticket_photo_read": "8a8ae0475c05e4b8a4cd220ba4811d19",
+  "policy public.ticket_attachments.portal_ticket_att_insert": "73feca4ae21cf80f1878827fd599318c",
+  "policy public.ticket_attachments.portal_ticket_att_read": "d8f0b43cfb2f0ac490310afa58b99d58",
+};
+// Trigger functions of class "predicate" must stay bound and enabled, or their check never runs.
+const GUARD_TRIGGERS = ["public.esign_version_guard()", "app.b017_invite_guard()", "app.b017_member_guard()"];
 const ORG_MEMBERS_POLICIES = [
   "members_admin|ALL|app.has_role(org_id, '{admin}'::org_role[])|app.has_role(org_id, '{admin}'::org_role[])",
   "members_read|SELECT|(app.is_member(org_id) OR (user_id = auth.uid()))|",
@@ -250,18 +279,44 @@ roots AS (
   UNION
   SELECT t.tgfoid FROM pg_trigger t JOIN fn ON fn.oid = t.tgfoid WHERE NOT t.tgisinternal
   UNION
-  SELECT b.oid FROM exprs e JOIN fn b ON e.txt ~ ('(^|[^.\w])(' || b.nspname || '\.)?' || b.proname || '\s*\(')),
-edges AS (
+  SELECT b.oid FROM exprs e JOIN fn b ON strpos(e.txt, b.proname) > 0 AND e.txt ~ ('(^|[^.\w])(' || b.nspname || '\.)?' || b.proname || '\s*\(')),
+-- MATERIALIZED: the recursive step below would otherwise recompute this join on every iteration
+edges AS MATERIALIZED (
   SELECT a.oid AS src, b.oid AS dst FROM fn a JOIN fn b ON a.oid <> b.oid
+   AND strpos(a.prosrc, b.proname) > 0 -- cheap substring test first; the regex decides
    AND a.prosrc ~ ('(^|[^.\w])(' || b.nspname || '\.)?' || b.proname || '\s*\(')),
 reach AS (
   SELECT oid FROM roots
   UNION
-  SELECT e.dst FROM reach r JOIN edges e ON e.src = r.oid)
-SELECT 'fn' AS kind, f.q AS name, f.lanname AS lang, md5(f.prosrc) AS md5, f.prosrc AS src
-  FROM reach r JOIN fn f ON f.oid = r.oid
+  SELECT e.dst FROM reach r JOIN edges e ON e.src = r.oid),
+-- body + execution context, computed once per function (kept out of fn, which the call graph joins on)
+fpx AS (
+  SELECT p.oid,
+         md5(concat_ws(chr(31),
+           p.prosrc, l.lanname, p.prosecdef::text, p.provolatile::text, p.proisstrict::text, p.proleakproof::text,
+           p.proparallel::text, p.proretset::text,
+           (SELECT tn.nspname || '.' || t.typname FROM pg_type t JOIN pg_namespace tn ON tn.oid = t.typnamespace WHERE t.oid = p.prorettype),
+           (SELECT coalesce(string_agg(tn.nspname || '.' || t.typname, ',' ORDER BY a.ord), '')
+              FROM unnest(coalesce(p.proallargtypes, p.proargtypes::oid[])) WITH ORDINALITY a(typ, ord)
+              JOIN pg_type t ON t.oid = a.typ JOIN pg_namespace tn ON tn.oid = t.typnamespace),
+           coalesce(p.proargmodes::text, ''), coalesce(p.proargnames::text, ''), coalesce(pg_get_expr(p.proargdefaults, 0), ''),
+           coalesce((SELECT string_agg(c, ',' ORDER BY c) FROM unnest(p.proconfig) c), ''),
+           (p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.org_members'::regclass))::text,
+           (SELECT coalesce(string_agg(CASE WHEN x.grantee = 0 THEN 'PUBLIC' WHEN x.grantee = p.proowner THEN 'OWNER' ELSE r.rolname END
+                                       || ':' || x.privilege_type, ',' ORDER BY 1), '')
+              FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x LEFT JOIN pg_roles r ON r.oid = x.grantee)
+         )) AS fp
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace JOIN pg_language l ON l.oid = p.prolang
+   WHERE n.nspname IN ('public', 'app'))
+SELECT 'fn' AS kind, f.q AS name, f.lanname AS lang, x.fp AS md5, f.prosrc AS src
+  FROM reach r JOIN fn f ON f.oid = r.oid JOIN fpx x ON x.oid = f.oid
 UNION ALL
 SELECT 'expr', e.src, '', md5(e.txt), e.txt FROM exprs e WHERE e.txt ~* 'org_members'
+UNION ALL
+-- every use of the staff-exclusion helper, reachable or not
+SELECT 'helper_use', e.src, '', md5(e.txt), '' FROM exprs e WHERE e.txt ~ 'b027_any_org_member'
+UNION ALL
+SELECT 'helper_use', 'fn ' || f.q, '', x.fp, '' FROM fn f JOIN fpx x ON x.oid = f.oid WHERE f.prosrc ~ 'b027_any_org_member' AND f.proname <> 'b027_any_org_member'
 ORDER BY 1, 2`;
 
 const stripSqlComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");
@@ -282,7 +337,7 @@ async function inventoryProblems(): Promise<string[]> {
     if (!entry) { problems.push(`unclassified org_members reader: ${r.name}`); continue; }
     const active = body.match(/'active'/g)?.length ?? 0;
     const guarded = body.match(/status\s*=\s*'active'\s+AND NOT app\.b056_member_paused\(/g)?.length ?? 0;
-    if (r.md5 !== entry.md5) problems.push(`body changed since review: ${r.name}`);
+    if (r.md5 !== entry.fp) problems.push(`definition or execution context changed since review: ${r.name}`);
     if (active !== entry.active || guarded !== entry.guarded) {
       problems.push(`active-membership tests changed: ${r.name} (active ${active}/${entry.active}, guarded ${guarded}/${entry.guarded})`);
     }
@@ -300,11 +355,17 @@ async function inventoryProblems(): Promise<string[]> {
   if (JSON.stringify(memberPolicies) !== JSON.stringify(ORG_MEMBERS_POLICIES)) problems.push("org_members policies changed");
   const rls = (await db.query<{ ok: boolean }>(`SELECT relrowsecurity AS ok FROM pg_class WHERE oid = 'public.org_members'::regclass`)).rows[0].ok;
   if (!rls) problems.push("org_members RLS is off");
-  const positive = (await db.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM pg_policies
-      WHERE (coalesce(qual, '') ~ 'b027_any_org_member' AND coalesce(qual, '') !~ 'NOT app\\.b027_any_org_member')
-         OR (coalesce(with_check, '') ~ 'b027_any_org_member' AND coalesce(with_check, '') !~ 'NOT app\\.b027_any_org_member')`)).rows[0].n;
-  if (positive !== 0) problems.push("b027_any_org_member is used un-negated in a policy");
+  const uses = rows.filter((x) => x.kind === "helper_use");
+  for (const r of uses) {
+    if (EXCLUSION_HELPER_USES[r.name] !== r.md5) problems.push(`use of ${EXCLUSION_HELPER} not reviewed: ${r.name}`);
+  }
+  for (const name of Object.keys(EXCLUSION_HELPER_USES)) if (!uses.some((u) => u.name === name)) problems.push(`reviewed use of ${EXCLUSION_HELPER} not found: ${name}`);
+  for (const fnName of GUARD_TRIGGERS) {
+    const t = (await db.query<{ enabled: number; disabled: number }>(
+      `SELECT count(*) FILTER (WHERE tgenabled IN ('O', 'A'))::int AS enabled, count(*) FILTER (WHERE tgenabled NOT IN ('O', 'A'))::int AS disabled
+         FROM pg_trigger WHERE tgfoid = $1::regprocedure AND NOT tgisinternal`, [fnName])).rows[0];
+    if (t.enabled < 1 || t.disabled > 0) problems.push(`guard trigger missing or disabled: ${fnName}`);
+  }
   return problems;
 }
 
@@ -376,7 +437,14 @@ test("inventory negative fixtures (Codex PR-3a r2): each omission class is caugh
   p = await problemsWith(scope.replace(needle,
     `AND (NOT p_admin OR m.role='admin')) OR EXISTS (SELECT 1 FROM public.org_members z WHERE z.org_id = p_org AND z.user_id = auth.uid() AND z.status = 'active');`));
   assert.deepEqual(p, [
-    "body changed since review: app.b027_scope(p_org uuid, p_admin boolean)",
+    "definition or execution context changed since review: app.b027_scope(p_org uuid, p_admin boolean)",
+    "active-membership tests changed: app.b027_scope(p_org uuid, p_admin boolean) (active 2/1, guarded 1/1)",
+  ]);
+  // 5b. the same, spelled with a cast and ANY: the literal counter must still see it (r3 finding 4)
+  p = await problemsWith(scope.replace(needle,
+    `AND (NOT p_admin OR m.role='admin')) OR EXISTS (SELECT 1 FROM public.org_members z WHERE z.org_id = p_org AND z.user_id = auth.uid() AND z.status::text = ANY (ARRAY['active']));`));
+  assert.deepEqual(p, [
+    "definition or execution context changed since review: app.b027_scope(p_org uuid, p_admin boolean)",
     "active-membership tests changed: app.b027_scope(p_org uuid, p_admin boolean) (active 2/1, guarded 1/1)",
   ]);
 
@@ -401,6 +469,44 @@ test("inventory negative fixtures (Codex PR-3a r2): each omission class is caugh
     CREATE VIEW public.review_probe_v AS SELECT o.id, app.review_probe_helper(o.id, auth.uid()) AS ok FROM public.organizations o;`);
   assert.deepEqual(p, ["unclassified org_members reader: app.review_probe_helper(p_org uuid, p_user uuid)"]);
 
+  // 9. positive use of the staff-exclusion helper (r3 finding 1): mixed into USING, into
+  //    WITH CHECK, and through a granting wrapper that never mentions org_members
+  p = await problemsWith(`
+    ALTER POLICY portal_ticket_att_read ON public.ticket_attachments
+      USING (((NOT is_internal) AND (NOT app.b027_any_org_member(org_id)) AND app.tenant_owns_ticket(ticket_id)) OR app.b027_any_org_member(org_id));`);
+  assert.deepEqual(p, ["use of b027_any_org_member not reviewed: policy public.ticket_attachments.portal_ticket_att_read"]);
+  p = await problemsWith(`
+    CREATE POLICY review_probe_helper_check ON public.profiles FOR INSERT TO authenticated
+      WITH CHECK ((NOT app.b027_any_org_member(id)) OR app.b027_any_org_member(id));`);
+  assert.deepEqual(p, ["use of b027_any_org_member not reviewed: policy public.profiles.review_probe_helper_check"]);
+  p = await problemsWith(`
+    CREATE FUNCTION public.review_probe_staffish(p_org uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $f$ SELECT app.b027_any_org_member(p_org) $f$;
+    GRANT EXECUTE ON FUNCTION public.review_probe_staffish(uuid) TO authenticated;`);
+  assert.deepEqual(p, ["use of b027_any_org_member not reviewed: fn public.review_probe_staffish(p_org uuid)"]);
+
+  // 10. execution context changed with the body untouched (r3 finding 2)
+  const changed = (name: string) => [`definition or execution context changed since review: ${name}`];
+  const someone = (await db.query<{ id: string }>(`SELECT gen_random_uuid()::text AS id`)).rows[0].id;
+  p = await problemsWith(`ALTER FUNCTION app.is_member(uuid) SET request.jwt.claim.sub = '${someone}';`); // auth.uid() would become someone else
+  assert.deepEqual(p, changed("app.is_member(p_org uuid)"));
+  p = await problemsWith(`ALTER FUNCTION app.has_role(uuid, org_role[]) SECURITY INVOKER;`);
+  assert.deepEqual(p, changed("app.has_role(p_org uuid, p_roles org_role[])"));
+  p = await problemsWith(`ALTER FUNCTION app.b027_scope(uuid, boolean) SET search_path = app, public, pg_catalog;`);
+  assert.deepEqual(p, changed("app.b027_scope(p_org uuid, p_admin boolean)"));
+  p = await problemsWith(`ALTER FUNCTION app.b017_effective(uuid, uuid) OWNER TO service_role;`);
+  assert.deepEqual(p, changed("app.b017_effective(p_org uuid, p_user uuid)"));
+  p = await problemsWith(`ALTER FUNCTION app.b056_member_paused(uuid, uuid) VOLATILE;`);
+  assert.deepEqual(p, changed("app.b056_member_paused(p_org uuid, p_user uuid)"));
+  p = await problemsWith(`GRANT EXECUTE ON FUNCTION app.b017_preserve_admin(uuid) TO authenticated;`);
+  assert.deepEqual(p, changed("app.b017_preserve_admin(p_org uuid)"));
+  p = await problemsWith(`ALTER FUNCTION app.lock_tables_bounded(regclass[], text) SECURITY DEFINER;`);
+  assert.deepEqual(p, ["dynamic SQL not reviewed: app.lock_tables_bounded(p_tables regclass[], p_mode text)"]);
+
+  // 11. a guard trigger disabled: its predicate would never run
+  p = await problemsWith(`ALTER TABLE public.esign_versions DISABLE TRIGGER esign_version_guard;`);
+  assert.deepEqual(p, ["guard trigger missing or disabled: public.esign_version_guard()"]);
+
   // every fixture was rolled back
   assert.deepEqual(await inventoryProblems(), []);
   assert.equal((await db.query(`SELECT 1 FROM pg_proc WHERE proname LIKE 'review\\_probe\\_%'`)).rowCount, 0);
@@ -408,14 +514,36 @@ test("inventory negative fixtures (Codex PR-3a r2): each omission class is caugh
 
 test("the two actor checks surfaced in r3 refuse a paused admin and still accept the kept one", async () => {
   const o = await makeOrg();
-  // esign void guard: the paused admin a2 is not "an active admin"; the kept admin a1 is.
-  const src = (await db.query<{ s: string }>(`SELECT prosrc AS s FROM pg_proc WHERE oid = 'public.esign_version_guard()'::regprocedure`)).rows[0].s;
-  assert.match(src, /m\.role = 'admin' AND m\.status = 'active' AND NOT app\.b056_member_paused\(m\.org_id, m\.user_id\)/);
-  const adminOk = async (userId: string) => (await db.query<{ ok: boolean }>(
-    `SELECT EXISTS (SELECT 1 FROM public.org_members m WHERE m.org_id = $1 AND m.user_id = $2
-        AND m.role = 'admin' AND m.status = 'active' AND NOT app.b056_member_paused(m.org_id, m.user_id)) AS ok`, [o.orgId, userId])).rows[0].ok;
-  assert.equal(await adminOk(o.a1), true);
-  assert.equal(await adminOk(o.a2), false);
+  // esign void guard, through the real trigger on a real version row: the paused admin a2 and the
+  // paused manager cannot void; the kept admin a1 can. (r3 finding 5)
+  const bound = (await db.query<{ tgname: string; tgenabled: string }>(
+    `SELECT tgname, tgenabled FROM pg_trigger WHERE tgrelid = 'public.esign_versions'::regclass AND tgfoid = 'public.esign_version_guard()'::regprocedure AND NOT tgisinternal`)).rows;
+  assert.ok(bound.length >= 1 && bound.every((t) => t.tgenabled === "O"), "the guard trigger is bound and enabled");
+  const property = (await db.query<{ id: string }>(`INSERT INTO properties (org_id, name, country_code, currency, timezone) VALUES ($1, 'b056 esign', 'TW', 'TWD', 'Asia/Taipei') RETURNING id::text`, [o.orgId])).rows[0].id;
+  const unit = (await db.query<{ id: string }>(`INSERT INTO units (org_id, property_id, label, rental_mode) VALUES ($1, $2, 'E1', 'whole_unit') RETURNING id::text`, [o.orgId, property])).rows[0].id;
+  const lease = (await db.query<{ id: string }>(
+    `INSERT INTO leases (org_id, property_id, unit_id, target_unit_id, status, esign_status, start_date, end_date, currency, rent_amount_minor)
+     VALUES ($1, $2, $3, $3, 'active', 'imported', '2090-01-01', '2090-12-31', 'TWD', 0) RETURNING id::text`, [o.orgId, property, unit])).rows[0].id;
+  const caseId = (await db.query<{ id: string }>(`INSERT INTO esign_cases (org_id, lease_id, created_by, retention_until) VALUES ($1, $2, $3, 'infinity') RETURNING id::text`, [o.orgId, lease, o.a1])).rows[0].id;
+  const newVersion = async () => (await db.query<{ id: string }>(
+    `INSERT INTO esign_versions (id, case_id, body, pdf_bytes, content_digest, state, retention_until)
+     SELECT v.id, $1, 'Fixture', 'synthetic'::bytea, encode(sha256('synthetic'::bytea), 'hex'),
+            jsonb_build_object('id', v.id, 'body', 'Fixture', 'documentDigest', encode(sha256('synthetic'::bytea), 'hex'), 'status', 'draft'), 'infinity'
+       FROM (SELECT gen_random_uuid() AS id) v RETURNING id::text`, [caseId])).rows[0].id;
+  const voidAs = (version: string, userId: string) => db.query(
+    `UPDATE esign_versions SET status = 'voided', state = jsonb_set(state, '{status}', '"voided"'), void_reason = 'synthetic', voided_by = $2, voided_at = clock_timestamp() WHERE id = $1`, [version, userId]);
+  const adminRequired = (e: unknown) => (e as { code?: string; message?: string }).code === "42501" && /Company admin required to void/.test((e as Error).message);
+  const v1 = await newVersion();
+  await assert.rejects(voidAs(v1, o.a2), adminRequired, "paused admin cannot void");
+  await assert.rejects(voidAs(v1, o.mgr), adminRequired, "paused manager cannot void (never could: not an admin)");
+  assert.equal((await db.query(`SELECT status FROM esign_versions WHERE id = $1`, [v1])).rows[0].status, "draft");
+  assert.equal((await voidAs(v1, o.a1)).rowCount, 1, "the kept admin can void");
+  assert.equal((await db.query(`SELECT status FROM esign_versions WHERE id = $1`, [v1])).rows[0].status, "voided");
+  // with the trial still running the second admin is not paused and can void
+  await db.query(`UPDATE app.b056_org_trials SET trial_ends_at = clock_timestamp() + interval '1 day' WHERE org_id = $1`, [o.orgId]);
+  const v2 = await newVersion();
+  assert.equal((await voidAs(v2, o.a2)).rowCount, 1, "not paused while the trial runs");
+  await db.query(`UPDATE app.b056_org_trials SET trial_ends_at = clock_timestamp() - interval '1 hour' WHERE org_id = $1`, [o.orgId]);
   // app.b015_edit_context, called for real: signed in as each user with a live session of their own.
   const editContext = async (userId: string, orgId = o.orgId): Promise<string> => {
     await db.query("BEGIN");
