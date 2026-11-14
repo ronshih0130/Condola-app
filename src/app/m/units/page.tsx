@@ -1,3 +1,5 @@
+import { staffInviteVisible, staffInviteEntries, staffInvitePath } from "@/server/b040-staff-ui";
+import { staffInviteCopy } from "@/i18n/staff-invite";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { archiveCopy } from "@/i18n/record-archive";
@@ -20,6 +22,8 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
   const result = await searchSpaces(session, raw);
   const { rows, q, page, hasNext, total, from, to } = result;
   const summary = listSummary(t, result);
+  const inviteEntries = await staffInviteVisible(session) ? await staffInviteEntries(session, rows) : [];
+  const inviteCopy = staffInviteCopy(session.locale);
   const editable = can(session, "props.edit");
   const roomTypeKey: Record<string, string> = {
     whole_home: "i_whole_home",
@@ -89,6 +93,13 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
                           : "—"}
                 </td>
                 <td className="r">
+                  {inviteEntries.filter(entry => entry.rowId === row.id).map(entry => (
+                    <span key={entry.unitId} data-testid="staff-invite-entry">
+                      <span className="muted">{inviteCopy.text("status", { n: entry.bound })}</span>{" "}
+                      {entry.expiresAt && new Date(entry.expiresAt).getTime() - Date.now() <= 3 * 86400000 ? <span className="alert warn">{inviteCopy.text("soon", { n: Math.max(1, Math.ceil((new Date(entry.expiresAt).getTime() - Date.now()) / 86400000)) })}</span> : null}{" "}
+                      <a className="btn sm" href={staffInvitePath(entry.unitId)}>{inviteCopy.text("invite")}</a>{" "}
+                    </span>
+                  ))}
                   {editable ? (
                     <Link className="btn sm" href={row.kind === "room" ? `/m/units/room/${row.id}` : `/m/units/whole/${row.id}`}>
                       {t("i_edit")}
