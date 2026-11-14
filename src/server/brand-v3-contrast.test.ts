@@ -17,7 +17,7 @@ function contrast(a: string, b: string) {
   return (light + .05) / (dark + .05);
 }
 
-test("approved text and outline pairs meet WCAG thresholds without rounding up", () => {
+test("PLT-50-AC1: approved text and outline pairs meet WCAG thresholds without rounding up", () => {
   const pairs = [
     ...["c-text", "c-text-2", "c-text-3"].map(fg => [fg, "c-bg"]),
     ["c-text-3", "c-tint-soft"], ["c-text-3", "c-surface"],
@@ -37,7 +37,7 @@ test("approved text and outline pairs meet WCAG thresholds without rounding up",
   assert.ok(contrast("c-brand", "c-surface") < 4.5);
 });
 
-test("input, textarea and select placeholders use opaque text-3 on white at 4.5:1 or better", () => {
+test("PLT-50-AC5: input, textarea and select placeholders use opaque text-3 on white at 4.5:1 or better", () => {
   const css = postcss.parse(readFileSync("public/brand/v3/theme.css", "utf8"));
   const scope = 'html[data-brand="v2"][data-brand-v3]';
   for (const selector of ['.inp::placeholder', 'textarea::placeholder', 'select.inp:has(> option[value=""]:checked)', 'select.inp > option[value=""]']) {
@@ -51,7 +51,7 @@ test("input, textarea and select placeholders use opaque text-3 on white at 4.5:
   assert.ok(contrast("c-text-3", "#FFFFFF") >= 4.5);
 });
 
-test("forbidden combinations still fail, documenting why the delta is required", () => {
+test("PLT-50-AC2 / AC3: forbidden combinations still fail, documenting why the delta is required", () => {
   for (const [fg, bg] of [
     [v2.color["c-text-3"].value, "c-bg"],
     [v2.color["c-warning"].value, "c-warning-soft"],
@@ -61,7 +61,7 @@ test("forbidden combinations still fail, documenting why the delta is required",
   assert.ok(contrast("c-surface", "c-bg") < 3);
 });
 
-test("sand blocks avoid cobalt/info text, darken avatar outlines, and retain card shadows", () => {
+test("PLT-50-AC3 / PLT-48-AC3 / PLT-47-AC4: sand blocks avoid cobalt/info text, darken avatar outlines, and retain card shadows", () => {
   const css = postcss.parse(readFileSync("public/brand/v3/theme.css", "utf8"));
   const rings = new Set<string>();
   css.walkRules(rule => {

@@ -9,7 +9,7 @@ const css = readFileSync("public/brand/v3/theme.css", "utf8");
 const tree = postcss.parse(css);
 const scope = 'html[data-brand="v2"][data-brand-v3]';
 
-test("every v3 delta token is present and exact; unchanged tokens stay inherited", () => {
+test("PLT-47-AC1 / PLT-50-AC2: every v3 delta token is present and exact; unchanged tokens stay inherited", () => {
   const expected = Object.fromEntries([tokens.color, tokens.radius].flatMap(group =>
     Object.entries(group).map(([name, token]) => {
       assert.equal(token.css, `var(--${name})`);
@@ -30,7 +30,7 @@ test("every v3 delta token is present and exact; unchanged tokens stay inherited
   assert.equal(tokens.color["c-warning"].value, "#8A560C");
 });
 
-test("all style selectors, including media rules, are v3 scoped and flat fills only", () => {
+test("PLT-46-AC1 / PLT-47-AC4: all style selectors, including media rules, are v3 scoped and flat fills only", () => {
   let count = 0;
   tree.walkRules(rule => {
     if (rule.parent?.type === "atrule" && rule.parent.name === "keyframes") {
@@ -68,7 +68,7 @@ test("all style selectors, including media rules, are v3 scoped and flat fills o
   assert.doesNotMatch(css, /@import|url\(["']?https?:/i);
 });
 
-test("buttons, row actions, focus, sand header and status masks have scoped rules", () => {
+test("PLT-47-AC1…AC3 / PLT-50-AC4: buttons, row actions, focus, sand header and status masks have scoped rules", () => {
   const rules = new Map<string, string>();
   tree.walkRules(rule => { rules.set(rule.selector, rule.toString()); });
   assert.match(rules.get(`${scope} .btn`)!, /min-height: 44px/);

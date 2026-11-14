@@ -15,7 +15,7 @@ import { TenantPaymentHistory } from "../tenant-payment-history";
 // Existing server components use the application's JSX runtime.
 Object.assign(globalThis, { React });
 
-test("role avatars render all four glyphs and localized accessible role names", () => {
+test("PLT-48-AC1 / AC4: role avatars render all four glyphs and localized accessible role names", () => {
   for (const locale of ["zh-TW", "en"] as const) {
     for (const [role, glyph] of [["m", "管"], ["t", "租"], ["o", "屋"], ["v", "廠"]] as const) {
       const html = renderToStaticMarkup(<RoleAvatar role={role} locale={locale} />);
@@ -27,7 +27,7 @@ test("role avatars render all four glyphs and localized accessible role names", 
   }
 });
 
-test("account avatars use surname initials and retain the full accessible name", () => {
+test("PLT-48-AC2: account avatars use surname initials and retain the full accessible name", () => {
   for (const [name, glyph] of [["陳小明", "陳"], ["Ada Lovelace", "L"]]) {
     const html = renderToStaticMarkup(<RoleAvatar role="m" locale="zh-TW" name={name} />);
     assert.match(html, /party-name/);
@@ -37,7 +37,7 @@ test("account avatars use surname initials and retain the full accessible name",
   assert.ok(renderToStaticMarkup(<RoleAvatar role="t" locale="en" name="  " />).includes(">租</span>"));
 });
 
-test("decorative avatars preserve the glyph without repeating the adjacent accessible name", () => {
+test("PLT-48-AC2: decorative avatars preserve the glyph without repeating the adjacent accessible name", () => {
   for (const role of ["m", "t", "o", "v"] as const) {
     for (const name of [undefined, "陳小明", "Ada Lovelace"]) {
       const baseline = renderToStaticMarkup(<RoleAvatar role={role} locale="en" name={name} />);
@@ -49,11 +49,11 @@ test("decorative avatars preserve the glyph without repeating the adjacent acces
   }
 });
 
-test("turn tag marks the supplied step without inventing new copy", () => {
+test("B-069 component (used from B-070 / PLT-52): turn tag marks the supplied step without inventing new copy", () => {
   assert.equal(renderToStaticMarkup(<TurnTag>Confirm</TurnTag>), '<span class="turn-tag" aria-current="step">Confirm</span>');
 });
 
-test("completion mark renders the entire logo with the tick last and reduced motion static", () => {
+test("PLT-51-AC1 / AC3 / AC4: completion mark renders the entire logo with the tick last and reduced motion static", () => {
   const html = renderToStaticMarkup(<CompletionCheck />);
   assert.match(html, /class="v3-check" aria-hidden="true"/);
   assert.equal((html.match(/<path /g) ?? []).length, 2);
@@ -74,7 +74,7 @@ test("completion mark renders the entire logo with the tick last and reduced mot
   assert.ok(staticRule);
 });
 
-test("approved illustrations retain decorative SVG geometry and theme variables", () => {
+test("PLT-47-AC5: approved illustrations retain decorative SVG geometry and theme variables", () => {
   for (const name of ["04", "05", "06", "08", "24", "26"] as const) {
     const html = renderToStaticMarkup(<Illustration name={name} />);
     assert.match(html, /viewBox="0 0 176 120"/);
@@ -85,7 +85,7 @@ test("approved illustrations retain decorative SVG geometry and theme variables"
   }
 });
 
-test("empty-state illustration slot leaves OFF markup identical", () => {
+test("PLT-46-AC1 / PLT-47-AC5: empty-state illustration slot leaves OFF markup identical", () => {
   for (const id of ["PAY", "TIX", "MSG", "MSG_joined"] as const) {
     const baseline = renderToStaticMarkup(<EmptyState id={id} locale="en" />);
     assert.equal(renderToStaticMarkup(<EmptyState id={id} locale="en" illustration={undefined} />), baseline);
@@ -95,7 +95,7 @@ test("empty-state illustration slot leaves OFF markup identical", () => {
   }
 });
 
-test("PLT-51: tick only when confirmed, clock only when submitted; flag OFF preserves the payment view", () => {
+test("PLT-51-AC1 / AC2: tick only when confirmed, clock only when submitted; flag OFF preserves the payment view", () => {
   type Ready = Parameters<typeof TenantPaymentHistory>[0]["data"];
   const data: Ready = {
     state: "ready", lease: { id: "lease", status: "active", currency: "TWD", canReport: false, legacyPayeeVisible: false },

@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { ACCOUNTS, signIn } from "./session";
 
 // Brand 3.0 Batch 1 visual evidence (design: condola-hub 20-build/specs/BRAND-3.0-batch1-design.md §9).
+// Stories: B-069 PLT-46…PLT-51 (condola-hub 07-brand/brand-3.0-1113/stories.md). The pages are evidence pages for the
+// shared 3.0 base, not restyle targets (Ron 2026-11-14: unbuilt designs are built directly in 3.0).
 // Run through e2e/brand-v3-visual-playwright.config.ts with BRAND_V3_VISUAL=baseline|off|on.
 // Seeded demo accounts only; a disposable local database; no outbound.
 const MODE = (process.env.BRAND_V3_VISUAL ?? "off") as "baseline" | "off" | "on";
@@ -34,7 +36,7 @@ async function settle(page: Page) {
 test.describe.configure({ mode: "serial" });
 
 for (const group of PAGES) {
-  test(`brand v3 visual (${MODE}): ${group.account ?? "signed out"}`, async ({ page }) => {
+  test(`B-069 PLT-46-AC2 / PLT-47 / PLT-50 — brand v3 visual (${MODE}): ${group.account ?? "signed out"}`, async ({ page }) => {
     mkdirSync(OUT, { recursive: true });
     if (group.account) await signIn(page, group.account);
     else await page.context().clearCookies();
@@ -112,7 +114,7 @@ for (const group of PAGES) {
   });
 }
 
-test(`brand v3 visual (${MODE}): reduced motion keeps the completion tick static`, async ({ browser }) => {
+test(`B-069 PLT-51-AC4 — brand v3 visual (${MODE}): reduced motion keeps the completion tick static`, async ({ browser }) => {
   test.skip(MODE !== "on", "v3 only");
   const context = await browser.newContext({ reducedMotion: "reduce" });
   const page = await context.newPage();

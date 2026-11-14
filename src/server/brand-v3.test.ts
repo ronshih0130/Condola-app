@@ -26,7 +26,7 @@ function compile(source: string, mocks: Record<string, unknown>) {
   return exports;
 }
 
-test("v3 needs an organization, effective v2 and the exact JSON boolean true", async () => {
+test("PLT-46-AC3 / AC4: v3 needs an organization, effective v2 and the exact JSON boolean true", async () => {
   for (const org of [undefined, null, "", "org-a"]) {
     for (const effective of [false, true]) {
       for (const flag of [undefined, null, false, "true", "false", 0, 1, {}, [], true]) {
@@ -41,7 +41,7 @@ test("v3 needs an organization, effective v2 and the exact JSON boolean true", a
   }
 });
 
-test("environment switches alone never activate v3 and errors fail closed", async () => {
+test("PLT-46-AC4: environment switches alone never activate v3 and errors fail closed", async () => {
   for (const env of [{}, { BRAND_V2: "true" }, { BRAND_V2: "true", BRAND_V3: "true" }]) {
     assert.equal(await brandV3EnabledForOrg(null, env), false);
     assert.equal(await brandV3EnabledForOrg("org", env, async () => false, async () => true), false);
@@ -59,7 +59,7 @@ test("environment switches alone never activate v3 and errors fail closed", asyn
   assert.doesNotMatch(readFileSync("wrangler.jsonc", "utf8"), /BRAND_V3/);
 });
 
-test("flag OFF preserves the exact legacy attributes and ordered v2 stylesheets", () => {
+test("PLT-46-AC1: flag OFF preserves the exact legacy attributes and ordered v2 stylesheets", () => {
   assert.deepEqual(brandRoot({ v2: false, v3: false }), { attributes: {}, stylesheets: [] });
   assert.deepEqual(brandRoot({ v2: false, v3: true }), { attributes: {}, stylesheets: [] });
   const baseline = { attributes: { "data-brand": "v2" }, stylesheets: ["/brand/v2/theme.css", ...BRAND_V2_PAGE_STYLES] };
@@ -70,7 +70,7 @@ test("flag OFF preserves the exact legacy attributes and ordered v2 stylesheets"
   });
 });
 
-test("actual root layout OFF serialization matches the pre-v3 commit, for both locales and shells", async () => {
+test("PLT-46-AC1: actual root layout OFF serialization matches the pre-v3 commit, for both locales and shells", async () => {
   const baseline = execFileSync("git", ["show", "7fa0018:src/app/layout.tsx"], { encoding: "utf8" });
   const current = readFileSync("src/app/layout.tsx", "utf8");
   for (const locale of ["zh-TW", "en"] as const) for (const v2 of [false, true]) for (const signedIn of [false, true]) {
