@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261114000000_b056_pr3a_pause_predicate.sql": {
+    addOnly: false,
+    reason: "B-056 PR-3a: adds nullable app.b056_org_trials.kept_member_id (composite FK to org_members ON DELETE RESTRICT), changes the b056_org_trials org FK from ON DELETE CASCADE to ON DELETE RESTRICT (#139 GO fix-forward), adds definer-only app.b056_member_paused(org,user) (EXECUTE revoked from PUBLIC/anon/authenticated, granted to service_role), and CREATE OR REPLACEs app.is_member, app.has_role, app.b010_confirmation_audit, app.b010_lock_payment_context and app.b017_denied_orgs with their current bodies plus AND NOT app.b056_member_paused(m.org_id, m.user_id) on each active-membership test; grants and owners unchanged. With pricing_trial OFF (seed) the predicate is a constant false, so every changed function returns what it returned before. Not add-only because of the FK change, CREATE OR REPLACE of live RLS helpers and privilege statements. No row rewritten, no enum or flag change, no outbound, no delete.",
+  },
   "supabase/migrations/20261113210000_b056_c0_legacy_classifier.sql": {
     addOnly: false,
     reason: "B-056 C-0: one SECURITY DEFINER function app.b056_classify_legacy(org, actor) with REVOKE ALL from PUBLIC/anon/authenticated/service_role and EXECUTE to service_role only; when called (ops runbook, before first pricing_trial ON) it inserts one app.b056_org_trials row + one audit_log row per org, idempotent, never overwrites. Not add-only because of privilege statements. No table/column/enum/flag change; no outbound; no delete.",

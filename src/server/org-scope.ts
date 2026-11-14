@@ -106,6 +106,7 @@ export async function resolveStaffOrg(
        FROM org_members m
        JOIN organizations o ON o.id = m.org_id
       WHERE m.user_id = $1 AND m.status = 'active' AND o.environment = 'live'
+        AND NOT app.b056_member_paused(m.org_id, m.user_id)
       ORDER BY CASE WHEN m.org_id::text = $2 THEN 0 ELSE 1 END, m.created_at
       LIMIT 1`,
     [userId, preferredOrg],
