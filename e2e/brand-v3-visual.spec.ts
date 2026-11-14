@@ -77,15 +77,21 @@ for (const group of PAGES) {
           }));
         expect(shapes.filter(b => b.width < b.height * 1.4), `${id}: pills, not circles`).toEqual([]);
         expect(shapes.filter(b => b.lines > 1 && !b.cta), `${id}: short labels stay on one line`).toEqual([]);
-        // Table header bands stay inside their card's rounded corners.
-        const poking = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".main .card")].filter(card => {
-          const radius = parseFloat(getComputedStyle(card).borderTopLeftRadius) || 0;
-          const head = card.querySelector<HTMLElement>(":scope > table thead, :scope > .rf thead, :scope > table tr:first-child");
-          return radius >= 14 && !!head && getComputedStyle(card).overflow === "visible"
-            && !["0px", ""].includes(getComputedStyle(head).backgroundColor === "rgba(0, 0, 0, 0)" ? "0px" : "x")
-            && parseFloat(getComputedStyle(head.querySelector("th,td") ?? head).borderTopLeftRadius || "0") < 1;
-        }).length);
-        expect(poking, `${id}: table header bands are clipped to the card radius`).toBe(0);
+        // A card's table never paints square corners over the card radius: measure the first visible row.
+        const poking = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".main .card")].flatMap(card => {
+          const style = getComputedStyle(card);
+          const radius = parseFloat(style.borderTopLeftRadius) || 0;
+          const table = card.querySelector<HTMLElement>(":scope > table");
+          if (!table || radius < 14 || style.overflow !== "visible") return [];
+          const row = [...table.querySelectorAll<HTMLElement>("tr")].find(tr => tr.getClientRects().length > 0);
+          if (!row || Math.abs(row.getBoundingClientRect().top - card.getBoundingClientRect().top) > radius) return [];
+          const painted = (el: Element) => !["rgba(0, 0, 0, 0)", "transparent"].includes(getComputedStyle(el).backgroundColor);
+          const corner = getComputedStyle(row).display === "block" ? row : row.firstElementChild!;
+          const paints = painted(row) || painted(corner) || painted(row.parentElement!);
+          return paints && (parseFloat(getComputedStyle(corner).borderTopLeftRadius) || 0) < radius - 2
+            ? [`${card.querySelector("table")?.getAttribute("data-testid") ?? "table"}: ${getComputedStyle(corner).borderTopLeftRadius}`] : [];
+        }));
+        expect(poking, `${id}: table rows stay inside the card radius`).toEqual([]);
       }
     }
   });

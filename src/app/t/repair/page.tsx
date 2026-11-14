@@ -1,3 +1,5 @@
+import { Illustration } from "@/components/v3/illustrations";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -25,6 +27,7 @@ export default async function RepairPage({
 }) {
   await requireCurrentConsent(undefined, "page");
   const { session, lease } = await selectedLease();
+  const v3 = await brandV3EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   if (!lease) return <p>{t("i_empty")}</p>;
@@ -136,6 +139,7 @@ export default async function RepairPage({
       <h3 style={{ marginTop: 20 }}>{t("i_repair_mine")}</h3>
       {repairs.length === 0 ? (
         <div data-testid="repair-tenant-empty">
+          {v3 ? <Illustration name="08" /> : null}
           <p>{t("i_repair_tenant_empty")}</p>
           <p className="small muted">{t("i_repair_tenant_empty_hint")}</p>
         </div>
