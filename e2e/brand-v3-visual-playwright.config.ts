@@ -21,5 +21,6 @@ export default defineConfig({
   snapshotPathTemplate: resolve(__dirname, "results/brand-v3/baseline/{arg}{ext}"),
   use: { baseURL: origin, trace: "off", video: "off", screenshot: "off" },
   webServer: { cwd: resolve(__dirname, ".."), command: "node scripts/third-party-licenses.mjs --check && node scripts/third-party-licenses.mjs --vendor && node node_modules/next/dist/bin/next dev -p 43163 -H 127.0.0.1", url: origin, reuseExistingServer: false, timeout: 240_000, env },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // PW_CHANNEL=chrome uses an installed Google Chrome when no Playwright browser is downloaded (local Mac runs).
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}) } }],
 });

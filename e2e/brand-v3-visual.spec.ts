@@ -17,16 +17,18 @@ const PAGES: { account: string | null; shots: Shot[] }[] = [
     { name: "m-today", path: "/m" }, { name: "m-units", path: "/m/units" }, { name: "m-leases", path: "/m/leases" },
     { name: "m-rent", path: "/m/rent" }, { name: "m-payments", path: "/m/payments" }, { name: "m-tickets", path: "/m/tickets" },
     { name: "m-messages", path: "/m/messages" }, { name: "m-settings", path: "/m/settings" },
+    { name: "m-noperm", path: "/m/noperm?need=admin" }, { name: "not-found", path: "/brand-v3-visual-missing-page" },
   ] },
-  { account: ACCOUNTS.tenant, shots: [{ name: "t-home", path: "/t" }, { name: "t-pay", path: "/t/pay" }] },
+  // tenant2 has one lease in the seeded org, so /t is the tenant home and not the lease picker.
+  { account: ACCOUNTS.tenant2, shots: [{ name: "t-home", path: "/t" }, { name: "t-pay", path: "/t/pay" }] },
   { account: ACCOUNTS.owner, shots: [{ name: "o-home", path: "/o" }] },
 ];
 
 async function settle(page: Page) {
   await page.waitForLoadState("networkidle");
   await page.evaluate(() => document.fonts.ready);
-  // The commit stamp and relative times differ between runs; they are not brand surface.
-  await page.addStyleTag({ content: `[data-testid="app-version"]{visibility:hidden!important} *{caret-color:transparent!important}` });
+  // The commit stamp differs between commits and the Next.js dev badge is not product UI; neither is brand surface.
+  await page.addStyleTag({ content: `[data-testid="app-version"],.build-sha{visibility:hidden!important} nextjs-portal{display:none!important} *{caret-color:transparent!important}` });
 }
 
 test.describe.configure({ mode: "serial" });
@@ -65,6 +67,25 @@ for (const group of PAGES) {
         const small = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".main a.btn, .main button.btn")]
           .filter(el => el.offsetParent !== null && el.getBoundingClientRect().height < 44).length);
         expect(small, `${id}: 44px minimum touch height on buttons`).toBe(0);
+        // A pill is wider than it is tall, and a short label stays on one line (B-046 empty-state CTAs may wrap).
+        const shapes = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("header.top .btn, .main a.btn, .main button.btn, .side .btn")]
+          .filter(el => el.offsetParent !== null && (el.textContent ?? "").trim().length > 0).map(el => {
+            const box = el.getBoundingClientRect();
+            const range = document.createRange(); range.selectNodeContents(el);
+            const lines = new Set([...range.getClientRects()].filter(r => r.width > 0).map(r => Math.round(r.top))).size;
+            return { text: (el.textContent ?? "").trim().slice(0, 12), width: Math.round(box.width), height: Math.round(box.height), lines, cta: !!el.closest(".es-primary") };
+          }));
+        expect(shapes.filter(b => b.width < b.height * 1.4), `${id}: pills, not circles`).toEqual([]);
+        expect(shapes.filter(b => b.lines > 1 && !b.cta), `${id}: short labels stay on one line`).toEqual([]);
+        // Table header bands stay inside their card's rounded corners.
+        const poking = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".main .card")].filter(card => {
+          const radius = parseFloat(getComputedStyle(card).borderTopLeftRadius) || 0;
+          const head = card.querySelector<HTMLElement>(":scope > table thead, :scope > .rf thead, :scope > table tr:first-child");
+          return radius >= 14 && !!head && getComputedStyle(card).overflow === "visible"
+            && !["0px", ""].includes(getComputedStyle(head).backgroundColor === "rgba(0, 0, 0, 0)" ? "0px" : "x")
+            && parseFloat(getComputedStyle(head.querySelector("th,td") ?? head).borderTopLeftRadius || "0") < 1;
+        }).length);
+        expect(poking, `${id}: table header bands are clipped to the card radius`).toBe(0);
       }
     }
   });
