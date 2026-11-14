@@ -42,6 +42,29 @@ test("all style selectors, including media rules, are v3 scoped and flat fills o
   });
   assert.ok(count > 30);
   assert.doesNotMatch(css, /gradient\(/i);
+  // A flat v3 file must also clear the gradients inherited from these v2 surfaces.
+  const knownGradientRoots = [".idv-watermark", ".rich", ".shot"];
+  const covered = new Set<string>();
+  const inherited = postcss.parse(readFileSync("src/app/globals.css", "utf8"));
+  inherited.walkRules(rule => {
+    if (!rule.nodes.some(node => node.type === "decl" && /gradient\(/i.test(node.value))) return;
+    for (const selector of rule.selectors) {
+      const root = knownGradientRoots.find(root => selector === root || selector.startsWith(`${root} `));
+      if (!root) continue;
+      covered.add(root);
+      let clearsGradient = false;
+      tree.walkRules(override => {
+        if (!override.selectors.includes(`${scope} ${selector}`)) return;
+        override.walkDecls(d => {
+          if (d.prop === "background" || d.prop === "background-image") {
+            clearsGradient = !/gradient\(|\b(?:inherit|revert(?:-layer)?)\b/i.test(d.value);
+          }
+        });
+      });
+      assert.ok(clearsGradient, `inherited gradient needs a v3 override: ${selector}`);
+    }
+  });
+  assert.deepEqual([...covered].sort(), [...knownGradientRoots].sort());
   assert.doesNotMatch(css, /@import|url\(["']?https?:/i);
 });
 

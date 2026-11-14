@@ -37,6 +37,18 @@ test("account avatars use surname initials and retain the full accessible name",
   assert.ok(renderToStaticMarkup(<RoleAvatar role="t" locale="en" name="  " />).includes(">租</span>"));
 });
 
+test("decorative avatars preserve the glyph without repeating the adjacent accessible name", () => {
+  for (const role of ["m", "t", "o", "v"] as const) {
+    for (const name of [undefined, "陳小明", "Ada Lovelace"]) {
+      const baseline = renderToStaticMarkup(<RoleAvatar role={role} locale="en" name={name} />);
+      const decorative = renderToStaticMarkup(<RoleAvatar role={role} locale="en" name={name} decorative />);
+      assert.match(decorative, /aria-hidden="true"/);
+      assert.doesNotMatch(decorative, /\brole=|aria-label=/);
+      assert.equal(decorative.replace(' aria-hidden="true"', ""), baseline.replace(' role="img"', "").replace(/ aria-label="[^"]*"/, ""));
+    }
+  }
+});
+
 test("turn tag marks the supplied step without inventing new copy", () => {
   assert.equal(renderToStaticMarkup(<TurnTag>Confirm</TurnTag>), '<span class="turn-tag" aria-current="step">Confirm</span>');
 });

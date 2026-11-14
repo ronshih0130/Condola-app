@@ -37,6 +37,20 @@ test("approved text and outline pairs meet WCAG thresholds without rounding up",
   assert.ok(contrast("c-brand", "c-surface") < 4.5);
 });
 
+test("input, textarea and select placeholders use opaque text-3 on white at 4.5:1 or better", () => {
+  const css = postcss.parse(readFileSync("public/brand/v3/theme.css", "utf8"));
+  const scope = 'html[data-brand="v2"][data-brand-v3]';
+  for (const selector of ['.inp::placeholder', 'textarea::placeholder', 'select.inp:has(> option[value=""]:checked)', 'select.inp > option[value=""]']) {
+    const values: Record<string, string> = {};
+    css.walkRules(rule => {
+      if (rule.selectors.includes(`${scope} ${selector}`)) rule.walkDecls(d => { values[d.prop] = d.value; });
+    });
+    assert.equal(values.color, "var(--c-text-3)", selector);
+    assert.equal(values.opacity, "1", selector);
+  }
+  assert.ok(contrast("c-text-3", "#FFFFFF") >= 4.5);
+});
+
 test("forbidden combinations still fail, documenting why the delta is required", () => {
   for (const [fg, bg] of [
     [v2.color["c-text-3"].value, "c-bg"],

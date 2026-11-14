@@ -51,7 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </label>
           {v2 ? <BrandLink v2 /> : <BrandLink />}
           <span className="top-extra">
-            {session ? <span className="small">{v3 ? <RoleAvatar role={session.kind === "staff" ? "m" : session.kind === "owner" ? "o" : "t"} locale={prefs.locale} name={session.name} /> : null}{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
+            {session ? <span className="small">{v3 ? <RoleAvatar role={session.kind === "staff" ? "m" : session.kind === "owner" ? "o" : "t"} locale={prefs.locale} name={session.name} decorative /> : null}{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
           </span>
           <span className="locale-slot">
             <LocaleLinks />
