@@ -68,9 +68,9 @@ Raw local logs are under `/private/tmp/b027s2-*.log`; final normal and opt-in re
 
 Reproduce with the provided local environment (never print its contents), then:
 
-```sh
+```bash
 # $DISPOSABLE_DB_BASE = the Mac-owned local disposable cluster (scheme://user:…@127.0.0.1:55432), from a local env file; never paste its value.
-case "$DISPOSABLE_DB_BASE" in *@127.0.0.1:55432) ;; *) echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1 ;; esac
+[[ "$DISPOSABLE_DB_BASE" =~ ^postgres(ql)?://[^/@?#[:space:]]+@127\.0\.0\.1:55432$ ]] || { echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1; }
 export DATABASE_URL="$DISPOSABLE_DB_BASE/condola_b027s2"
 export CONDOLA_RLS_DISPOSABLE=YES
 npx tsx --test --test-concurrency=1 src/server/b027-denial-inventory.integration.test.ts
@@ -117,10 +117,10 @@ Target: owned localhost PostgreSQL 16 database `127.0.0.1:55432/condola_b027s3`;
 
 The ten partner integration cases cover actual server-page redirects; default/malformed/missing/OFF configurations; complete public/app table snapshots with zero domain writes (excluding normal `auth_sessions` touch); unchanged OFF page trees; ON allowance; exact synthetic term boundaries; kill/opt-out; audited renewal and revision conflict; cross-org/non-Admin/forged-role/missing-scope/environment denial; private ACL/RLS and pinned definer configuration; audit-failure atomic rollback; database term/unit bounds; and revoke. These are server-component invocation tests, not browser rendering acceptance. The existing GAP-01/02 Accountant RLS failures remain outside this slice.
 
-```sh
+```bash
 # Source the authorized local environment without printing it first.
 # $DISPOSABLE_DB_BASE = the Mac-owned local disposable cluster (scheme://user:…@127.0.0.1:55432), from a local env file; never paste its value.
-case "$DISPOSABLE_DB_BASE" in *@127.0.0.1:55432) ;; *) echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1 ;; esac
+[[ "$DISPOSABLE_DB_BASE" =~ ^postgres(ql)?://[^/@?#[:space:]]+@127\.0\.0\.1:55432$ ]] || { echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1; }
 export DATABASE_URL="$DISPOSABLE_DB_BASE/condola_b027s3"
 export CONDOLA_RLS_DISPOSABLE=YES
 npx tsx --test --test-concurrency=1 src/server/b027-partner-controls.integration.test.ts src/server/b027-denial-inventory.integration.test.ts
@@ -195,10 +195,10 @@ Target: owned localhost PostgreSQL 16 database `127.0.0.1:55432/condola_b027s4`,
 
 New cases cover seed replay without overwrite; strict OFF matrix; legacy control writes without consent side effects; zero-write control OFF; missing/malformed approval and consent; mismatch and cross-company evidence; valid create/renew/revoke; changed approval denying subsequent writes atomically; forged/non-Admin/cross-org/pin/client-RPC denial; immutable evidence; sandbox scoping; and actual blocked writers observing committed approval changes or activation of a previously absent gate. Existing consent and slice-3 suites supply regression coverage. This does not claim full B-027 completion, resolve the slice-2 Accountant gaps, or validate browser acceptance.
 
-```sh
+```bash
 # Source the authorized local environment without printing it.
 # $DISPOSABLE_DB_BASE = the Mac-owned local disposable cluster (scheme://user:…@127.0.0.1:55432), from a local env file; never paste its value.
-case "$DISPOSABLE_DB_BASE" in *@127.0.0.1:55432) ;; *) echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1 ;; esac
+[[ "$DISPOSABLE_DB_BASE" =~ ^postgres(ql)?://[^/@?#[:space:]]+@127\.0\.0\.1:55432$ ]] || { echo "refusing: DISPOSABLE_DB_BASE is not the local disposable cluster" >&2; exit 1; }
 export DATABASE_URL="$DISPOSABLE_DB_BASE/condola_b027s4"
 export CONDOLA_RLS_DISPOSABLE=YES
 npx tsx --test --test-concurrency=1 src/server/b027-partner-consent-gate.integration.test.ts src/server/b027-partner-controls.integration.test.ts src/server/consents.integration.test.ts
