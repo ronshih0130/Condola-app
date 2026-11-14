@@ -159,7 +159,7 @@ async function readSetupSnapshotOn(client: Client, session: Session, readPermiss
     : inviteMode === "no_lease" ? "/m/leases/new"
     : counts.unjoined_leases.length === 1 ? `/m/leases/${counts.unjoined_leases[0]}` : "/m/leases";
   return { step: firstIncompleteStep(done), checklistOn, hasUnits: counts.has_units,
-    tenantJoined, inviteMode, inviteHref: can(session, "props.edit") ? inviteHref : "/m/leases",
+    tenantJoined, inviteMode, inviteHref: can(session, "leases.edit") ? inviteHref : "/m/leases",
     permissions: PERMS.flatMap(([key]) => can(session, key) ? [key] : []),
     checklist: checklistOn ? setupChecklist(done, completedAt, key => can(session, key)) : null };
 }

@@ -64,3 +64,12 @@ test("MGT-56-AC6/AC7/AC10: custom permissions govern fallback after no-lease sub
   const action: EmptyAction = { ...A.lease, href: "/m/leases/new?tenant=example" };
   assert.equal(resolveEmptyCta({ page: "TENID", setup: { ...setup, step: 4 }, can: () => true, pageAction: action }).primary?.href, action.href);
 });
+
+test("B-046 r3: the invite CTA uses the B-040 invite permission (leases.edit), not props.edit", () => {
+  const setup: EmptySetup = { step: 2, checklistOn: true, hasUnits: true, inviteMode: "m4", inviteHref: "/m/units/u1/invite" };
+  for (const page of ["TEN", "MSG"] as const) {
+    assert.equal(resolveEmptyCta({ page, setup, can: key => key === "props.edit" || key === "props.view" || key === "dash.view" }).primary, null, page);
+    assert.equal(resolveEmptyCta({ page, setup, can: key => key === "leases.edit" }).primary?.href, "/m/units/u1/invite", page);
+  }
+  assert.equal(resolveEmptyCta({ page: "UNIT", setup, can: key => key === "props.edit" }).primary?.key, A.unit.key);
+});

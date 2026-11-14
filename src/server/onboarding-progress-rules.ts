@@ -3,7 +3,7 @@ import type { PermKey } from "./perms";
 export const SETUP_STEPS = [
   { id: "company", key: "es_setup_company", perm: "settings.edit" },
   { id: "unit", key: "es_UNIT_action", perm: "props.edit" },
-  { id: "invite", key: "es_TEN_action", perm: "props.edit" },
+  { id: "invite", key: "es_TEN_action", perm: "leases.edit" }, // = B-040 invite permission (staffInvitePage)
   { id: "joined", key: "es_setup_joined", perm: "props.edit" },
 ] as const satisfies readonly { id: string; key: string; perm: PermKey }[];
 export type SetupDone = readonly [boolean, boolean, boolean, boolean];

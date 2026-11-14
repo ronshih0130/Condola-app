@@ -77,6 +77,19 @@ test("MGT-54-AC1/AC2: each step, legacy account readiness, audited persistent co
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM audit_log WHERE org_id=$1 AND event_type='onboarding_setup_completed'`, [f.org])).rows[0].n, 1);
 });
 
+test("MGT-54-AC2: two concurrent first readers record completion once (one audit, same timestamp)", async () => {
+  const f = await fixture(); await f.allow(); await f.company();
+  const tenant = await f.tenant(await f.unit()); await tenant.join();
+  const c1 = new Client({ connectionString: clone.url }), c2 = new Client({ connectionString: clone.url });
+  await c1.connect(); await c2.connect();
+  try {
+    const [a, b] = await Promise.all([readSetupStepOn(c1, f.admin), readSetupStepOn(c2, f.admin)]);
+    assert.equal(a.step, 4); assert.equal(b.step, 4);
+    assert.ok(a.checklist?.completedAt); assert.equal(a.checklist?.completedAt, b.checklist?.completedAt);
+  } finally { await c1.end(); await c2.end(); }
+  assert.equal((await db.query(`SELECT count(*)::int AS n FROM audit_log WHERE org_id=$1 AND event_type='onboarding_setup_completed'`, [f.org])).rows[0].n, 1);
+});
+
 test("MGT-54-AC1: a read needing no completion returns within 2 s while the organization is write-locked", async () => {
   const f = await fixture(); await f.allow();
   const locker = new Client({ connectionString: clone.url });

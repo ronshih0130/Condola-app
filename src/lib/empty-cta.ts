@@ -14,7 +14,8 @@ export const EMPTY_ACTIONS = {
   manual: { key: "es_DASH_manual", href: "/m/units/new", perm: "props.edit" },
   sample: { key: "es_DASH_sample", href: "/api/env?set=sandbox&next=/m" },
   importLink: { key: "es_PROP_import", href: "/m/import", perm: "props.edit" },
-  invite: { key: "es_TEN_action", href: "/m/units", perm: "props.edit" },
+  // B-040 invite permission: M4 (staffInvitePage), /m/leases/new and lease detail all require leases.edit.
+  invite: { key: "es_TEN_action", href: "/m/units", perm: "leases.edit" },
   lease: { key: "es_LEASE_action", href: "/m/leases/new", perm: "leases.edit" },
   rent: { key: "es_PAY_action", href: "/m/rent", perm: "stmt.view" },
   bank: { key: "es_BANK_action", href: "/m/bank#bank-import", perm: "bank.reconcile" },
