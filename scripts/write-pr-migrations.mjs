@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261113220000_b042_today_home_schema.sql": {
+    addOnly: false,
+    reason: "B-042 PR-1 (narrowed): seeds default-OFF today_home and today_dash with ON CONFLICT DO NOTHING; adds app.b042_first_logins and app.b042_invite_shares (CHECKs, ENABLE+FORCE RLS, no policies, REVOKE ALL incl. service_role = definer-only) and six app-schema functions (flag check, session-pin check, first-login record/seen, invite-share record, org-shared; sample_marks excluded) with EXECUTE to service_role only. Not add-only because of constraints and privilege statements. No existing-table, B-040, B-028 or funnel change; no outbound; no delete.",
+  },
   "supabase/migrations/20261113210000_b056_c0_legacy_classifier.sql": {
     addOnly: false,
     reason: "B-056 C-0: one SECURITY DEFINER function app.b056_classify_legacy(org, actor) with REVOKE ALL from PUBLIC/anon/authenticated/service_role and EXECUTE to service_role only; when called (ops runbook, before first pricing_trial ON) it inserts one app.b056_org_trials row + one audit_log row per org, idempotent, never overwrites. Not add-only because of privilege statements. No table/column/enum/flag change; no outbound; no delete.",
