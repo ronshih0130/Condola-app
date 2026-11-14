@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { can, ROLE_KEYS } from "@/server/perms";
+import { can, noPermHref, ROLE_KEYS, type PermKey } from "@/server/perms";
+import { setupChecklist } from "@/server/onboarding-progress-rules";
+import type { Session } from "@/server/types";
 import { EMPTY_ACTIONS as A, EMPTY_PAGES, emptyPageAction, resolveEmptyCta, type EmptyAction, type EmptyPage, type EmptySetup } from "./empty-cta";
 
 // Port of approved mockup app.js resolve(s,p). Independent role/action table;
@@ -65,11 +67,42 @@ test("MGT-56-AC6/AC7/AC10: custom permissions govern fallback after no-lease sub
   assert.equal(resolveEmptyCta({ page: "TENID", setup: { ...setup, step: 4 }, can: () => true, pageAction: action }).primary?.href, action.href);
 });
 
-test("B-046 r3: the invite CTA uses the B-040 invite permission (leases.edit), not props.edit", () => {
-  const setup: EmptySetup = { step: 2, checklistOn: true, hasUnits: true, inviteMode: "m4", inviteHref: "/m/units/u1/invite" };
-  for (const page of ["TEN", "MSG"] as const) {
-    assert.equal(resolveEmptyCta({ page, setup, can: key => key === "props.edit" || key === "props.view" || key === "dash.view" }).primary, null, page);
-    assert.equal(resolveEmptyCta({ page, setup, can: key => key === "leases.edit" }).primary?.href, "/m/units/u1/invite", page);
+test("B-046 r3: every invite CTA a custom role receives lands on a destination its route guard admits", () => {
+  const sessionWith = (keys: PermKey[]) => ({
+    kind: "staff", role: "manager", orgId: "o", userId: "u", sessionId: "s",
+    customRole: { orgId: "o", userId: "u", sessionId: "s", nativeRole: "manager", keys },
+  }) as unknown as Session;
+  const grants: PermKey[][] = [
+    ["dash.view", "props.edit", "props.view"], ["dash.view", "leases.edit"], ["dash.view", "props.view"],
+    ["dash.view", "leases.edit", "props.view"], ["dash.view", "leases.edit", "props.view", "props.edit"],
+  ];
+  const setups: EmptySetup[] = [
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "m4", inviteHref: "/m/units/u1/invite" },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "m4", inviteHref: "/m/units" },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "lease", inviteHref: "/m/leases/l1" },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "lease", inviteHref: "/m/leases" },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "no_lease", inviteHref: "/m/leases/new" },
+  ];
+  let offered = 0;
+  for (const keys of grants) {
+    const session = sessionWith(keys);
+    for (const setup of setups) for (const page of ["DASH", "TEN", "MSG"] as const) {
+      const cta = resolveEmptyCta({ page, setup, can: key => can(session, key) });
+      for (const a of [cta.primary, ...cta.links].filter((x): x is EmptyAction => !!x)) {
+        if (a.key !== A.invite.key && a.key !== A.lease.key) continue;
+        offered++;
+        const path = a.href.split(/[?#]/)[0];
+        assert.equal(noPermHref(path, session), null, `${keys.join("+")} ${page} → ${a.href}`);
+        assert.ok(can(session, "leases.edit") && can(session, "props.view"), `${keys.join("+")} got ${a.key}`);
+      }
+    }
   }
-  assert.equal(resolveEmptyCta({ page: "UNIT", setup, can: key => key === "props.edit" }).primary?.key, A.unit.key);
+  assert.ok(offered > 0, "the fully granted roles must be offered the invite");
+  // the checklist shows 邀請租客 and 租客加入 only to people who can invite (spec §4)
+  for (const keys of grants) {
+    const session = sessionWith(keys);
+    const ids = setupChecklist([true, true, false, false], null, key => can(session, key)).steps.map(s => s.id);
+    const inviter = keys.includes("leases.edit") && keys.includes("props.view");
+    assert.equal(ids.includes("invite"), inviter, keys.join("+")); assert.equal(ids.includes("joined"), inviter, keys.join("+"));
+  }
 });

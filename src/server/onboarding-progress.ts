@@ -5,7 +5,7 @@ import { writeAudit } from "./audit";
 import { withClient } from "./db";
 import { FlowError } from "./errors";
 import { can, PERMS, type PermKey } from "./perms";
-import { firstIncompleteStep, readCompletedAt, setupChecklist, type SetupDone } from "./onboarding-progress-rules";
+import { canInvite, firstIncompleteStep, readCompletedAt, setupChecklist, type SetupDone } from "./onboarding-progress-rules";
 import type { Session } from "./types";
 
 type Counts = { units: number; only_unit: string | null; has_units: boolean; invitations: number; bindings: number; bound_tenants: number; tenant_ready: number; leases: number; unjoined_leases: string[] };
@@ -159,7 +159,7 @@ async function readSetupSnapshotOn(client: Client, session: Session, readPermiss
     : inviteMode === "no_lease" ? "/m/leases/new"
     : counts.unjoined_leases.length === 1 ? `/m/leases/${counts.unjoined_leases[0]}` : "/m/leases";
   return { step: firstIncompleteStep(done), checklistOn, hasUnits: counts.has_units,
-    tenantJoined, inviteMode, inviteHref: can(session, "leases.edit") ? inviteHref : "/m/leases",
+    tenantJoined, inviteMode, inviteHref: canInvite(key => can(session, key)) ? inviteHref : "/m/leases",
     permissions: PERMS.flatMap(([key]) => can(session, key) ? [key] : []),
     checklist: checklistOn ? setupChecklist(done, completedAt, key => can(session, key)) : null };
 }

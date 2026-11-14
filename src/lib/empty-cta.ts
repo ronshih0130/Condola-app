@@ -1,9 +1,11 @@
 import type { PermKey } from "@/server/perms";
+import { INVITE_PERMS } from "@/server/onboarding-progress-rules";
 
 export const EMPTY_PAGES = ["DASH", "MSG", "PROP", "UNIT", "TEN", "TENID", "LEASE", "PAY", "BANK", "UTIL", "EXP", "STMT", "RPT", "TIX", "OWN", "NOTI", "SRCH"] as const;
 export type EmptyPage = typeof EMPTY_PAGES[number];
 export type InviteMode = "m4" | "lease" | "no_lease";
-export type EmptyAction = { key: string; href: string; perm?: PermKey };
+/** perm: one key; perms: every listed key is also required (destination route + loader). */
+export type EmptyAction = { key: string; href: string; perm?: PermKey; perms?: readonly PermKey[] };
 export type EmptyCta = { primary: EmptyAction | null; links: EmptyAction[]; showAdminHint: boolean };
 export type EmptySetup = { step: 0 | 1 | 2 | 3 | 4; checklistOn: boolean; hasUnits: boolean; inviteMode: InviteMode; inviteHref: string };
 
@@ -14,9 +16,10 @@ export const EMPTY_ACTIONS = {
   manual: { key: "es_DASH_manual", href: "/m/units/new", perm: "props.edit" },
   sample: { key: "es_DASH_sample", href: "/api/env?set=sandbox&next=/m" },
   importLink: { key: "es_PROP_import", href: "/m/import", perm: "props.edit" },
-  // B-040 invite permission: M4 (staffInvitePage), /m/leases/new and lease detail all require leases.edit.
-  invite: { key: "es_TEN_action", href: "/m/units", perm: "leases.edit" },
-  lease: { key: "es_LEASE_action", href: "/m/leases/new", perm: "leases.edit" },
+  // B-040 invite permission = what every invite destination enforces (INVITE_PERMS).
+  invite: { key: "es_TEN_action", href: "/m/units", perms: INVITE_PERMS },
+  // /m/leases/new: route leases.edit + loader listTenants (props.view).
+  lease: { key: "es_LEASE_action", href: "/m/leases/new", perms: INVITE_PERMS },
   rent: { key: "es_PAY_action", href: "/m/rent", perm: "stmt.view" },
   bank: { key: "es_BANK_action", href: "/m/bank#bank-import", perm: "bank.reconcile" },
   utility: { key: "es_UTIL_action", href: "/m/properties", perm: "props.edit" },
@@ -41,7 +44,7 @@ export function resolveEmptyCta({ page, setup, can, pageAction = emptyPageAction
   page: EmptyPage; setup: EmptySetup; can: (key: PermKey) => boolean; pageAction?: EmptyAction | null;
 }): EmptyCta {
   if (page === "SRCH") return { primary: pageAction ?? EMPTY_ACTIONS.clear, links: [], showAdminHint: false };
-  const allowed = (a: EmptyAction | null): boolean => !!a && (!a.perm || can(a.perm));
+  const allowed = (a: EmptyAction | null): boolean => !!a && (!a.perm || can(a.perm)) && (a.perms ?? []).every(key => can(key));
   const invite = (a: EmptyAction | null) => a?.key === EMPTY_ACTIONS.invite.key
     ? setup.inviteMode === "no_lease" ? EMPTY_ACTIONS.lease : { ...a, href: setup.inviteHref } : a;
   const own = invite(pageAction);
