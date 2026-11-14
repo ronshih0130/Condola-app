@@ -14,6 +14,14 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261113210000_b056_c0_legacy_classifier.sql": {
+    addOnly: false,
+    reason: "B-056 C-0: one SECURITY DEFINER function app.b056_classify_legacy(org, actor) with REVOKE ALL from PUBLIC/anon/authenticated/service_role and EXECUTE to service_role only; when called (ops runbook, before first pricing_trial ON) it inserts one app.b056_org_trials row + one audit_log row per org, idempotent, never overwrites. Not add-only because of privilege statements. No table/column/enum/flag change; no outbound; no delete.",
+  },
+  "supabase/migrations/20261113200000_b056_trial_engine_schema.sql": {
+    addOnly: false,
+    reason: "B-056 PR-1: seeds default-OFF pricing_trial (enabled false, empty allowlist) with ON CONFLICT DO NOTHING; adds app.b056_org_trials and app.b056_banner_dismissals (CHECK constraints, ENABLE+FORCE RLS, no policies, REVOKE ALL from PUBLIC/anon/authenticated/service_role = definer-only) and six app-schema functions (flag check, plan facts, trial end, start trial, dismiss banner, dismissed kinds) with EXECUTE to service_role only; start writes one audit_log row. Not add-only because of new table constraints and privilege statements. No existing-table, enum, plan_tier or FREE_UNITS change; no outbound; no delete.",
+  },
   "supabase/migrations/20261113100000_c4_free_units_default_5.sql": {
     addOnly: false,
     reason: "C4 billing change (Ron 2026-11-13): ALTER partner_codes.free_units DEFAULT 4 -> 5 for newly inserted partner codes only. No existing row rewritten (issued partner allowances keep their stored value), no privilege/RLS/policy/flag change, no outbound. Not add-only because it alters an existing column default.",
