@@ -8,9 +8,12 @@ import { RequiredValidity } from "@/components/required-validity";
 import { EnvBanner } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
 import { demoModeEnabled } from "@/server/demo";
-import { BRAND_V2_PAGE_STYLES, brandV2EnabledForOrg, brandMetadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
+import { brandV2EnabledForOrg, brandMetadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
 import { sandboxChrome } from "@/server/sandbox";
 import { readSession, requestPrefs } from "@/server/session";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { brandRoot } from "@/lib/brand-root";
+import { RoleAvatar } from "@/components/v3/role-avatar";
 import "./globals.css";
 import "./ui-targets.css";
 
@@ -33,6 +36,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const t = makeT(prefs.locale);
   const showReset = demoModeEnabled() && session?.kind === "staff" && session.role === "admin";
   const v2 = await brandV2EnabledForOrg(session?.orgId);
+  const v3 = await brandV3EnabledForOrg(session?.orgId);
+  const root = brandRoot({ v2, v3 });
+  const pageStylesheets = root.stylesheets.slice(1);
   const body = (
     <body>
       <LocaleProvider locale={prefs.locale}>
@@ -45,7 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </label>
           {v2 ? <BrandLink v2 /> : <BrandLink />}
           <span className="top-extra">
-            {session ? <span className="small">{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
+            {session ? <span className="small">{v3 ? <RoleAvatar role={session.kind === "staff" ? "m" : session.kind === "owner" ? "o" : "t"} locale={prefs.locale} name={session.name} decorative /> : null}{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
           </span>
           <span className="locale-slot">
             <LocaleLinks />
@@ -85,7 +91,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang={prefs.locale === "zh-TW" ? "zh-Hant-TW" : "en"} data-brand="v2">
+    <html lang={prefs.locale === "zh-TW" ? "zh-Hant-TW" : "en"} {...root.attributes}>
       <head>
         <link
           rel="preload"
@@ -97,10 +103,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {
           // Load the external theme only for v2 to preserve OFF behavior without changing globals.css.
           // eslint-disable-next-line @next/next/no-css-tags
-          <link rel="stylesheet" href="/brand/v2/theme.css" />
+          root.stylesheets[0] === "/brand/v2/theme.css" ? <link rel="stylesheet" href="/brand/v2/theme.css" /> : null
         }
-        {BRAND_V2_PAGE_STYLES.map((href) => (
-          // eslint-disable-next-line @next/next/no-css-tags
+        {pageStylesheets.map((href) => (
           <link key={href} rel="stylesheet" href={href} />
         ))}
       </head>

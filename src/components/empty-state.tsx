@@ -9,12 +9,12 @@ export type EmptyStateId = keyof typeof illustrations;
 export function EmptyPrimary({ action, locale }: { action: EmptyAction; locale: Locale }) {
   return <div className="es-primary"><Link className="btn pri" href={action.href}>{makeT(locale)(action.key)}</Link></div>;
 }
-export function EmptyState({ id, locale, cta = { primary: null, links: [], showAdminHint: false }, compact = false }: {
-  id: EmptyStateId; locale: Locale; cta?: EmptyCta; compact?: boolean;
+export function EmptyState({ id, locale, cta = { primary: null, links: [], showAdminHint: false }, compact = false, illustration }: {
+  id: EmptyStateId; locale: Locale; cta?: EmptyCta; compact?: boolean; illustration?: React.ReactNode;
 }) {
   const t = makeT(locale);
   return <section className={`empty-state${compact ? " es-compact" : ""}`} data-testid={`empty-${id}`}>
-    <EmptyIllustration name={illustrations[id]} compact={compact} />
+    {illustration ?? <EmptyIllustration name={illustrations[id]} compact={compact} />}
     <h2>{t(`es_${id}_title`)}</h2><p>{t(`es_${id}_reason`)}</p>
     {cta.showAdminHint ? <p><strong>{t("es_common_admin_hint")}</strong></p> : null}
     {cta.primary ? <EmptyPrimary action={cta.primary} locale={locale} /> : null}

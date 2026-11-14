@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 
-const FORBIDDEN = ["房東", "房客", "收款", "收租", "即將推出", "測試模式", "範例沙盒", "示範"];
+const FORBIDDEN = ["房東", "房客", "收款", "收租", "即將推出", "測試模式", "範例沙盒", "示範", "欠租", "本月實收"];
 
 const PHRASES = [
   "🧪 測試模式",

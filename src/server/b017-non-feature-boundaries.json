@@ -516,7 +516,11 @@
     "sha256": "f6aacd09dd20517f74faa326fc9850986865ae16262394c49dae92f255553ab6"
   },
   "src/components/management-empty-state.tsx#ManagementEmptyState": {
-    "reason": "Presentation adapter only; readSetupStep validates current staff authority and returns effective permissions. Resolves CTA with those permissions; no server action or independent business SQL.",
-    "sha256": "ca8ff8a5cea8a9ed138b3cd7073d52452bec151c46deaf19bdb0821d221fccb0"
+    "reason": "Presentation adapter only; readSetupStep validates current staff authority and returns effective permissions. Resolves CTA with those permissions; no server action or independent business SQL. Brand v3 only substitutes a decorative illustration after a fail-closed organization presentation flag; CTA authority is unchanged.",
+    "sha256": "4fc7b8ba53b7d63e9ff1ba7b018c2853c186886b364f517d370f901b2e3c5e98"
+  },
+  "src/server/brand-v3.ts#brandV3EnabledForOrg": {
+    "reason": "Presentation-only organization brand flag reader: exact JSON opt-in plus effective v2; fails closed, reads no business records, grants no permission and performs no mutation.",
+    "sha256": "d0f24ea47ac673125dbda63c4be7c71d514775b96df2d011ab4b70327d3b4faf"
   }
 }

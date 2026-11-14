@@ -52,3 +52,6 @@ next-env.d.ts
 *.age
 
 *.key
+
+# Brand 3.0 visual evidence (copied to condola-hub receipts)
+/e2e/results/brand-v3/
