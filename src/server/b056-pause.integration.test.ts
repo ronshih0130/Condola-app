@@ -190,44 +190,45 @@ type Entry = { cls: Cls; active: number; guarded: number; fp: string };
 // fp      = fingerprint of the body AND its execution context: language, SECURITY DEFINER,
 //           volatility, strictness, leakproofness, parallel safety, result and argument types,
 //           argument defaults, function-local settings (search_path and any other SET),
-//           whether the owner is the owner of the core tables, and the ACL (r3 finding 2).
+//           the planner support function, whether the owner is the owner of the core tables,
+//           and the ACL including grant options (r3 finding 2; r4 added support and grant option).
 const CLASSIFIED: Record<string, Entry> = {
   // predicate: every test that authorises the ACTING user carries the pause predicate
-  "app.is_member(p_org uuid)": { cls: "predicate", active: 2, guarded: 2, fp: "5e60f05eb17e1042108637f6decb7c93" },
-  "app.has_role(p_org uuid, p_roles org_role[])": { cls: "predicate", active: 1, guarded: 1, fp: "d39cc93141dd5be91b562f655feea2be" },
-  "app.b008_capture_first_period(p_lease uuid, p_prorate boolean)": { cls: "predicate", active: 1, guarded: 1, fp: "46d1d088dcc415301460ce89ddd41268" },
-  "app.b010_confirmation_audit(p_payment uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "6d7861ff96a878550c700431a2ac8a01" },
-  "app.b010_lock_payment_context(p_org uuid, p_live_org uuid, p_environment text, p_session uuid, p_lease uuid, p_role text)": { cls: "predicate", active: 2, guarded: 2, fp: "fec4040ecb05330d7a1878370a89a6c5" },
-  "app.b015_edit_context(p_org uuid, p_live uuid, p_env text, p_session uuid)": { cls: "predicate", active: 2, guarded: 2, fp: "a3f302f43b0f84d10a47814b54a603da" },
-  "app.b017_denied_orgs(p_floor text)": { cls: "predicate", active: 2, guarded: 2, fp: "7794cb0d349f61f81d01c47ad4476308" },
-  "app.b017_effective(p_org uuid, p_user uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "aa76329d838bbd0babee9e690f779b7b" },
-  "app.b017_invite_guard()": { cls: "predicate", active: 2, guarded: 2, fp: "18616f8a77624103f2ec18c2b5269a22" },
+  "app.is_member(p_org uuid)": { cls: "predicate", active: 2, guarded: 2, fp: "430fa5cba030081d3367d6598626569d" },
+  "app.has_role(p_org uuid, p_roles org_role[])": { cls: "predicate", active: 1, guarded: 1, fp: "6a9bbafd11b9a457f432ef41ab165ff9" },
+  "app.b008_capture_first_period(p_lease uuid, p_prorate boolean)": { cls: "predicate", active: 1, guarded: 1, fp: "ed679a6e23c0e1fb39ca6264e699c62a" },
+  "app.b010_confirmation_audit(p_payment uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "1d0d7bb091ad3b5257b2c705599f1a8d" },
+  "app.b010_lock_payment_context(p_org uuid, p_live_org uuid, p_environment text, p_session uuid, p_lease uuid, p_role text)": { cls: "predicate", active: 2, guarded: 2, fp: "9600806a7e93671ea946750db8462aa6" },
+  "app.b015_edit_context(p_org uuid, p_live uuid, p_env text, p_session uuid)": { cls: "predicate", active: 2, guarded: 2, fp: "4da089b8c46a3256b52c344d0964e2f9" },
+  "app.b017_denied_orgs(p_floor text)": { cls: "predicate", active: 2, guarded: 2, fp: "fccd8cab37895a591ec1524073d5abf0" },
+  "app.b017_effective(p_org uuid, p_user uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "163667691a61c22e101fa9036e276c58" },
+  "app.b017_invite_guard()": { cls: "predicate", active: 2, guarded: 2, fp: "febd7a2dc5daa368fcb90e180e4ccaa5" },
   // 1 guarded actor test; the other two literals are NEW.status <> 'active' on the TARGET row
   // (billing-owner protection, grant ceiling), not a test of the acting user.
-  "app.b017_member_guard()": { cls: "predicate", active: 3, guarded: 1, fp: "9a4895ec8975c485c423f54ece68a629" },
-  "app.b027_scope(p_org uuid, p_admin boolean)": { cls: "predicate", active: 1, guarded: 1, fp: "8212772573e428b9ede73cef700ed579" },
-  "public.esign_version_guard()": { cls: "predicate", active: 1, guarded: 1, fp: "6636cf6909de18fee55375941117e81e" },
+  "app.b017_member_guard()": { cls: "predicate", active: 3, guarded: 1, fp: "97e4df74c46d344df9c54b0eb4126762" },
+  "app.b027_scope(p_org uuid, p_admin boolean)": { cls: "predicate", active: 1, guarded: 1, fp: "45d0b3082104c44de12fbd1f3f6e227e" },
+  "public.esign_version_guard()": { cls: "predicate", active: 1, guarded: 1, fp: "11f0d8a0af803b466d4c5d0f0cafd17f" },
   // staff_exclusion: membership is used only to EXCLUDE staff from owner/tenant paths, so a
   // paused member must stay excluded (adding the predicate would weaken these).
-  "app.b027_any_org_member(p_org uuid)": { cls: "staff_exclusion", active: 0, guarded: 0, fp: "1b9bf76b8d06ae67333040631c7bfddf" },
-  "app.b022_my_owner_contact(p_org uuid)": { cls: "staff_exclusion", active: 1, guarded: 0, fp: "c770c4fee4ff23305eccef9fb02dc242" },
-  "app.b022_reply_statement(p_statement uuid, p_owner_only boolean)": { cls: "staff_exclusion", active: 1, guarded: 0, fp: "07cd9fa96df22319050eb7fe5e267fd1" },
+  "app.b027_any_org_member(p_org uuid)": { cls: "staff_exclusion", active: 0, guarded: 0, fp: "7eabce663c1e5e9c5cb48b0d50482198" },
+  "app.b022_my_owner_contact(p_org uuid)": { cls: "staff_exclusion", active: 1, guarded: 0, fp: "a037e8213823a396d83e942ab4843345" },
+  "app.b022_reply_statement(p_statement uuid, p_owner_only boolean)": { cls: "staff_exclusion", active: 1, guarded: 0, fp: "e40bdcc5d4b261f03bff267b02f3fc90" },
   // invariant: raises when no usable native admin would remain; grants nothing. It calls the
   // guarded app.b017_effective, so a paused admin does not count as usable.
-  "app.b017_preserve_admin(p_org uuid)": { cls: "invariant", active: 2, guarded: 0, fp: "72a5c3894d932f4237641990e8abd570" },
+  "app.b017_preserve_admin(p_org uuid)": { cls: "invariant", active: 2, guarded: 0, fp: "d79c4ec436784e12e988a94cd5b626e9" },
   // via_is_member: gated by app.is_member; the inline reads match ids only.
-  "app.prop04_my_consent_records()": { cls: "via_is_member", active: 0, guarded: 0, fp: "510a4e2facce1e9c1770390e51630b9d" },
+  "app.prop04_my_consent_records()": { cls: "via_is_member", active: 0, guarded: 0, fp: "6166331fbf1c1f9994362854df6d15bd" },
   // not_a_caller_grant: reads org_members without authorising the acting user.
-  "app.b017_member_admission()": { cls: "not_a_caller_grant", active: 0, guarded: 0, fp: "c25177c671fef6e891ba318675911afa" }, // admission bookkeeping on the member row itself
-  "app.b028_center_recipient_valid()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "1951148071b32a18c0db8e8c8fc1eacd" }, // validates the RECIPIENT of a notification row
-  "app.b056_member_paused(p_org uuid, p_user uuid)": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "a215c7c91ac62ec41c412bb595c285d9" }, // the predicate itself (kept-member lookup)
-  "public.fn_org_bootstrap()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "671e4d6b923121f1bdcd06c4e92449c7" }, // inserts the creator's own row with the literal 'active'
+  "app.b017_member_admission()": { cls: "not_a_caller_grant", active: 0, guarded: 0, fp: "eab0e86d03185c034b5d081aafc2c7a5" }, // admission bookkeeping on the member row itself
+  "app.b028_center_recipient_valid()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "c9075803e76369df346a2cdc38e3d88c" }, // validates the RECIPIENT of a notification row
+  "app.b056_member_paused(p_org uuid, p_user uuid)": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "380a3da2d33fea4952879c16243c83fb" }, // the predicate itself (kept-member lookup)
+  "public.fn_org_bootstrap()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "6e55553fa6d14401368d74b850b5806f" }, // inserts the creator's own row with the literal 'active'
 };
 // Reachable plpgsql functions that run dynamic SQL. Each was read: the statement is a fixed
 // LOCK TABLE over regclass arguments and can call no function. Pinned, so a change re-opens it.
 const DYNAMIC_SQL_REVIEWED: Record<string, string> = {
-  "app.lock_tables_bounded(p_tables regclass[], p_mode text)": "db9f433cd32dd94262cfb8825ccecccb",
-  "app.lock_tables_nowait_retry(p_tables regclass[], p_mode text)": "7dc8dd7c96f91b59b7580895c6170b23",
+  "app.lock_tables_bounded(p_tables regclass[], p_mode text)": "2f3bea985c6c27ea27bbebc3da4eb61f",
+  "app.lock_tables_nowait_retry(p_tables regclass[], p_mode text)": "910f2588be3ad52a965d5b3779f700c2",
 };
 // Policy / view / column-default expressions that read org_members inline. profiles_teammates
 // is safe because its subquery runs as the querying user under org_members' own policies
@@ -294,7 +295,7 @@ fpx AS (
   SELECT p.oid,
          md5(concat_ws(chr(31),
            p.prosrc, l.lanname, p.prosecdef::text, p.provolatile::text, p.proisstrict::text, p.proleakproof::text,
-           p.proparallel::text, p.proretset::text,
+           p.proparallel::text, p.proretset::text, p.prosupport::regproc::text,
            (SELECT tn.nspname || '.' || t.typname FROM pg_type t JOIN pg_namespace tn ON tn.oid = t.typnamespace WHERE t.oid = p.prorettype),
            (SELECT coalesce(string_agg(tn.nspname || '.' || t.typname, ',' ORDER BY a.ord), '')
               FROM unnest(coalesce(p.proallargtypes, p.proargtypes::oid[])) WITH ORDINALITY a(typ, ord)
@@ -302,9 +303,10 @@ fpx AS (
            coalesce(p.proargmodes::text, ''), coalesce(p.proargnames::text, ''), coalesce(pg_get_expr(p.proargdefaults, 0), ''),
            coalesce((SELECT string_agg(c, ',' ORDER BY c) FROM unnest(p.proconfig) c), ''),
            (p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.org_members'::regclass))::text,
-           (SELECT coalesce(string_agg(CASE WHEN x.grantee = 0 THEN 'PUBLIC' WHEN x.grantee = p.proowner THEN 'OWNER' ELSE r.rolname END
-                                       || ':' || x.privilege_type, ',' ORDER BY 1), '')
-              FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x LEFT JOIN pg_roles r ON r.oid = x.grantee)
+           (SELECT coalesce(string_agg(y.entry, ',' ORDER BY y.entry COLLATE "C"), '')
+              FROM (SELECT CASE WHEN x.grantee = 0 THEN 'PUBLIC' WHEN x.grantee = p.proowner THEN 'OWNER' ELSE r.rolname END
+                           || ':' || x.privilege_type || CASE WHEN x.is_grantable THEN ':grantable' ELSE '' END AS entry
+                      FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x LEFT JOIN pg_roles r ON r.oid = x.grantee) y)
          )) AS fp
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace JOIN pg_language l ON l.oid = p.prolang
    WHERE n.nspname IN ('public', 'app'))
@@ -316,7 +318,8 @@ UNION ALL
 -- every use of the staff-exclusion helper, reachable or not
 SELECT 'helper_use', e.src, '', md5(e.txt), '' FROM exprs e WHERE e.txt ~ 'b027_any_org_member'
 UNION ALL
-SELECT 'helper_use', 'fn ' || f.q, '', x.fp, '' FROM fn f JOIN fpx x ON x.oid = f.oid WHERE f.prosrc ~ 'b027_any_org_member' AND f.proname <> 'b027_any_org_member'
+SELECT 'helper_use', 'fn ' || f.q, '', x.fp, '' FROM fn f JOIN fpx x ON x.oid = f.oid
+ WHERE f.prosrc ~ 'b027_any_org_member' AND f.oid <> 'app.b027_any_org_member(uuid)'::regprocedure
 ORDER BY 1, 2`;
 
 const stripSqlComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");
@@ -484,6 +487,13 @@ test("inventory negative fixtures (Codex PR-3a r2): each omission class is caugh
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $f$ SELECT app.b027_any_org_member(p_org) $f$;
     GRANT EXECUTE ON FUNCTION public.review_probe_staffish(uuid) TO authenticated;`);
   assert.deepEqual(p, ["use of b027_any_org_member not reviewed: fn public.review_probe_staffish(p_org uuid)"]);
+  // ... and a wrapper that reuses the helper's own name in another schema (r4)
+  p = await problemsWith(`
+    CREATE FUNCTION public.b027_any_org_member(p_org uuid) RETURNS SETOF public.ticket_attachments
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $f$
+      SELECT a.* FROM public.ticket_attachments a WHERE a.org_id = p_org AND app.b027_any_org_member(p_org) $f$;
+    GRANT EXECUTE ON FUNCTION public.b027_any_org_member(uuid) TO authenticated;`);
+  assert.deepEqual(p, ["use of b027_any_org_member not reviewed: fn public.b027_any_org_member(p_org uuid)"]);
 
   // 10. execution context changed with the body untouched (r3 finding 2)
   const changed = (name: string) => [`definition or execution context changed since review: ${name}`];
@@ -500,6 +510,8 @@ test("inventory negative fixtures (Codex PR-3a r2): each omission class is caugh
   assert.deepEqual(p, changed("app.b056_member_paused(p_org uuid, p_user uuid)"));
   p = await problemsWith(`GRANT EXECUTE ON FUNCTION app.b017_preserve_admin(uuid) TO authenticated;`);
   assert.deepEqual(p, changed("app.b017_preserve_admin(p_org uuid)"));
+  p = await problemsWith(`GRANT EXECUTE ON FUNCTION app.is_member(uuid) TO authenticated WITH GRANT OPTION;`); // same grantee, same privilege
+  assert.deepEqual(p, changed("app.is_member(p_org uuid)"));
   p = await problemsWith(`ALTER FUNCTION app.lock_tables_bounded(regclass[], text) SECURITY DEFINER;`);
   assert.deepEqual(p, ["dynamic SQL not reviewed: app.lock_tables_bounded(p_tables regclass[], p_mode text)"]);
 
