@@ -19,7 +19,7 @@ const emptyData = { properties: [{ id: "property", name: "Property without units
   received: 0, outstanding: 0, owingCount: 0, pending: 0, tickets: 0, occupied: 0, rooms: 0, owing: [], expiring: [] };
 function progress(step: 0 | 1 | 2 | 3 | 4, flag = false): SetupProgress {
   const done = [step > 0, step > 1, step > 2, step > 3] as const;
-  return { step, checklistOn: flag, hasUnits: step >= 2, inviteMode: "lease", inviteHref: "/m/leases/one",
+  return { step, checklistOn: flag, hasUnits: step >= 2, inviteMode: "lease", inviteHref: "/m/leases/one", unmappedEntryOk: true,
     tenantJoined: step === 4, permissions: PERMS.map(([key]) => key), checklist: flag ? setupChecklist(done, step === 4 ? "2026-11-13T12:00:00Z" : null, () => true) : null };
 }
 const render = (node: React.ReactNode) => renderToStaticMarkup(<LocaleProvider locale="zh-TW">{node}</LocaleProvider>);

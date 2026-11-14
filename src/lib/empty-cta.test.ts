@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { can, noPermHref, ROLE_KEYS, type PermKey } from "@/server/perms";
 import { setupChecklist } from "@/server/onboarding-progress-rules";
 import type { Session } from "@/server/types";
@@ -38,7 +39,7 @@ function oracle(page: EmptyPage, p: number, role: typeof ROLE_KEYS[number], flag
 for (const page of EMPTY_PAGES) for (const step of [0, 1, 2, 3, 4] as const) for (const role of ROLE_KEYS) for (const flag of [false, true]) {
   test(`MGT-55-AC1/AC2/AC3/AC6 MGT-56-AC1–AC10 oracle: ${page} step=${step} ${role} flag=${flag}`, () => {
     for (const inviteMode of ["m4", "lease", "no_lease"] as const) for (const hasUnits of [false, true]) {
-      const setup: EmptySetup = { step, checklistOn: flag, hasUnits, inviteMode, inviteHref: inviteMode === "m4" ? "/m/units/unit/invite" : "/m/leases/lease" };
+      const setup: EmptySetup = { step, checklistOn: flag, hasUnits, inviteMode, inviteHref: inviteMode === "m4" ? "/m/units/unit/invite" : "/m/leases/lease", unmappedEntryOk: true };
       const result = resolveEmptyCta({ page, setup, can: key => can(role, key) });
       const expected = oracle(page, step, role, flag, inviteMode, hasUnits);
       assert.equal(result.primary?.key ?? null, expected.primary ? A[expected.primary as keyof typeof A].key : null);
@@ -53,12 +54,12 @@ for (const page of EMPTY_PAGES) for (const step of [0, 1, 2, 3, 4] as const) for
 }
 test("MGT-56-AC4: search clears the actual page URL irrespective of role or setup", () => {
   for (const path of ["properties", "units", "tenants", "leases", "audit"]) {
-    const result = resolveEmptyCta({ page: "SRCH", setup: { step: 0, checklistOn: true, hasUnits: false, inviteMode: "no_lease", inviteHref: "" }, can: () => false, pageAction: { ...A.clear, href: `/m/${path}` } });
+    const result = resolveEmptyCta({ page: "SRCH", setup: { step: 0, checklistOn: true, hasUnits: false, inviteMode: "no_lease", inviteHref: "", unmappedEntryOk: true }, can: () => false, pageAction: { ...A.clear, href: `/m/${path}` } });
     assert.equal(result.primary?.href, `/m/${path}`); assert.equal(result.showAdminHint, false);
   }
 });
 test("MGT-56-AC6/AC7/AC10: custom permissions govern fallback after no-lease substitution", () => {
-  const setup: EmptySetup = { step: 2, checklistOn: true, hasUnits: true, inviteMode: "no_lease", inviteHref: "" };
+  const setup: EmptySetup = { step: 2, checklistOn: true, hasUnits: true, inviteMode: "no_lease", inviteHref: "", unmappedEntryOk: true };
   const result = resolveEmptyCta({ page: "EXP", setup, can: key => key === "exp.add" });
   assert.equal(result.primary?.key, A.expense.key);
   assert.equal(resolveEmptyCta({ page: "TEN", setup, can: key => key === "props.edit" }).primary, null);
@@ -77,11 +78,11 @@ test("B-046 r3: every invite CTA a custom role receives lands on a destination i
     ["dash.view", "leases.edit", "props.view"], ["dash.view", "leases.edit", "props.view", "props.edit"],
   ];
   const setups: EmptySetup[] = [
-    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "m4", inviteHref: "/m/units/u1/invite" },
-    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "m4", inviteHref: "/m/units" },
-    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "lease", inviteHref: "/m/leases/l1" },
-    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "lease", inviteHref: "/m/leases" },
-    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "no_lease", inviteHref: "/m/leases/new" },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "m4", inviteHref: "/m/units/u1/invite", unmappedEntryOk: true },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "m4", inviteHref: "/m/units", unmappedEntryOk: true },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "lease", inviteHref: "/m/leases/l1", unmappedEntryOk: true },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "lease", inviteHref: "/m/leases", unmappedEntryOk: true },
+    { step: 2, checklistOn: true, hasUnits: true, inviteMode: "no_lease", inviteHref: "/m/leases/new", unmappedEntryOk: true },
   ];
   let offered = 0;
   for (const keys of grants) {
@@ -104,5 +105,29 @@ test("B-046 r3: every invite CTA a custom role receives lands on a destination i
     const ids = setupChecklist([true, true, false, false], null, key => can(session, key)).steps.map(s => s.id);
     const inviter = keys.includes("leases.edit") && keys.includes("props.view");
     assert.equal(ids.includes("invite"), inviter, keys.join("+")); assert.equal(ids.includes("joined"), inviter, keys.join("+"));
+  }
+});
+
+test("B-046 r4: an assigned custom role (null-key guard refuses) never gets the /m/leases/new CTA", () => {
+  const assigned = (keys: PermKey[], flag: boolean | undefined) => ({
+    kind: "staff", role: "manager", orgId: "o", userId: "u", sessionId: "s",
+    customRole: { orgId: "o", userId: "u", sessionId: "s", nativeRole: "manager", keys, ...(flag === undefined ? {} : { assigned: flag }) },
+  }) as unknown as Session;
+  // mirror of guardEffectiveSession(session, null): denied when customRole && assigned !== false.
+  // If B-017 changes that rule, this assertion fails and onboarding-progress.ts must follow.
+  const guardSrc = readFileSync(new URL("../server/b017-custom-role-governance.ts", import.meta.url), "utf8");
+  assert.match(guardSrc, /key === null \? !!current\.customRole && current\.customRole\.assigned !== false/);
+  const progressSrc = readFileSync(new URL("../server/onboarding-progress.ts", import.meta.url), "utf8");
+  assert.match(progressSrc, /const unmappedEntryOk = !session\.customRole \|\| session\.customRole\.assigned === false;/);
+  const nullKeyOk = (s: Session) => !s.customRole || s.customRole.assigned === false;
+  const keys: PermKey[] = ["dash.view", "leases.edit", "props.view", "props.edit"];
+  for (const flag of [true, undefined, false]) {
+    const session = assigned(keys, flag);
+    for (const page of ["DASH", "TEN", "MSG", "LEASE", "TENID"] as const) {
+      const setup: EmptySetup = { step: 2, checklistOn: true, hasUnits: true, inviteMode: "no_lease", inviteHref: "/m/leases/new", unmappedEntryOk: nullKeyOk(session) };
+      const cta = resolveEmptyCta({ page, setup, can: key => can(session, key) });
+      const hrefs = [cta.primary, ...cta.links].filter((x): x is EmptyAction => !!x).map(a => a.href);
+      assert.equal(hrefs.includes("/m/leases/new"), flag === false, `assigned=${flag} ${page}: ${hrefs.join(",")}`);
+    }
   }
 });

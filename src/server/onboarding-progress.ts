@@ -152,13 +152,15 @@ async function readSetupSnapshotOn(client: Client, session: Session, readPermiss
   const checklistOn = eligible(session) && org.checklist_on === true;
   const completedAt = readCompletedAt(org.settings);
   const inviteMode = org.invite_on ? "m4" : counts.leases > 0 ? "lease" : "no_lease";
+  // Same condition guardEffectiveSession(session, null) applies (B-017): /m/leases/new loads via loadFirm.
+  const unmappedEntryOk = !session.customRole || session.customRole.assigned === false;
   // B-040 slice 2a staff UI (#146): M4 lives at /m/units/{unitId}/invite; several units → the units list (U0 per row).
   // This read never issues a secret or counts a visit as a share.
   const inviteHref = inviteMode === "m4"
     ? counts.units === 1 ? `/m/units/${counts.only_unit}/invite` : "/m/units"
-    : inviteMode === "no_lease" ? "/m/leases/new"
+    : inviteMode === "no_lease" ? unmappedEntryOk ? "/m/leases/new" : "/m/leases"
     : counts.unjoined_leases.length === 1 ? `/m/leases/${counts.unjoined_leases[0]}` : "/m/leases";
-  return { step: firstIncompleteStep(done), checklistOn, hasUnits: counts.has_units,
+  return { step: firstIncompleteStep(done), checklistOn, hasUnits: counts.has_units, unmappedEntryOk,
     tenantJoined, inviteMode, inviteHref: canInvite(key => can(session, key)) ? inviteHref : "/m/leases",
     permissions: PERMS.flatMap(([key]) => can(session, key) ? [key] : []),
     checklist: checklistOn ? setupChecklist(done, completedAt, key => can(session, key)) : null };
