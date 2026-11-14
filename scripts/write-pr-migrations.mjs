@@ -14,6 +14,22 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261113220000_b042_today_home_schema.sql": {
+    addOnly: false,
+    reason: "B-042 PR-1 (narrowed): seeds default-OFF today_home and today_dash with ON CONFLICT DO NOTHING; adds app.b042_first_logins and app.b042_invite_shares (CHECKs, ENABLE+FORCE RLS, no policies, REVOKE ALL incl. service_role = definer-only) and six app-schema functions (flag check, session-pin check, first-login record/seen, invite-share record, org-shared; sample_marks excluded) with EXECUTE to service_role only. Not add-only because of constraints and privilege statements. No existing-table, B-040, B-028 or funnel change; no outbound; no delete.",
+  },
+  "supabase/migrations/20261113210000_b056_c0_legacy_classifier.sql": {
+    addOnly: false,
+    reason: "B-056 C-0: one SECURITY DEFINER function app.b056_classify_legacy(org, actor) with REVOKE ALL from PUBLIC/anon/authenticated/service_role and EXECUTE to service_role only; when called (ops runbook, before first pricing_trial ON) it inserts one app.b056_org_trials row + one audit_log row per org, idempotent, never overwrites. Not add-only because of privilege statements. No table/column/enum/flag change; no outbound; no delete.",
+  },
+  "supabase/migrations/20261113200000_b056_trial_engine_schema.sql": {
+    addOnly: false,
+    reason: "B-056 PR-1: seeds default-OFF pricing_trial (enabled false, empty allowlist) with ON CONFLICT DO NOTHING; adds app.b056_org_trials and app.b056_banner_dismissals (CHECK constraints, ENABLE+FORCE RLS, no policies, REVOKE ALL from PUBLIC/anon/authenticated/service_role = definer-only) and six app-schema functions (flag check, plan facts, trial end, start trial, dismiss banner, dismissed kinds) with EXECUTE to service_role only; start writes one audit_log row. Not add-only because of new table constraints and privilege statements. No existing-table, enum, plan_tier or FREE_UNITS change; no outbound; no delete.",
+  },
+  "supabase/migrations/20261113100000_c4_free_units_default_5.sql": {
+    addOnly: false,
+    reason: "C4 billing change (Ron 2026-11-13): ALTER partner_codes.free_units DEFAULT 4 -> 5 for newly inserted partner codes only. No existing row rewritten (issued partner allowances keep their stored value), no privilege/RLS/policy/flag change, no outbound. Not add-only because it alters an existing column default.",
+  },
   "supabase/migrations/20261112100000_advisor_rls_stop_bleed.sql": {
     addOnly: false,
     reason: "ENABLE RLS (no policies, not FORCE) and REVOKE ALL from anon and authenticated on seven existing tables (partner_codes, firm_partner_prices, firm_price_overrides, signup_verifications, signup_drafts, funnel_events, upgrade_requests); adds app.owner_lease_tenants() and CREATE OR REPLACE / ALTER VIEW so owner_lease_tenants and tenant_lease_picker are security_invoker; UPDATE unused signup_verifications.expires_at (never DELETE) plus one audit_log insert. Not add-only because it changes privileges, enables RLS on existing tables, replaces an existing view, and rewrites existing rows. No FORCE RLS, no mail or SMS, no flag or FREE_UNITS change.",

@@ -1,7 +1,7 @@
 // FILE: src/components/usage-card.tsx
 //
 // Condola B-045 — Flag-ON usage card for /m/settings (story MGT-53).
-// Server component. No client interactivity, no trial buttons (those are B-056).
+// Server component. Optional B-056 trial state is supplied only when pricing_trial is ON.
 //
 // Acceptance criteria covered:
 //   MGT-53-AC1 — Shows the current plan label (免費 / 標準 / 進階) via data-testid="usage-plan".
@@ -13,21 +13,25 @@
 
 import Link from "next/link";
 import { pricingInterimCopy } from "../i18n/pricing-interim";
+import { b056TrialCopy } from "../i18n/b056-trial";
 
 type UsageCardProps = {
   locale: string;
   plan: "free" | "standard" | "pro";
   units: number;
+  trial?: { plan: "standard" | "pro"; endsOn: string; daysLeft: number } | null;
+  offer?: "admin" | "non_admin" | null;
 };
 
-export function UsageCard({ locale, plan, units }: UsageCardProps) {
+export function UsageCard({ locale, plan, units, trial, offer }: UsageCardProps) {
   const copy = pricingInterimCopy(locale).usage;
+  const trialCopy = b056TrialCopy(locale);
 
   // MGT-53-AC1 — plan label
   const planLabel =
     plan === "free" ? copy.plan_free : plan === "standard" ? copy.plan_std : copy.plan_pre;
 
-  const isFree = plan === "free";
+  const isFree = !trial && plan === "free";
 
   // MGT-53-AC2 — free plan fills the proportion bar to n/5, capped at 100%.
   const fillPct = Math.min(100, (units / 5) * 100);
@@ -39,7 +43,8 @@ export function UsageCard({ locale, plan, units }: UsageCardProps) {
       <h3>{copy.usage_title}</h3>
 
       {/* MGT-53-AC1 */}
-      <p data-testid="usage-plan">{planLabel}</p>
+      <p data-testid="usage-plan">{trial ? (trial.plan === "pro" ? trialCopy.plan_trial_pro(trial.endsOn) : trialCopy.plan_trial_std(trial.endsOn)) : planLabel}</p>
+      {trial ? <p data-testid="trial-days-left">{trialCopy.days_left(trial.daysLeft)}</p> : null}
 
       {/* MGT-53-AC2 */}
       {isFree ? (
@@ -75,6 +80,15 @@ export function UsageCard({ locale, plan, units }: UsageCardProps) {
       <p>
         <Link href="/pricing">{copy.view_plans}</Link>
       </p>
+      {offer === "admin" ? (
+        <>
+          <div data-testid="trial-start-actions">
+            <a className="btn block" href="/m/settings?trial=premium" data-testid="trial-start-pro">{trialCopy.btn_trial_pro}</a>
+            <a className="btn o block" href="/m/settings?trial=standard" data-testid="trial-start-std">{trialCopy.btn_trial_std}</a>
+          </div>
+          <p data-testid="trial-note">{trialCopy.note_admin}</p>
+        </>
+      ) : offer === "non_admin" ? <p data-testid="trial-note">{trialCopy.note_non_admin}</p> : null}
     </div>
   );
 }

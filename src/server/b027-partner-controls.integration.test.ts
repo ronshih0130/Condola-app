@@ -174,7 +174,7 @@ test("B027 ON hides only the settings plan, redirects upgrade/pricing and applie
   assert.equal(byTestId(settings, "sandbox-plan"), undefined);
   const gate = await upgradeGate(admin, 4);
   assert.equal(gate.unitLimit, 20);
-  assert.equal(quoteMonthly({ units: 25, tier: "standard", cycle: "month", now: new Date(), unitOverride: gate.unitOverride }).monthly, 150);
+  assert.equal(quoteMonthly({ units: 25, tier: "standard", cycle: "month", now: new Date(), unitOverride: gate.unitOverride }).monthly, 195); // 5 billable units × NT$39 (C4b)
   // Independent flags: hiding OFF does not disable the unit term.
   await query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='partner_pricing_hide'`, [JSON.stringify(off)]);
   const page = pageTree(await PricingPage());

@@ -88,8 +88,8 @@
     "sha256": "df532d8d0b2e5c78c7c206e8e7ef9d9ae1d270a704a46a51d7b271703737763e"
   },
   "src/server/partners.ts#requestUpgrade": {
-    "reason": "Account upgrade request; action has default-deny custom guard",
-    "sha256": "13024e1cb45622cfa2b227a2b313d8aea243d8ddf4a6ae4ab2510935761e1b32"
+    "reason": "Account upgrade request; action has default-deny custom guard. B-056 PR-2: with pricing_trial ON for the org the settings.plan write is skipped (request + audit only); no new authority, same admin gate.",
+    "sha256": "b63184a881d6ff072248677c1ce64ea3ca1134910f73932fab6ca7913a4ef87e"
   },
   "src/server/sandbox.ts#ensureSandbox": {
     "reason": "Session provisioning infrastructure, before feature entry authority",
@@ -241,7 +241,9 @@
   },
   "src/app/m/admin/page.tsx#PlatformAdminPage": {
     "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and 入帳日 render only after that same gate; no member-role authority and no outbound.",
-    "sha256": "a50156ad1ac07ead3a5660aff49d753d5c92e4ff79b11f0649779a5c65ebfe4d"
+    "sha256": "a50156ad1ac07ead3a5660aff49d753d5c92e4ff79b11f0649779a5c65ebfe4d",
+    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and \u5165\u5e33\u65e5 render only after that same gate; no member-role authority and no outbound.",
+    "sha256": "a5d784a60085c2b40d3cc2a7b55fc73b91e0a518e108b91828d8ff694febcaf5"
   },
   "src/server/pricing-apply-actions.ts#actionSubmitPricingApply": {
     "reason": "Pricing apply form (PLT-30). Independent of organization custom grants. Access is canAccessPricingApply: flag OFF or internal-only ON without an allowlisted staff live org => notFound() before insert; public mode (enabled===true AND public===true) keeps the anonymous submit path; allowlisted staff may submit during internal-only ON. Optional session stamps org/user when present. No outbound.",
