@@ -72,10 +72,10 @@ for (const group of PAGES) {
             const st = getComputedStyle(p); if ((st.position === "fixed" || st.position === "sticky") && p.getBoundingClientRect().bottom >= innerHeight - 2 && p.getBoundingClientRect().top > innerHeight / 2) return true; } return false; };
           return [...document.querySelectorAll<HTMLElement>(".main a.btn, .main button.btn, header.top .btn, header.top .nav-toggle, header.top .seg a, a, button")]
             .filter(el => el.offsetParent !== null && (el.matches(".btn, .nav-toggle, .seg a, .tnav a, .tnav button") || bottomNav(el)))
-            .filter(el => el.getBoundingClientRect().height < 43.5)
-            .map(el => `${(el.textContent ?? "").trim().slice(0, 10) || el.className}:${Math.round(el.getBoundingClientRect().height)}`);
+            .filter(el => { const r = el.getBoundingClientRect(); return r.height < 43.5 || r.width < 43.5; })
+            .map(el => { const r = el.getBoundingClientRect(); return `${(el.textContent ?? "").trim().slice(0, 10) || el.className}:${Math.round(r.width)}x${Math.round(r.height)}`; });
         });
-        expect([...new Set(small)], `${id}: 44px minimum touch height`).toEqual([]);
+        expect([...new Set(small)], `${id}: 44px minimum touch size (width and height)`).toEqual([]);
         // Bottom-navigation labels share one line: growing one item's hit area must not push its label off the row.
         const skew = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".tnav")].filter(nav => nav.offsetParent !== null).map(nav => {
           const mids = [...nav.querySelectorAll<HTMLElement>("a, button")].map(el => { const r = document.createRange(); r.selectNodeContents(el); const b = r.getBoundingClientRect(); return b.top + b.height / 2; });
