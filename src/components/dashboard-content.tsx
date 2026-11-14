@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { dictionary, makeT, translate } from "@/i18n";
 import { brandV3Copy } from "@/i18n/lanes/brand-v3";
-import { ConfirmedBills, PaymentTurnGroups, type BillRow } from "./v3/payment-turns";
+import { ConfirmedBills, PaymentTurnGroups, hasMonthlyFigure, type BillRow } from "./v3/payment-turns";
 import type { StaffPaymentTurns } from "@/server/b3-payment-turns";
 import { OnboardingProgress } from "./onboarding-progress";
 import { EmptyState } from "./empty-state";
@@ -26,6 +26,8 @@ export function DashboardContent({ session, data, setup, cta, query, v2, notific
   const dict = dictionary(session.locale);
   const money = (minor: number | string, currency = "TWD") => moneyLabel(minor, currency, session.locale);
   const paymentV3 = v3 && setup.hasUnits && turns?.state !== "off";
+  // the old 已繳 card leaves only when the monthly figure is really drawn
+  const monthly = paymentV3 && hasMonthlyFigure(bills, month);
   return (
     <>
       <PageHeader title={paymentV3 && turns?.state === "ready" && turns.yourTurn >= 1
@@ -48,9 +50,9 @@ export function DashboardContent({ session, data, setup, cta, query, v2, notific
       {!setup.hasUnits ? <div data-testid="dashboard-empty"><EmptyState id="DASH" locale={session.locale} cta={cta} /></div> : (
       <>
       {paymentV3 && turns && <PaymentTurnGroups turns={turns} locale={session.locale} />}
-      {paymentV3 && bills && month !== undefined && <ConfirmedBills rows={bills} month={month} locale={session.locale} />}
+      {monthly && <ConfirmedBills rows={bills} month={month!} locale={session.locale} />}
       <div className="grid5" style={{ marginBottom: 16 }} data-v2-page={v2 ? "m-home" : undefined} data-v2-section={v2 ? "stats" : undefined}>
-        {!(paymentV3 && bills) && Number(data.received) > 0 ? (
+        {!monthly && Number(data.received) > 0 ? (
         <Link className="card kpi" href="/m/rent">
           <div className="lbl">{t("i_paid")}</div>
           <div className="val" data-testid="dash-received">{money(data.received)}</div>

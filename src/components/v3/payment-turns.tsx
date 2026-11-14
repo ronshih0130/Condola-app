@@ -33,28 +33,41 @@ export function PaymentTurnGroups({ turns, locale }: { turns: StaffPaymentTurns;
   </section>)}</div>;
 }
 
-export function ConfirmedBills({ rows, month, locale }: { rows: BillRow[]; month: number; locale: Locale }) {
-  const copy = brandV3Copy(locale);
-  const totals = new Map<string, { due: number; received: number; paid: number; total: number }>();
+type BillTotal = { due: bigint; received: bigint; paid: number; total: number };
+
+/** Per currency, in integer minor units. Only currencies with at least one positive-due row. */
+export function monthlyBillTotals(rows: BillRow[]): [string, BillTotal][] {
+  const totals = new Map<string, BillTotal>();
   for (const row of rows) {
-    const sum = totals.get(row.currency) ?? { due: 0, received: 0, paid: 0, total: 0 };
-    const due = Number(row.due), received = Number(row.received);
+    const sum = totals.get(row.currency) ?? { due: BigInt(0), received: BigInt(0), paid: 0, total: 0 };
+    const due = BigInt(row.due), received = BigInt(row.received);
     sum.due += due;
     sum.received += received;
-    if (due > 0) {
+    if (due > BigInt(0)) {
       sum.total++;
       if (received >= due) sum.paid++;
     }
     totals.set(row.currency, sum);
   }
-  return <>{Array.from(totals).filter(([, sum]) => sum.total > 0).map(([currency, sum]) => {
-    const percent = sum.due > 0 ? Math.floor(sum.received / sum.due * 100) : undefined;
+  return Array.from(totals).filter(([, sum]) => sum.total > 0);
+}
+
+/** Whether the monthly figure will actually be drawn; the old 已繳 card leaves 今天 only then. */
+export function hasMonthlyFigure(rows: BillRow[] | undefined, month: number | undefined): rows is BillRow[] {
+  return rows !== undefined && month !== undefined && monthlyBillTotals(rows).length > 0;
+}
+
+export function ConfirmedBills({ rows, month, locale }: { rows: BillRow[]; month: number; locale: Locale }) {
+  const copy = brandV3Copy(locale);
+  return <>{monthlyBillTotals(rows).map(([currency, sum]) => {
+    // integer arithmetic: 2,900 of 10,000 is 29%, not 28.999…% floored to 28
+    const percent = sum.due > BigInt(0) ? Number(sum.received * BigInt(100) / sum.due) : undefined;
     const label = translate(copy, "confirmedBills", { month });
     const progress = translate(copy, percent === undefined ? "billProgressWithoutPercent" : "billProgress", {
-      amount: moneyLabel(sum.due, currency, locale), percent: percent ?? "", paid: sum.paid, total: sum.total,
+      amount: moneyLabel(Number(sum.due), currency, locale), percent: percent ?? "", paid: sum.paid, total: sum.total,
     });
     return <section className="card v3-confirmed-bills" key={currency} data-testid="confirmed-bills" data-currency={currency}>
-      <div><p>{label}</p><p className="v3-bill-amount">{moneyLabel(sum.received, currency, locale)}</p><Link className="v3-bill-source" href="/m/rent">{copy.source}</Link></div>
+      <div><p>{label}</p><p className="v3-bill-amount">{moneyLabel(Number(sum.received), currency, locale)}</p><Link className="v3-bill-source" href="/m/rent">{copy.source}</Link></div>
       <div>{percent !== undefined && <progress className="v3-bill-progress" value={Math.max(0, Math.min(100, percent))} max={100} aria-label={progress} />}<p>{progress}</p></div>
     </section>;
   })}</>;

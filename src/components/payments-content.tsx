@@ -38,7 +38,7 @@ export function PaymentsContent({ rows, locale, error, canAct, canReverse, rever
                 <th>{t("i_last5")}</th>
                 <th className="num">{t("i_amount_label")}</th>
                 <th>{t("i_status")}</th>
-                {ready && <th>{copy.turnHolder}</th>}
+                {ready && <th scope="col">{copy.turnHolder}</th>}
                 <th />
               </tr>
             </thead>

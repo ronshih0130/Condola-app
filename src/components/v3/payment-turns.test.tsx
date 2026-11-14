@@ -182,7 +182,7 @@ const payments = (extra: Partial<Parameters<typeof PaymentsContent>[0]> = {}) =>
 test("MGT-126-AC3 MGT-127-AC1: ready table adds holder before actions and uncapped supporting count", () => {
   const html = payments({ v3: true, turns });
   assert.match(html, /120 筆等你核對/);
-  assert.match(html, /<th>輪到誰<\/th><th><\/th>/);
+  assert.match(html, /<th scope="col">輪到誰<\/th><th><\/th>/);
   assert.equal((html.match(/data-label="輪到誰"/g) ?? []).length, paymentRows.length);
   assert.equal((html.match(/party-m"/g) ?? []).length, 1);
   assert.equal((html.match(/party-t"/g) ?? []).length, 1);
@@ -271,3 +271,22 @@ test("PLT-47-AC3 MGT-126-AC1/AC4: new CSS is flag-scoped, existing-token-only an
     assert.ok(rule.nodes.some(node => node.type === "decl" && node.prop === "min-width" && node.value === "44px"));
   }
 });
+
+test("MGT-125-AC5: the percentage is exact at integer boundaries (2,900 of 10,000 is 29%)", () => {
+  const html = renderToStaticMarkup(<ConfirmedBills rows={[{ currency: "TWD", due: "1000000", received: "290000" }]} month={11} locale="zh-TW" />);
+  assert.match(html, /已確認 29%/);
+  assert.match(html, /value="29"/);
+  const third = renderToStaticMarkup(<ConfirmedBills rows={[{ currency: "TWD", due: "300", received: "100" }]} month={11} locale="zh-TW" />);
+  assert.match(third, /已確認 33%/);
+});
+
+test("MGT-125-AC5 (B5: no number is dropped): 已繳 stays when the rent roll is empty or has only zero-due rows", () => {
+  const paid = `<div class="lbl">${makeT("zh-TW")("i_paid")}</div>`;
+  for (const rows of [[], [{ currency: "TWD", due: "0", received: "0" }]]) {
+    const html = dashboard({ v3: true, turns, bills: rows, month: 11 });
+    assert.equal(html.includes(paid), true, JSON.stringify(rows));
+    assert.doesNotMatch(html, /data-testid="confirmed-bills"/);
+  }
+  assert.equal(dashboard({ v3: true, turns, bills, month: 11 }).includes(paid), false);
+});
+

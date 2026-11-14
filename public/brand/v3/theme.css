@@ -155,7 +155,10 @@ html[data-brand="v2"][data-brand-v3] .v3-payment-holder { flex-wrap: nowrap; }
 html[data-brand="v2"][data-brand-v3] table.t.rf td.v3-payment-holder-cell[data-label]::before { flex: 0 0 auto; max-width: none; }
 html[data-brand="v2"][data-brand-v3] .v3-payment-holder .turn-tag,
 html[data-brand="v2"][data-brand-v3] .v3-turn-row .turn-tag { white-space: nowrap; }
-/* A finished row has nobody to name: in the card layout its empty 輪到誰 line is not drawn. */
-html[data-brand="v2"][data-brand-v3] td.v3-payment-holder-cell:empty { display: none; }
+/* A finished row has nobody to name: in the CARD layout only, its empty 輪到誰 line is not drawn.
+   On the desktop table the empty cell stays, so the columns keep their meaning. */
+@container main (max-width:800px) {
+  html[data-brand="v2"][data-brand-v3] table.t.rf td.v3-payment-holder-cell:empty { display: none; }
+}
 html[data-brand="v2"][data-brand-v3] .btn.v3-confirm-payment { background: var(--c-surface); color: var(--c-primary); border: 1px solid var(--c-primary); border-radius: var(--r-btn); min-width: 44px; min-height: 44px; }
 html[data-brand="v2"][data-brand-v3] .btn.v3-confirm-payment:hover { background: var(--c-surface-2); }
