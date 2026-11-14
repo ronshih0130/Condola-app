@@ -6,7 +6,7 @@ import { EmptyState } from "./empty-state";
 import { FooterNote } from "./chrome";
 import { Cell, RfTable } from "./rf";
 import { PageHeader } from "./ui";
-import { EMPTY_ACTIONS, type EmptyCta } from "@/lib/empty-cta";
+import { EMPTY_ACTIONS, emptyActionAllowed, type EmptyCta } from "@/lib/empty-cta";
 import { can } from "@/server/perms";
 import { showDemoLineCopy } from "@/server/demo";
 import { formatDate, moneyLabel } from "@/server/format";
@@ -107,7 +107,7 @@ export function DashboardContent({ session, data, setup, cta, query, v2, notific
           </div>
           {data.owing.length === 0 ? (
             <EmptyState id={setup.step === 4 || setup.tenantJoined ? "DASH_C_pay" : "DASH_pay"} locale={session.locale} compact
-              cta={{ primary: null, showAdminHint: false, links: (setup.step === 4 || setup.tenantJoined) && can(session, "stmt.view") ? [EMPTY_ACTIONS.rent] : [] }} />
+              cta={{ primary: null, showAdminHint: false, links: (setup.step === 4 || setup.tenantJoined) && emptyActionAllowed(EMPTY_ACTIONS.rent, setup, key => setup.permissions.includes(key)) ? [EMPTY_ACTIONS.rent] : [] }} />
           ) : (
             <RfTable testId="outstanding-list">
               <thead>
@@ -139,7 +139,7 @@ export function DashboardContent({ session, data, setup, cta, query, v2, notific
         </div>
         {data.expiring.length === 0 ? (
           <EmptyState id={setup.step === 4 || setup.tenantJoined ? "DASH_C_lease" : "DASH_lease"} locale={session.locale} compact
-            cta={{ primary: null, showAdminHint: false, links: (setup.step === 4 || setup.tenantJoined) && can(session, "props.view") ? [EMPTY_ACTIONS.leases] : [] }} />
+            cta={{ primary: null, showAdminHint: false, links: (setup.step === 4 || setup.tenantJoined) && emptyActionAllowed(EMPTY_ACTIONS.leases, setup, key => setup.permissions.includes(key)) ? [EMPTY_ACTIONS.leases] : [] }} />
         ) : (
           <RfTable testId="expiring-list">
             <thead>

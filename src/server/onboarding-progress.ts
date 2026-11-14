@@ -160,7 +160,7 @@ async function readSetupSnapshotOn(client: Client, session: Session, readPermiss
     ? counts.units === 1 ? `/m/units/${counts.only_unit}/invite` : "/m/units"
     : inviteMode === "no_lease" ? unmappedEntryOk ? "/m/leases/new" : "/m/leases"
     : counts.unjoined_leases.length === 1 ? `/m/leases/${counts.unjoined_leases[0]}` : "/m/leases";
-  return { step: firstIncompleteStep(done), checklistOn, hasUnits: counts.has_units, unmappedEntryOk,
+  return { step: firstIncompleteStep(done), checklistOn, hasUnits: counts.has_units, unmappedEntryOk, customAuthority: !!session.customRole,
     tenantJoined, inviteMode, inviteHref: canInvite(key => can(session, key)) ? inviteHref : "/m/leases",
     permissions: PERMS.flatMap(([key]) => can(session, key) ? [key] : []),
     checklist: checklistOn ? setupChecklist(done, completedAt, key => can(session, key)) : null };

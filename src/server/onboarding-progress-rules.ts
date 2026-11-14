@@ -11,7 +11,7 @@ export const canInvite = (can: (key: PermKey) => boolean) => INVITE_PERMS.every(
 
 export const SETUP_STEPS = [
   { id: "company", key: "es_setup_company", perms: ["settings.edit"] },
-  { id: "unit", key: "es_UNIT_action", perms: ["props.edit"] },
+  { id: "unit", key: "es_UNIT_action", perms: ["props.edit", "props.view"] },
   { id: "invite", key: "es_TEN_action", perms: INVITE_PERMS },
   { id: "joined", key: "es_setup_joined", perms: INVITE_PERMS },
 ] as const satisfies readonly { id: string; key: string; perms: readonly PermKey[] }[];
