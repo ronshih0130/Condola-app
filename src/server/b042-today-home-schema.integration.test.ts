@@ -275,14 +275,31 @@ test("fix-forward 2: today_dash is on only when today_home is also on for the or
     assert.equal(await on("today_dash", o.orgId), false, "a string is not boolean true");
     await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"today_home":true}' WHERE id = $1`, [o.orgId]);
     assert.equal(await on("today_dash", o.orgId), true);
+    // with BOTH flags fully on for this org: an unknown or NULL key, or a NULL org, is still off (never NULL)
+    await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"pricing_trial":true,"today":true}' WHERE id = $1`, [o.orgId]);
+    for (const key of ["pricing_trial", "today", "today_home ", "TODAY_HOME", "", null]) assert.equal(await on(key, o.orgId), false, String(key));
+    assert.equal(await on("today_home", null), false);
+    assert.equal(await on("today_dash", null), false);
+    // an allowlist that is not an array admits nobody and does not raise (object, string, number, JSON null, missing)
+    const homeOn = (await db.query(`SELECT value FROM platform_settings WHERE key = 'today_home'`)).rows[0].value;
+    for (const bad of [`{"${o.orgId}":true}`, `"${o.orgId}"`, "1", "null"]) {
+      await db.query(`UPDATE platform_settings SET value = jsonb_set(value, '{allowed_org_ids}', $1::jsonb) WHERE key = 'today_home'`, [bad]);
+      assert.equal(await on("today_home", o.orgId), false, bad);
+      assert.equal(await on("today_dash", o.orgId), false, bad);
+    }
+    await db.query(`UPDATE platform_settings SET value = value - 'allowed_org_ids' WHERE key = 'today_home'`);
+    assert.equal(await on("today_home", o.orgId), false);
+    for (const whole of [`"on"`, "true", "[]", "null"]) {
+      await db.query(`UPDATE platform_settings SET value = $1::jsonb WHERE key = 'today_home'`, [whole]);
+      assert.equal(await on("today_home", o.orgId), false, whole);
+      assert.equal(await on("today_dash", o.orgId), false, whole);
+    }
+    await db.query(`UPDATE platform_settings SET value = $1 WHERE key = 'today_home'`, [homeOn]);
+    assert.equal(await on("today_dash", o.orgId), true);
     // global today_home switch off → dash off for everyone
     await db.query(`UPDATE platform_settings SET value = jsonb_set(value, '{enabled}', 'false') WHERE key = 'today_home'`);
     assert.equal(await on("today_dash", o.orgId), false);
     assert.equal(await on("today_home", o.orgId), false);
-    // never NULL, never on for unknown or NULL input
-    assert.equal(await on(null, o.orgId), false);
-    assert.equal(await on("today_dash", null), false);
-    assert.equal(await on("pricing_trial", o.orgId), false);
   } finally {
     await db.query(`UPDATE platform_settings SET value = $1 WHERE key = 'today_dash'`, [dashBefore]);
     await db.query(`UPDATE platform_settings SET value = $1 WHERE key = 'today_home'`, [homeBefore]);
@@ -292,23 +309,31 @@ test("fix-forward 2: today_dash is on only when today_home is also on for the or
 test("fix-forward 3: anon and authenticated actually calling each app.b042_* function are denied", async () => {
   const o = await makeOrg(true);
   const sec = await secret(o.orgId, o.unit);
-  const calls: [string, unknown[]][] = [
-    ["SELECT app.b042_flag_on('today_home', $1)", [o.orgId]],
-    ["SELECT app.b042_session_pin_ok($1)", [o.orgId]],
-    ["SELECT app.b042_record_first_login($1, $2)", [o.orgId, o.admin]],
-    ["SELECT app.b042_first_login_seen($1, $2)", [o.orgId, o.admin]],
-    ["SELECT app.b042_record_invite_share($1, $2, 'unit', $3, 'copy')", [o.orgId, o.admin, sec]],
-    ["SELECT app.b042_org_invite_shared($1)", [o.orgId]],
+  const calls: [string, string, unknown[]][] = [
+    ["b042_flag_on", "SELECT app.b042_flag_on('today_home', $1)", [o.orgId]],
+    ["b042_session_pin_ok", "SELECT app.b042_session_pin_ok($1)", [o.orgId]],
+    ["b042_record_first_login", "SELECT app.b042_record_first_login($1, $2)", [o.orgId, o.admin]],
+    ["b042_first_login_seen", "SELECT app.b042_first_login_seen($1, $2)", [o.orgId, o.admin]],
+    ["b042_record_invite_share", "SELECT app.b042_record_invite_share($1, $2, 'unit', $3, 'copy')", [o.orgId, o.admin, sec]],
+    ["b042_org_invite_shared", "SELECT app.b042_org_invite_shared($1)", [o.orgId]],
   ];
-  assert.equal(calls.length, FUNCTIONS.length);
+  assert.deepEqual(calls.map((c) => `app.${c[0]}`), FUNCTIONS.map((f) => f.slice(0, f.indexOf("("))));
+  // The refusal must be the grant on this very object (or on its schema), not an error raised
+  // from inside the function body or by a table it reads.
+  const denied = (object: string, kind: "function" | "table") => (e: unknown) => {
+    const err = e as { code?: string; message?: string };
+    assert.equal(err.code, "42501", `${object}: ${err.message}`);
+    assert.match(err.message ?? "", new RegExp(`^permission denied for (schema app|${kind} ${object})$`), object);
+    return true;
+  };
   for (const role of ["anon", "authenticated"]) {
-    for (const [sql, params] of calls) {
+    for (const [name, sql, params] of calls) {
       await db.query("BEGIN");
       try {
         await db.query(`SET LOCAL ROLE ${role}`);
         // pinned and signed in as the org's own admin: the denial is the grant, not the data
         await db.query(`SELECT set_config('app.env', 'live', true), set_config('app.active_org_id', $1, true), set_config('request.jwt.claim.sub', $2, true)`, [o.orgId, o.admin]);
-        await assert.rejects(db.query(sql, params), /permission denied/, `${role}: ${sql}`);
+        await assert.rejects(db.query(sql, params), denied(name, "function"), `${role}: ${sql}`);
       } finally {
         await db.query("ROLLBACK");
       }
@@ -317,7 +342,7 @@ test("fix-forward 3: anon and authenticated actually calling each app.b042_* fun
       await db.query("BEGIN");
       try {
         await db.query(`SET LOCAL ROLE ${role}`);
-        await assert.rejects(db.query(`SELECT count(*) FROM ${t}`), /permission denied/, `${role}: ${t}`);
+        await assert.rejects(db.query(`SELECT count(*) FROM ${t}`), denied(t.slice(4), "table"), `${role}: ${t}`);
       } finally {
         await db.query("ROLLBACK");
       }

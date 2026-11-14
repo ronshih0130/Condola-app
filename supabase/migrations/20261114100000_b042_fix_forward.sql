@@ -37,7 +37,12 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
              AND jsonb_typeof(f.value) = 'object'
              AND f.value->'enabled' = 'true'::jsonb
              AND jsonb_typeof(f.value->'allowed_org_ids') = 'array'
-             AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(f.value->'allowed_org_ids') e WHERE jsonb_typeof(e) <> 'string')
+             -- The CASE makes the expansion safe by itself: SQL does not promise that the
+             -- jsonb_typeof check above is evaluated first (Codex fix-forward r1, minor 3).
+             AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(
+                               CASE WHEN jsonb_typeof(f.value->'allowed_org_ids') = 'array'
+                                    THEN f.value->'allowed_org_ids' ELSE '[]'::jsonb END) e
+                              WHERE jsonb_typeof(e) <> 'string')
              AND f.value->'allowed_org_ids' @> jsonb_build_array(p_org::text)
              AND jsonb_typeof(o.feature_flags) = 'object'
              AND o.feature_flags->need.k = 'true'::jsonb))
