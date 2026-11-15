@@ -11,6 +11,7 @@ import { ArchiveEntry } from "../../../record-archive-entry";
 import type { PropertyQuery } from "./page";
 import { PropertyLegacyControls, type LegacyPropertyControls } from "./legacy-controls";
 import { makeT } from "../../../../i18n";
+import { archiveV3Copy } from "../../../../i18n/lanes/brand-v3-archive";
 import { archiveCopy } from "../../../../i18n/record-archive";
 import { can } from "../../../../server/perms";
 import { displaySampleName } from "../../../../server/sandbox-data";
@@ -140,7 +141,7 @@ function sections(html:string) {
 function textParts(html:string) {
   return html.split(/<[^>]*>/).map(text=>text.replace(/\s+/g," ").trim()).filter(Boolean);
 }
-test("v3 preserves real legacy archive, audit, forms and section inventory for every role",async()=>{
+test("v3 replaces archive entries while preserving real audit, forms and section inventory for every role",async()=>{
   for(const locale of ["zh-TW","en"] as const)for(const role of ["admin","manager","accountant"] as const)for(const archived of [false,true]){
     const s={...session,role,locale};
     const whole=propertyRoomState({...row,id:"whole",unitId:"whole",kind:"whole_unit",label:"Whole",unitLabel:"Whole"});
@@ -151,15 +152,18 @@ test("v3 preserves real legacy archive, audit, forms and section inventory for e
     const v3=await v3Page(s,d,{...data,rows:[row,whole],...propertyTotals([row,whole]),archived,canInvite:role!=="accountant"&&!archived},query);
     const html=renderToStaticMarkup(v3);
     const oldHtml=renderToStaticMarkup(legacy);
-    assert.deepEqual(controls(html),controls(oldHtml),`${locale}/${role}/${archived}`);
+    assert.deepEqual(controls(html).filter(x=>!x.href.startsWith("/m/archive/")),controls(oldHtml).filter(x=>!x.href.startsWith("/m/archive/")),`${locale}/${role}/${archived}`);
     assert.deepEqual(sections(html),sections(oldHtml));
     const visibleText=textParts(html).join(" ");
-    for(const text of textParts(oldHtml))assert.ok(visibleText.includes(text),`Missing legacy text: ${locale}/${role}/${text}`);
+    for(const text of textParts(oldHtml).filter(text=>text!==archiveCopy(locale).entry))assert.ok(visibleText.includes(text),`Missing legacy text: ${locale}/${role}/${text}`);
     for(const key of ["s_a757163","i_owner","i_repair_history","s_66a6e8b"] as const)assert.ok(html.includes(renderToStaticMarkup(<h3>{makeT(locale)(key)}</h3>)),`${locale}/${role}/${key}`);
     assert.ok(html.includes(d.property.address_display));
     for(const saved of [...d.rooms,...d.wholes])assert.ok(html.includes(moneyLabel(Number(saved.base_rent_minor),d.property.currency,locale)));
-    assert.equal(controls(html).filter(link=>link.href.startsWith("/m/archive/")).length,archived?1:3);
-    assert.equal(html.includes('href="/m/archive/unit/zero-room-unit"'),!archived);
+    assert.equal(controls(html).filter(link=>link.href.startsWith("/m/archive/")).length,archived?1:role==="accountant"?3:0);
+    const archiveButtons=[...html.matchAll(/<button[^>]*>([^<]+)<\/button>/g)].filter(match=>match[1]===archiveCopy(locale).archive);
+    assert.equal(archiveButtons.length,archived||role==="accountant"?0:3);
+    for(const link of controls(html).filter(x=>x.href.startsWith("/m/archive/")))assert.equal(link.label,archiveV3Copy(locale).view);
+    assert.equal(html.includes('href="/m/archive/unit/zero-room-unit"'),!archived&&role==="accountant");
     assert.equal(html.includes('data-testid="audit-history"'),role==="admin");
     if(role==="admin"){
       assert.ok(controls(html).some(link=>link.href==="/m/properties/p?error=forbidden"));
@@ -207,16 +211,17 @@ test("real phone checkbox belongs to a v3 label with a 44px hit area",()=>{
     assert.match(css,/html\[data-brand="v2"\]\[data-brand-v3\] \.v3-property \.v3-property-phone-visibility \{[^}]*display:inline-flex;[^}]*min-height:44px;[^}]*min-width:44px;/);
   }
 });
-test("zero-room units survive an empty rentable list with the real archive entry",async()=>{
+test("zero-room units survive an empty rentable list with the v3 archive entry",async()=>{
   const d={...detail,rooms:[],wholes:[],byRoomUnits:[detail.byRoomUnits[1]]};
   for(const role of ["admin","manager","accountant"] as const){
     const s={...session,role};
     const html=renderToStaticMarkup(await v3Page(s,d,{...data,rows:[],...propertyTotals([])}));
     const old=renderToStaticMarkup(await legacyPage(s,d));
-    assert.deepEqual(controls(html),controls(old));
+    assert.deepEqual(controls(html).filter(x=>!x.href.startsWith("/m/archive/")),controls(old).filter(x=>!x.href.startsWith("/m/archive/")));
     assert.deepEqual(sections(html),sections(old));
     assert.match(html,/data-testid="by-room-unit"/);
-    assert.match(html,/href="\/m\/archive\/unit\/zero-room-unit"/);
+    if(role==="accountant")assert.match(html,/href="\/m\/archive\/unit\/zero-room-unit"/);
+    else assert.equal([...html.matchAll(/<button[^>]*>([^<]+)<\/button>/g)].filter(match=>match[1]===archiveCopy(s.locale).archive).length,2);
     assert.ok(html.includes(d.byRoomUnits[0].label));
   }
 });

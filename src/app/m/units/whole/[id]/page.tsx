@@ -1,3 +1,6 @@
+import {brandV3EnabledForOrg} from '@/server/brand-v3';
+import {ArchiveEntryV3} from '@/components/v3/m/archive/controls';
+import {archiveScope} from '@/server/record-archive';
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound, redirect } from "next/navigation";
 import { ArchiveEntry } from "@/components/record-archive-entry";
@@ -24,6 +27,7 @@ export default async function EditWholeUnitPage({
   const { id } = await params;
   const query = await searchParams;
   const session = await getSession();
+  const v3=await brandV3EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const archivedView = await archiveView(session,{kind:"unit",id});
   if (archivedView.state !== "ready") notFound();
@@ -38,7 +42,9 @@ export default async function EditWholeUnitPage({
   const propertyName = properties.find((property) => property.id === space.propertyId)?.name ?? "";
   return (
     <>
-      <PageHeader title={t("i_space_edit")} crumb={t("i_units_title")} actions={<ArchiveEntry refValue={{kind:"unit",id}} locale={session.locale} />} />
+      {/* eslint-disable-next-line @next/next/no-css-tags */}
+      {v3&&<link rel="stylesheet" href="/brand/v3/archive.css"/>}
+      <PageHeader title={t("i_space_edit")} crumb={t("i_units_title")} actions={v3 ? <ArchiveEntryV3 refValue={{kind:"unit",id}} scope={archiveScope(session)} locale={session.locale} role={session.role}/> : <ArchiveEntry refValue={{kind:"unit",id}} locale={session.locale} />} />
       <ErrorBanner t={t} error={query.error} />
       <SpaceForm
         action={actionUpdateSpace}
