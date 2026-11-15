@@ -93,6 +93,22 @@ test("the session cookie is an app token and tx pins app.active_org_id before SE
   assert.match(db, /SET LOCAL ROLE service_role/);
 });
 
+test("PR-015 owner gateway replacements stay private to app and service_role", () => {
+  const sql = read("supabase/migrations/20261115130000_b013_current_owner_authority.sql");
+  assert.doesNotMatch(sql, /CREATE (?:OR REPLACE )?FUNCTION public\./);
+  const signatures = [
+    "b013_owner_pending(uuid,uuid,text,uuid)",
+    "b013_owner_history(uuid,uuid,text,uuid,uuid)",
+    "b013_decide_estimate(uuid,uuid,text,uuid,uuid,uuid,text,text,bytea)",
+  ];
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of signatures) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated,service_role;`));
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+    assert.ok(!read("supabase/rpc-allowlist.txt").includes(signature.split("(")[0]));
+  }
+});
+
 test("the lock migration checks caller org and revokes the country trigger", () => {
   const sql = read("supabase/migrations/20261030100000_lock_public_function_execute.sql");
   assert.match(sql, /app\.active_org_id/);

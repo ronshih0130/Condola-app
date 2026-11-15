@@ -106,6 +106,34 @@ SQL
   done
 } | psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q
 
+# PR-015 owner gateway ACL/config probe. The general scan below covers public;
+# these app gateways must retain service-only execution after CREATE OR REPLACE.
+psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+DO $p015_owner_gateways$
+DECLARE signature text; fn record;
+BEGIN
+  FOREACH signature IN ARRAY ARRAY[
+    'app.b013_owner_pending(uuid,uuid,text,uuid)',
+    'app.b013_owner_history(uuid,uuid,text,uuid,uuid)',
+    'app.b013_decide_estimate(uuid,uuid,text,uuid,uuid,uuid,text,text,bytea)'
+  ] LOOP
+    SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+    IF NOT fn.prosecdef OR NOT coalesce(fn.proconfig @> ARRAY['search_path=pg_catalog, public, app, pg_temp'],false)
+      OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+      OR has_function_privilege('anon',fn.oid,'EXECUTE')
+      OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+      OR EXISTS (SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) acl
+        WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') THEN
+      RAISE EXCEPTION 'PR-015 owner gateway ACL/config mismatch: %',signature;
+    END IF;
+    IF fn.proname='b013_decide_estimate'
+      AND NOT coalesce(fn.proconfig @> ARRAY['lock_timeout=3s'],false) THEN
+      RAISE EXCEPTION 'PR-015 decision lock timeout missing: %',signature;
+    END IF;
+  END LOOP;
+END $p015_owner_gateways$;
+SQL
+
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"
 if [[ -f "$default_file" ]]; then
   psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'

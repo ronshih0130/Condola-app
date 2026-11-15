@@ -37,6 +37,10 @@ test("migration manifest includes every changed SQL file and classifies unsafe c
     assert.match(b030, /revokes/);
     assert.match(b030, /grants role-specific gateway EXECUTE/);
     assert.match(b030, /assignment trigger/);
+    const p015 = manifest.split("\n").find(line => line.startsWith("| 20261115130000_b013_current_owner_authority.sql |"));
+    assert.ok(p015);
+    assert.match(p015, /\| A \| no \|/);
+    assert.match(p015, /PR-015 \/ B-080 Tier 2/);
     assert.match(manifest, /20261025120000_id_consent_notice\.sql \| A \| yes \|/);
     assert.match(readFileSync(path.join(out, "PERMISSIONS.md"), "utf8"), /Live database check was not run/);
   } finally {

@@ -200,6 +200,151 @@ test("owner_history_same_ticket_org", async () => {
   assert.deepEqual(await read("b013_owner_history", sessions.owner, randomUUID()), []);
   assert.deepEqual(await read("b013_owner_history", sessions.owner, org2Ticket), []);
 });
+
+// Keep actor admission valid on a DIFFERENT property. Otherwise a rejection by
+// b013_actor would mask a missing property-specific check in the three gateways.
+async function retainOtherPropertyAuthority(version: string) {
+  const own = (await db.query("SELECT designated_ownership_id FROM app.b013_estimate_versions WHERE id=$1", [version])).rows[0];
+  const retainedProperty = randomUUID();
+  await copyFixture("properties", property, { id: retainedProperty, name: "PR-015 retained authority" });
+  await copyFixture("property_owners", own.designated_ownership_id, {
+    id: randomUUID(), property_id: retainedProperty, effective_from: "2000-01-01", effective_to: null,
+  });
+  assert.notEqual(retainedProperty, property);
+  return own.designated_ownership_id as string;
+}
+async function approvalState() {
+  const rows: Record<string, unknown> = {};
+  for (const table of tables) {
+    rows[table] = (await db.query("SELECT coalesce(jsonb_agg(to_jsonb(t)"
+      + " ORDER BY to_jsonb(t)::text COLLATE \"C\"),'[]'::jsonb) snapshot FROM app." + table + " t")).rows[0].snapshot;
+  }
+  return rows;
+}
+async function assertOwnerDeniedWithoutWrites(version: string) {
+  const before = await approvalState();
+  assert.deepEqual(await read("b013_owner_pending"), []);
+  assert.deepEqual(await read("b013_owner_history"), []);
+  for (const decision of ["approved", "rejected", "more_information"]) {
+    await assert.rejects(asRole("SELECT app.b013_decide_estimate("
+      + "$1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,$5::text,'PR-015 denial',$6::bytea)",
+    [ORG_ID, sessions.owner, randomUUID(), version, decision, hash([version, decision])],
+    "service_role", USERS.owner), { code: "42501", message: "errors.forbidden" });
+    // Decisions AND command ledger/outbox/heads/etc must all remain byte-for-byte unchanged.
+    assert.deepEqual(await approvalState(), before);
+  }
+}
+
+for (const timing of ["ended yesterday", "ends today", "starts tomorrow"] as const) {
+  test("PR-015 property authority " + timing + " while owner remains current elsewhere", async () => {
+    // Align the two existing date rules for these boundary tests, independent of host time zone.
+    await db.query("SET LOCAL TIME ZONE 'UTC'");
+    await db.query("UPDATE public.organizations SET timezone='UTC' WHERE id=$1", [ORG_ID]);
+    const first = await submit();
+    assert.equal((await decideEstimate(first)).status, "recorded");
+    const current = await submit(ticket, first);
+    const ownership = await retainOtherPropertyAuthority(current);
+    assert.deepEqual((await read("b013_owner_pending")).map(row => row.version_id), [current]);
+    assert.deepEqual((await read("b013_owner_history")).map(row => row.version_id), [current, first]);
+    const managerBefore = await read("b013_manager_view", sessions.manager);
+    await db.query("UPDATE public.property_owners SET effective_from=CURRENT_DATE-10,"
+      + "effective_to=CURRENT_DATE-1 WHERE id=$1", [ownership]);
+    if (timing === "ends today") {
+      await db.query("UPDATE public.property_owners SET effective_to=CURRENT_DATE WHERE id=$1", [ownership]);
+    } else if (timing === "starts tomorrow") {
+      await db.query("UPDATE public.property_owners SET effective_from=CURRENT_DATE+1,effective_to=NULL WHERE id=$1", [ownership]);
+    }
+    // The other property really admits the session; no active staff membership is needed.
+    assert.equal((await db.query("SELECT actor FROM app.b013_actor($1,$2)", [ORG_ID, sessions.owner])).rows[0].actor, USERS.owner);
+    await assertOwnerDeniedWithoutWrites(current);
+    assert.deepEqual(await read("b013_manager_view", sessions.manager), managerBefore);
+    assert.deepEqual(await read("b013_manager_view", sessions.admin), managerBefore);
+  });
+}
+
+for (const state of ["archived", "not owner"] as const) {
+  test("PR-015 designated contact " + state + " is excluded even with valid staff admission", async () => {
+    const version = await submit();
+    // contacts(org_id,user_id) is unique: archiving this contact ends all its
+    // owner admission. A maintenance membership isolates the gateway predicate.
+    await db.query("INSERT INTO public.org_members(org_id,user_id,role,status) VALUES($1,$2,'maintenance','active')"
+      + " ON CONFLICT(org_id,user_id) DO UPDATE SET role='maintenance',status='active'", [ORG_ID, USERS.owner]);
+    if (state === "archived") {
+      await db.query("UPDATE public.contacts SET archived_at=clock_timestamp() WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.owner]);
+    } else {
+      await db.query("UPDATE public.contacts SET is_owner=false WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.owner]);
+    }
+    assert.equal((await db.query("SELECT actor FROM app.b013_actor($1,$2)", [ORG_ID, sessions.owner])).rows[0].actor, USERS.owner);
+    await assertOwnerDeniedWithoutWrites(version);
+    assert.equal((await read("b013_manager_view", sessions.manager))[0].version_id, version);
+  });
+}
+
+for (const boundary of ["end", "start"] as const) {
+  test("PR-015 CURRENT_DATE " + boundary + " boundary also applies when org-local date would admit", async () => {
+    const version = await submit();
+    const ownership = await retainOtherPropertyAuthority(version);
+    // These zones are 26 hours apart, so the dates differ at every time of day.
+    await db.query(boundary === "end" ? "SET LOCAL TIME ZONE 'Pacific/Kiritimati'" : "SET LOCAL TIME ZONE 'Etc/GMT+12'");
+    await db.query("UPDATE public.organizations SET timezone=$2 WHERE id=$1",
+      [ORG_ID, boundary === "end" ? "Etc/GMT+12" : "Pacific/Kiritimati"]);
+    await db.query(boundary === "end"
+      ? "UPDATE public.property_owners SET effective_from=CURRENT_DATE-10,effective_to=CURRENT_DATE WHERE id=$1"
+      : "UPDATE public.property_owners SET effective_from=CURRENT_DATE+1,effective_to=NULL WHERE id=$1", [ownership]);
+    assert.equal((await db.query("SELECT po.effective_from <= (clock_timestamp() AT TIME ZONE o.timezone)::date"
+      + " AND (po.effective_to IS NULL OR po.effective_to > (clock_timestamp() AT TIME ZONE o.timezone)::date) allowed"
+      + " FROM public.property_owners po JOIN public.organizations o ON o.id=po.org_id WHERE po.id=$1", [ownership])).rows[0].allowed, true);
+    await assertOwnerDeniedWithoutWrites(version);
+  });
+}
+
+for (const bounded of [false, true]) {
+  test("PR-015 current owner starts today and can decide; future end=" + bounded, async () => {
+    await db.query("SET LOCAL TIME ZONE 'UTC'");
+    await db.query("UPDATE public.organizations SET timezone='UTC' WHERE id=$1", [ORG_ID]);
+    const version = await submit();
+    await db.query("UPDATE public.property_owners SET effective_from=CURRENT_DATE,"
+      + "effective_to=CASE WHEN $2::boolean THEN CURRENT_DATE+1 ELSE NULL END"
+      + " WHERE id=(SELECT designated_ownership_id FROM app.b013_estimate_versions WHERE id=$1)", [version, bounded]);
+    assert.deepEqual((await read("b013_owner_pending")).map(row => row.version_id), [version]);
+    assert.equal((await read("b013_owner_history"))[0].version_id, version);
+    assert.equal((await decideEstimate(version)).status, "recorded");
+    assert.deepEqual(await read("b013_owner_pending"), []);
+    assert.equal((await read("b013_owner_history"))[0].decision, "approved");
+    assert.equal((await db.query("SELECT count(*)::int n FROM app.b013_estimate_decisions WHERE version_id=$1", [version])).rows[0].n, 1);
+  });
+}
+
+test("PR-015 vendor appointment remains available after owner's property authority ends", async () => {
+  const version = await submit();
+  const ownership = await retainOtherPropertyAuthority(version);
+  const jobId = await job(ticket);
+  const token = (await db.query("SELECT token_hash FROM public.repair_vendor_jobs WHERE id=$1", [jobId])).rows[0].token_hash;
+  await controls("vendor_dispatch", true);
+  await db.query("UPDATE public.property_owners SET effective_to=CURRENT_DATE WHERE id=$1", [ownership]);
+  await assertOwnerDeniedWithoutWrites(version);
+  const result = (await asRole("SELECT app.b013_record_vendor_appointment("
+    + "$1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,'vendor_rejected',"
+    + "NULL,NULL,NULL,NULL,'Cannot attend',$6::bytea) r",
+  [ORG_ID, jobId, token, randomUUID(), version, hash([version, jobId, "vendor_rejected"])])).rows[0].r;
+  assert.equal(result.status, "recorded");
+  assert.equal((await read("b013_manager_view", sessions.manager))[0].appointment_event_kind, "vendor_rejected");
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b013_estimate_decisions WHERE version_id=$1", [version])).rows[0].n, 0);
+});
+
+test("PR-015 preserves an existing decision receipt replay after authority ends without writing", async () => {
+  const version = await submit(), request = randomUUID();
+  const ownership = await retainOtherPropertyAuthority(version);
+  const receipt = await decideEstimate(version, sessions.owner, request);
+  assert.equal(receipt.status, "recorded");
+  await db.query("UPDATE public.property_owners SET effective_to=CURRENT_DATE WHERE id=$1", [ownership]);
+  const before = await approvalState();
+  // Replay precedes authorization in the existing body; it is a stored receipt,
+  // not a new decision. Fresh requests still fail, even on a decided version.
+  assert.deepEqual(await decideEstimate(version, sessions.owner, request), receipt);
+  assert.deepEqual(await approvalState(), before);
+  await assertOwnerDeniedWithoutWrites(version);
+});
 test("manager_staff_only", async () => {
   await submit();
   await assert.rejects(read("b013_manager_view", sessions.owner), { code: "42501" });
@@ -369,12 +514,17 @@ test("appointment_job_guard", async () => {
   assert.equal((await read("b013_manager_view", sessions.manager))[0].appointment_event_kind, "vendor_proposed");
 });
 test("reader_role_definer_only and no_direct_table_grants", async () => {
+  const gateways = [...readers, "b013_decide_estimate"];
   const rows = (await db.query("SELECT p.oid,p.proname,p.prosecdef,p.proconfig FROM pg_proc p"
-    + " JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1::text[])", [readers])).rows;
-  assert.equal(rows.length, 3);
+    + " JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1::text[])", [gateways])).rows;
+  assert.equal(rows.length, 4);
   for (const row of rows) {
     assert.equal(row.prosecdef, true);
     assert.ok(row.proconfig.some((value: string) => value.replaceAll(" ", "") === "search_path=pg_catalog,public,app,pg_temp"));
+    if (row.proname === "b013_decide_estimate") assert.ok(row.proconfig.includes("lock_timeout=3s"));
+    assert.equal((await db.query("SELECT EXISTS (SELECT 1 FROM pg_proc p,"
+      + "LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl"
+      + " WHERE p.oid=$1 AND acl.grantee=0 AND acl.privilege_type='EXECUTE') exposed", [row.oid])).rows[0].exposed, false);
     for (const role of ["anon", "authenticated", "service_role"]) {
       assert.equal((await db.query("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [role, row.oid])).rows[0].ok, role === "service_role");
     }
