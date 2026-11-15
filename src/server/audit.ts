@@ -97,3 +97,16 @@ export async function writeStaffSignedPdfDownload(event: SignedPdfDownloadAudit 
     client,
   ));
 }
+
+/** R1-RPT: fixed metadata only, after authorised read, CSV construction and revalidation.
+ * A separate service-role transaction follows the signed-PDF pattern above; never app.audit_event. */
+export async function writeIncomeReportExport(event: import("./b3-income-report-csv").IncomeReportExportAudit) {
+  await svc(event.userId, client => recordAudit(
+    svcAuditScope({ orgId: event.orgId, actorUserId: event.userId, actorRole: event.actorRole }),
+    { table: "income_expense_report", rowId: event.operationId, action: "insert", eventType: "income_report_exported",
+      newRow: { event: "income_report_exported", operation_id: event.operationId,
+        start: event.start, end: event.end, property_id: event.propertyId, owner_id: event.ownerId,
+        row_count: event.rowCount, currency_count: event.currencyCount },
+      reason: "income_report_exported", requestId: event.operationId }, client,
+  ));
+}

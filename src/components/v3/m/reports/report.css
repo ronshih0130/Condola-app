@@ -1,0 +1,27 @@
+.v3-income-report-report { color: var(--c-text); display: grid; gap: 20px; min-width: 0; }
+.v3-income-report-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+.v3-income-report-heading h1 { font-size: 24px; margin: 0; }
+.v3-income-report-lead { border-radius: var(--r-lg); background: var(--c-surface-2); padding: 24px; }
+.v3-income-report-lead p:first-child { font-size: 22px; }
+.v3-income-report-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; }
+.v3-income-report-filters label { display: grid; gap: 6px; min-width: 140px; flex: 1 1 140px; }
+.v3-income-report-filters select, .v3-income-report-filters input { width: 100%; min-height: 44px; background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: 8px; font: inherit; }
+.v3-income-report-report a, .v3-income-report-report button, .v3-income-report-source summary { min-height: 44px; display: inline-flex; align-items: center; }
+.v3-income-report-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); gap: 20px; align-items: start; }
+.v3-income-report-card { min-width: 0; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: 16px; }
+.v3-income-report-card h2 { margin-top: 0; font-size: 18px; }
+.v3-income-report-tableWrap { overflow-x: auto; }
+.v3-income-report-report table { width: 100%; border-collapse: collapse; }
+.v3-income-report-report th, .v3-income-report-report td { padding: 12px 8px; text-align: start; vertical-align: top; border-bottom: 1px solid var(--c-border); }
+.v3-income-report-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.v3-income-report-source summary { cursor: pointer; padding: 0 12px; border: 1px solid var(--c-border-strong); border-radius: var(--r-btn); white-space: nowrap; }
+.v3-income-report-source dl { margin: 8px 0; min-width: 180px; }
+.v3-income-report-source dd { margin: 0 0 8px; overflow-wrap: anywhere; }
+.v3-income-report-source dt { color: var(--c-text-2); }
+.v3-income-report-deposit { border-top: 1px solid var(--c-border); padding-block: 12px; }
+.v3-income-report-empty { text-align: center; padding: 36px 16px; }
+.v3-income-report-empty svg { width: 176px; max-width: 100%; }
+.v3-income-report-pagination { display: flex; justify-content: space-between; gap: 20px; }
+.v3-income-report-skeleton { height: 100px; border-radius: var(--r-md); background: var(--c-border); }
+.v3-income-report-report :is(a, button, input, select, summary):focus-visible { outline: 2px solid var(--c-primary); outline-offset: 3px; }
+@media (max-width: 900px) { .v3-income-report-columns { grid-template-columns: minmax(0, 1fr); } }

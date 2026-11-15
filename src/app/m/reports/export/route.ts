@@ -1,3 +1,5 @@
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { exportIncomeReport } from "@/server/b3-income-report-csv";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
@@ -18,6 +20,14 @@ export async function GET(request: Request) {
   if (blocked) return blocked;
   const url = new URL(request.url);
   try {
+    if (await brandV3EnabledForOrg(session.orgId)) {
+      const body = await exportIncomeReport(session, Object.fromEntries(url.searchParams));
+      return new NextResponse(body, { headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": "attachment; filename=income-expense.csv",
+        "cache-control": "private, no-store",
+      } });
+    }
     session = await guardEffectiveSession(session, "reports.export");
     const period = reportPeriod({
       mode: url.searchParams.get("mode") ?? undefined,

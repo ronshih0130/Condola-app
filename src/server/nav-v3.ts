@@ -29,7 +29,7 @@ export const MANAGER_AREAS_V3: readonly ManagerAreaV3[] = [
   { id: "money", icon: "coin", ...link("v3.money", "/m/rent", "stmt.view"), links: [
     link("i_nav_rent", "/m/rent", "stmt.view"), link("i_nav_inbox", "/m/payments", "pay.record"),
     link("i_nav_bank", "/m/bank", "bank.reconcile"), link("i_nav_stmt", "/m/statements", "stmt.view"),
-    link("i_nav_expenses", "/m/expenses", "exp.add"), link("i_nav_reports", "/m/reports", "reports.export"),
+    link("i_nav_expenses", "/m/expenses", "exp.add"), link("i_nav_reports", "/m/reports", "stmt.view"),
     link("i_nav_close", "/m/close", "month.close"),
   ] },
   { id: "maintenance", icon: "tool", ...link("v3.maintenance", "/m/tickets", "any"), links: [] },

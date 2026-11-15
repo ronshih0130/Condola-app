@@ -28,12 +28,15 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   // is read here only for that case, so the OFF path keeps its reader and redirect order (PLT-46-AC1).
   const moneyV3 = routeDenied && /^\/m\/(payments|rent)\/?$/.test(path) && (can(session, "stmt.view") || can(session, "pay.record"))
     ? await brandV3EnabledForOrg(session.orgId) : undefined;
-  const denied = moneyV3 ? null : routeDenied;
+  // Exact report page only: nested routes, including export, retain reports.export.
+  const reportV3 = routeDenied && /^\/m\/reports\/?$/.test(path) && can(session, "stmt.view")
+    ? await brandV3EnabledForOrg(session.orgId) : undefined;
+  const denied = moneyV3 || reportV3 ? null : routeDenied;
   if (denied) redirect(denied);
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   const banner = session.kind === "staff" ? await trialBannerFor(session) : null;
-  if (moneyV3 ?? await brandV3EnabledForOrg(session.orgId)) {
+  if (moneyV3 ?? reportV3 ?? await brandV3EnabledForOrg(session.orgId)) {
     // /api/env accepts native staff roles; its null-key guard refuses assigned custom roles.
     return <ManagerShellV3 areas={areasFor(session)} tabs={tabsFor(session)}
       locale={session.locale} name={session.name} role={session.role} firm={firm.name}
