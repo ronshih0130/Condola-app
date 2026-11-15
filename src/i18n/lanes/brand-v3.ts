@@ -105,3 +105,10 @@ const todayCopy = {
   },
 };
 export function brandV3TodayCopy(locale: Locale) { return todayCopy[locale]; }
+
+// OV-SH-PHONE / OV-SH-NONAME. Interim owner navigation until O-HOME and the overview ship.
+const ownerShellCopy = {
+  "zh-TW": { home: "首頁", statements: "月報", context: "{name} 你好｜管理方：{company}", contextNoName: "管理方：{company}" },
+  en: { home: "Home", statements: "Monthly statements", context: "Hello {name} · Managed by: {company}", contextNoName: "Managed by: {company}" },
+};
+export function brandV3OwnerShellCopy(locale: Locale) { return ownerShellCopy[locale]; }

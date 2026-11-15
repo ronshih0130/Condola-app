@@ -39,9 +39,9 @@ async function renderLayout(text: string, mocks: Record<string, unknown>) {
   return renderToStaticMarkup(await layout({ children: <main data-testid="content">fixture</main> }));
 }
 
-test("PLT-46-AC1 / MGT-47-AC1: SH-SANDBOX root OFF is byte-identical to 529b4fa, ON only replaces staff /m header", async () => {
+test("PLT-46-AC1 / MGT-47-AC1: SH-SANDBOX root OFF is byte-identical to 529b4fa, ON retains root controls regardless of first-load path", async () => {
   const old = execFileSync("git", ["show", "529b4fa:src/app/layout.tsx"], { encoding: "utf8" });
-  for (const locale of ["zh-TW", "en"] as const) for (const kind of ["staff", "tenant", "owner"] as const) for (const environment of ["live", "sandbox"] as const) for (const path of ["/m", "/m/payments", "/t", "/consent"]) {
+  for (const locale of ["zh-TW", "en"] as const) for (const kind of ["staff", "tenant", "owner"] as const) for (const environment of ["live", "sandbox"] as const) for (const path of ["/m", "/m/payments", "/o", "/o/statements", "/privacy", "/terms", "/other", "/t", "/consent"]) {
     let on = false;
     const actor = { ...session, locale, kind, environment };
     const mocks = {
@@ -49,8 +49,8 @@ test("PLT-46-AC1 / MGT-47-AC1: SH-SANDBOX root OFF is byte-identical to 529b4fa,
       "@/i18n": i18n,
       "@/components/auth-hash": { AuthHashForward: stub }, "@/components/chunk-reload": { ChunkReloadListener: stub },
       "@/components/chrome": { BrandLink: stub, LocaleLinks: stub, ResetButton: stub, SignOutButton: stub },
-      "@/components/required-validity": { RequiredValidity: stub }, "@/components/env-mode": { EnvBanner: () => <div data-testid="legacy-env-banner" /> },
-      "@/components/locale": { LocaleProvider: stub }, "@/server/demo": { demoModeEnabled: () => true },
+      "@/components/required-validity": { RequiredValidity: stub }, "@/components/env-mode": compile(source("src/components/env-mode.tsx"), chromeMocks(locale, path)),
+      "@/components/locale": compile(source("src/components/locale.tsx"), { "@/i18n": i18n }), "@/server/demo": { demoModeEnabled: () => true },
       "@/server/brand-v2": { brandV2EnabledForOrg: async () => true }, "@/server/brand-v3": { brandV3EnabledForOrg: async () => on },
       "@/server/sandbox": { sandboxChrome: async () => ({ environment }) },
       "@/server/session": { requestPrefs: async () => ({ locale }), readSession: async () => actor },
@@ -59,9 +59,9 @@ test("PLT-46-AC1 / MGT-47-AC1: SH-SANDBOX root OFF is byte-identical to 529b4fa,
     assert.equal(await renderLayout(source("src/app/layout.tsx"), mocks), await renderLayout(old, mocks));
     on = true;
     const html = await renderLayout(source("src/app/layout.tsx"), mocks);
-    assert.equal(html.includes('class="top"'), !(kind === "staff" && path.startsWith("/m")));
+    assert.ok(html.includes('class="top"'));
     assert.ok(html.includes('data-testid="site-footer"'));
-    assert.equal(html.includes('data-testid="legacy-env-banner"'), environment === "sandbox" && !(kind === "staff" && path.startsWith("/m")));
+    assert.equal(html.includes('class="env-banner"'), environment === "sandbox");
   }
 });
 
@@ -130,7 +130,7 @@ function chromeMocks(locale: i18n.Locale, path: string) {
     "./locale": { useT: () => i18n.makeT(locale), useLocale: () => locale },
   };
 }
-function renderShell({ path = "/m", open = null, ...overrides }: Record<string, unknown> & { path?: string; open?: "avatar" | "org" | null } = {}) {
+function renderShell({ path = "/m", open = null, baseline = false, ...overrides }: Record<string, unknown> & { path?: string; open?: "avatar" | "org" | null } = {}) {
   const locale = (overrides.locale || "zh-TW") as i18n.Locale;
   const chrome = compile(source("src/components/chrome.tsx"), chromeMocks(locale, path));
   const mocks = {
@@ -139,7 +139,9 @@ function renderShell({ path = "/m", open = null, ...overrides }: Record<string, 
     "../../chrome": chrome, "../role-avatar": { RoleAvatar }, "./icon": { ShellIcon },
     ...(open ? { react: { ...React, useState: () => [{ kind: open, top: 64, left: 8 }, () => {}] } } : {}),
   };
-  const Shell = compile(source("src/components/v3/shell/manager-shell.tsx"), mocks).ManagerShellV3 as React.ComponentType<Record<string, unknown>>;
+  const shared = compile(source("src/components/v3/shell/shared-shell.tsx"), mocks);
+  const text = baseline ? execFileSync("git", ["show", "54fedb07f5cd851aa22683e585dbf1dbec2eb1ca:src/components/v3/shell/manager-shell.tsx"], { encoding: "utf8" }) : source("src/components/v3/shell/manager-shell.tsx");
+  const Shell = compile(text, { ...mocks, "./shared-shell": shared }).ManagerShellV3 as React.ComponentType<Record<string, unknown>>;
   return renderToStaticMarkup(<Shell areas={nav.areasFor(session)} tabs={nav.tabsFor(session)} locale={locale} name={session.name} role="admin" firm="安居代管"
     sandbox={false} showReset={true} hasLiveCompany={true} canSwitchCompany={true} todayTitle={copy.shellTodayTitle(new Date("2026-11-13T00:00:00+08:00"), locale)}
     buildSha="fixture" trialBanner={<p data-testid="trial-banner">trial</p>} {...overrides}><h1>content</h1></Shell>);
@@ -164,7 +166,7 @@ test("SH-DESK/SH-PHONE/SH-ME / PLT-44, PLT-48-AC2: identity, current nav, defaul
 });
 
 test("SH-ME: open avatar menu uses approved bilingual strings, current language, POST logout, admin/demo-only reset", () => {
-  assert.match(renderShell({ locale: "en", name: "Alex Chen" }), /party-name" aria-hidden="true">A<\/span>/);
+  assert.match(renderShell({ locale: "en", name: "Alex Chen" }), /party-name" aria-hidden="true">C<\/span>/);
   for (const locale of ["zh-TW", "en"] as const) for (const role of ["admin", "manager", "accountant", "maintenance"] as const) for (const showReset of [false, true]) {
     const html = renderShell({ open: "avatar", locale, role, showReset, path: "/m/units" });
     const menu = html.split('data-testid="avatar-menu"')[1].split('<nav class="tabbar"')[0];
@@ -376,4 +378,43 @@ test("PLT-44-AC1 / MGT-54: on phones the fixed empty-state primary sits above th
   assert.match(source("src/app/globals.css"), /\.es-primary\{position:fixed;bottom:calc\(var\(--m-bottom-nav-height,0px\)/);
   // The shell's own content padding must not shrink the room globals.css leaves for the fixed button + tab bar.
   assert.match(css, /@media\(max-width:600px\) \{\s*html\[data-brand="v2"\]\[data-brand-v3\] \.v3-shell \.shell-content:has\(\.es-primary\)\{ padding-bottom:calc\(120px \+ var\(--m-bottom-nav-height,0px\)/);
+});
+
+
+test("PLT-44 / SH-PHONE/SH-DESK/SH-ME: shared owner extraction preserves manager HTML byte-for-byte except the mounted-shell marker", () => {
+  for (const locale of ["zh-TW", "en"] as const) for (const open of [null, "avatar", "org"] as const) for (const path of ["/m", "/m/payments"]) for (const sandbox of [false, true]) {
+    const props = { locale, open, path, sandbox, name: open === "avatar" ? "" : "陳小明" };
+    const html = renderShell(props);
+    assert.equal((html.match(/ data-v3-shell=""/g) ?? []).length, 1);
+    assert.equal(html.replace(' data-v3-shell=""', ''), renderShell({ ...props, baseline: true }));
+  }
+});
+
+
+test("SH-ME: both locales use the surname initial; all other manager bytes stay identical", () => {
+  for (const locale of ["en", "zh-TW"] as const) for (const [name, initial] of [["Jane Smith", "S"], ["  alex   chen  ", "C"], ["林小姐", "林"], ["𠮷田 太郎", "𠮷"], ["Alex", "A"]]) {
+    const props = { locale, name };
+    const html = renderShell(props);
+    assert.equal((html.match(new RegExp(`party-name" aria-hidden="true">${initial}</span>`, "gu")) ?? []).length, 2);
+    const before = renderShell({ ...props, baseline: true });
+    // The historical manager only truncated English names. Normalize that exact glyph delta.
+    const oldInitial = locale === "en" ? Array.from(name.trim())[0].toUpperCase() : initial;
+    assert.equal(html.replace(' data-v3-shell=""', ''), before.replaceAll(`party-name" aria-hidden="true">${oldInitial}</span>`, `party-name" aria-hidden="true">${initial}</span>`));
+  }
+});
+
+test("root controls are hidden only by scoped mounted-shell CSS, never by pathname", () => {
+  const css = postcss.parse(source("public/brand/v3/shell.css"));
+  const selectors: string[] = [];
+  css.walkRules(rule => {
+    if (!/header\.top|\.env-banner/.test(rule.selector)) return;
+    selectors.push(...rule.selectors);
+    assert.deepEqual(rule.nodes.map(node => node.type === "decl" ? [node.prop, node.value] : node.type), [["display", "none"]]);
+  });
+  assert.deepEqual(selectors, [
+    'html[data-brand="v2"][data-brand-v3] body:has([data-v3-shell]) > header.top',
+    'html[data-brand="v2"][data-brand-v3] body:has([data-v3-shell]) > .env-banner',
+  ]);
+  assert.doesNotMatch(source("src/app/layout.tsx"), /x-pathname|managerShell|ownerShell|portalShell/);
+  assert.match(renderShell(), /<div data-v3-shell="" class="v3-shell"/);
 });

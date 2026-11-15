@@ -420,3 +420,104 @@ for (const role of ["admin", "accountant"] as const) for (const size of SIZES) {
     writeFileSync(resolve(OUT, `money-${role}-${size.name}.png`), await page.screenshot({ fullPage: true, animations: "disabled" }));
   });
 }
+
+for (const size of SIZES) {
+  test(`OV-SH-PHONE/OV-SH-DESK/OV-SH-MORE/OV-SH-ME/OV-SH-ORG/OV-SH-NOTI / OWN-27-AC5 / PLT-44: owner shell at ${size.name}`, async ({ page }) => {
+    test.skip(MODE !== "on", "Owner shell requires brand_v3 ON; preserve the OFF evidence set");
+    await page.setViewportSize(size);
+    await signIn(page, ACCOUNTS.owner);
+    await page.goto("/api/demo/locale?set=zh-TW&next=%2Fo");
+    await settle(page);
+    const shell = page.getByTestId("owner-shell-v3");
+    await expect(shell).toBeVisible();
+    // Owner shell r1 fix: the legacy header/banner stay in the DOM and are hidden only while the shell is mounted.
+    await expect(page.locator("body > header.top")).toBeHidden();
+    await expect(page.locator("aside.side")).toHaveCount(0);
+    await expect(page.getByTestId("env-banner")).toBeHidden();
+    await expect(page.getByTestId("trial-banner")).toHaveCount(0);
+    await expect(shell.locator('[data-testid="org-switch"], a[href^="/m"]')).toHaveCount(0);
+    const desktop = size.width >= 1024;
+    const nav = shell.getByTestId(desktop ? "v3-sidebar-nav" : "v3-phone-tabs");
+    const bar = shell.locator(desktop ? ".deskbar" : ".appbar.navy");
+    await expect(nav).toBeVisible();
+    await expect(shell.locator(desktop ? ".appbar.navy" : ".deskbar")).toBeHidden();
+    await expect(shell.getByTestId(desktop ? "v3-phone-tabs" : "v3-sidebar-nav")).toBeHidden();
+    await expect(nav.locator('[data-area="home"]')).toHaveAttribute("aria-current", "page");
+    await expect(shell.locator(".side-head .wm").or(shell.locator(".appbar.navy .wm")).first()).toHaveText("租多啦・屋主");
+    await expect(shell.locator(desktop ? ".side-head .cap" : ".appbar.navy .cap")).toContainText("你好｜管理方：");
+    const admitted = await page.getByTestId("notification-center-entry").count() > 0;
+    await expect(bar.getByTestId("shell-bell")).toHaveCount(admitted ? 1 : 0);
+    await expect(nav.locator('[data-area="notifications"]')).toHaveCount(admitted ? 1 : 0);
+    if (admitted) {
+      await expect(bar.getByTestId("shell-bell")).toHaveAttribute("href", "/o/notifications");
+      await assertShellControl(bar.getByTestId("shell-bell"), "owner bell");
+    }
+    const areas = await nav.locator("[data-area]").evaluateAll(items => items.map(item => item.getAttribute("data-area")));
+    if (desktop) {
+      expect(areas.slice(0, admitted ? 4 : 3)).toEqual(["home", "statements", ...(admitted ? ["notifications"] : []), "approvals"]);
+      expect(areas.slice(admitted ? 4 : 3).every(id => id?.startsWith("repair-policy-"))).toBeTruthy();
+    } else expect(areas).toEqual(["home", "statements", ...(admitted ? ["notifications"] : []), "more"]);
+    for (const control of await nav.locator("a,button").all()) await assertShellControl(control, "owner navigation");
+
+    const avatar = bar.getByTestId("avatar-menu-trigger");
+    await assertShellControl(avatar, "owner avatar");
+    await avatar.click();
+    const menu = page.getByTestId("avatar-menu");
+    await expect(menu.locator(".shell-menu-heading")).toContainText("屋主・");
+    await expect(menu.getByTestId("avatar-account")).toHaveCount(0);
+    await expect(menu.getByTestId("reset-demo")).toHaveCount(0);
+    await expect(menu.getByTestId("locale-zh")).toBeFocused();
+    await expect(menu.locator("form")).toHaveAttribute("method", "post");
+    await expect(menu.locator("form")).toHaveAttribute("action", "/api/auth/sign-out");
+    for (const id of ["avatar-language", "locale-zh", "locale-en", "sign-out"]) await assertShellControl(menu.getByTestId(id), `owner ${id}`);
+    await page.keyboard.press("Shift+Tab");
+    await expect(menu.getByTestId("sign-out")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(menu.getByTestId("locale-zh")).toBeFocused();
+    if (!desktop) {
+      const box = await menu.boundingBox();
+      expect(Math.abs(box!.y + box!.height - size.height)).toBeLessThanOrEqual(1);
+    }
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect(avatar).toBeFocused();
+    await avatar.click();
+    await page.getByTestId("shell-dim").click({ position: { x: 2, y: 2 } });
+    await expect(menu).toHaveCount(0);
+    await expect(avatar).toBeFocused();
+
+    if (!desktop) {
+      const more = nav.locator('[data-area="more"]');
+      await more.click();
+      const sheet = page.getByTestId("more-menu");
+      await expect(sheet.locator('a[href="/o/approvals"]')).toBeFocused();
+      const hrefs = await sheet.locator("a").evaluateAll(links => links.map(link => link.getAttribute("href")));
+      expect(hrefs[0]).toBe("/o/approvals");
+      expect(hrefs.slice(1).every(href => href?.startsWith("/o/repair-policy/"))).toBeTruthy();
+      for (const control of await sheet.locator("a").all()) await assertShellControl(control, "owner more entry");
+      const box = await sheet.boundingBox();
+      expect(Math.abs(box!.y + box!.height - size.height)).toBeLessThanOrEqual(1);
+      await page.keyboard.press("Escape");
+      await expect(sheet).toHaveCount(0);
+      await expect(more).toBeFocused();
+      await more.click();
+      await sheet.locator('a[href="/o/approvals"]').click();
+      await expect(page).toHaveURL(/\/o\/approvals$/);
+      await expect(sheet).toHaveCount(0);
+      await expect(more).toHaveAttribute("aria-current", "page");
+    }
+    for (const path of ["/o", "/o/statements"]) {
+      await page.goto(path);
+      await settle(page);
+      await expect(nav.locator(`[data-area="${path === "/o" ? "home" : "statements"}"]`)).toHaveAttribute("aria-current", "page");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      mkdirSync(OUT, { recursive: true });
+      await page.screenshot({ path: resolve(OUT, `shell-owner-${path === "/o" ? "home" : "statements"}-${size.name}.png`), fullPage: true, animations: "disabled" });
+    }
+    await avatar.click();
+    await page.getByTestId("avatar-menu").getByTestId("locale-en").click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page).toHaveURL(/\/o\/statements$/);
+    await expect(page.getByTestId("avatar-menu")).toHaveCount(0);
+  });
+}
