@@ -1,7 +1,7 @@
 import { brandV3ReadForOrg } from "./brand-v3";
 import { guardEffectiveSession, withEffectiveReadAuthority } from "./b017-custom-role-governance";
 import { PENDING_TENANT_REPORT_SQL } from "./b3-payment-eligibility";
-import { tx } from "./db";
+import { query, tx } from "./db";
 import { FlowError, logServerError } from "./errors";
 import { requireOrgScope } from "./org-guard";
 import { assertPerm } from "./perms";
@@ -34,7 +34,7 @@ export type MoneyMonthBills = { state: "off" } | { state: "unavailable" } | {
 };
 export type MoneyMonthReport = {
   id: string; leaseId: string; place: string; tenantName: string | null;
-  /** B-003 assigned payee, projected under staff RLS; never bank details or a property-owner guess. */
+  /** B-003 payee matched to the enabled B-010 audit collector; no bank details. */
   ownerPayee: { displayName: string | null } | null;
   amountMinor: string; currency: string; paidOn: string; submittedAt: string;
   source: "tenant_portal"; bankTransactionId: string | null; proofFileId: string | null;
@@ -48,7 +48,7 @@ export type MoneyMonthReports = { state: "off" } | { state: "unavailable" } | {
   otherScope: "all_pending";
   attached: MoneyMonthReport[]; other: MoneyMonthReport[]; nextCursor: string | null;
 };
-type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx; now?: () => Date };
+type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx; now?: () => Date; proxyOwners?: typeof readMoneyProxyOwners };
 type BillsInput = { month: string; status?: MoneyMonthFilterStatus; cursor?: string };
 type ReportsInput = { month: string; cursor?: string };
 
@@ -199,32 +199,78 @@ SELECT c.today::text, c.timezone, summary.*
        (SELECT count(*)::int FROM bill_rows WHERE currency_count <> 1) AS invalid_currencies
   FROM selected_reports) summary CROSS JOIN calendar c`;
 
+// Shared with the month projection, so stale sheets cannot bypass the B-003 checks.
+const PROXY_PAYEE_JOIN_SQL = `
+  JOIN leases l ON l.id = p.lease_id AND l.org_id = $1
+  LEFT JOIN bank_accounts payee ON payee.id = l.payee_bank_account_id AND payee.org_id = $1
+    AND payee.archived_at IS NULL AND payee.show_to_tenants
+    AND (payee.property_id IS NULL OR payee.property_id = l.property_id)`;
+
 // $4 group (other first), $5 submitted timestamp (full microseconds), $6 id, $7 lookahead.
 export const REPORTS_LIST_SQL_FOR_TEST = `${POPULATION_SQL}
 SELECT p.id::text, p.lease_id::text AS "leaseId", p.amount_minor::text AS "amountMinor", p.currency::text,
        p.paid_on::text AS "paidOn", to_char(p.submitted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "submittedAt",
        p.source, p.bank_transaction_id::text AS "bankTransactionId", p.proof_file_id::text AS "proofFileId",
        pr.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place, c.display_name AS "tenantName",
+       payee.owner_contact_id::text AS "ownerPayeeContactId",
        CASE WHEN payee.owner_contact_id IS NOT NULL
          THEN jsonb_build_object('displayName', payee_owner.display_name) ELSE NULL END AS "ownerPayee",
        coalesce((SELECT jsonb_agg(jsonb_build_object('leaseId', a.lease_id::text, 'month', to_char(a.month, 'YYYY-MM'))
            ORDER BY a.month, a.lease_id) FROM attachments a WHERE a.report_id = p.id), '[]'::jsonb) AS "billRows",
        coalesce((SELECT min(a.attachment) FROM attachments a WHERE a.report_id = p.id), 'other') AS attachment
   FROM selected_reports p
-  JOIN leases l ON l.id = p.lease_id AND l.org_id = $1
+  ${PROXY_PAYEE_JOIN_SQL}
   JOIN properties pr ON pr.id = l.property_id AND pr.org_id = $1
   JOIN units u ON u.id = l.unit_id AND u.org_id = $1
   LEFT JOIN rooms r ON r.id = l.target_room_id AND r.org_id = $1
   LEFT JOIN contacts c ON c.id = p.payer_contact_id AND c.org_id = $1
   -- A company default cannot be an owner payee. Only the explicitly assigned,
   -- active, property-compatible B-003 account can open M-PROXY. No sealed account-number read.
-  LEFT JOIN bank_accounts payee ON payee.id = l.payee_bank_account_id AND payee.org_id = $1
-    AND payee.archived_at IS NULL AND payee.show_to_tenants
-    AND (payee.property_id IS NULL OR payee.property_id = l.property_id)
   LEFT JOIN contacts payee_owner ON payee_owner.id = payee.owner_contact_id AND payee_owner.org_id = $1
     AND payee_owner.is_owner AND payee_owner.archived_at IS NULL
  WHERE ($4::int IS NULL OR (p.group_order, p.submitted_at, p.id) > ($4::int, $5::timestamptz, $6::uuid))
  ORDER BY p.group_order, p.submitted_at, p.id LIMIT $7`;
+
+// B-010 tables deny authenticated reads and its collector RPC requires a writable
+// context. This SELECT uses the existing server connection only AFTER RLS admission,
+// constrained to the admitted org and payment IDs. Never call the context-lock RPC here.
+export const MONEY_PROXY_OWNERS_SQL = `
+SELECT p.id::text, lc.owner_contact_id::text AS "ownerContactId"
+  FROM payments p
+  JOIN organizations o ON o.id = p.org_id
+  JOIN platform_settings f ON f.key = 'payment_results_v2'
+  JOIN app.b010_lease_collectors lc ON lc.org_id = p.org_id AND lc.lease_id = p.lease_id
+ WHERE p.org_id = $1 AND p.id = ANY($2::uuid[]) AND lc.collector = 'owner'
+   AND o.feature_flags->'payment_results_v2' = 'true'::jsonb
+   AND f.value->'enabled' = 'true'::jsonb
+   AND jsonb_typeof(f.value->'allowed_org_ids') = 'array'
+   AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)`;
+async function readMoneyProxyOwners(orgId: string, paymentIds: string[]) {
+  if (!paymentIds.length) return [];
+  return (await query<{ id: string; ownerContactId: string }>(MONEY_PROXY_OWNERS_SQL, [orgId, paymentIds])).rows;
+}
+
+/** Same-request read only. The existing writer remains the sole, idempotent write path. */
+export async function moneyProxyConfirmationState(session: Session, paymentId: string, deps: Deps = {}) {
+  const admitted = await guardEffectiveSession(session, "pay.record");
+  assertPerm(admitted, "pay.record");
+  return (deps.transaction ?? tx)(admitted.userId, client =>
+    withEffectiveReadAuthority(client, admitted, "pay.record", async () => {
+      const staff = await client.query<{ ok: boolean | null }>(
+        "SELECT app.has_role($1::uuid, '{admin,manager,accountant}'::org_role[]) AS ok", [admitted.orgId]);
+      if (staff.rows[0]?.ok !== true) throw new FlowError("errors.forbidden");
+      const payment = (await client.query<{ status: string; ownerContactId: string | null }>(`
+        SELECT p.status::text, payee.owner_contact_id::text AS "ownerContactId"
+          FROM payments p ${PROXY_PAYEE_JOIN_SQL}
+         WHERE p.org_id = $1 AND p.id = $2`, [admitted.orgId, paymentId])).rows[0];
+      if (!payment) throw new FlowError("errors.notFound");
+      if (payment.status === "confirmed") return "already_confirmed" as const;
+      if (payment.status !== "submitted" || !payment.ownerContactId) return "proxy_unavailable" as const;
+      const owners = await (deps.proxyOwners ?? readMoneyProxyOwners)(admitted.orgId, [paymentId]);
+      return owners.some(owner => owner.id === paymentId && owner.ownerContactId === payment.ownerContactId)
+        ? "available" as const : "proxy_unavailable" as const;
+    }), requireOrgScope(admitted), { isolation: "repeatable read", readOnly: true });
+}
 
 type Cursor = { v: 1; kind: "bills" | "reports"; org: string; month: string; status: MoneyMonthStatus | null; date: string; id: string; group?: number };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -325,9 +371,16 @@ export async function moneyMonthReports(session: Session, input: ReportsInput, d
         const params = [admitted.orgId, month, now];
         const summary = (await client.query<ReportsSummary>(REPORTS_SUMMARY_SQL_FOR_TEST, params)).rows[0];
         if (!summary || summary.invalid_currencies !== 0) throw new Error("Incomplete report summary");
-        const page = (await client.query<MoneyMonthReport>(REPORTS_LIST_SQL_FOR_TEST,
+        const page = (await client.query<MoneyMonthReport & { ownerPayeeContactId: string | null }>(REPORTS_LIST_SQL_FOR_TEST,
           [...params, cursor?.group ?? null, cursor?.date ?? null, cursor?.id ?? null, MONEY_MONTH_LIST_LIMIT + 1])).rows;
-        const rows = page.slice(0, MONEY_MONTH_LIST_LIMIT), last = rows.at(-1);
+        const visible = page.slice(0, MONEY_MONTH_LIST_LIMIT);
+        const candidates = visible.filter(row => row.ownerPayeeContactId);
+        const owners = await (deps.proxyOwners ?? readMoneyProxyOwners)(admitted.orgId, candidates.map(row => row.id));
+        const rows = visible.map(({ ownerPayeeContactId, ...row }) => ({ ...row,
+          ownerPayee: owners.some(owner => owner.id === row.id && owner.ownerContactId === ownerPayeeContactId)
+            ? row.ownerPayee : null,
+        }));
+        const last = rows.at(-1);
         return { state: "ready" as const, month: input.month, today: summary.today, timezone: summary.timezone, yourTurn: summary.count, attachedCount: summary.attached,
           otherCount: summary.other, otherScope: "all_pending" as const,
           attached: rows.filter(r => r.attachment !== "other"), other: rows.filter(r => r.attachment === "other"),

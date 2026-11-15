@@ -10,20 +10,19 @@ import { actionConfirmPayment } from "../../../../server/actions";
 import { CompletionCheck } from "../../completion-check";
 
 type Details = { paymentId: string; ownerName: string; target: string; amount: string; date: string; locale: Locale; returnTo: string };
-type Step = "confirm" | "done";
+type Step = "confirm" | "done" | "already_confirmed" | "proxy_unavailable";
 
 /** Uses the existing action; no client-supplied owner identity enters the write. */
 export function ProxyConfirmation(props: Details) {
   const [open, setOpen] = useState(false);
-  const [completed, setCompleted] = useState(false);
+  const [settled, setSettled] = useState(false);
   const router = useRouter();
-  const trigger = useRef<HTMLButtonElement>(null);
   return <>
-    <button ref={trigger} type="button" className="btn o" data-testid="confirm-owner-payment" disabled={completed}
+    <button type="button" className="btn o" data-testid="confirm-owner-payment" disabled={settled}
       onClick={() => setOpen(true)}>{moneyPageCopy(props.locale).confirm}</button>
-    {open && <ProxySheet {...props} onClose={done => {
-      setOpen(false); setCompleted(done); trigger.current?.focus();
-      if (done) router.refresh();
+    {open && <ProxySheet {...props} onClose={refresh => {
+      setOpen(false); setSettled(refresh);
+      if (refresh) router.refresh();
     }} />}
   </>;
 }
@@ -34,6 +33,11 @@ export function ProxySheetBody({ ownerName, target, amount, date, locale, step, 
   const copy = moneyPageCopy(locale), own = ownStatusCopy(locale);
   return step === "done" ? <>
     <p role="status" data-testid="proxy-done"><CompletionCheck />{own.proxyDone.replace("{屋主}", ownerName)}</p>
+    <button type="button" className="v3-proxy-text" onClick={close}>{copy.proxyClose}</button>
+  </> : step !== "confirm" ? <>
+    <p role={step === "proxy_unavailable" ? "alert" : "status"}>
+      {step === "already_confirmed" ? copy.alreadyConfirmed : copy.proxyError}
+    </p>
     <button type="button" className="v3-proxy-text" onClick={close}>{copy.proxyClose}</button>
   </> : <form onSubmit={event => { event.preventDefault(); submit(); }} aria-busy={busy}>
     <p>{own.proxyNote}</p>
@@ -47,27 +51,30 @@ export function ProxySheetBody({ ownerName, target, amount, date, locale, step, 
   </form>;
 }
 
-export function ProxySheet(props: Details & { onClose: (done: boolean) => void }) {
+export function ProxySheet(props: Details & { onClose: (refresh: boolean) => void }) {
   const [step, setStep] = useState<Step>("confirm");
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
   const inFlight = useRef(false), dialog = useRef<HTMLDialogElement>(null), title = useRef<HTMLHeadingElement>(null);
   const id = useId();
   useEffect(() => {
-    const element = dialog.current, previous = document.activeElement as HTMLElement | null;
+    const element = dialog.current;
     element?.showModal(); title.current?.focus();
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { element?.close(); document.body.style.overflow = overflow; if (previous?.isConnected) previous.focus(); };
+    return () => { element?.close(); document.body.style.overflow = overflow; document.getElementById("money-month-heading")?.focus(); };
   }, []);
   useEffect(() => { title.current?.focus(); }, [step]);
-  const close = () => { if (!inFlight.current) props.onClose(step === "done"); };
+  const close = () => { if (!inFlight.current) props.onClose(step !== "confirm"); };
   async function submit() {
-    if (inFlight.current || step === "done") return;
+    if (inFlight.current || step !== "confirm") return;
     inFlight.current = true; setBusy(true); setFailed(false);
     const data = new FormData();
     data.set("paymentId", props.paymentId); data.set("returnTo", props.returnTo);
     data.set("proxyOwnerConfirmed", "true"); data.set("presentation", "owner-proxy");
-    try { await actionConfirmPayment(data); setStep("done"); }
+    try {
+      const outcome = await actionConfirmPayment(data);
+      setStep(outcome === "confirmed" ? "done" : outcome);
+    }
     catch { setFailed(true); }
     finally { inFlight.current = false; setBusy(false); }
   }

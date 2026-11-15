@@ -59,22 +59,37 @@ test("M-PROXY reuses actionConfirmPayment: inline success, failures stay open, p
   const selected = source.statements.filter(node => ts.isFunctionDeclaration(node) && ["actionConfirmPayment", "bounce", "isRedirect"].includes(node.name?.text ?? ""));
   const code = ts.transpileModule(selected.map(node => node.getText(source)).join("\n"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   for (const failAt of [null, "consent", "guard", "write"] as const) {
-    const events: string[] = [], exports: Record<string, (form: FormData) => Promise<void>> = {};
+    const events: string[] = [], exports: Record<string, (form: FormData) => Promise<unknown>> = {};
     const session = { role: "manager" };
     const failure = new FlowError("errors.forbidden");
     const step = (name: string) => { events.push(name); if (failAt === name) throw failure; };
     new Function("exports", "paymentReturnTo", "requireCurrentConsent", "text", "guardEffectiveSession", "getSession",
-      "confirmPayment", "redirect", "FlowError", "readProxyOwnerConfirmed", code)(exports, paymentReturnTo,
+      "confirmPayment", "redirect", "FlowError", "readProxyOwnerConfirmed", "moneyProxyConfirmationState", code)(exports, paymentReturnTo,
       async () => step("consent"), (v: unknown) => String(v ?? ""),
       async (s: unknown, key: string) => { assert.equal(s, session); assert.equal(key, "pay.record"); step("guard"); return s; },
       async () => session,
       async (s: unknown, id: string, options: unknown) => { assert.equal(s, session); assert.equal(id, "report");
         assert.deepEqual(options, { proxyOwnerConfirmed: true, source: "staff_ui" }); step("write"); },
-      () => assert.fail("inline mode must not redirect"), FlowError, (value: unknown) => value === "true");
+      () => assert.fail("inline mode must not redirect"), FlowError, (value: unknown) => value === "true", async () => { step("read"); return "available"; });
     const form = new FormData(); form.set("paymentId", "report"); form.set("proxyOwnerConfirmed", "true");
     form.set("presentation", "owner-proxy"); form.set("returnTo", "//untrusted");
     if (failAt) await assert.rejects(exports.actionConfirmPayment(form), error => error === failure);
-    else assert.equal(await exports.actionConfirmPayment(form), undefined);
-    assert.deepEqual(events, failAt === "consent" ? ["consent"] : failAt === "guard" ? ["consent", "guard"] : ["consent", "guard", "write"]);
+    else assert.equal(await exports.actionConfirmPayment(form), "confirmed");
+    assert.deepEqual(events, failAt === "consent" ? ["consent"] : failAt === "guard" ? ["consent", "guard"] : ["consent", "guard", "read", "write"]);
+  }
+});
+
+test("M-PROXY inline terminal outcomes never call the writer or redirect", async () => {
+  const source = ts.createSourceFile("actions.ts", readFileSync("src/server/actions.ts", "utf8"), ts.ScriptTarget.Latest, true);
+  const selected = source.statements.filter(node => ts.isFunctionDeclaration(node) && ["actionConfirmPayment", "bounce", "isRedirect"].includes(node.name?.text ?? ""));
+  const code = ts.transpileModule(selected.map(node => node.getText(source)).join("\n"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  for (const state of ["proxy_unavailable", "already_confirmed"]) {
+    const exports: Record<string, (form: FormData) => Promise<unknown>> = {};
+    new Function("exports", "paymentReturnTo", "requireCurrentConsent", "text", "guardEffectiveSession", "getSession",
+      "confirmPayment", "redirect", "FlowError", "readProxyOwnerConfirmed", "moneyProxyConfirmationState", code)(exports,
+      paymentReturnTo, async () => {}, String, async (s: unknown) => s, async () => ({}),
+      () => assert.fail("must not write"), () => assert.fail("must not redirect"), FlowError, () => true, async () => state);
+    const form = new FormData(); form.set("paymentId", "report"); form.set("proxyOwnerConfirmed", "true"); form.set("presentation", "owner-proxy");
+    assert.equal(await exports.actionConfirmPayment(form), state);
   }
 });

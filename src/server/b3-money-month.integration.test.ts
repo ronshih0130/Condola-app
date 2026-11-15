@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { BILLS_LIST_SQL_FOR_TEST, BILLS_SUMMARY_SQL_FOR_TEST, REPORTS_LIST_SQL_FOR_TEST, REPORTS_SUMMARY_SQL_FOR_TEST,
-  moneyMonthBills, moneyMonthReports, type MoneyMonthStatus } from "./b3-money-month";
+  moneyMonthBills, moneyMonthReports, moneyProxyConfirmationState, type MoneyMonthStatus } from "./b3-money-month";
 import { governCustomRole, resolveCustomRoleSession } from "./b017-custom-role-governance";
 import { staffPaymentTurns } from "./b3-payment-turns";
 import { staffOverdueTurns } from "./b3-overdue-turns";
@@ -20,10 +20,12 @@ const ON = { v3: async () => true, now: () => new Date("2030-05-01T12:00:00Z") }
 const denied = (e: unknown) => e instanceof FlowError && e.key === "errors.forbidden";
 const savedCustom = process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
 let savedSetting: unknown;
+let savedPaymentSetting: unknown;
 let db: Client;
 test.before(async () => {
   db = new Client({ connectionString: process.env.DATABASE_URL }); await db.connect();
   savedSetting = (await query<{ value: unknown }>("SELECT value FROM platform_settings WHERE key = 'custom_roles'")).rows[0]?.value;
+  savedPaymentSetting = (await query<{ value: unknown }>("SELECT value FROM platform_settings WHERE key = 'payment_results_v2'")).rows[0]?.value;
   process.env.CUSTOM_ROLES_ORG_ALLOWLIST = "";
 });
 test.after(async () => {
@@ -31,6 +33,9 @@ test.after(async () => {
     if (savedSetting === undefined) await query("DELETE FROM platform_settings WHERE key = 'custom_roles'");
     else await query(`INSERT INTO platform_settings (key, value) VALUES ('custom_roles', $1::jsonb)
       ON CONFLICT (key) DO UPDATE SET value = excluded.value`, [JSON.stringify(savedSetting)]);
+    if (savedPaymentSetting === undefined) await query("DELETE FROM platform_settings WHERE key = 'payment_results_v2'");
+    else await query(`INSERT INTO platform_settings (key, value) VALUES ('payment_results_v2', $1::jsonb)
+      ON CONFLICT (key) DO UPDATE SET value = excluded.value`, [JSON.stringify(savedPaymentSetting)]);
   } finally {
     if (savedCustom === undefined) delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST; else process.env.CUSTOM_ROLES_ORG_ALLOWLIST = savedCustom;
     await db?.end();
@@ -576,6 +581,14 @@ test("mixed invoice currencies in one lease/month are unavailable, never silentl
 
 // B-085 part 1 / M-PROXY. These cases intentionally use only fixture SQL + the
 // authenticated read-only reader: they never invoke a notification-producing writer.
+async function proxyCollector(o: Org, l: Lease, owner: string) {
+  await query(`INSERT INTO app.b010_lease_collectors (org_id, lease_id, collector, owner_contact_id)
+    VALUES ($1, $2, 'owner', $3)`, [o.orgId, l.id, owner]);
+  await query(`UPDATE organizations SET feature_flags = feature_flags || '{"payment_results_v2":true}'::jsonb WHERE id = $1`, [o.orgId]);
+  await query(`INSERT INTO platform_settings (key, value) VALUES ('payment_results_v2',
+    jsonb_build_object('enabled', true, 'allowed_org_ids', jsonb_build_array($1::text)))
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value`, [o.orgId]);
+}
 test("M-PROXY B-003 owner payee, company/default/unassigned, archived and property-mismatch accounts", async () => {
   const o = await org(), l = await lease(o);
   const owner = (await query<{ id: string }>(`INSERT INTO contacts (org_id, is_owner, display_name)
@@ -590,12 +603,35 @@ test("M-PROXY B-003 owner payee, company/default/unassigned, archived and proper
   await query("UPDATE leases SET payee_bank_account_id = $2 WHERE id = $1", [l.id, companyAccount]);
   assert.equal((await read()).ownerPayee, null);
   await query("UPDATE leases SET payee_bank_account_id = $2 WHERE id = $1", [l.id, ownerAccount]);
+  assert.equal((await read()).ownerPayee, null, "B-010 off retains ordinary confirmation without owner name");
+  assert.equal(await moneyProxyConfirmationState(o.staff.manager, payment), "proxy_unavailable");
+  await proxyCollector(o, l, owner);
+  await query("UPDATE organizations SET feature_flags = feature_flags || '{\"payment_results_v2\":false}'::jsonb WHERE id = $1", [o.orgId]);
+  assert.equal((await read()).ownerPayee, null, "org OFF even when platform allows it");
+  assert.equal(await moneyProxyConfirmationState(o.staff.manager, payment), "proxy_unavailable");
+  await query("UPDATE organizations SET feature_flags = feature_flags || '{\"payment_results_v2\":true}'::jsonb WHERE id = $1", [o.orgId]);
+  assert.equal(await moneyProxyConfirmationState(o.staff.manager, payment), "available");
   for (const role of ["admin", "manager", "accountant"] as const) {
     const row = await read(o.staff[role]);
     assert.deepEqual(row.ownerPayee, { displayName: "Synthetic visible owner" });
     assert.doesNotMatch(JSON.stringify(row.ownerPayee), /account|phone|email|contactId/);
   }
+  await query("UPDATE app.b010_lease_collectors SET collector = 'management', owner_contact_id = NULL WHERE org_id = $1 AND lease_id = $2", [o.orgId, l.id]);
+  assert.equal((await read()).ownerPayee, null, "management collector uses ordinary confirmation");
+  assert.equal(await moneyProxyConfirmationState(o.staff.manager, payment), "proxy_unavailable");
+  const otherOwner = (await query<{ id: string }>("INSERT INTO contacts (org_id, is_owner, display_name) VALUES ($1, true, 'Synthetic alternate owner') RETURNING id::text", [o.orgId])).rows[0].id;
+  await query("UPDATE app.b010_lease_collectors SET collector = 'owner', owner_contact_id = $3 WHERE org_id = $1 AND lease_id = $2", [o.orgId, l.id, otherOwner]);
+  assert.equal((await read()).ownerPayee, null, "another owner cannot open the sheet");
+  assert.equal(await moneyProxyConfirmationState(o.staff.manager, payment), "proxy_unavailable");
+  await query("UPDATE app.b010_lease_collectors SET owner_contact_id = $3 WHERE org_id = $1 AND lease_id = $2", [o.orgId, l.id, owner]);
+  for (const value of [{ enabled: false, allowed_org_ids: [o.orgId] }, { enabled: true, allowed_org_ids: [] }]) {
+    await query("UPDATE platform_settings SET value = $1::jsonb WHERE key = 'payment_results_v2'", [JSON.stringify(value)]);
+    assert.equal((await read()).ownerPayee, null);
+    assert.equal(await moneyProxyConfirmationState(o.staff.manager, payment), "proxy_unavailable");
+  }
+  await query("UPDATE platform_settings SET value = $1::jsonb WHERE key = 'payment_results_v2'", [JSON.stringify({ enabled: true, allowed_org_ids: [o.orgId] })]);
   await assert.rejects(moneyMonthReports(o.staff.maintenance, { month: MONTH }, ON), denied);
+  await assert.rejects(moneyProxyConfirmationState(o.staff.maintenance, payment), denied);
   const foreign = await org();
   assert.equal((await reports(foreign.staff.admin)).attached.some(row => row.id === payment), false);
   await query("UPDATE bank_accounts SET archived_at = now() WHERE id = $1", [ownerAccount]);
@@ -619,6 +655,9 @@ test("M-PROXY owner payee also survives the unmatched-report path", async () => 
     VALUES ($1, 'Synthetic owner account', 'TWD', $2, true) RETURNING id::text`, [o.orgId, owner])).rows[0].id;
   await query("UPDATE leases SET payee_bank_account_id = $2 WHERE id = $1", [l.id, account]);
   const payment = await pay(l);
+  const confirmed = await pay(l, { status: "confirmed" });
+  await proxyCollector(o, l, owner);
+  assert.equal(await moneyProxyConfirmationState(o.staff.accountant, confirmed), "already_confirmed");
   const result = await reports(o.staff.accountant);
   assert.deepEqual(result.other.find(row => row.id === payment)?.ownerPayee, { displayName: "Synthetic other owner" });
   assert.equal(result.attached.length, 0);

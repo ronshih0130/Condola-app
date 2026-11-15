@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Client } from "pg";
 import { BILLS_LIST_SQL_FOR_TEST, BILLS_SUMMARY_SQL_FOR_TEST, MONEY_MONTH_LIST_LIMIT, MONEY_MONTH_STATUSES,
-  REPORTS_LIST_SQL_FOR_TEST, REPORTS_SUMMARY_SQL_FOR_TEST, moneyMonthBills, moneyMonthReports, moneyMonthStatus,
+  MONEY_PROXY_OWNERS_SQL, moneyProxyConfirmationState, REPORTS_LIST_SQL_FOR_TEST, REPORTS_SUMMARY_SQL_FOR_TEST, moneyMonthBills, moneyMonthReports, moneyMonthStatus,
   type MoneyMonthBill, type MoneyMonthReport } from "./b3-money-month";
 import { PENDING_TENANT_REPORT_SQL } from "./b3-payment-eligibility";
 import { PAYMENT_TURN_MATTERS_SQL } from "./b3-payment-turns";
@@ -99,8 +99,12 @@ test("M-PROXY reports preserve owner payee metadata for attached and other rows 
   const attached = { ...report(1), ownerPayee: { displayName: "Synthetic owner" } };
   const other = { ...report(2, true), ownerPayee: { displayName: null } };
   const ordinary = report(3);
-  const result = await moneyMonthReports(session, { month }, { ...ON, transaction: mockTx(sql =>
-    ({ rows: sql === REPORTS_SUMMARY_SQL_FOR_TEST ? [reportSummary] : [attached, other, ordinary] })) });
+  const result = await moneyMonthReports(session, { month }, { ...ON,
+    proxyOwners: async (org, ids) => {
+      assert.equal(org, session.orgId); assert.deepEqual(ids, [attached.id, other.id]);
+      return ids.map(id => ({ id, ownerContactId: "owner" }));
+    }, transaction: mockTx(sql => ({ rows: sql === REPORTS_SUMMARY_SQL_FOR_TEST ? [reportSummary]
+      : [{ ...attached, ownerPayeeContactId: "owner" }, { ...other, ownerPayeeContactId: "owner" }, ordinary] })) });
   assert.equal(result.state, "ready");
   if (result.state !== "ready") return;
   assert.deepEqual(result.attached, [attached, ordinary]);
@@ -254,4 +258,56 @@ test("other-report page cursor stays in the other group, with full timestamp pre
   const bad = Buffer.from(JSON.stringify({ v: 1, kind: "reports", org: session.orgId, month, status: null,
     id: id(1), date: "2030-02-30T23:00:00.123456Z", group: 0 })).toString("base64url");
   assert.deepEqual(await moneyMonthReports(session, { month, cursor: bad }, { ...ON, transaction: never }), { state: "unavailable" });
+});
+
+for (const [scenario, owners, expected] of [
+  ["matching collector", [{ id: id(1), ownerContactId: "owner" }], true],
+  ["B-010 off / management / missing collector", [], false],
+  ["other owner", [{ id: id(1), ownerContactId: "other" }], false],
+] as const) test(`M-PROXY reader: ${scenario}`, async () => {
+  const row = { ...report(1), ownerPayee: { displayName: "Owner" }, ownerPayeeContactId: "owner" };
+  const result = await moneyMonthReports(session, { month }, { ...ON, proxyOwners: async () => [...owners],
+    transaction: mockTx(sql => ({ rows: sql === REPORTS_SUMMARY_SQL_FOR_TEST ? [reportSummary] : [row] })) });
+  assert.equal(result.state, "ready");
+  if (result.state !== "ready") return;
+  assert.deepEqual(result.attached[0].ownerPayee, expected ? row.ownerPayee : null);
+  assert.equal("ownerPayeeContactId" in result.attached[0], false);
+});
+
+test("B-010 lookup is org/payment scoped and requires every rollout control plus owner collector", () => {
+  assert.match(MONEY_PROXY_OWNERS_SQL, /p.org_id = \$1 AND p.id = ANY\(\$2::uuid\[\]\)/);
+  assert.match(MONEY_PROXY_OWNERS_SQL, /lc.org_id = p.org_id AND lc.lease_id = p.lease_id/);
+  assert.match(MONEY_PROXY_OWNERS_SQL, /lc.collector = 'owner'/);
+  assert.match(MONEY_PROXY_OWNERS_SQL, /o.feature_flags->'payment_results_v2' = 'true'::jsonb/);
+  assert.match(MONEY_PROXY_OWNERS_SQL, /f.value->'enabled' = 'true'::jsonb/);
+  assert.match(MONEY_PROXY_OWNERS_SQL, /f.value->'allowed_org_ids' @> jsonb_build_array\(o.id::text\)/);
+  assert.doesNotMatch(MONEY_PROXY_OWNERS_SQL, /INSERT|UPDATE|DELETE|b010_lock_payment_context/);
+});
+
+test("inline read: confirmed short-circuits collector lookup, mismatched/missing payee fails closed", async () => {
+  for (const [status, payee, collector, expected] of [
+    ["confirmed", "owner", "owner", "already_confirmed"],
+    ["submitted", "owner", "owner", "available"],
+    ["submitted", "owner", "other", "proxy_unavailable"],
+    ["submitted", "owner", null, "proxy_unavailable"],
+    ["submitted", null, "owner", "proxy_unavailable"],
+    ["rejected", "owner", "owner", "proxy_unavailable"],
+  ]) {
+    let lookups = 0;
+    const transaction: typeof tx = async (user, fn, scope, options) => {
+      assert.equal(user, session.userId); assert.deepEqual(scope, { orgId: session.orgId, environment: "live" });
+      assert.deepEqual(options, { isolation: "repeatable read", readOnly: true });
+      return fn({ query: async (sql: string, args: unknown[]) => {
+        if (sql.includes("SELECT app.has_role")) return { rows: [{ ok: true }] };
+        assert.deepEqual(args, [session.orgId, id(1)]);
+        return { rows: [{ status, ownerContactId: payee }] };
+      } } as unknown as Client);
+    };
+    assert.equal(await moneyProxyConfirmationState(session, id(1), { transaction,
+      proxyOwners: async (org, ids) => {
+        lookups++; assert.equal(org, session.orgId); assert.deepEqual(ids, [id(1)]);
+        return collector ? [{ id: id(1), ownerContactId: collector }] : [];
+      } }), expected);
+    assert.equal(lookups, status === "submitted" && payee ? 1 : 0);
+  }
 });

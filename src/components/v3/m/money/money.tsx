@@ -48,7 +48,7 @@ export function MoneyPage({ session, month, tab, bills, reports, error, cursor }
         ? <ProxyConfirmation paymentId={report.id} ownerName={displaySampleName(report.ownerPayee.displayName ?? "") || copy.proxyOwner}
           target={[displaySampleName(report.place), displaySampleName(report.tenantName ?? "")].filter(Boolean).join("・")}
           amount={moneyLabel(report.amountMinor, report.currency, locale)} date={date(report.paidOn)} locale={locale} returnTo={returnTo} />
-        : <form action={actionConfirmPayment}>
+        : <form action={async data => { "use server"; await actionConfirmPayment(data); }}>
         <input type="hidden" name="paymentId" value={report.id} />
         <input type="hidden" name="returnTo" value={returnTo} />
         <button type="submit" className="btn o" data-testid="confirm-payment">{copy.confirm}</button>
@@ -72,7 +72,7 @@ export function MoneyPage({ session, month, tab, bills, reports, error, cursor }
     <ErrorBanner t={t} error={error} />
     {error && <Link href={returnTo}>{brandV3TodayCopy(locale).retry}</Link>}
     {can(session, "pay.record") && <Link href="/m/payments/list">{t("i_nav_inbox")}</Link>}
-    <header className="v3-money-lead"><h1>{bills.state === "ready"
+    <header className="v3-money-lead"><h1 id="money-month-heading" tabIndex={-1}>{bills.state === "ready"
       ? text("headline", { month: Number(month.slice(5)), total: bills.counts.all, paid: bills.counts.paid })
       : brandV3NavigationCopy(locale).money}</h1>{supporting && <p data-testid="money-supporting">{supporting}</p>}</header>
     {notice("bills", bills.state)}{reports.state !== "forbidden" && notice("reports", reports.state)}

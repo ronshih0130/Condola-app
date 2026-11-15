@@ -410,3 +410,10 @@ test("輪到你 without report access falls back to 全部: no `reported` bill f
     assert.doesNotMatch(render(data), /money-tab-yours/);
   }
 });
+
+test("month heading persists as focus destination when refresh removes the confirmed report", () => {
+  for (const current of [reports, { ...reports, attached: [], other: [], yourTurn: 0 }]) {
+    const html = render({ reports: current });
+    assert.match(html, /<h1 id="money-month-heading" tabindex="-1">/);
+  }
+});

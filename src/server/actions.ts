@@ -337,6 +337,7 @@ export async function actionRecordPayment(formData: FormData) {
   }
 }
 
+import { moneyProxyConfirmationState } from "./b3-money-month";
 import { readProxyOwnerConfirmed } from "./b010-proxy-confirm-rules";
 
 export async function actionConfirmPayment(formData: FormData) {
@@ -345,13 +346,17 @@ export async function actionConfirmPayment(formData: FormData) {
   const id = text(formData.get("paymentId"));
   try {
     const session = await guardEffectiveSession(await getSession(), "pay.record");
+    const proxyOwnerConfirmed = readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed"));
+    if (formData.get("presentation") === "owner-proxy") {
+      const state = await moneyProxyConfirmationState(session, id);
+      if (state !== "available") return state;
+    }
     await confirmPayment(session, id, {
-      proxyOwnerConfirmed: readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed")),
+      proxyOwnerConfirmed,
       source: "staff_ui",
     });
-    // M-PROXY keeps the modal mounted for its completion state. This changes only
-    // presentation: the same consent, effective permission and domain write run above.
-    if (formData.get("presentation") === "owner-proxy") return;
+    // M-PROXY keeps the modal mounted for its completion state.
+    if (formData.get("presentation") === "owner-proxy") return "confirmed" as const;
     redirect(returnTo);
   } catch (error) {
     if (formData.get("presentation") === "owner-proxy" && !isRedirect(error)) throw error;

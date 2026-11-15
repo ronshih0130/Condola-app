@@ -79,7 +79,7 @@ export async function LegacyPaymentsList({ session, error, returnTo }: { session
                     ) : null}
                     {canAct && row.status === "submitted" ? (
                       <div className="row">
-                        <form action={actionConfirmPayment}>
+                        <form action={async data => { "use server"; await actionConfirmPayment(data); }}>
                           <input type="hidden" name="paymentId" value={row.id} />
                           {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
                           <button className="btn sm pri" type="submit" data-testid="confirm-payment">
