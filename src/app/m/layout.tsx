@@ -23,7 +23,7 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const path = (await headers()).get("x-pathname") || "";
   await requireCurrentConsent(session, "page", path || "/m");
   const routeDenied = noPermHref(path, session);
-  // Brand 3.0 收款 month page: the two exact month routes have independent bill (stmt.view) and report
+  // Brand 3.0 money month page: the two exact month routes have independent bill (stmt.view) and report
   // (pay.record) readers, so either key admits them under brand_v3. Nested routes keep their gates. The flag
   // is read here only for that case, so the OFF path keeps its reader and redirect order (PLT-46-AC1).
   const moneyV3 = routeDenied && /^\/m\/(payments|rent)\/?$/.test(path) && (can(session, "stmt.view") || can(session, "pay.record"))
