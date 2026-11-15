@@ -292,3 +292,10 @@ test("responsive cards, token styling, focus and 44px targets; only existing gat
   assert.match(page,/r.kind==="whole_unit"/);
   assert.doesNotMatch(page,/issueInvite\(|mutateStaffInvite\(|fetch\(/);
 });
+
+test("R2-PROP: audit next/latest links sit in the 44px-scoped wrapper (Codex r2)", () => {
+  const css = readFileSync("public/brand/v3/property.css", "utf8");
+  assert.match(css, /\.v3-property :is\([^)]*\.v3-property-audit a[^)]*\)\s*\{[^}]*min-height:44px/);
+  const tsx = readFileSync("src/components/v3/m/properties/property.tsx", "utf8");
+  assert.match(tsx, /<div className="v3-property-audit">\{auditHistory\}<\/div>/);
+});

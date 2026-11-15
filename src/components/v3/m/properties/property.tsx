@@ -73,7 +73,7 @@ export function PropertyView({data,locale,id,invites=[],legacy,query={},auditHis
         })}</tbody>
       </table></div>}
     {legacy && <PropertyLegacyControls {...legacy} />}
-    {auditHistory}
+    {auditHistory ? <div className="v3-property-audit">{auditHistory}</div> : null}
     {/* Legacy controls keep their shipped labels until their v3 homes exist.
         No existing bulk action exists; scoped form outlines keep zero solid primaries. */}
   </section>;
