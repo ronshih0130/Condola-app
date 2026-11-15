@@ -93,7 +93,8 @@ test("PLT-46-AC1 / PLT-44-AC8: SH-ME/SH-ORG/SH-TRIAL manager OFF preserves marku
     assert.equal(shellProps.showReset, demo && role === "admin");
     assert.equal(shellProps.canSwitchCompany, true);
     assert.equal(shellProps.hasLiveCompany, true);
-    assert.equal(Boolean(shellProps.trialBanner), path === "/m" && role === "admin" && environment === "live");
+    // Eligibility does not depend on the first path (the layout is retained on client navigation); the shell filters by path.
+    assert.equal(Boolean(shellProps.trialBanner), role === "admin" && environment === "live");
     assert.doesNotMatch(html, /class="app"|id="nav-open"/);
     assert.ok(html.includes('data-testid="content"'));
   }
@@ -336,4 +337,17 @@ test("PLT-44-AC15 / PLT-47-AC4 / PLT-50-AC4: shell styles are fully scoped, flat
   assert.match(css, /safe-area-inset-bottom/);
   assert.match(css, /:focus-visible/);
   assert.doesNotMatch(css, /gradient\(|#[a-f0-9]{3,8}\b/i);
+});
+
+test("SH-TRIAL / MGT-98-AC1: the retained /m layout keeps the trial banner across client navigation", () => {
+  // Next.js keeps the /m layout (and its props) when the user navigates inside /m, so the layout
+  // must pass the banner for an eligible admin regardless of the first path; the shell decides by path.
+  const layout = source("src/app/m/layout.tsx");
+  const prop = layout.split("trialBanner={")[1].split("}>")[0];
+  assert.doesNotMatch(prop, /path/, "trial banner eligibility must not depend on the first path");
+  assert.match(prop, /next="\/m"/);
+  // Same props, path changes as on client navigation: /m/units → /m → /m/units.
+  assert.equal(renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m/units" }).includes('data-testid="trial-banner"'), false);
+  assert.equal(renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m" }).includes('data-testid="trial-banner"'), true);
+  assert.equal(renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m/units" }).includes('data-testid="trial-banner"'), false);
 });

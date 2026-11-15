@@ -36,7 +36,9 @@ export default async function ManagerLayout({ children }: { children: React.Reac
       canSwitchCompany={session.kind === "staff" && Boolean(session.role && session.liveOrgId) && (!session.customRole || session.customRole.assigned === false)}
       todayTitle={shellTodayTitle(new Date(), session.locale)}
       buildSha={BUILD_SHA}
-      trialBanner={banner && (path || "/m") === "/m" && session.role === "admin" && session.environment === "live" ? <TrialBanner shellV3 locale={session.locale} banner={banner} next={path || "/m"} /> : null}>
+      // The layout is kept across client navigation, so eligibility must not depend on the first path;
+      // the shell shows the banner only on /m (SH-TRIAL), and dismissal returns to /m.
+      trialBanner={banner && session.role === "admin" && session.environment === "live" ? <TrialBanner shellV3 locale={session.locale} banner={banner} next="/m" /> : null}>
       {children}
     </ManagerShellV3>;
   }
