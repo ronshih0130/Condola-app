@@ -1,3 +1,4 @@
+import { tenantPaymentHistoryCopy } from "../tenant-payment-history";
 import type { Locale } from "../index";
 
 // screens.md: money month page A/B (PR-011), B3A-PAY / B3A-PAY-ROW;
@@ -19,4 +20,7 @@ const en: typeof zh = {
   pending: "{count} awaiting your confirmation", confirm: "Confirm payment", confirmed: "Payment confirmed",
   tenantReport: "Tenant report", bank: "Bank statement", waiting: "Waiting for tenant payment", dueDate: "Due {date}",
 };
-export const moneyPageCopy = (locale: Locale) => locale === "en" ? en : zh;
+export const moneyPageCopy = (locale: Locale) => ({
+  ...(locale === "en" ? en : zh),
+  next: tenantPaymentHistoryCopy(locale).next, first: tenantPaymentHistoryCopy(locale).first,
+});

@@ -28,6 +28,10 @@ html[data-brand="v2"][data-brand-v3] .v3-money-turn { display: flex; align-items
 html[data-brand="v2"][data-brand-v3] .v3-money .btn.o { border: 1px solid var(--c-primary); background: var(--c-surface); color: var(--c-primary); min-height: 44px; }
 html[data-brand="v2"][data-brand-v3] .v3-money-notice { padding: 16px; color: var(--c-text-2); }
 html[data-brand="v2"][data-brand-v3] .v3-money :is(a, button):focus-visible { outline: 2px solid var(--c-focus); outline-offset: 3px; }
+html[data-brand="v2"][data-brand-v3] .v3-money > a,
+html[data-brand="v2"][data-brand-v3] .v3-money-notice a,
+html[data-brand="v2"][data-brand-v3] .v3-money-paging a { display: inline-flex; align-items: center; min-height: 44px; color: var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-money-paging { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; }
 @media (max-width: 63.999em) {
   html[data-brand="v2"][data-brand-v3] .v3-money-lead { padding: 20px; }
   html[data-brand="v2"][data-brand-v3] .v3-money-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

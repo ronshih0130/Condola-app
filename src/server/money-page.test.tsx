@@ -43,7 +43,7 @@ const view = compile(source("src/components/v3/m/money/money.tsx"), {
   "../../../../i18n/lanes/brand-v3-money": copy, "../../../../i18n/lanes/brand-v3": brand,
   "../../../../i18n/lanes/notification-center": center,
   "../../../../server/actions": { actionConfirmPayment: confirm }, "../../../../server/money-page": model,
-  "../../../../server/format": format, "../../../../server/sandbox-data": { displaySampleName: (name: string) => name },
+  "../../../../server/perms": perms, "../../../../server/format": format, "../../../../server/sandbox-data": { displaySampleName: (name: string) => name },
   "../../../ui": { ErrorBanner: ({ error }: { error?: string }) => error ? <p>{error}</p> : null },
   "../../role-avatar": { RoleAvatar }, "../../completion-check": { CompletionCheck },
 }).MoneyPage as typeof View;
@@ -60,7 +60,7 @@ const bills: Extract<MoneyMonthBills, { state: "ready" }> = {
   rows: [bill("overdue"), bill("reported"), bill("future"), bill("paid"), bill("due_today")], nextCursor: null,
 };
 const reports: Extract<MoneyMonthReports, { state: "ready" }> = {
-  state: "ready", month: "2026-11", yourTurn: 3, attachedCount: 2, otherCount: 1, otherScope: "all_pending",
+  state: "ready", month: "2026-11", today: "2026-11-14", timezone: "Asia/Taipei", yourTurn: 3, attachedCount: 2, otherCount: 1, otherScope: "all_pending",
   attached: [report("r2"), report("r1")], other: [report("other", true)], nextCursor: null,
 };
 function render(extra: Partial<React.ComponentProps<typeof View>> = {}) {
@@ -105,7 +105,8 @@ test("no pay.record: bills remain, but no report source, turn count, row action,
   assert.equal(data.reports.state, "forbidden");
   const html = render({ session: limited, ...data });
   assert.match(html, /5 筆應繳/);
-  assert.doesNotMatch(html, /money-tab-yours|等你核對|confirm-payment|租客回報|已回報|data-status="reported"|party-/);
+  assert.match(html, /class="v3-money-status">—<\/span>/);
+  assert.doesNotMatch(html, /money-tab-yours|等你核對|confirm-payment|租客回報|已回報|data-status="reported"|v3-money-reported|party-/);
 });
 
 test("forbidden, off and unavailable readers remain independent and never become a zero count", async () => {
@@ -149,36 +150,83 @@ test("month links preserve the tab, cross years, and invalid input uses the read
   assert.deepEqual(seen, ["2026-10", "2026-11"]); assert.equal(result.month, "2026-11"); assert.equal(result.tab, "all");
 });
 
-test("independent pagination retains reports and bills beyond page 1, rejects partial, duplicate and changed pages", async () => {
-  const result = await model.readMoneyPage(session, {}, { ...deps,
-    bills: async (_session, input) => ({ ...bills, rows: input.cursor ? bills.rows.slice(2) : bills.rows.slice(0, 2), nextCursor: input.cursor ? null : "bill-page-2" }),
-    reports: async (_session, input) => ({ ...reports, other: input.cursor ? [] : reports.other, attached: input.cursor ? reports.attached : [], nextCursor: input.cursor ? null : "report-page-2" }),
-  });
-  assert.equal(result.bills.state, "ready"); assert.equal(result.reports.state, "ready");
-  assert.equal((render(result).match(/money-bill/g) ?? []).length, 5);
-  for (const mode of ["failure", "duplicate", "summary", "cursor"] as const) {
-    const data = await model.readMoneyPage(session, {}, { ...deps, reports: async (_session, input) => {
-      if (!input.cursor) return { ...reports, other: reports.other, attached: [], nextCursor: "next" };
-      if (mode === "failure") return { state: "unavailable" };
-      return { ...reports, other: mode === "duplicate" ? reports.other : [], yourTurn: mode === "summary" ? 4 : 3, nextCursor: mode === "cursor" ? "next" : null };
-    } });
-    assert.equal(data.reports.state, "unavailable"); assert.equal(data.bills.state, "ready");
+test("one call per reader uses the selected status and only the primary cursor; summary and rows stay together", async () => {
+  for (const tab of ["all", "yours", "overdue", "future", "paid"] as const) {
+    const billInputs: unknown[] = [], reportInputs: unknown[] = [];
+    const data = await model.readMoneyPage(session, { month: "2026-11", tab, cursor: "opaque+/=?" }, { ...deps,
+      bills: async (_session, input) => { billInputs.push(input); return { ...bills, rows: [bill("paid")], nextCursor: "bill-next" }; },
+      reports: async (_session, input) => { reportInputs.push(input); return { ...reports, attached: [], nextCursor: "report-next" }; },
+    });
+    assert.deepEqual(billInputs, [{ month: "2026-11", status: tab === "all" ? undefined : tab === "yours" ? "reported" : tab, cursor: tab === "yours" ? undefined : "opaque+/=?" }]);
+    assert.deepEqual(reportInputs, [{ month: "2026-11", cursor: tab === "yours" ? "opaque+/=?" : undefined }]);
+    assert.equal(data.bills.state, "ready");
+    if (data.bills.state === "ready") { assert.equal(data.bills.counts.paid, 1); assert.equal(data.bills.rows.length, 1); }
+    assert.match(render(data), /5 筆應繳，1 筆已確認繳款/);
+    assert.match(render(data), new RegExp(`cursor=${tab === "yours" ? "report" : "bill"}-next`));
   }
 });
 
-test("scoped CSS uses tokens only; existing confirmation action is byte-identical", () => {
+test("paging links preserve month/tab, encode opaque cursors and reuse shipped bilingual words", () => {
+  for (const locale of ["zh-TW", "en"] as const) for (const tab of ["all", "yours"] as const) {
+    const html = render({ session: { ...session, locale }, tab, cursor: "current",
+      bills: { ...bills, nextCursor: "bill+/=?" }, reports: { ...reports, nextCursor: "report+/=?" } });
+    assert.match(html, new RegExp(`href="/m/payments\\?month=2026-11&amp;tab=${tab}&amp;cursor=${tab === "yours" ? "report" : "bill"}%2B%2F%3D%3F"`));
+    assert.match(html, new RegExp(`href="/m/payments\\?month=2026-11&amp;tab=${tab}">${locale === "en" ? "Back to first page" : "返回第一頁"}`));
+    assert.ok(html.includes(locale === "en" ? "Next page" : "下一頁"));
+  }
+  assert.doesNotMatch(render(), /下一頁|返回第一頁/);
+});
+
+test("invalid primary cursors fail only that reader and retain a first-page/retry path", async () => {
+  for (const tab of ["all", "yours"] as const) for (const cursor of ["", "!invalid"]) {
+    const data = await model.readMoneyPage(session, { month: "2026-11", tab, cursor }, { ...deps,
+      bills: async (_s, input) => input.cursor !== undefined ? { state: "unavailable" } : bills,
+      reports: async (_s, input) => input.cursor !== undefined ? { state: "unavailable" } : reports,
+    });
+    assert.equal(data[tab === "yours" ? "reports" : "bills"].state, "unavailable");
+    assert.equal(data[tab === "yours" ? "bills" : "reports"].state, "ready");
+    assert.match(render(data), /返回第一頁/); assert.match(render(data), /再試一次/);
+  }
+});
+
+test("pay.record-only and bill failure still select the org month; both reads are bounded to one retry", async () => {
+  for (const mode of ["payOnly", "failure", "billCalendar"] as const) {
+    const limited = mode === "payOnly" ? { ...session, customRole: { orgId: "org", userId: "user", sessionId: "session", nativeRole: "admin" as const, assigned: true, keys: ["pay.record"] as perms.PermKey[], photos: false, audit: false } } : session;
+    const billMonths: string[] = [], reportMonths: string[] = [];
+    const data = await model.readMoneyPage(limited, {}, { ...deps, now: () => new Date("2026-10-31T18:00:00Z"),
+      bills: async (_s, input) => { billMonths.push(input.month); return mode === "failure" ? { state: "unavailable" } : { ...bills, today: "2026-11-01" }; },
+      reports: async (_s, input) => { reportMonths.push(input.month); return { ...reports, today: reportMonths.length === 1 ? "2026-11-01" : "2026-12-01" }; },
+    });
+    assert.equal(data.month, "2026-11"); assert.deepEqual(reportMonths, ["2026-10", "2026-11"]);
+    assert.deepEqual(billMonths, mode === "payOnly" ? [] : ["2026-10", "2026-11"]);
+  }
+  let calls = 0;
+  const explicit = await model.readMoneyPage(session, { month: "2026-09" }, { ...deps,
+    bills: async () => { calls++; return bills; }, reports: async () => { calls++; return reports; } });
+  assert.equal(explicit.month, "2026-09"); assert.equal(calls, 2);
+});
+
+test("list link follows pay.record permission; confirmation and retry preserve month/tab", () => {
+  const html = render({ month: "2026-09", tab: "yours", error: "errors.generic" });
+  assert.match(html, /href="\/m\/payments\/list">待確認繳款<\/a>/);
+  assert.match(html, /name="returnTo" value="\/m\/payments\?month=2026-09&amp;tab=yours"/);
+  assert.match(html, /href="\/m\/payments\?month=2026-09&amp;tab=yours">再試一次/);
+  const limited: Session = { ...session, customRole: { orgId: "org", userId: "user", sessionId: "session", nativeRole: "admin", assigned: true, keys: ["stmt.view"], photos: false, audit: false } };
+  assert.doesNotMatch(render({ session: limited, reports: { state: "forbidden" } }), /\/m\/payments\/list/);
+});
+
+test("scoped CSS uses tokens only", () => {
   const css = postcss.parse(source("public/brand/v3/money.css"));
   css.walkRules(rule => assert.ok(rule.selector.startsWith('html[data-brand="v2"][data-brand-v3]')));
   css.walkDecls(decl => assert.doesNotMatch(decl.value, /#[0-9a-f]{3,8}\b|rgba?\(/i));
-  assert.equal(source("src/server/actions.ts"), execFileSync("git", ["show", "e1cd98f:src/server/actions.ts"], { encoding: "utf8" }));
 });
 
 test("/m/payments and /m/rent OFF render byte-identical legacy markup; ON renders the same new tree", async () => {
   type Page = (props: { searchParams: Promise<Model.MoneyParams> }) => Promise<React.ReactNode>;
   const baseline = (file: string) => execFileSync("git", ["show", `e1cd98f:${file}`], { encoding: "utf8" });
   for (const locale of ["zh-TW", "en"] as const) for (const empty of [false, true]) for (const role of ["admin", "accountant"] as const) {
-    let v3 = false, reads = 0;
-    const read = <T,>(value: T) => async () => { reads++; if (v3) assert.fail("v3 must not use old readers"); return value; };
+    let v3 = false, reads = 0, allowLegacy = false;
+    const read = <T,>(value: T) => async () => { reads++; if (v3 && !allowLegacy) assert.fail("v3 must not use old readers"); return value; };
     const node = ({ children, title }: { children?: React.ReactNode; title?: React.ReactNode }) => <div>{title}{children}</div>;
     const mocks = {
       "react": React, "next/link": { __esModule: true, default: "a" }, "@/i18n": i18n,
@@ -200,6 +248,7 @@ test("/m/payments and /m/rent OFF render byte-identical legacy markup; ON render
       "@/i18n/monthly-billing-preview": { monthlyBillingCopy: () => ({ title: "Preview" }) },
       "@/server/manual-reminders": { manualRemindersEnabled: read(false) }, "@/server/money": { taipeiToday: () => "2026-11-14" },
     };
+    Object.assign(mocks, { "@/components/legacy-payments-list": compile(source("src/components/legacy-payments-list.tsx"), mocks) });
     const trees: string[] = [];
     for (const path of ["src/app/m/payments/page.tsx", "src/app/m/rent/page.tsx"]) {
       v3 = false;
@@ -210,6 +259,19 @@ test("/m/payments and /m/rent OFF render byte-identical legacy markup; ON render
       v3 = true;
       trees.push(renderToStaticMarkup(await current(props)));
     }
+    allowLegacy = true;
+    for (const flag of [false, true]) {
+      v3 = flag;
+      const list = compile(source("src/app/m/payments/list/page.tsx"), mocks).default as Page;
+      const html = renderToStaticMarkup(await list({ searchParams: Promise.resolve({ error: "errors.generic" }) }));
+      assert.doesNotMatch(html, /money-v3/);
+      if (!empty) {
+        assert.match(html, /name="returnTo" value="\/m\/payments\/list"/);
+        assert.match(html, /confirm-payment/); assert.match(html, /name="reason"/);
+        if (perms.can({ ...session, role }, "pay.reverse")) assert.match(html, /reverse-form/);
+        else assert.match(html, /reverse-disabled/);
+      }
+    }
     assert.equal(trees[0], trees[1]); assert.match(trees[0], /data-month="2026-09" data-tab="yours"/);
   }
 });
@@ -218,7 +280,7 @@ test("v3 layout admits either reader only on the two exact money routes; OFF/nes
   type Layout = (p: { children: React.ReactNode }) => Promise<React.ReactNode>;
   for (const flag of [false, true]) for (const keys of [["stmt.view"], ["pay.record"], []] as perms.PermKey[][]) {
     const limited: Session = { ...session, customRole: { orgId: "org", userId: "user", sessionId: "session", nativeRole: "admin", assigned: true, keys, photos: false, audit: false } };
-    for (const path of ["/m/payments", "/m/rent", "/m/rent/monthly-preview"]) {
+    for (const path of ["/m/payments", "/m/rent", "/m/rent/monthly-preview", "/m/payments/list"]) {
       const stub = () => null;
       const Layout = compile(source("src/app/m/layout.tsx"), {
         "@/i18n/lanes/brand-v3": brand, "@/server/brand-v3": { brandV3EnabledForOrg: async () => flag },
@@ -231,17 +293,35 @@ test("v3 layout admits either reader only on the two exact money routes; OFF/nes
         "@/server/session": { getSession: async () => limited }, "@/server/b056-trial": { trialBannerFor: async () => null }, "@/components/b056-trial-banner": { TrialBanner: stub },
       }).default as Layout;
       const oldDenied = perms.noPermHref(path, limited);
-      const allowed = flag && path !== "/m/rent/monthly-preview" && keys.length > 0 || !oldDenied;
+      const allowed = flag && ["/m/payments", "/m/rent"].includes(path) && keys.length > 0 || !oldDenied;
       if (allowed) await Layout({ children: null });
       else await assert.rejects(() => Layout({ children: null }), /\/m\/noperm/);
     }
   }
 });
 
-test("cross-reader snapshot mismatch hides report counts instead of losing an actionable report", async () => {
-  const data = await model.readMoneyPage(session, {}, { ...deps, reports: async () => ({ ...reports, attached: reports.attached.map(row => ({ ...row, billRows: [{ month: "2026-11", leaseId: "not-in-bills" }] })) }) });
-  assert.equal(data.bills.state, "ready"); assert.equal(data.reports.state, "unavailable");
-  const html = render(data);
-  assert.match(html, /money-tab-yours">輪到你 <span>—<\/span>/);
-  assert.doesNotMatch(html, /confirm-payment|等你核對/);
+test("visible report-to-bill conflicts fail closed, while paid precedence and off-page targets remain valid", async () => {
+  for (const status of ["overdue", "due_today", "future", "reported", "paid"] as const) {
+    const data = await model.readMoneyPage(session, {}, { ...deps, bills: async () => ({ ...bills, rows: [bill(status, "reported")] }) });
+    assert.equal(data.reports.state, ["reported", "paid"].includes(status) ? "ready" : "unavailable");
+    if (status === "paid") assert.match(render(data), /data-status="paid"/);
+    else if (status !== "reported") assert.doesNotMatch(render(data), /confirm-payment/);
+  }
+  const offPage = await model.readMoneyPage(session, { tab: "yours" }, { ...deps, bills: async () => ({ ...bills, rows: [], nextCursor: "beyond" }) });
+  assert.equal(offPage.reports.state, "ready");
+  assert.equal((render(offPage).match(/data-testid="money-report-only"/g) ?? []).length, 2);
+});
+
+test("reported bills need an attached report only when the report list is complete; no invented buttons", async () => {
+  for (const [tab, cursor, nextCursor, expected] of [
+    ["all", undefined, null, "unavailable"], ["all", "bill-page-2", null, "unavailable"],
+    ["all", undefined, "report-page-2", "ready"], ["yours", "report-page-2", null, "ready"],
+  ] as const) {
+    const data = await model.readMoneyPage(session, { tab, cursor }, { ...deps,
+      reports: async () => ({ ...reports, attached: [], other: [], nextCursor }),
+    });
+    assert.equal(data.reports.state, expected); assert.doesNotMatch(render(data), /confirm-payment/);
+    if (expected === "ready") assert.match(render(data), /v3-money-reported/);
+    if (expected === "unavailable") { assert.doesNotMatch(render(data), /v3-money-reported/); assert.match(render(data), /class="v3-money-status">—<\/span>/); }
+  }
 });

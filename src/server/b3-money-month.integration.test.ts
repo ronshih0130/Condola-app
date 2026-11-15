@@ -127,6 +127,14 @@ async function reports(s: Session, input: Parameters<typeof moneyMonthReports>[1
 }
 const ids = (xs: { id: string }[]) => xs.map(x => x.id);
 
+test("reports expose the organization calendar even when no reports exist", async () => {
+  const o = await org();
+  await query("UPDATE organizations SET timezone = 'Asia/Taipei' WHERE id = $1", [o.orgId]);
+  const r = await reports(o.staff.accountant, { month: "2026-11" }, { ...ON, now: () => new Date("2026-10-31T18:00:00Z") });
+  assert.equal(r.today, "2026-11-01"); assert.equal(r.timezone, "Asia/Taipei");
+  assert.equal(r.yourTurn, 0); assert.deepEqual(r.attached, []); assert.deepEqual(r.other, []);
+});
+
 test("rules 1–2: all five statuses, paid wins over report, partial remaining, earliest unpaid invoice due date", async () => {
   const o = await org();
   const expected = new Map<string, { status: MoneyMonthStatus; total: string; confirmed: string; remaining: string }>();
@@ -339,6 +347,9 @@ test("custom keys stay separate; reassignment after revision and in-snapshot rev
     await assert.rejects(moneyMonthReports(o.staff.accountant, { month: MONTH }, { ...ON, transaction: never }), denied);
     const payOnly = await revise(["pay.record"]);
     assert.ok((await resolveCustomRoleSession(payOnly)).customRole?.keys?.includes("pay.record"));
+    await query("UPDATE organizations SET timezone = 'Asia/Taipei' WHERE id = $1", [o.orgId]);
+    const calendarReports = await reports(payOnly, { month: "2026-11" }, { ...ON, now: () => new Date("2026-10-31T18:00:00Z") });
+    assert.equal(calendarReports.today, "2026-11-01"); assert.equal(calendarReports.timezone, "Asia/Taipei");
     assert.equal((await reports(payOnly)).yourTurn, 1);
     await assert.rejects(moneyMonthBills(payOnly, { month: MONTH }, { ...ON, transaction: never }), denied);
     for (const [reader, removed] of [[moneyMonthBills, "stmt.view"], [moneyMonthReports, "pay.record"]] as const) {
@@ -361,7 +372,12 @@ function sqlParams(sql: string, orgId: string): unknown[] {
   return sql === BILLS_LIST_SQL_FOR_TEST || sql === REPORTS_LIST_SQL_FOR_TEST ? [...base, null, null, null, 51] : base;
 }
 function noBusinessRows(sql: string, rows: Record<string, unknown>[]) {
-  if (sql === REPORTS_SUMMARY_SQL_FOR_TEST) assert.deepEqual(rows, [{ count: 0, attached: 0, other: 0, invalid_currencies: 0 }]);
+  // The reports summary now joins the org calendar (default month without stmt.view), so an org row hidden
+  // by RLS yields no row at all, as the bills summary already did; a visible org row must carry zero counts.
+  if (sql === REPORTS_SUMMARY_SQL_FOR_TEST && rows.length) {
+    assert.equal(rows.length, 1); assert.deepEqual([rows[0].count, rows[0].attached, rows[0].other, rows[0].invalid_currencies], [0, 0, 0, 0]);
+  }
+  else if (sql === REPORTS_SUMMARY_SQL_FOR_TEST) return;
   else if (sql === BILLS_SUMMARY_SQL_FOR_TEST && rows.length) {
     assert.equal(rows[0].all_count, 0); assert.deepEqual(rows[0].totals, []); assert.equal(rows[0].owing, 0); assert.deepEqual(rows[0].outstanding, []);
   } else assert.deepEqual(rows, []);

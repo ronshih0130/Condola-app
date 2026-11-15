@@ -38,7 +38,7 @@ export type MoneyMonthReport = {
   attachment: "allocation" | "oldest_unpaid" | "other";
 };
 export type MoneyMonthReports = { state: "off" } | { state: "unavailable" } | {
-  state: "ready"; month: string; yourTurn: number; attachedCount: number; otherCount: number;
+  state: "ready"; month: string; today: string; timezone: string; yourTurn: number; attachedCount: number; otherCount: number;
   /** Unmatched pending reports are month-independent, never assigned by paid/submitted date. */
   otherScope: "all_pending";
   attached: MoneyMonthReport[]; other: MoneyMonthReport[]; nextCursor: string | null;
@@ -174,11 +174,12 @@ SELECT b.lease_id::text AS "leaseId", to_char(b.month, 'YYYY-MM') AS month, b.pl
  ORDER BY b.due_date, b.lease_id LIMIT $7`;
 
 export const REPORTS_SUMMARY_SQL_FOR_TEST = `${POPULATION_SQL}
-SELECT count(*)::int AS count,
+SELECT c.today::text, c.timezone, summary.*
+  FROM (SELECT count(*)::int AS count,
        count(*) FILTER (WHERE group_order = 1)::int AS attached,
        count(*) FILTER (WHERE group_order = 0)::int AS other,
        (SELECT count(*)::int FROM bill_rows WHERE currency_count <> 1) AS invalid_currencies
-  FROM selected_reports`;
+  FROM selected_reports) summary CROSS JOIN calendar c`;
 
 // $4 group (other first), $5 submitted timestamp (full microseconds), $6 id, $7 lookahead.
 export const REPORTS_LIST_SQL_FOR_TEST = `${POPULATION_SQL}
@@ -227,7 +228,7 @@ type BillsSummary = {
   counts: Partial<Record<MoneyMonthStatus, number>>; totals: MoneyMonthCurrencyTotal[];
   owing: number; outstanding: { currency: string; amountMinor: string; leaseCount: number }[];
 };
-type ReportsSummary = { count: number; attached: number; other: number; invalid_currencies: number };
+type ReportsSummary = { today: string; timezone: string; count: number; attached: number; other: number; invalid_currencies: number };
 type BillRow = Omit<MoneyMonthBill, "status"> & { has_pending_report: boolean };
 
 export async function moneyMonthBills(session: Session, input: BillsInput, deps: Deps = {}): Promise<MoneyMonthBills> {
@@ -300,7 +301,7 @@ export async function moneyMonthReports(session: Session, input: ReportsInput, d
         const page = (await client.query<MoneyMonthReport>(REPORTS_LIST_SQL_FOR_TEST,
           [...params, cursor?.group ?? null, cursor?.date ?? null, cursor?.id ?? null, MONEY_MONTH_LIST_LIMIT + 1])).rows;
         const rows = page.slice(0, MONEY_MONTH_LIST_LIMIT), last = rows.at(-1);
-        return { state: "ready" as const, month: input.month, yourTurn: summary.count, attachedCount: summary.attached,
+        return { state: "ready" as const, month: input.month, today: summary.today, timezone: summary.timezone, yourTurn: summary.count, attachedCount: summary.attached,
           otherCount: summary.other, otherScope: "all_pending" as const,
           attached: rows.filter(r => r.attachment !== "other"), other: rows.filter(r => r.attachment === "other"),
           nextCursor: page.length > MONEY_MONTH_LIST_LIMIT && last ? cursorFor({ v: 1, ...scope, date: last.submittedAt,

@@ -3,30 +3,34 @@ import Link from "next/link";
 import { dictionary, makeT, translate, type Locale } from "../../../../i18n";
 import { centerCopy } from "../../../../i18n/lanes/notification-center";
 import { moneyPageCopy } from "../../../../i18n/lanes/brand-v3-money";
-import { brandV3NavigationCopy } from "../../../../i18n/lanes/brand-v3";
+import { brandV3NavigationCopy, brandV3TodayCopy } from "../../../../i18n/lanes/brand-v3";
 import { actionConfirmPayment } from "../../../../server/actions";
 import type { MoneyMonthBill, MoneyMonthReport } from "../../../../server/b3-money-month";
 import { adjacentMoneyMonth, moneyHref, type MoneyBills, type MoneyReports, type MoneyTab } from "../../../../server/money-page";
 import { formatDate, moneyLabel } from "../../../../server/format";
 import { displaySampleName } from "../../../../server/sandbox-data";
+import { can } from "../../../../server/perms";
 import type { Session } from "../../../../server/types";
 import { ErrorBanner } from "../../../ui";
 import { RoleAvatar } from "../../role-avatar";
 import { CompletionCheck } from "../../completion-check";
 
 const tabs = ["all", "yours", "overdue", "future", "paid"] as const;
-export function MoneyPage({ session, month, tab, bills, reports, error }: {
-  session: Session; month: string; tab: MoneyTab; bills: MoneyBills; reports: MoneyReports; error?: string;
+export function MoneyPage({ session, month, tab, bills, reports, error, cursor }: {
+  session: Session; month: string; tab: MoneyTab; bills: MoneyBills; reports: MoneyReports; error?: string; cursor?: string;
 }) {
   const locale: Locale = session.locale, copy = moneyPageCopy(locale), t = makeT(locale);
   const text = (key: keyof typeof copy, vars: Record<string, string | number>) => translate(copy, key, vars);
   const date = (value: string) => formatDate(value, locale, session.calendar, dictionary(locale));
+  const returnTo = moneyHref(month, tab);
+  const primary = tab === "yours" ? reports : bills;
+  const nextCursor = primary.state === "ready" ? primary.nextCursor : null;
   const reportReady = reports.state === "ready";
   const attached = reportReady ? [...reports.attached].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt) || a.id.localeCompare(b.id)) : [];
   const forBill = (bill: MoneyMonthBill) => attached.filter(report => report.billRows.some(target => target.leaseId === bill.leaseId && target.month === month));
   const count = (key: MoneyTab) => key === "yours" ? reportReady ? reports.yourTurn : undefined
     : bills.state === "ready" ? bills.counts[key] : undefined;
-  const visible = bills.state === "ready" ? bills.rows.filter(row => tab === "all" || (tab === "yours" ? forBill(row).length > 0 : row.status === tab)) : [];
+  const visible = bills.state === "ready" ? bills.rows.filter(row => tab === "all" || (tab === "yours" ? row.status === "reported" : row.status === tab)) : [];
   const supporting = [reportReady && reports.yourTurn > 0 ? text("pending", { count: reports.yourTurn }) : "",
     ...(bills.state === "ready" ? bills.outstanding.currencies.filter(value => BigInt(value.amountMinor) > BigInt(0)).map(value =>
       `${t("i_open_balance")} ${moneyLabel(value.amountMinor, value.currency, locale)}・${t("i_tenant_count", { count: value.leaseCount })}`) : []),
@@ -34,12 +38,14 @@ export function MoneyPage({ session, month, tab, bills, reports, error }: {
   const notice = (kind: "bills" | "reports", state: MoneyBills["state"]) => state === "ready" ? null :
     <p className="v3-money-notice" role="status" data-testid={`money-${kind}-${state}`}>
       {kind === "bills" ? copy.due : copy.turn}・{state === "forbidden" ? t("i_forbidden") : centerCopy(locale).unknown}
+      {state !== "forbidden" && <>・<Link href={returnTo}>{brandV3TodayCopy(locale).retry}</Link></>}
     </p>;
   const reportDetails = (report: MoneyMonthReport) => <div className="v3-money-report" key={report.id} data-report-id={report.id}>
     <span>{moneyLabel(report.amountMinor, report.currency, locale)}・{copy.tenantReport} {bills.state === "ready" ? date(new Intl.DateTimeFormat("en-CA", { timeZone: bills.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(report.submittedAt))) : ""}</span>
     <span className="v3-money-turn"><RoleAvatar role="m" locale={locale} decorative /><span>{copy.yours}</span>
       <form action={actionConfirmPayment}>
         <input type="hidden" name="paymentId" value={report.id} />
+        <input type="hidden" name="returnTo" value={returnTo} />
         <button type="submit" className="btn o" data-testid="confirm-payment">{copy.confirm}</button>
       </form>
     </span>
@@ -59,6 +65,8 @@ export function MoneyPage({ session, month, tab, bills, reports, error }: {
       </nav>
     </div>
     <ErrorBanner t={t} error={error} />
+    {error && <Link href={returnTo}>{brandV3TodayCopy(locale).retry}</Link>}
+    {can(session, "pay.record") && <Link href="/m/payments/list">{t("i_nav_inbox")}</Link>}
     <header className="v3-money-lead"><h1>{bills.state === "ready"
       ? text("headline", { month: Number(month.slice(5)), total: bills.counts.all, paid: bills.counts.paid })
       : brandV3NavigationCopy(locale).money}</h1>{supporting && <p data-testid="money-supporting">{supporting}</p>}</header>
@@ -76,7 +84,7 @@ export function MoneyPage({ session, month, tab, bills, reports, error }: {
             return <tr key={bill.leaseId} id={`bill-${bill.leaseId}`} data-testid="money-bill" data-status={bill.status === "reported" && !reportReady ? undefined : bill.status}>
               <td><strong>{displaySampleName(bill.place)}</strong><span className="v3-money-sub">{[displaySampleName(bill.tenantName ?? ""), text("dueDate", { date: date(bill.dueDate) })].filter(Boolean).join("・")}</span></td>
               <td data-label={copy.due} className="v3-money-amount">{moneyLabel(bill.status === "paid" ? bill.totalMinor : bill.remainingMinor, bill.currency, locale)}</td>
-              <td data-label={copy.status}><span className={`v3-money-status v3-money-${bill.status}`}>
+              <td data-label={copy.status}><span className={`v3-money-status${bill.status === "reported" && !reportReady ? "" : ` v3-money-${bill.status}`}`}>
                 {bill.status === "paid" && <CompletionCheck />}{bill.status === "reported" && !reportReady ? "—" : copy[bill.status]}
               </span></td>
               <td data-label={copy.source}>{items.length ? copy.tenantReport : "—"}{items.some(item => item.bankTransactionId) ? `・${copy.bank}` : ""}</td>
@@ -84,10 +92,14 @@ export function MoneyPage({ session, month, tab, bills, reports, error }: {
                 <span className="v3-money-turn"><RoleAvatar role="t" locale={locale} decorative /><span>{copy.waiting}</span></span>}</td>
             </tr>;
           })}
-          {/* A separately authorized report remains accessible when the bill reader fails/denies. */}
-          {tab === "yours" && bills.state !== "ready" && attached.map(report => reportRow(report, false))}
+          {/* A visible report remains accessible when its bill is on another page or cannot be read. */}
+          {tab === "yours" && attached.filter(report => !visible.some(bill => report.billRows.some(target => target.month === month && target.leaseId === bill.leaseId))).map(report => reportRow(report, false))}
         </tbody>
       </table>
+      {(cursor !== undefined || nextCursor) && <nav className="v3-money-paging">
+        {cursor !== undefined && <Link href={returnTo}>{copy.first}</Link>}
+        {nextCursor && <Link href={moneyHref(month, tab, nextCursor)}>{copy.next}</Link>}
+      </nav>}
       {count(tab) === 0 && <p className="v3-money-notice" data-testid="money-empty">{t("i_empty")}</p>}
     </section>
   </div>;

@@ -75,7 +75,7 @@ const report = (n: number, other = false): MoneyMonthReport => ({ id: id(n), lea
 const summary = { today: "2030-05-01", timezone: "UTC", invalid_currencies: 0, all_count: 80, counts: { due_today: 80 },
   totals: [{ currency: "USD", totalMinor: "720575940379279440", confirmedMinor: "80", billedRows: 80, paidRows: 0 }],
   owing: 90, outstanding: [{ currency: "USD", amountMinor: "810647932926689280", leaseCount: 90 }] };
-const reportSummary = { count: 80, attached: 60, other: 20, invalid_currencies: 0 };
+const reportSummary = { today: "2030-05-01", timezone: "UTC", count: 80, attached: 60, other: 20, invalid_currencies: 0 };
 
 function mockTx(handler: (sql: string, args?: unknown[]) => { rows: unknown[] }): typeof tx {
   return async (user, fn, scope, options) => {
@@ -142,6 +142,7 @@ test("reports ready shape separates other reports; counts are reports, not attac
   assert.equal(first.state, "ready"); if (first.state !== "ready") return;
   assert.equal(first.yourTurn, 80); assert.equal(first.attachedCount, 60); assert.equal(first.otherCount, 20);
   assert.equal(first.otherScope, "all_pending");
+  assert.equal(first.today, reportSummary.today); assert.equal(first.timezone, reportSummary.timezone);
   assert.deepEqual(first.other, rows.slice(0, 20)); assert.deepEqual(first.attached, rows.slice(20, 50));
   assert.ok(first.nextCursor);
   const second = await moneyMonthReports(session, { month, cursor: first.nextCursor }, { ...ON, transaction: mockTx((sql, args) => {
@@ -160,7 +161,7 @@ test("empty ready differs from missing summary, mixed currency, list failure, an
       const transaction: typeof tx = async (_user, fn) => fn({ query: async (sql: string) => {
         if (sql.includes("SELECT app.has_role")) return { rows: [{ ok: mode !== "denied" }] };
         if (sql === (bills ? BILLS_SUMMARY_SQL_FOR_TEST : REPORTS_SUMMARY_SQL_FOR_TEST)) return { rows: mode === "missing" ? [] : [{
-          ...(bills ? { ...summary, all_count: 0, counts: {}, totals: [], owing: 0, outstanding: [] } : { count: 0, attached: 0, other: 0 }),
+          ...(bills ? { ...summary, all_count: 0, counts: {}, totals: [], owing: 0, outstanding: [] } : { ...reportSummary, count: 0, attached: 0, other: 0 }),
           invalid_currencies: mode === "mixed" ? 1 : 0,
         }] };
         if ((sql === BILLS_LIST_SQL_FOR_TEST || sql === REPORTS_LIST_SQL_FOR_TEST) && mode === "timeout") throw new Error("statement timeout");
