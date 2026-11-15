@@ -22,15 +22,18 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   if (session.kind === "owner") redirect("/o");
   const path = (await headers()).get("x-pathname") || "";
   await requireCurrentConsent(session, "page", path || "/m");
-  const v3 = await brandV3EnabledForOrg(session.orgId);
-  // The two exact month routes have independent bill/report readers. Nested routes keep their gates.
-  const moneyPage = v3 && /^\/m\/(payments|rent)\/?$/.test(path);
-  const denied = moneyPage && (can(session, "stmt.view") || can(session, "pay.record")) ? null : noPermHref(path, session);
+  const routeDenied = noPermHref(path, session);
+  // Brand 3.0 收款 month page: the two exact month routes have independent bill (stmt.view) and report
+  // (pay.record) readers, so either key admits them under brand_v3. Nested routes keep their gates. The flag
+  // is read here only for that case, so the OFF path keeps its reader and redirect order (PLT-46-AC1).
+  const moneyV3 = routeDenied && /^\/m\/(payments|rent)\/?$/.test(path) && (can(session, "stmt.view") || can(session, "pay.record"))
+    ? await brandV3EnabledForOrg(session.orgId) : undefined;
+  const denied = moneyV3 ? null : routeDenied;
   if (denied) redirect(denied);
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   const banner = session.kind === "staff" ? await trialBannerFor(session) : null;
-  if (v3) {
+  if (moneyV3 ?? await brandV3EnabledForOrg(session.orgId)) {
     // /api/env accepts native staff roles; its null-key guard refuses assigned custom roles.
     return <ManagerShellV3 areas={areasFor(session)} tabs={tabsFor(session)}
       locale={session.locale} name={session.name} role={session.role} firm={firm.name}

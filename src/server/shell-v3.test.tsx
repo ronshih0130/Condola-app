@@ -12,7 +12,7 @@ import * as copy from "../i18n/lanes/brand-v3";
 import { b056TrialCopy } from "../i18n/b056-trial";
 import { formatTrialDate } from "./b056-trial-rules";
 import * as nav from "./nav-v3";
-import { noPermHref, roleHome } from "./perms";
+import { can, noPermHref, roleHome } from "./perms";
 import { brandRoot } from "../lib/brand-root";
 import { RoleAvatar } from "../components/v3/role-avatar";
 import { ShellIcon } from "../components/v3/shell/icon";
@@ -77,7 +77,7 @@ test("PLT-46-AC1 / PLT-44-AC8: SH-ME/SH-ORG/SH-TRIAL manager OFF preserves marku
       "next/navigation": { redirect: (to: string) => { throw new Error(to); } }, "@/build-info": { BUILD_SHA: "fixture" },
       "@/components/chrome": { Sidebar: stub, TaskPanel: stub },
       "@/server/consent-gate": { requireCurrentConsent: async () => { calls.push("consent"); } },
-      "@/server/demo": { demoModeEnabled: () => demo }, "@/server/perms": { noPermHref: (p: string, s: Session) => { calls.push("permission"); return noPermHref(p, s); } },
+      "@/server/demo": { demoModeEnabled: () => demo }, "@/server/perms": { can, noPermHref: (p: string, s: Session) => { calls.push("permission"); return noPermHref(p, s); } },
       "@/server/queries": { loadManagerChrome: async () => { calls.push("chrome"); return { flags: { property: true }, firm: { name: "fixture" }, badge: { pending: 2, tickets: 3 } }; } },
       "@/server/session": { getSession: async () => actor },
       "@/server/b056-trial": { trialBannerFor: async () => { calls.push("trial"); return { kind: "fixture" }; } },
@@ -108,7 +108,7 @@ test("SH-ORG / PLT-44-AC13: layout uses existing env eligibility, including miss
       "next/headers": { headers: async () => ({ get: () => "/m/account" }), cookies: async () => ({ get: () => undefined }) },
       "next/navigation": { redirect: (to: string) => { throw new Error(to); } }, "@/build-info": { BUILD_SHA: "fixture" },
       "@/components/chrome": { Sidebar: stub, TaskPanel: stub }, "@/server/consent-gate": { requireCurrentConsent: async () => {} },
-      "@/server/demo": { demoModeEnabled: () => false }, "@/server/perms": { noPermHref },
+      "@/server/demo": { demoModeEnabled: () => false }, "@/server/perms": { can, noPermHref },
       "@/server/queries": { loadManagerChrome: async () => ({ flags: {}, firm: { name: "fixture" }, badge: {} }) },
       "@/server/session": { getSession: async () => actor }, "@/server/b056-trial": { trialBannerFor: async () => null },
       "@/components/b056-trial-banner": { TrialBanner: stub }, "@/server/brand-v3": { brandV3EnabledForOrg: async () => true },
