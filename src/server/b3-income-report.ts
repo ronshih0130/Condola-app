@@ -47,12 +47,40 @@ function filterId(value?: string) {
   return value.toLowerCase();
 }
 
-/** Existing report property/owner overlap and allocation waterfall. Partition BEFORE excluding
- * deposits/future rent, so excluded money is never reassigned to another charge. One income
+/** Cash-date recognition switch point. Hub PENDING-RON PR-019 must define period
+ * boundaries and later recognition before replacing this rule; early rent counts today.
+ * This is a SQL policy expression, not a feature flag. */
+export const INCOME_REPORT_CASH_DATE_SQL = "date BETWEEN $2::date AND $3::date";
+
+/** Both ranges use integer minor units (PostgreSQL sum(bigint) is exact numeric).
+ * Order allocations by paid_on, confirmed_at ASC NULLS LAST, payment id, allocation id:
+ * cash chronology first, confirmation order for same-day receipts, stable unique ties last.
+ * Compute over ALL confirmed allocations before filtering dates; joining invoice lines
+ * first would multiply each allocation in the running sum. Line order is unchanged.
+ * Inputs are org/lease/currency scoped below; each invoice's lines appear only once. */
+export const INCOME_REPORT_WATERFALL_SQL = `allocation_ranges AS (
+  SELECT a.*, coalesce(sum(allocated_amount) OVER (
+    PARTITION BY invoice_id, currency ORDER BY date, confirmed_at ASC NULLS LAST, source_id, allocation_id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS allocation_start
+  FROM allocation_inputs a
+), line_ranges AS (
+  SELECT il.*, coalesce(sum(greatest(line_amount, 0)) OVER (
+    PARTITION BY invoice_id ORDER BY CASE charge_type
+      WHEN 'rent' THEN 1 WHEN 'add_on' THEN 2 WHEN 'late_fee' THEN 3 WHEN 'one_off' THEN 4
+      WHEN 'maintenance' THEN 5 WHEN 'utility' THEN 6 WHEN 'deposit' THEN 7
+      WHEN 'adjustment' THEN 8 WHEN 'credit' THEN 9 ELSE 0 END, line_no
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS line_start
+  FROM line_inputs il
+), portions AS (
+  SELECT a.*, il.line_id, il.charge_type, il.item,
+    greatest(0, least(a.allocation_start + a.allocated_amount, il.line_start + greatest(il.line_amount, 0))
+      - greatest(a.allocation_start, il.line_start)) AS amount
+  FROM allocation_ranges a JOIN line_ranges il ON il.invoice_id = a.invoice_id
+)`;
+
+/** Existing report property/owner overlap with a cumulative invoice waterfall. One income
  * row is one allocation x invoice-line portion; expenses are one row each. No repair-state filter.
  * Existing cost_bearer `manager` is company liability (not the paid_by actor).
- * Rent uses invoice.period_start against the inclusive query end; it is not later
- * recognized by this cash-date reader. Missing rent periods fail the whole report.
  * $1 org, $2 inclusive start, $3 inclusive end, $4 property, $5 owner. */
 export const INCOME_REPORT_POPULATION_SQL = `WITH props AS MATERIALIZED (
   SELECT p.id, p.name, o.id AS owner_id, o.name AS owner_name
@@ -69,31 +97,26 @@ export const INCOME_REPORT_POPULATION_SQL = `WITH props AS MATERIALIZED (
      AND ($5::uuid IS NULL OR EXISTS (SELECT 1 FROM property_owners po WHERE po.org_id = $1
        AND po.property_id = p.id AND po.owner_contact_id = $5
        AND po.effective_from <= $3::date AND (po.effective_to IS NULL OR po.effective_to >= $2::date)))
-), portions AS (
+), allocation_inputs AS (
   SELECT pay.id AS source_id, pay.amount_minor AS source_amount, pay.paid_on AS date, btrim(pay.currency) AS currency,
     p.id AS property_id, p.name AS property, p.owner_id, p.owner_name AS owner,
-    a.id AS allocation_id, il.id AS line_id, i.id AS invoice_id, i.period_start,
-    il.charge_type, il.description AS item,
-    least(greatest(0, a.amount_minor - coalesce(sum(greatest(il.amount_minor, 0)) OVER (
-      PARTITION BY a.id ORDER BY CASE il.charge_type
-        WHEN 'rent' THEN 1 WHEN 'add_on' THEN 2 WHEN 'late_fee' THEN 3 WHEN 'one_off' THEN 4
-        WHEN 'maintenance' THEN 5 WHEN 'utility' THEN 6 WHEN 'deposit' THEN 7
-        WHEN 'adjustment' THEN 8 WHEN 'credit' THEN 9 ELSE 0 END, il.line_no
-      ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)), greatest(il.amount_minor, 0)) AS amount
+    a.id AS allocation_id, i.id AS invoice_id, pay.confirmed_at, a.amount_minor AS allocated_amount
   FROM payments pay
   JOIN leases l ON l.id = pay.lease_id AND l.org_id = $1
   JOIN props p ON p.id = l.property_id
   JOIN payment_allocations a ON a.payment_id = pay.id AND a.org_id = $1
   JOIN invoices i ON i.id = a.invoice_id AND i.org_id = $1 AND i.lease_id = pay.lease_id AND i.currency = pay.currency
-  JOIN invoice_lines il ON il.invoice_id = i.id AND il.org_id = $1
-  WHERE pay.org_id = $1 AND pay.status = 'confirmed' AND pay.paid_on BETWEEN $2::date AND $3::date
-), report_lines AS (
+  WHERE pay.org_id = $1 AND pay.status = 'confirmed'
+), line_inputs AS (
+  SELECT il.invoice_id, il.id AS line_id, il.charge_type, il.line_no, il.description AS item, il.amount_minor AS line_amount
+  FROM invoice_lines il JOIN (SELECT DISTINCT invoice_id FROM allocation_inputs) i ON i.invoice_id = il.invoice_id
+  WHERE il.org_id = $1
+), ${INCOME_REPORT_WATERFALL_SQL}, report_lines AS (
   SELECT allocation_id::text || ':' || line_id::text AS key, date,
     CASE WHEN charge_type = 'deposit' THEN 'deposit' ELSE 'income' END AS kind,
     item, property_id, property, owner_id, owner, currency, amount,
     source_id, invoice_id, allocation_id, source_amount
-  FROM portions WHERE amount > 0
-    AND (charge_type <> 'rent' OR period_start <= $3::date)
+  FROM portions WHERE amount > 0 AND ${INCOME_REPORT_CASH_DATE_SQL}
   UNION ALL
   SELECT e.id::text, e.incurred_on, 'expense', coalesce(e.description, e.category),
     p.id, p.name, p.owner_id, p.owner_name, btrim(e.currency), e.amount_minor,
@@ -104,7 +127,6 @@ export const INCOME_REPORT_POPULATION_SQL = `WITH props AS MATERIALIZED (
 )`;
 export const INCOME_REPORT_SUMMARY_SQL = `${INCOME_REPORT_POPULATION_SQL}
 SELECT (SELECT count(*)::int FROM report_lines) AS count,
-  (SELECT count(*)::int FROM portions WHERE charge_type = 'rent' AND amount > 0 AND period_start IS NULL) AS unknown_periods,
   coalesce(jsonb_agg(t ORDER BY currency), '[]'::jsonb) AS totals FROM (
     SELECT currency, coalesce(sum(amount) FILTER (WHERE kind = 'income'), 0)::text AS "incomeMinor",
       coalesce(sum(amount) FILTER (WHERE kind = 'expense'), 0)::text AS "expenseMinor",
@@ -141,8 +163,8 @@ async function readOn(client: Client, session: Session, input: IncomeReportInput
       || !/^[0-9a-f:-]{36,73}$/i.test(cursor.key)) throw new FlowError("errors.reportRange");
   }
   const args = [session.orgId, period.start, period.end, property, owner];
-  const summary = (await client.query<{ count: number; unknown_periods: number; totals: IncomeReportTotal[] }>(INCOME_REPORT_SUMMARY_SQL, args)).rows[0];
-  if (!summary || summary.unknown_periods !== 0) throw new Error("Unknown rent period");
+  const summary = (await client.query<{ count: number; totals: IncomeReportTotal[] }>(INCOME_REPORT_SUMMARY_SQL, args)).rows[0];
+  if (!summary) throw new Error("Missing report summary");
   const page = (await client.query<IncomeReportLine>(INCOME_REPORT_LIST_SQL,
     [...args, cursor?.date ?? null, cursor?.key ?? null, all ? null : INCOME_REPORT_LIMIT + 1])).rows;
   const rows = all ? page : page.slice(0, INCOME_REPORT_LIMIT), last = rows.at(-1);

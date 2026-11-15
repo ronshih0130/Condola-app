@@ -24,7 +24,7 @@ test.after(() => { if (previous === undefined) delete process.env.CUSTOM_ROLES_O
 const row = (n: number): IncomeReportLine => ({ key: id(n), date: "2030-05-01", kind: "expense", item: "=SUM(1,2)",
   propertyId: id(4), property: "Synthetic, \"property\"", ownerId: id(5), owner: "@owner", currency: "TWD", amountMinor: "9007199254740993",
   sourceAmountMinor: "9007199254740993", sourceId: id(n), invoiceId: null, allocationId: null });
-const summary = { count: 80, unknown_periods: 0, totals: [{ currency: "TWD", incomeMinor: "100000", expenseMinor: "32000", netMinor: "68000", depositMinor: "1000" }] };
+const summary = { count: 80, totals: [{ currency: "TWD", incomeMinor: "100000", expenseMinor: "32000", netMinor: "68000", depositMinor: "1000" }] };
 function mockTx(rows: IncomeReportLine[] = [row(7)], overrides: { role?: boolean; summary?: typeof summary; capture?: (sql: string, args?: unknown[]) => void } = {}): typeof tx {
   return async (user, fn, scope, options) => {
     assert.equal(user, session.userId); assert.deepEqual(scope, { orgId: session.orgId, environment: "live" });
@@ -82,8 +82,7 @@ test("one scoped read-only snapshot, organization calendar default, uncapped tot
     assert.equal((await incomeExpenseLines(session, { ...input, cursor: data.nextCursor }, { ...ON, transaction: mockTx() })).state, "unavailable");
 });
 
-test("unknown rent periods and operational failures are unavailable, current staff denial is forbidden", async () => {
-  assert.equal((await incomeExpenseLines(session, {}, { ...ON, transaction: mockTx([], { summary: { ...summary, unknown_periods: 1 } }) })).state, "unavailable");
+test("operational failures are unavailable, current staff denial is forbidden", async () => {
   assert.equal((await incomeExpenseLines(session, {}, { ...ON, v3: async () => { throw new Error("lookup failed"); } })).state, "unavailable");
   await assert.rejects(incomeExpenseLines(session, {}, { ...ON, transaction: mockTx([], { role: false }) }), forbidden);
 });
@@ -147,11 +146,13 @@ test("OFF page/export legacy bodies and legacy reader stay byte-identical", () =
   assert.equal(sha(readFileSync("src/server/income-expense.ts", "utf8")), "1e0d426e7d0f627bec41cd376f550b29077e100530ba70350f012dde4d3c8574");
 });
 
-test("financial SQL contract retains waterfall before exclusions, paid/incurred dates and owner/company liability", () => {
+test("financial SQL contract applies cash dates after cumulative allocation, retaining owner/company liability", () => {
   // Policy assertions, paired with executable real-row fixtures in the Mac integration suite.
-  assert.ok(INCOME_REPORT_SUMMARY_SQL.indexOf("PARTITION BY a.id") < INCOME_REPORT_SUMMARY_SQL.indexOf("charge_type <> 'rent'"));
-  assert.match(INCOME_REPORT_SUMMARY_SQL, /charge_type <> 'rent' OR period_start <= \$3::date/);
-  assert.match(INCOME_REPORT_SUMMARY_SQL, /pay\.status = 'confirmed' AND pay\.paid_on BETWEEN \$2::date AND \$3::date/);
+  assert.ok(INCOME_REPORT_SUMMARY_SQL.indexOf("PARTITION BY invoice_id, currency") < INCOME_REPORT_SUMMARY_SQL.indexOf("date BETWEEN $2::date"));
+  assert.ok(!INCOME_REPORT_SUMMARY_SQL.includes("period_start"));
+  assert.ok(!INCOME_REPORT_SUMMARY_SQL.includes("unknown_periods"));
+  assert.match(INCOME_REPORT_SUMMARY_SQL, /pay\.status = 'confirmed'\s*\)/);
+  assert.match(INCOME_REPORT_SUMMARY_SQL, /FROM portions WHERE amount > 0 AND date BETWEEN \$2::date AND \$3::date/);
   assert.match(INCOME_REPORT_SUMMARY_SQL, /e\.status IN \('approved','posted'\) AND e\.bill_to IN \('owner','manager'\)/);
   assert.match(INCOME_REPORT_SUMMARY_SQL, /e\.incurred_on BETWEEN \$2::date AND \$3::date/);
   assert.ok(!INCOME_REPORT_SUMMARY_SQL.includes("repair_cost_on_statement"));

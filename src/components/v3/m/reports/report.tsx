@@ -71,6 +71,8 @@ export function IncomeReportView({ session, input, data }: { session: Session; i
       : data.count === 0 ? <div className={styles.empty}><ReportDrawing /><p>{c.empty}</p></div>
       : <div className={styles.columns}><section className={styles.card}>{table(data.rows.filter(row => row.kind !== "deposit"))}</section>
         <aside className={styles.card}><h2>{c.separate}</h2>
+          {/* Prepayment section waits on hub PENDING-RON PR-019. Keep the approved R1-RPT hint;
+              unallocated money is not income. Only deposits are listed separately for now. */}
           {data.totals.map(total => <p key={total.currency}>{c.deposit} {money(total.depositMinor, total.currency)}</p>)}
           {data.rows.filter(row => row.kind === "deposit").map(row => <div key={row.key} className={styles.deposit}>
             <p>{date(row.date)} · {row.property} · {row.owner || "—"}</p><p>{row.item} · {money(row.amountMinor, row.currency)}</p>{source(row)}

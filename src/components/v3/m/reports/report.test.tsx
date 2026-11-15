@@ -24,6 +24,10 @@ test("per-currency lead, sole solid CSV primary, no invented prepayment or annua
   assert.ok(html.includes("payment-source")); assert.ok(html.includes("NT$105")); assert.ok(html.includes("<summary>查來源</summary>"));
   assert.ok(!html.includes("年度收支匯出")); assert.ok(!html.includes("/m/payments"));
   assert.ok(html.includes("property=prop&amp;owner=owner"));
+  assert.ok(html.includes("只算已確認的。押金和預付另外列，不算收入。"));
+  const aside = html.slice(html.indexOf("<aside"), html.indexOf("</aside>"));
+  assert.ok(aside.includes("另外列")); assert.ok(aside.includes("押金 NT$5"));
+  assert.ok(!aside.includes("預付"));
 });
 test("view-only hides export and write destinations; empty drawing 14 and shipped sentence, no export", () => {
   const viewer: Session = { ...s, customRole: { orgId: s.orgId, userId: s.userId, sessionId: s.sessionId, nativeRole: s.role, keys: ["stmt.view"], photos: false, audit: false } };

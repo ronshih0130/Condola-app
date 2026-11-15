@@ -89,7 +89,7 @@ async function pay(l: Lease, opts: { status?: "submitted" | "confirmed" | "rejec
 }
 const allocate = (l: Lease, payment: string, inv: string, amount = "1000") => query(
   "INSERT INTO payment_allocations (org_id, payment_id, invoice_id, amount_minor) VALUES ($1, $2, $3, $4::bigint)", [l.orgId, payment, inv, amount]);
-async function invoice(l: Lease, period = "2030-05-01", lines: [string, string][] = [["rent", "1000"]]) {
+async function invoice(l: Lease, period: string | null = "2030-05-01", lines: [string, string][] = [["rent", "1000"]]) {
   const id = (await query<{ id: string }>(`INSERT INTO invoices
     (org_id, property_id, lease_id, invoice_number, currency, due_date, period_start, status)
     VALUES ($1, $2, $3, $4, $5, '2030-05-01', $6, 'open') RETURNING id::text`,
@@ -119,7 +119,7 @@ async function read(s: Session, input: IncomeReportInput = { month: "2030-05" })
   assert.equal(data.state, "ready"); if (data.state !== "ready") throw new Error("report unavailable"); return data;
 }
 
-test("real allocations: waterfall, deposits, partials, early rent boundaries, paid_on, payer basis, open repair, currencies", async () => {
+test("real allocations: waterfall, deposits, partials, early rent cash date, paid_on, payer basis, open repair, currencies", async () => {
   const o = await org(), l = await lease(o);
   const main = await receipt(l, "2030-05-01", [["rent", "1000"], ["utility", "200"], ["deposit", "500"]], "1700");
   const early = await receipt(l, "2030-06-01", [["rent", "1000"], ["utility", "200"], ["deposit", "500"]], "1700");
@@ -140,17 +140,58 @@ test("real allocations: waterfall, deposits, partials, early rent boundaries, pa
   await expense(usd, "7");
   const data = await read(o.staff.accountant);
   assert.deepEqual(data.totals, [
-    { currency: "TWD", incomeMinor: "1800", expenseMinor: "500", netMinor: "1300", depositMinor: "1000" },
+    { currency: "TWD", incomeMinor: "2800", expenseMinor: "500", netMinor: "2300", depositMinor: "1000" },
     { currency: "USD", incomeMinor: "9007199254740993", expenseMinor: "7", netMinor: "9007199254740986", depositMinor: "0" },
   ]);
   assert.equal(data.rows.filter(r => r.sourceId === main).length, 3);
-  assert.deepEqual(data.rows.filter(r => r.sourceId === early).map(r => r.kind).sort(), ["deposit", "income"]);
+  assert.deepEqual(data.rows.filter(r => r.sourceId === early).map(r => r.kind).sort(), ["deposit", "income", "income"]);
   assert.ok(data.rows.some(r => r.sourceId === company));
   const future = await read(o.staff.admin, { month: "2030-06", property: o.property });
   assert.ok(!future.rows.some(r => r.sourceId === early), "no invented later recognition of a May receipt");
   const boundary = await read(o.staff.admin, { mode: "range", from: "2030-05-31", to: "2030-05-31" });
   assert.equal(boundary.totals.find(r => r.currency === "TWD")?.incomeMinor, "100");
   assert.equal(boundary.totals.find(r => r.currency === "TWD")?.expenseMinor, "300");
+});
+
+test("same invoice rent 100 + deposit 100: two payments of 100 consume each line once", async () => {
+  const o = await org(), l = await lease(o), inv = await invoice(l, "2030-05-01", [["rent", "100"], ["deposit", "100"]]);
+  // Insert later cash date first, with an earlier confirmation: paid_on must win.
+  const second = await pay(l, { status: "confirmed", amount: "100", paidOn: "2030-05-02", at: "2030-05-02T00:00:00Z" });
+  const first = await pay(l, { status: "confirmed", amount: "100", paidOn: "2030-05-01", at: "2030-05-03T00:00:00Z" });
+  await allocate(l, second, inv, "100"); await allocate(l, first, inv, "100");
+  const data = await read(o.staff.accountant);
+  assert.deepEqual(data.totals, [{ currency: "TWD", incomeMinor: "100", expenseMinor: "0", netMinor: "100", depositMinor: "100" }]);
+  assert.deepEqual(data.rows.map(r => [r.sourceId, r.kind, r.amountMinor]), [[first, "income", "100"], [second, "deposit", "100"]]);
+  const exported = await incomeExpenseExportData(o.staff.accountant, { month: "2030-05" }, ON);
+  assert.deepEqual(exported.rows, data.rows); assert.deepEqual(exported.totals, data.totals);
+  assert.equal(incomeReportCsv(exported, "en"), incomeReportCsv(data, "en"));
+});
+
+test("cross-period invoice: May 150 consumes rent 100 + deposit 50; June 50 consumes deposit only", async () => {
+  const o = await org(), l = await lease(o), inv = await invoice(l, "2030-05-01", [["rent", "100"], ["deposit", "100"]]);
+  // Non-confirmed allocations must not consume any interval.
+  const pending = await pay(l, { amount: "100", paidOn: "2030-04-01" }); await allocate(l, pending, inv, "100");
+  const first = await pay(l, { status: "confirmed", amount: "150", paidOn: "2030-05-01" }); await allocate(l, first, inv, "150");
+  const second = await pay(l, { status: "confirmed", amount: "50", paidOn: "2030-06-01" }); await allocate(l, second, inv, "50");
+  const may = await read(o.staff.admin), june = await read(o.staff.admin, { month: "2030-06" });
+  assert.deepEqual(may.totals, [{ currency: "TWD", incomeMinor: "100", expenseMinor: "0", netMinor: "100", depositMinor: "50" }]);
+  assert.deepEqual(june.totals, [{ currency: "TWD", incomeMinor: "0", expenseMinor: "0", netMinor: "0", depositMinor: "50" }]);
+  assert.ok(may.rows.every(r => r.sourceId === first));
+  assert.deepEqual(june.rows.map(r => [r.sourceId, r.kind, r.amountMinor]), [[second, "deposit", "50"]]);
+  const range = await read(o.staff.admin, { mode: "range", from: "2030-05-01", to: "2030-06-30" });
+  assert.deepEqual(range.rows, [...may.rows, ...june.rows]);
+});
+
+test("May-paid June rent counts in May only; missing invoice period does not block cash recognition", async () => {
+  const o = await org(), l = await lease(o);
+  const early = await receipt(l, "2030-06-01", [["rent", "100"]], "100", "2030-05-15");
+  const may = await read(o.staff.admin);
+  assert.equal(may.totals[0].incomeMinor, "100");
+  assert.deepEqual(may.rows.map(r => [r.sourceId, r.date, r.kind, r.amountMinor]), [[early, "2030-05-15", "income", "100"]]);
+  assert.equal((await read(o.staff.admin, { month: "2030-06" })).count, 0);
+  const inv = await invoice(l, null, [["rent", "25"]]);
+  const payment = await pay(l, { status: "confirmed", amount: "25", paidOn: "2030-05-20" }); await allocate(l, payment, inv, "25");
+  assert.equal((await read(o.staff.admin)).totals[0].incomeMinor, "125");
 });
 
 test("owner overlap/property filters, org calendar default, pagination totals and complete CSV all use one population", async () => {
