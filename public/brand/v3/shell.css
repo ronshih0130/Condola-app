@@ -13,8 +13,8 @@ html[data-brand="v2"][data-brand-v3] .v3-shell .sidebar{ display:contents; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .side-head, html[data-brand="v2"][data-brand-v3] .v3-shell .snav, html[data-brand="v2"][data-brand-v3] .v3-shell .deskbar{ display:none; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .shell-content{ order:1; flex:1; min-width:0; width:auto; max-width:none; margin:0; padding:16px 14px calc(80px + env(safe-area-inset-bottom,0px)); overflow:visible; overflow-wrap:anywhere; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar{ position:fixed; bottom:0; left:0; right:0; height:auto; min-height:64px; padding-bottom:env(safe-area-inset-bottom,0px); background:var(--c-surface); border-top:1px solid var(--c-border); display:flex; z-index:20; }
-html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar a{ flex:1; min-width:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:11px; color:var(--c-text-3); text-decoration:none; min-height:44px; }
-html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar a.on{ color:var(--c-primary); font-weight:700; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar :is(a,button){ flex:1; min-width:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:11px; color:var(--c-text-3); text-decoration:none; min-height:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar :is(a,button).on{ color:var(--c-primary); font-weight:700; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .snav a{ display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--r-sm); text-decoration:none; min-height:44px; min-width:44px; font-weight:500; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .snav svg{ flex:none; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .subchips{ display:flex; gap:8px; overflow-x:auto; margin:0 -14px 14px; padding:4px 14px; scrollbar-width:none; }
@@ -95,3 +95,18 @@ html[data-brand="v2"][data-brand-v3] .v3-shell .build-sha{ margin-top:24px; }
 }
 /* SH-NONAME: the same white avatar square, holding the 我的帳號 person icon instead of a letter. */
 html[data-brand="v2"][data-brand-v3] .v3-shell .shell-avatar-noname svg{ width:1.1em; height:1.1em; display:block; }
+
+/* OV-SH-PHONE/DESK/MORE: owner uses the shared shell, with an admitted bell and a More sheet. */
+html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar button{ border:0; border-radius:0; padding:0; background:transparent; font-family:inherit; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-bell{ display:flex; align-items:center; justify-content:center; min-width:44px; width:44px; min-height:44px; color:inherit; border-radius:var(--r-pill); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy:has(.shell-bell){ grid-template-columns:minmax(0,1fr) 44px 44px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy .shell-bell{ grid-column:2; grid-row:1; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy:has(.shell-bell) .shell-avatar{ grid-column:3; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead{ background:var(--c-bg); padding:8px 0 16px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead h1{ margin:0; font-family:var(--font-display); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup-more{ left:0; right:0; bottom:0; padding-bottom:calc(16px + env(safe-area-inset-bottom,0px)); border-bottom-left-radius:0; border-bottom-right-radius:0; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-more-entry{ padding:12px; gap:12px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-more-entry svg{ flex:none; }
+@media(min-width:64em) {
+  html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead{ display:none; }
+}

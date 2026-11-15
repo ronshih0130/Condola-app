@@ -39,9 +39,9 @@ async function renderLayout(text: string, mocks: Record<string, unknown>) {
   return renderToStaticMarkup(await layout({ children: <main data-testid="content">fixture</main> }));
 }
 
-test("PLT-46-AC1 / MGT-47-AC1: SH-SANDBOX root OFF is byte-identical to 529b4fa, ON only replaces staff /m header", async () => {
+test("PLT-46-AC1 / MGT-47-AC1: SH-SANDBOX root OFF is byte-identical to 529b4fa, ON replaces only the staff /m and owner /o headers", async () => {
   const old = execFileSync("git", ["show", "529b4fa:src/app/layout.tsx"], { encoding: "utf8" });
-  for (const locale of ["zh-TW", "en"] as const) for (const kind of ["staff", "tenant", "owner"] as const) for (const environment of ["live", "sandbox"] as const) for (const path of ["/m", "/m/payments", "/t", "/consent"]) {
+  for (const locale of ["zh-TW", "en"] as const) for (const kind of ["staff", "tenant", "owner"] as const) for (const environment of ["live", "sandbox"] as const) for (const path of ["/m", "/m/payments", "/o", "/o/statements", "/other", "/t", "/consent"]) {
     let on = false;
     const actor = { ...session, locale, kind, environment };
     const mocks = {
@@ -59,9 +59,9 @@ test("PLT-46-AC1 / MGT-47-AC1: SH-SANDBOX root OFF is byte-identical to 529b4fa,
     assert.equal(await renderLayout(source("src/app/layout.tsx"), mocks), await renderLayout(old, mocks));
     on = true;
     const html = await renderLayout(source("src/app/layout.tsx"), mocks);
-    assert.equal(html.includes('class="top"'), !(kind === "staff" && path.startsWith("/m")));
+    assert.equal(html.includes('class="top"'), !((kind === "staff" && path.startsWith("/m")) || (kind === "owner" && /^\/o(?:\/|$)/.test(path))));
     assert.ok(html.includes('data-testid="site-footer"'));
-    assert.equal(html.includes('data-testid="legacy-env-banner"'), environment === "sandbox" && !(kind === "staff" && path.startsWith("/m")));
+    assert.equal(html.includes('data-testid="legacy-env-banner"'), environment === "sandbox" && !((kind === "staff" && path.startsWith("/m")) || (kind === "owner" && /^\/o(?:\/|$)/.test(path))));
   }
 });
 
@@ -130,7 +130,7 @@ function chromeMocks(locale: i18n.Locale, path: string) {
     "./locale": { useT: () => i18n.makeT(locale), useLocale: () => locale },
   };
 }
-function renderShell({ path = "/m", open = null, ...overrides }: Record<string, unknown> & { path?: string; open?: "avatar" | "org" | null } = {}) {
+function renderShell({ path = "/m", open = null, baseline = false, ...overrides }: Record<string, unknown> & { path?: string; open?: "avatar" | "org" | null } = {}) {
   const locale = (overrides.locale || "zh-TW") as i18n.Locale;
   const chrome = compile(source("src/components/chrome.tsx"), chromeMocks(locale, path));
   const mocks = {
@@ -139,7 +139,9 @@ function renderShell({ path = "/m", open = null, ...overrides }: Record<string, 
     "../../chrome": chrome, "../role-avatar": { RoleAvatar }, "./icon": { ShellIcon },
     ...(open ? { react: { ...React, useState: () => [{ kind: open, top: 64, left: 8 }, () => {}] } } : {}),
   };
-  const Shell = compile(source("src/components/v3/shell/manager-shell.tsx"), mocks).ManagerShellV3 as React.ComponentType<Record<string, unknown>>;
+  const shared = compile(source("src/components/v3/shell/shared-shell.tsx"), mocks);
+  const text = baseline ? execFileSync("git", ["show", "54fedb07f5cd851aa22683e585dbf1dbec2eb1ca:src/components/v3/shell/manager-shell.tsx"], { encoding: "utf8" }) : source("src/components/v3/shell/manager-shell.tsx");
+  const Shell = compile(text, { ...mocks, "./shared-shell": shared }).ManagerShellV3 as React.ComponentType<Record<string, unknown>>;
   return renderToStaticMarkup(<Shell areas={nav.areasFor(session)} tabs={nav.tabsFor(session)} locale={locale} name={session.name} role="admin" firm="安居代管"
     sandbox={false} showReset={true} hasLiveCompany={true} canSwitchCompany={true} todayTitle={copy.shellTodayTitle(new Date("2026-11-13T00:00:00+08:00"), locale)}
     buildSha="fixture" trialBanner={<p data-testid="trial-banner">trial</p>} {...overrides}><h1>content</h1></Shell>);
@@ -376,4 +378,12 @@ test("PLT-44-AC1 / MGT-54: on phones the fixed empty-state primary sits above th
   assert.match(source("src/app/globals.css"), /\.es-primary\{position:fixed;bottom:calc\(var\(--m-bottom-nav-height,0px\)/);
   // The shell's own content padding must not shrink the room globals.css leaves for the fixed button + tab bar.
   assert.match(css, /@media\(max-width:600px\) \{\s*html\[data-brand="v2"\]\[data-brand-v3\] \.v3-shell \.shell-content:has\(\.es-primary\)\{ padding-bottom:calc\(120px \+ var\(--m-bottom-nav-height,0px\)/);
+});
+
+
+test("PLT-44 / SH-PHONE/SH-DESK/SH-ME: shared owner extraction preserves manager HTML byte-for-byte", () => {
+  for (const locale of ["zh-TW", "en"] as const) for (const open of [null, "avatar", "org"] as const) for (const path of ["/m", "/m/payments"]) for (const sandbox of [false, true]) {
+    const props = { locale, open, path, sandbox, name: open === "avatar" ? "" : "陳小明" };
+    assert.equal(renderShell(props), renderShell({ ...props, baseline: true }));
+  }
 });

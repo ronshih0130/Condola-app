@@ -1,3 +1,8 @@
+import { OwnerShellV3 } from "@/components/v3/shell/owner-shell";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { ownerPrivacy } from "@/server/auth";
+import { centerSessionAdmission } from "@/server/notification-center";
+import { ownerNavigationV3 } from "@/server/nav-v3";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ownerRepairPolicyEntryIds } from "@/server/repair-owner-policy";
@@ -17,5 +22,11 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
   await requireCurrentConsent(session, "page", path || "/o");
   const properties = await ownerPropertyNames(session);
   const repairPolicyIds = await ownerRepairPolicyEntryIds(session, properties.map(property => property.id));
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    const firm = await ownerPrivacy(session.orgId);
+    const admission = await centerSessionAdmission(session);
+    return <OwnerShellV3 locale={session.locale} name={session.name} firm={firm.name}
+      navigation={ownerNavigationV3(session, properties, repairPolicyIds, admission)}>{children}</OwnerShellV3>;
+  }
   return <OwnerNav properties={properties} repairPolicyIds={repairPolicyIds} {...(v2 ? { v2: true } : {})}>{children}</OwnerNav>;
 }
