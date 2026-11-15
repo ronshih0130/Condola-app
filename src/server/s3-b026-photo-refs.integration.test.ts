@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { withClient } from "./db";
+import { query, withClient } from "./db";
 import { createTicket } from "./domain";
 import { ORG_ID, USERS } from "./ids";
 import { cloneTestDatabase } from "./test-database-clone";
@@ -93,6 +93,36 @@ async function exposed(job: Job, ownerSession: Session) {
   const home = (await ownerPending(ownerSession, { homeDetails: true })).filter(row => row.ticket_id === job.ticketId);
   assert.deepEqual(home.map(row => row.version_id), (await ownerPending(ownerSession)).filter(row => row.ticket_id === job.ticketId).map(row => row.version_id));
   for (const row of home) { assert.ok(row.property_name, "property_name visible to owner"); assert.ok(row.item, "ticket title visible to owner"); }
+  if (home.length) {
+    // Revocation: once this owner's property_owners authority for the ticket's property ends, the home projection
+    // drops the row (it reads current property/ticket fields), whatever the estimate snapshot says.
+    // Keep the owner admitted (a second, still-current property), then end the authority for THIS ticket's
+    // property: the gateway still admits the session, and the home projection must drop the revoked row.
+    const other = await query<{ id: string }>(
+      `INSERT INTO property_owners(org_id, property_id, owner_contact_id, effective_from)
+       SELECT po.org_id, p.id, po.owner_contact_id, current_date - 1
+         FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id JOIN maintenance_tickets t ON t.property_id = po.property_id
+         JOIN properties p ON p.org_id = po.org_id AND p.id <> po.property_id AND p.archived_at IS NULL
+        WHERE t.id = $1 AND c.user_id = $2 AND (po.effective_to IS NULL OR po.effective_to > current_date)
+        ORDER BY p.id LIMIT 1 RETURNING id`, [job.ticketId, ownerSession.userId]);
+    const ended = await query<{ id: string; effective_from: string; effective_to: string | null }>(
+      `WITH target AS (SELECT po.id, po.effective_from::text AS effective_from, po.effective_to::text AS effective_to
+           FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id JOIN maintenance_tickets t ON t.property_id = po.property_id
+          WHERE t.id = $1 AND c.user_id = $2 AND (po.effective_to IS NULL OR po.effective_to > current_date))
+       UPDATE property_owners po SET effective_from = least(po.effective_from, current_date - 1), effective_to = current_date
+         FROM target WHERE po.id = target.id RETURNING target.id, target.effective_from, target.effective_to`, [job.ticketId, ownerSession.userId]);
+    try {
+      assert.equal(other.rows.length, 1, "fixture has a second property to keep the owner admitted");
+      assert.ok(ended.rows.length > 0, "fixture owner had current authority to revoke");
+      const legacy = (await ownerPending(ownerSession)).filter(row => row.ticket_id === job.ticketId);
+      assert.deepEqual((await ownerPending(ownerSession, { homeDetails: true })).filter(row => row.ticket_id === job.ticketId), []);
+      // Recorded, not changed here: the old list still returns the snapshot-admitted row for the revoked property.
+      console.error(`# legacy owner pending rows for the revoked property: ${legacy.length}`);
+    } finally {
+      for (const row of ended.rows) await query("UPDATE property_owners SET effective_from = $2::date, effective_to = $3::date WHERE id = $1", [row.id, row.effective_from, row.effective_to]);
+      for (const row of other.rows) await query("DELETE FROM property_owners WHERE id = $1", [row.id]);
+    }
+  }
   return { manager, pending };
 }
 

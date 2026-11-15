@@ -307,9 +307,17 @@ function readApprovals<T>(
     + " ORDER BY r.submitted_at DESC,r.version_id),'[]'::jsonb) AS r FROM app."
     + gateway + "(" + args + ") r"
     + (homeDetails ? " LEFT JOIN public.maintenance_tickets t ON t.id=r.ticket_id AND t.org_id=$1 AND t.property_id=r.property_id"
-      + " LEFT JOIN public.properties p ON p.id=r.property_id AND p.org_id=$1" : "");
+      + " LEFT JOIN public.properties p ON p.id=r.property_id AND p.org_id=$1"
+      // `run` reads with the service role, and the gateway admits by the estimate snapshot's designated owner.
+      // The home projection reads CURRENT property/ticket fields, so it also requires the owner's current
+      // property_owners authority (the ownerPropertyScope rule, bound to this session's user): a property whose
+      // authorization ended is dropped here, never decorated with its current name, ticket title or vendor.
+      + " WHERE EXISTS (SELECT 1 FROM public.property_owners hpo JOIN public.contacts hc ON hc.id=hpo.owner_contact_id AND hc.org_id=hpo.org_id"
+      + " WHERE hpo.org_id=$1 AND hpo.property_id=r.property_id AND hc.user_id=$5 AND hc.is_owner AND hc.archived_at IS NULL"
+      + " AND hpo.effective_from<=current_date AND (hpo.effective_to IS NULL OR hpo.effective_to>current_date))" : "");
   const params: unknown[] = [session.orgId, session.liveOrgId, session.environment, session.sessionId];
   if (ticketId !== undefined) params.push(ticketId);
+  if (homeDetails) { if (ticketId !== undefined) throw new Error("homeDetails reads the pending list only"); params.push(session.userId); }
   return run(session, sql, params, approvalRows<T>);
 }
 

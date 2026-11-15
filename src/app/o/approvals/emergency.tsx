@@ -20,4 +20,3 @@ export function Emergency({ row, copy }: { row: OwnerHistoryRow; copy: Copy }) {
     <Intent label={copy.notice} at={row.emergency_notice_intent_at} copy={copy} />
   </section>;
 }
-

@@ -32,7 +32,9 @@ export function OwnerHomeV3({ name, locale, state, estimate }: {
   const handledLink = useRef<string | undefined>(undefined);
   const rows = state.status === "ready" ? state.rows.filter(row => !removed.includes(row.versionId)) : [];
   useEffect(() => {
-    if (!estimate || handledLink.current === estimate || state.status !== "ready") return;
+    // Once the query leaves (close replaces /o?estimate=… with /o), forget it so the same deep link opens again.
+    if (!estimate) { handledLink.current = undefined; return; }
+    if (handledLink.current === estimate || state.status !== "ready") return;
     handledLink.current = estimate;
     const row = state.rows.find(row => row.ticketId === estimate);
     if (row && !removed.includes(row.versionId)) setSelected(row);
