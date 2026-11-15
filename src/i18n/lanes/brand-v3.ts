@@ -137,3 +137,32 @@ export function brandV3OwnerHomeCopy(locale: Locale) {
     handoff: "管理方和廠商現在會看到同一版，廠商可以依約定開工。",
   };
 }
+
+// R1-BANK / R1-BANK-ROW (Round 1, 2026-11-14 18:53); scope follows phase 3 §3.2.
+// A single partial stored suggestion uses the possible-count wording, never the all-three claim.
+export function brandV3BankCopy(locale: Locale) {
+  return locale === "en" ? {
+    lead: "Month {month} has {all} bank lines, {matched} matched and {review} needing your review.",
+    upload: "Upload bank statement", lastUpload: "Last upload {time}",
+    uploadScope: "Across this organization's active accounts, all months.",
+    review: "Needs your review", matched: "Matched", all: "All", ignored: "Ignored",
+    exact: "All three match, not confirmed yet", possible: "{count} possible matches",
+    same_day: "{count} payments on the same date for the same amount", none: "No matching bill",
+    confirm: "Confirm match", reject: "Not this payment", choose: "Choose one", manual: "Match manually",
+    dateLast5: "Posted date · last five digits", last5: "Last five digits {last5}",
+    suggestion: "Suggestion", month: "Month", previous: "Previous month", next: "Next month",
+    more: "Next page", shown: "Showing {shown} of {total}", failure: "Couldn't load the data", retry: "Try again",
+    loading: "Loading", close: "Close", noRows: "No unmatched bank lines",
+  } : {
+    lead: "{month} 月的銀行明細有 {all} 筆，{matched} 筆已經對上，{review} 筆要你看。",
+    upload: "上傳銀行明細", lastUpload: "最後上傳 {time}",
+    uploadScope: "本組織未封存帳戶，不限月份。",
+    review: "要你看", matched: "已對上", all: "全部", ignored: "已忽略",
+    exact: "三樣都對上，還沒確認", possible: "有 {count} 筆可能",
+    same_day: "同一天同金額有 {count} 筆", none: "沒有對得上的帳單",
+    confirm: "確認配對", reject: "不是這筆", choose: "選一筆", manual: "手動配對",
+    dateLast5: "交易日・末五碼", last5: "末五碼 {last5}", suggestion: "建議",
+    month: "月份", previous: "上一個月", next: "下一個月", more: "下一頁", shown: "顯示 {shown}／{total} 筆",
+    failure: "資料載入失敗", retry: "再試一次", loading: "載入中", close: "關閉", noRows: "沒有未配對銀行明細",
+  };
+}
