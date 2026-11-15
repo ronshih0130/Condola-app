@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { BankV3Page, type BankSearchParams } from "@/components/v3/m/bank/page";
+import { BankLoading } from "@/components/v3/m/bank/bank";
 import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
@@ -13,11 +17,16 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function BankPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function BankPage({ searchParams }: { searchParams: Promise<BankSearchParams> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    // The v3-only public stylesheet follows the existing shell/today asset convention.
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/bank.css" /><Suspense fallback={<BankLoading locale={session.locale} />}><BankV3Page session={session} params={params} /></Suspense></>;
+  }
   if (await bankMatchingEnabled(session)) {
     const board = await bankBoard(session);
     if (!board) throw new Error("Bank matching unavailable");

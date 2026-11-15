@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     }
     const body = await request.json();
     if (!body || (body.decision !== "match" && body.decision !== "reject") || typeof body.bankId !== "string" || typeof body.reason !== "string") return Response.json({ok:false},{status:400});
-    const result = await decideBankMatch(session,{bankId:body.bankId,decision:body.decision,reason:body.reason,paymentId:typeof body.paymentId === "string" ? body.paymentId : undefined,suggestionId:typeof body.suggestionId === "string" ? body.suggestionId : undefined});
+    const result = await decideBankMatch(session,{bankId:body.bankId,decision:body.decision,reason:body.reason,paymentId:typeof body.paymentId === "string" ? body.paymentId : undefined,suggestionId:typeof body.suggestionId === "string" ? body.suggestionId : undefined,...(typeof body.requestId === "string" ? {requestId:body.requestId} : {})});
     return Response.json({ok:result === true},{status:result ? 200 : 403,headers:{"Cache-Control":"private, no-store"}});
   } catch { return Response.json({ok:false},{status:400,headers:{"Cache-Control":"private, no-store"}}); }
 }
