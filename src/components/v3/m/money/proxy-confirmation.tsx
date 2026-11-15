@@ -6,13 +6,13 @@ import type { Locale } from "../../../../i18n";
 import { moneyPageCopy } from "../../../../i18n/lanes/brand-v3-money";
 import { ownStatusCopy } from "../../../../i18n/lanes/brand-v3-own-status";
 import { brandV3TodayCopy } from "../../../../i18n/lanes/brand-v3";
-import { actionConfirmPayment } from "../../../../server/actions";
+import { actionConfirmPaymentOwnerProxy } from "../../../../server/actions";
 import { CompletionCheck } from "../../completion-check";
 
-type Details = { paymentId: string; ownerName: string; target: string; amount: string; date: string; locale: Locale; returnTo: string };
+type Details = { paymentId: string; ownerContactId: string; ownerName: string; target: string; amount: string; date: string; locale: Locale; returnTo: string };
 type Step = "confirm" | "done" | "already_confirmed" | "proxy_unavailable";
 
-/** Uses the existing action; no client-supplied owner identity enters the write. */
+/** The displayed owner is an expectation; the writer validates attribution under lock. */
 export function ProxyConfirmation(props: Details) {
   const [open, setOpen] = useState(false);
   const [settled, setSettled] = useState(false);
@@ -70,9 +70,10 @@ export function ProxySheet(props: Details & { onClose: (refresh: boolean) => voi
     inFlight.current = true; setBusy(true); setFailed(false);
     const data = new FormData();
     data.set("paymentId", props.paymentId); data.set("returnTo", props.returnTo);
-    data.set("proxyOwnerConfirmed", "true"); data.set("presentation", "owner-proxy");
+    data.set("expectedOwnerContactId", props.ownerContactId);
+    data.set("proxyOwnerConfirmed", "true");
     try {
-      const outcome = await actionConfirmPayment(data);
+      const outcome = await actionConfirmPaymentOwnerProxy(data);
       setStep(outcome === "confirmed" ? "done" : outcome);
     }
     catch { setFailed(true); }

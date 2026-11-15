@@ -86,18 +86,18 @@ const summary = { today: "2030-05-01", timezone: "UTC", invalid_currencies: 0, a
   owing: 90, outstanding: [{ currency: "USD", amountMinor: "810647932926689280", leaseCount: 90 }] };
 const reportSummary = { today: "2030-05-01", timezone: "UTC", count: 80, attached: 60, other: 20, invalid_currencies: 0 };
 
-test("M-PROXY payee projection is scoped to the assigned B-003 account and visible owner name only", () => {
+test("M-PROXY payee projection is scoped to the assigned B-003 account and owner identity only", () => {
   assert.match(REPORTS_LIST_SQL_FOR_TEST, /payee\.id = l\.payee_bank_account_id AND payee\.org_id = \$1/);
   assert.match(REPORTS_LIST_SQL_FOR_TEST, /payee\.archived_at IS NULL AND payee\.show_to_tenants/);
   assert.match(REPORTS_LIST_SQL_FOR_TEST, /payee\.property_id IS NULL OR payee\.property_id = l\.property_id/);
   assert.match(REPORTS_LIST_SQL_FOR_TEST, /payee_owner\.id = payee\.owner_contact_id AND payee_owner\.org_id = \$1/);
-  assert.match(REPORTS_LIST_SQL_FOR_TEST, /CASE WHEN payee\.owner_contact_id IS NOT NULL\s+THEN jsonb_build_object\('displayName', payee_owner\.display_name\) ELSE NULL END/);
+  assert.match(REPORTS_LIST_SQL_FOR_TEST, /CASE WHEN payee\.owner_contact_id IS NOT NULL\s+THEN jsonb_build_object\('contactId', payee\.owner_contact_id::text, 'displayName', payee_owner\.display_name\) ELSE NULL END/);
   assert.doesNotMatch(REPORTS_LIST_SQL_FOR_TEST, /payee_account_numbers|account_number|holder_name|app\.b010_lease_collectors/);
 });
 
 test("M-PROXY reports preserve owner payee metadata for attached and other rows in the existing snapshot", async () => {
-  const attached = { ...report(1), ownerPayee: { displayName: "Synthetic owner" } };
-  const other = { ...report(2, true), ownerPayee: { displayName: null } };
+  const attached = { ...report(1), ownerPayee: { contactId: "owner", displayName: "Synthetic owner" } };
+  const other = { ...report(2, true), ownerPayee: { contactId: "owner", displayName: null } };
   const ordinary = report(3);
   const result = await moneyMonthReports(session, { month }, { ...ON,
     proxyOwners: async (org, ids) => {
@@ -265,7 +265,7 @@ for (const [scenario, owners, expected] of [
   ["B-010 off / management / missing collector", [], false],
   ["other owner", [{ id: id(1), ownerContactId: "other" }], false],
 ] as const) test(`M-PROXY reader: ${scenario}`, async () => {
-  const row = { ...report(1), ownerPayee: { displayName: "Owner" }, ownerPayeeContactId: "owner" };
+  const row = { ...report(1), ownerPayee: { contactId: "owner", displayName: "Owner" }, ownerPayeeContactId: "owner" };
   const result = await moneyMonthReports(session, { month }, { ...ON, proxyOwners: async () => [...owners],
     transaction: mockTx(sql => ({ rows: sql === REPORTS_SUMMARY_SQL_FOR_TEST ? [reportSummary] : [row] })) });
   assert.equal(result.state, "ready");

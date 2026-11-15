@@ -346,21 +346,35 @@ export async function actionConfirmPayment(formData: FormData) {
   const id = text(formData.get("paymentId"));
   try {
     const session = await guardEffectiveSession(await getSession(), "pay.record");
-    const proxyOwnerConfirmed = readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed"));
-    if (formData.get("presentation") === "owner-proxy") {
-      const state = await moneyProxyConfirmationState(session, id);
-      if (state !== "available") return state;
-    }
     await confirmPayment(session, id, {
-      proxyOwnerConfirmed,
+      proxyOwnerConfirmed: readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed")),
       source: "staff_ui",
     });
-    // M-PROXY keeps the modal mounted for its completion state.
-    if (formData.get("presentation") === "owner-proxy") return "confirmed" as const;
     redirect(returnTo);
   } catch (error) {
-    if (formData.get("presentation") === "owner-proxy" && !isRedirect(error)) throw error;
     bounce(returnTo, error);
+  }
+}
+
+export async function actionConfirmPaymentOwnerProxy(formData: FormData) {
+  await requireCurrentConsent();
+  const session = await guardEffectiveSession(await getSession(), "pay.record");
+  const id = text(formData.get("paymentId"));
+  const proxyOwnerConfirmed = readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed"));
+  const expectedOwnerContactId = text(formData.get("expectedOwnerContactId"));
+  if (!proxyOwnerConfirmed || !expectedOwnerContactId) return "proxy_unavailable" as const;
+  try {
+    const state = await moneyProxyConfirmationState(session, id);
+    if (state !== "available") return state;
+    const result = await confirmPayment(session, id, {
+      proxyOwnerConfirmed,
+      expectedOwnerContactId,
+      source: "staff_ui",
+    });
+    return result.outcome;
+  } catch (error) {
+    if (error instanceof FlowError && error.key === "errors.proxyOwnerMismatch") return "proxy_unavailable" as const;
+    throw error;
   }
 }
 

@@ -19,7 +19,7 @@ function load(react: unknown = React, action: (data: FormData) => Promise<"confi
   const mocks: Record<string, unknown> = {
     react, "next/navigation": { useRouter: () => ({ refresh }) },
     "../../../../i18n/lanes/brand-v3-money": money, "../../../../i18n/lanes/brand-v3-own-status": own,
-    "../../../../i18n/lanes/brand-v3": brand, "../../../../server/actions": { actionConfirmPayment: action },
+    "../../../../i18n/lanes/brand-v3": brand, "../../../../server/actions": { actionConfirmPaymentOwnerProxy: action },
     "../../completion-check": { CompletionCheck },
   };
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS,
@@ -28,7 +28,7 @@ function load(react: unknown = React, action: (data: FormData) => Promise<"confi
   return exports as typeof Components;
 }
 const components = load();
-const details = { paymentId: "synthetic-payment", ownerName: "Synthetic owner", target: "Synthetic tenant · A",
+const details = { paymentId: "synthetic-payment", ownerContactId: "synthetic-owner", ownerName: "Synthetic owner", target: "Synthetic tenant · A",
   amount: "NT$1,000", date: "2026-11-15", locale: "zh-TW" as const, returnTo: "/m/payments?month=2026-11&tab=yours" };
 const noop = () => {};
 const body = (overrides: Partial<React.ComponentProps<typeof components.ProxySheetBody>> = {}) => renderToStaticMarkup(
@@ -86,7 +86,7 @@ test("M-PROXY cancel writes nothing; double submission is blocked; failed action
   render().submit(); render().submit(); render().close();
   assert.equal(calls.length, 1); assert.equal(render().busy, true); assert.deepEqual(closed, [false]);
   assert.deepEqual(Object.fromEntries(calls[0]), { paymentId: details.paymentId, returnTo: details.returnTo,
-    proxyOwnerConfirmed: "true", presentation: "owner-proxy" });
+    expectedOwnerContactId: details.ownerContactId, proxyOwnerConfirmed: "true" });
   reject!(); await new Promise(setImmediate);
   assert.equal(render().failed, true); assert.equal(render().step, "confirm");
   render().submit(); assert.equal(calls.length, 2);

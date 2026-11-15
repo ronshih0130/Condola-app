@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+import { confirmPayment } from "./domain";
+import { paymentReturnTo } from "./payment-return-to";
+import { readProxyOwnerConfirmed } from "./b010-proxy-confirm-rules";
 import test from "node:test";
 import { Client } from "pg";
 import { BILLS_LIST_SQL_FOR_TEST, BILLS_SUMMARY_SQL_FOR_TEST, REPORTS_LIST_SQL_FOR_TEST, REPORTS_SUMMARY_SQL_FOR_TEST,
@@ -12,7 +17,7 @@ import { FlowError } from "./errors";
 import { disposableDbUrl } from "./test-disposable-db";
 import type { Session } from "./types";
 
-// Synthetic fixtures only. No provider, notification, queue or domain write helper is invoked.
+// Synthetic fixtures only; writer race regressions use the local DB event/outbox paths, never a sender.
 // Run against the Mac's fully migrated disposable PostgreSQL database, never staging/production.
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 const MONTH = "2030-05";
@@ -613,8 +618,8 @@ test("M-PROXY B-003 owner payee, company/default/unassigned, archived and proper
   assert.equal(await moneyProxyConfirmationState(o.staff.manager, payment), "available");
   for (const role of ["admin", "manager", "accountant"] as const) {
     const row = await read(o.staff[role]);
-    assert.deepEqual(row.ownerPayee, { displayName: "Synthetic visible owner" });
-    assert.doesNotMatch(JSON.stringify(row.ownerPayee), /account|phone|email|contactId/);
+    assert.deepEqual(row.ownerPayee, { contactId: owner, displayName: "Synthetic visible owner" });
+    assert.doesNotMatch(JSON.stringify(row.ownerPayee), /account|holder|phone|email/);
   }
   await query("UPDATE app.b010_lease_collectors SET collector = 'management', owner_contact_id = NULL WHERE org_id = $1 AND lease_id = $2", [o.orgId, l.id]);
   assert.equal((await read()).ownerPayee, null, "management collector uses ordinary confirmation");
@@ -641,9 +646,9 @@ test("M-PROXY B-003 owner payee, company/default/unassigned, archived and proper
   await query("UPDATE bank_accounts SET show_to_tenants = true, property_id = $2 WHERE id = $1", [ownerAccount, await property(o.orgId)]);
   assert.equal((await read()).ownerPayee, null, "a stale assignment cannot use a different property's account");
   await query("UPDATE bank_accounts SET property_id = NULL WHERE id = $1", [ownerAccount]);
-  assert.deepEqual((await read()).ownerPayee, { displayName: "Synthetic visible owner" });
+  assert.deepEqual((await read()).ownerPayee, { contactId: owner, displayName: "Synthetic visible owner" });
   await query("UPDATE contacts SET archived_at = now() WHERE id = $1", [owner]);
-  assert.deepEqual((await read()).ownerPayee, { displayName: null }, "owner flow stays, archived contact name is withheld");
+  assert.deepEqual((await read()).ownerPayee, { contactId: owner, displayName: null }, "owner flow stays, archived contact name is withheld");
   assert.deepEqual(await moneyMonthReports(o.staff.manager, { month: MONTH }, { v3: async () => false }), { state: "off" });
 });
 
@@ -659,6 +664,71 @@ test("M-PROXY owner payee also survives the unmatched-report path", async () => 
   await proxyCollector(o, l, owner);
   assert.equal(await moneyProxyConfirmationState(o.staff.accountant, confirmed), "already_confirmed");
   const result = await reports(o.staff.accountant);
-  assert.deepEqual(result.other.find(row => row.id === payment)?.ownerPayee, { displayName: "Synthetic other owner" });
+  assert.deepEqual(result.other.find(row => row.id === payment)?.ownerPayee, { contactId: owner, displayName: "Synthetic other owner" });
   assert.equal(result.attached.length, 0);
+});
+
+// Run the real owner-proxy action with session/consent supplied by this synthetic fixture.
+// The reader and writer retain their real DB permission checks and transactions.
+function proxyAction(s: Session, beforeWrite: () => Promise<void> = async () => {}) {
+  const source = ts.createSourceFile("actions.ts", readFileSync("src/server/actions.ts", "utf8"), ts.ScriptTarget.Latest, true);
+  const fn = source.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === "actionConfirmPaymentOwnerProxy")!;
+  const code = ts.transpileModule(fn.getText(source), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const mocks = { paymentReturnTo, requireCurrentConsent: async () => {}, text: (v: unknown) => String(v ?? ""),
+    guardEffectiveSession: async () => s, getSession: async () => s, moneyProxyConfirmationState,
+    confirmPayment: async (...args: Parameters<typeof confirmPayment>) => { await beforeWrite(); return confirmPayment(...args); },
+    FlowError, readProxyOwnerConfirmed, isRedirect: () => false,
+    redirect: () => assert.fail("inline action must not redirect"), bounce: () => assert.fail("inline action must not bounce"),
+  };
+  const exports: Record<string, (form: FormData) => Promise<unknown>> = {};
+  new Function("exports", ...Object.keys(mocks), code)(exports, ...Object.values(mocks));
+  return exports.actionConfirmPaymentOwnerProxy;
+}
+async function proxyRaceFixture() {
+  const o = await org(), l = await lease(o);
+  const owner = (await query<{ id: string }>(`INSERT INTO contacts (org_id, is_owner, display_name)
+    VALUES ($1, true, 'Synthetic displayed owner') RETURNING id::text`, [o.orgId])).rows[0].id;
+  const account = (await query<{ id: string }>(`INSERT INTO bank_accounts (org_id, nickname, currency, owner_contact_id, show_to_tenants)
+    VALUES ($1, 'Synthetic account', 'TWD', $2, true) RETURNING id::text`, [o.orgId, owner])).rows[0].id;
+  await query("UPDATE leases SET payee_bank_account_id = $2 WHERE id = $1", [l.id, account]);
+  await invoice(l); const payment = await pay(l, { contact: await primary(l) });
+  await proxyCollector(o, l, owner);
+  const displayed = (await reports(o.staff.manager)).attached.find(row => row.id === payment)!;
+  assert.deepEqual(displayed.ownerPayee, { contactId: owner, displayName: "Synthetic displayed owner" });
+  const form = new FormData(); form.set("paymentId", payment);
+  form.set("proxyOwnerConfirmed", "true"); form.set("expectedOwnerContactId", displayed.ownerPayee!.contactId);
+  const snapshot = async () => ({
+    payment: (await query("SELECT * FROM payments WHERE id = $1", [payment])).rows,
+    allocations: (await query("SELECT * FROM payment_allocations WHERE payment_id = $1", [payment])).rows,
+    ledger: (await query("SELECT * FROM ledger_transactions WHERE lease_id = $1 ORDER BY id", [l.id])).rows,
+    confirmations: (await query("SELECT * FROM app.b010_payment_confirmations WHERE payment_id = $1", [payment])).rows,
+    events: (await query("SELECT * FROM app.b010_source_events WHERE payment_id = $1 ORDER BY kind", [payment])).rows,
+  });
+  return { o, l, owner, account, payment, form, snapshot };
+}
+test("M-PROXY mapping A to B between display and submit returns proxy_unavailable without writes", async () => {
+  const f = await proxyRaceFixture();
+  const ownerB = (await query<{ id: string }>(`INSERT INTO contacts (org_id, is_owner, display_name)
+    VALUES ($1, true, 'Synthetic replacement owner') RETURNING id::text`, [f.o.orgId])).rows[0].id;
+  await query("UPDATE bank_accounts SET owner_contact_id = $2 WHERE id = $1", [f.account, ownerB]);
+  await query("UPDATE app.b010_lease_collectors SET owner_contact_id = $2 WHERE lease_id = $1", [f.l.id, ownerB]);
+  assert.equal(await moneyProxyConfirmationState(f.o.staff.manager, f.payment), "available", "both current mappings agree on B");
+  const before = await f.snapshot();
+  assert.equal(await proxyAction(f.o.staff.manager)(f.form), "proxy_unavailable");
+  assert.deepEqual(await f.snapshot(), before);
+});
+test("M-PROXY concurrent confirmation after available preflight returns already_confirmed with no duplicate write", async () => {
+  const f = await proxyRaceFixture();
+  let winner: Awaited<ReturnType<typeof f.snapshot>> | undefined;
+  const action = proxyAction(f.o.staff.manager, async () => {
+    assert.equal(await moneyProxyConfirmationState(f.o.staff.manager, f.payment), "available");
+    assert.equal((await confirmPayment(f.o.staff.admin, f.payment,
+      { proxyOwnerConfirmed: true, expectedOwnerContactId: f.owner })).outcome, "confirmed");
+    winner = await f.snapshot();
+  });
+  assert.equal(await action(f.form), "already_confirmed");
+  assert.equal(winner?.confirmations.length, 1);
+  assert.equal(winner?.confirmations[0].on_behalf_of_owner_contact_id, f.owner);
+  assert.equal(winner?.ledger.length, 1);
+  assert.deepEqual(await f.snapshot(), winner);
 });

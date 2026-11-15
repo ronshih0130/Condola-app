@@ -316,6 +316,17 @@ test("adapter definitions reject early bypasses and wrong helpers", () => {
     if (name === "good") assert.doesNotThrow(check); else assert.throws(check, name);
   }
 });
+test("owner-proxy confirmation uses the default consent-guarded server action classification", () => {
+  const file = program.getSourceFile(resolve("src/server/actions.ts"));
+  assert.ok(file);
+  const moduleSymbol = checker.getSymbolAtLocation(file);
+  assert.ok(moduleSymbol);
+  const action = checker.getExportsOfModule(moduleSymbol).find(symbol => symbol.name === "actionConfirmPaymentOwnerProxy");
+  assert.ok(action);
+  assert.equal(openActions["server/actions.ts"]?.[action.name], undefined);
+  guarded(bodyOf(action)!, false, "server/actions.ts#actionConfirmPaymentOwnerProxy");
+});
+
 test("all runtime server exports, routes and protected pages are classified", () => {
   for (const path of paths) {
     const file = program.getSourceFile(path)!;

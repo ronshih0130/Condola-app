@@ -35,7 +35,7 @@ export type MoneyMonthBills = { state: "off" } | { state: "unavailable" } | {
 export type MoneyMonthReport = {
   id: string; leaseId: string; place: string; tenantName: string | null;
   /** B-003 payee matched to the enabled B-010 audit collector; no bank details. */
-  ownerPayee: { displayName: string | null } | null;
+  ownerPayee: { contactId: string; displayName: string | null } | null;
   amountMinor: string; currency: string; paidOn: string; submittedAt: string;
   source: "tenant_portal"; bankTransactionId: string | null; proofFileId: string | null;
   /** Allocation can span months/leases. Each target appears once; each report is counted once. */
@@ -214,7 +214,7 @@ SELECT p.id::text, p.lease_id::text AS "leaseId", p.amount_minor::text AS "amoun
        pr.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place, c.display_name AS "tenantName",
        payee.owner_contact_id::text AS "ownerPayeeContactId",
        CASE WHEN payee.owner_contact_id IS NOT NULL
-         THEN jsonb_build_object('displayName', payee_owner.display_name) ELSE NULL END AS "ownerPayee",
+         THEN jsonb_build_object('contactId', payee.owner_contact_id::text, 'displayName', payee_owner.display_name) ELSE NULL END AS "ownerPayee",
        coalesce((SELECT jsonb_agg(jsonb_build_object('leaseId', a.lease_id::text, 'month', to_char(a.month, 'YYYY-MM'))
            ORDER BY a.month, a.lease_id) FROM attachments a WHERE a.report_id = p.id), '[]'::jsonb) AS "billRows",
        coalesce((SELECT min(a.attachment) FROM attachments a WHERE a.report_id = p.id), 'other') AS attachment

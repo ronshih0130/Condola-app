@@ -44,7 +44,7 @@ const proxy = compile(source("src/components/v3/m/money/proxy-confirmation.tsx")
   "next/navigation": { useRouter: () => ({ refresh() {} }) },
   "../../../../i18n/lanes/brand-v3-money": copy, "../../../../i18n/lanes/brand-v3": brand,
   "../../../../i18n/lanes/brand-v3-own-status": ownStatus,
-  "../../../../server/actions": { actionConfirmPayment: confirm }, "../../completion-check": { CompletionCheck },
+  "../../../../server/actions": { actionConfirmPaymentOwnerProxy: confirm }, "../../completion-check": { CompletionCheck },
 });
 const view = compile(source("src/components/v3/m/money/money.tsx"), {
   "./proxy-confirmation": proxy,
@@ -109,7 +109,7 @@ test("paid is the only state with the existing completion mark; unpaid rows neve
 });
 
 test("M-PROXY: owner payee opens the sheet; management and unassigned payees retain the normal action", () => {
-  const ownerReports = { ...reports, attached: [{ ...report("r1"), ownerPayee: { displayName: "Synthetic owner" } }, report("r2")] };
+  const ownerReports = { ...reports, attached: [{ ...report("r1"), ownerPayee: { contactId: "owner", displayName: "Synthetic owner" } }, report("r2")] };
   for (const role of ["admin", "manager", "accountant"] as const) {
     const html = render({ session: { ...session, role }, reports: ownerReports });
     assert.equal((html.match(/data-testid="confirm-owner-payment"/g) ?? []).length, 1);
