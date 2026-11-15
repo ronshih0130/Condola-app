@@ -38,7 +38,11 @@ test("rendered decision form retains its requestId across submission retries", (
   const form = readFileSync(new URL("../../o/approvals/decision-form.tsx", import.meta.url), "utf8");
   assert.match(cards, /<DecisionForm\b[^>]*>[\s\S]*?<input type="hidden" name="requestId" value=\{crypto\.randomUUID\(\)\} \/>[\s\S]*?<\/DecisionForm>/);
   assert.match(form, /const requestId = new FormData\(event\.currentTarget\)\.get\("requestId"\)/);
-  assert.match(form, /body: JSON\.stringify\(\{ requestId, versionId, decision, reason:/);
+  const request = readFileSync(new URL("../../o/approvals/decision-request.ts", import.meta.url), "utf8");
+  assert.match(form, /postOwnerDecision\(\{ requestId: String\(requestId\), versionId, decision, reason:/);
+  assert.match(request, /fetch\("\/api\/owner-repair-decision"/);
+  assert.match(request, /body: JSON\.stringify\(input\)/);
+  assert.doesNotMatch(request, /randomUUID/);
   assert.match(form, /<form onSubmit=\{submit\}>[\s\S]*?\{children\}/);
   assert.doesNotMatch(form, /randomUUID|name="requestId"|\.set\("requestId"/);
 });

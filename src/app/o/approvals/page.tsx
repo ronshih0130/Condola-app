@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
@@ -10,6 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function ApprovalsPage() {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  if (await brandV3EnabledForOrg(session.orgId)) redirect("/o");
   const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   if (!(await repairApprovalsEnabled(session.orgId))) {

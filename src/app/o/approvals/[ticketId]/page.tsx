@@ -1,10 +1,11 @@
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { getSession } from "@/server/session";
-import { ownerHistory, repairApprovalsEnabled } from "@/server/repair-approval";
+import { ownerHistory, ownerPending, repairApprovalsEnabled } from "@/server/repair-approval";
 import { isUuid } from "@/server/repair-rules";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ApprovalHistoryCards } from "../approval-cards";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,10 @@ export default async function ApprovalHistoryPage({ params }: {
   }
   const { ticketId } = await params;
   if (!isUuid(ticketId)) notFound();
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    const pending = await ownerPending(session);
+    if (pending.some(row => row.ticket_id === ticketId)) redirect(`/o?estimate=${encodeURIComponent(ticketId)}`);
+  }
   const rows = await ownerHistory(session, { ticketId });
   return (
     <div data-v2-page={v2 ? "o-approvals" : undefined}>
