@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { guardEffectiveSession } from "./b017-custom-role-governance";
 import { ownerHistory, ownerPending, repairApprovalsEnabled } from "./repair-approval";
 import { approvalAmount } from "./repair-approval-rules";
 import { displaySampleName } from "./sandbox-data";
@@ -13,7 +14,9 @@ export function ownerEstimateAmount(amount: string, currency: string, scale: num
   return (currency.trim() === "TWD" ? "NT$" : currency.trim() + " ") + value;
 }
 
-export async function ownerHomeEstimates(session: Session): Promise<OwnerHomeState> {
+export async function ownerHomeEstimates(input: Session): Promise<OwnerHomeState> {
+  // B-017: the same effective-session guard the owner pages use, before any read.
+  const session = await guardEffectiveSession(input, null);
   try {
     if (!(await repairApprovalsEnabled(session.orgId))) return { status: "ready", rows: [] };
     const pending = await ownerPending(session, { homeDetails: true });

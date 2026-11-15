@@ -337,7 +337,7 @@
   },
   "src/app/o/approvals/page.tsx#ApprovalsPage": {
     "reason": "Owner portal page checks owner identity before its rollout and decision queries",
-    "sha256": "7de2fe28e386ad256a0bcba124e1bdc6b5031f2fdcfecb33c01cd359a6d80fc7"
+    "sha256": "868bfd91aebdafc622f803c82295a683a7a55c12ba6f7de4cd48e4d8878fb7a7"
   },
   "src/app/o/approvals/[ticketId]/page.tsx#ApprovalHistoryPage": {
     "reason": "Owner portal page checks owner identity before its rollout and decision queries",

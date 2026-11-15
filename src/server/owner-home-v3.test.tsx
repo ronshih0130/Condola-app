@@ -221,10 +221,12 @@ test("OQ-055 / O-EST: ON redirects list and pending detail; decided and unknown 
 });
 
 test("O-HOME / OWN-26-AC9: reader admission, emergency completeness, errors and exact scaled money", async () => {
-  let enabled = false; let fail = false; let hasEmergency = false; let history = false; let pendingCalls = 0;
+  let enabled = false; let fail = false; let hasEmergency = false; let history = false; let pendingCalls = 0; let guarded = 0;
   const reader = compile(source("src/server/owner-home-v3.ts"), {
+    // B-017: the effective-session guard runs (with no permission key, as on owner pages) before any read.
+    "./b017-custom-role-governance": { guardEffectiveSession: async (session: unknown, key: unknown) => { assert.equal(key, null); guarded++; return session; } },
     "./repair-approval": {
-      repairApprovalsEnabled: async () => enabled,
+      repairApprovalsEnabled: async () => { assert.ok(guarded > 0, "guard before the flag read"); return enabled; },
       ownerPending: async (_session: unknown, options: unknown) => { pendingCalls++; assert.deepEqual(options, { homeDetails: true }); if (fail) throw new Error("unavailable");
         return [{ ticket_id: row.ticketId, version_id: row.versionId, version_no: "2", property_name: row.property, item: row.item, vendor_name: row.vendor, amount_minor: "520000", currency: "TWD", minor_unit: 2, work_scope: row.scope, has_emergency: hasEmergency }]; },
       ownerHistory: async () => history ? [{ version_id: row.versionId, emergency_category: "water" }] : [],
