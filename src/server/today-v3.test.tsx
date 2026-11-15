@@ -268,7 +268,9 @@ test("Today CSS is wholly v3-scoped and reuses tokens; original readers stay byt
   css.walkRules(rule => assert.ok(rule.selector.startsWith('html[data-brand="v2"][data-brand-v3]'), rule.selector));
   css.walkDecls(declaration => assert.doesNotMatch(declaration.value, /#[0-9a-f]{3,8}\b|rgba?\(/i));
   // The rental and overdue readers gain two fields for the T-ROWS sublines (hub PR #15); their own tests cover them.
-  for (const name of ["b3-payment-turns.ts", "queries.ts", "onboarding-progress.ts"]) assert.equal(source(`src/server/${name}`), baseline(`src/server/${name}`));
+  // The payment reader now takes its pending-report predicate from b3-payment-eligibility (shared with the money
+  // month readers, phase 3 PR 1); its own tests cover it. The two other originals stay byte-identical.
+  for (const name of ["queries.ts", "onboarding-progress.ts"]) assert.equal(source(`src/server/${name}`), baseline(`src/server/${name}`));
 });
 
 test("Today composition gates P1/P2 without changing the shared payment reader", async () => {
