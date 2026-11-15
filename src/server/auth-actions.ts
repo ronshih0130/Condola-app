@@ -1,5 +1,7 @@
 "use server";
 
+import { paymentReturnTo } from "./payment-return-to";
+
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 
 import { requireCurrentConsent } from "./consent-gate";
@@ -707,12 +709,13 @@ export async function actionVoidExpense(formData: FormData) {
 
 export async function actionReversePayment(formData: FormData) {
   await requireCurrentConsent();
+  const returnTo = paymentReturnTo(formData.get("returnTo"));
   try {
     const session = await guardEffectiveSession(await getSession(), "pay.reverse");
     await reversePayment(session, text(formData.get("paymentId")), text(formData.get("reason")));
-    redirect("/m/payments?saved=1");
+    redirect(returnTo);
   } catch (error) {
-    bounce("/m/payments", error);
+    bounce(returnTo, error);
   }
 }
 

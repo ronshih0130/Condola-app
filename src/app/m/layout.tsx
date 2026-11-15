@@ -8,7 +8,7 @@ import { BUILD_SHA } from "@/build-info";
 import { Sidebar, TaskPanel } from "@/components/chrome";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { demoModeEnabled } from "@/server/demo";
-import { noPermHref } from "@/server/perms";
+import { can, noPermHref } from "@/server/perms";
 import { loadManagerChrome } from "@/server/queries";
 import { getSession } from "@/server/session";
 import { trialBannerFor } from "@/server/b056-trial";
@@ -22,12 +22,18 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   if (session.kind === "owner") redirect("/o");
   const path = (await headers()).get("x-pathname") || "";
   await requireCurrentConsent(session, "page", path || "/m");
-  const denied = noPermHref(path, session);
+  const routeDenied = noPermHref(path, session);
+  // Brand 3.0 money month page: the two exact month routes have independent bill (stmt.view) and report
+  // (pay.record) readers, so either key admits them under brand_v3. Nested routes keep their gates. The flag
+  // is read here only for that case, so the OFF path keeps its reader and redirect order (PLT-46-AC1).
+  const moneyV3 = routeDenied && /^\/m\/(payments|rent)\/?$/.test(path) && (can(session, "stmt.view") || can(session, "pay.record"))
+    ? await brandV3EnabledForOrg(session.orgId) : undefined;
+  const denied = moneyV3 ? null : routeDenied;
   if (denied) redirect(denied);
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   const banner = session.kind === "staff" ? await trialBannerFor(session) : null;
-  if (await brandV3EnabledForOrg(session.orgId)) {
+  if (moneyV3 ?? await brandV3EnabledForOrg(session.orgId)) {
     // /api/env accepts native staff roles; its null-key guard refuses assigned custom roles.
     return <ManagerShellV3 areas={areasFor(session)} tabs={tabsFor(session)}
       locale={session.locale} name={session.name} role={session.role} firm={firm.name}
