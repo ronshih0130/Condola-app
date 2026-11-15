@@ -55,6 +55,7 @@
   "src/server/actions.ts#actionSign": "leases.edit",
   "src/server/actions.ts#actionRecordPayment": "pay.record",
   "src/server/actions.ts#actionConfirmPayment": "pay.record",
+  "src/server/actions.ts#actionConfirmPaymentOwnerProxy": "pay.record",
   "src/server/actions.ts#actionRejectPayment": "pay.record",
   "src/server/actions.ts#actionImportCsv": "bank.reconcile",
   "src/server/actions.ts#actionApproveMatch": "bank.reconcile",

@@ -925,6 +925,7 @@
  "i_dismiss_guide": "Hide guide",
  "i_show_guide": "Show try-out list",
  "i_forbidden": "This role can't do that. Please ask someone with access, or go back.",
+ "i_proxy_owner_mismatch": "The owner details have changed. Please refresh and try again.",
  "i_required": "Some required fields are still empty. Please fill them in and try again.",
  "i_generic": "That didn't finish. Please check the fields and try again.",
  "i_lease_failed": "The lease was not saved. Please try again later, or contact service@condola.app if it keeps happening.",
