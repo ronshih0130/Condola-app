@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { VendorTokenShell } from "@/components/v3/vendor/token-shell";
 import { vendorTokenBrand } from "@/server/vendor-token-brand";
-import { VendorNotificationCenterEntry } from "@/components/notification-center-entry";
+import { VendorNotificationCenterEntry, resolveVendorNotificationEntry } from "@/components/notification-center-entry";
 import { vendorLinkCopy } from "@/i18n/lanes/vendor-link";
 import { makeT } from "@/i18n";
 import { VendorLinkDetails } from "@/components/vendor-link-details";
@@ -40,6 +40,9 @@ export default async function VendorJobPage({
     );
   }
   const tokenBrand = await vendorTokenBrand(token, !job.vendorLink || job.vendorLink.sharingApproved);
+  // Legacy VendorLinkDetails hides its notification child until sharing is approved.
+  const notificationEntry = tokenBrand && (!job.vendorLink || job.vendorLink.sharingApproved)
+    ? await resolveVendorNotificationEntry(token) : null;
   const vendorState = job.vendorLink && (!job.vendorLink.sharingApproved || job.vendorLink.capability !== "write")
     ? null : await resolveVendorJobState(token);
   // B-035: only while every strict vendor LINE gate is ON. OFF keeps the original child slot, so even useId output is unchanged.
@@ -167,6 +170,7 @@ export default async function VendorJobPage({
       on_hold: "i_st_hold", resolved: "i_st_resolved", closed: "i_st_closed", cancelled: "i_st_cancelled",
     }[tokenBrand.status];
     return <VendorTokenShell locale={prefs.locale} context={tokenBrand}
+      notificationHref={notificationEntry?.href ?? null}
       title={job!.title} address={job!.address} window={job!.window}
       status={reported ? t("i_vendor_reported_awaiting_company")
         : !shared ? vendorLinkCopy(prefs.locale).waiting : !writable ? t("i_vlink_read_only")

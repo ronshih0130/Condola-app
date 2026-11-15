@@ -7,6 +7,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import * as i18n from "../i18n";
+import * as notificationCopy from "../i18n/lanes/notification-center";
 import * as linkCopy from "../i18n/lanes/vendor-link";
 import * as rules from "./vendor-repair-rules";
 import { VendorTokenShell } from "../components/v3/vendor/token-shell";
@@ -30,9 +31,10 @@ const context: VendorTokenBrand = { name: "Vendor A", company: "Company A", prop
 const job: VendorJobPage = { title: "This job only", description: "Description", address: "Address A", place: "Unit A", window: "Monday", currency: "TWD", reported: false,
   issuePhotos: [{ id: "issue-photo", name: "issue.jpg" }], donePhotos: [{ id: "done-photo", name: "done.jpg" }] };
 const pageSource = source("src/app/v/[token]/page.tsx");
+const legacyNotificationSource = execFileSync("git", ["show", "3e87c93:src/components/notification-center-entry.tsx"], { encoding: "utf8" });
 const baseline = execFileSync("git", ["show", "3e87c93:src/app/v/[token]/page.tsx"], { encoding: "utf8" });
 
-type Scenario = { enabled?: boolean; v2?: boolean; locale?: i18n.Locale; job?: VendorJobPage | null; state?: Record<string, unknown> | null; line?: boolean };
+type Scenario = { admission?: "enabled" | "busy" | "disabled" | "denied"; enabled?: boolean; v2?: boolean; locale?: i18n.Locale; job?: VendorJobPage | null; state?: Record<string, unknown> | null; line?: boolean };
 function page(text: string, scenario: Scenario) {
   const locale = scenario.locale ?? "zh-TW";
   const v2 = scenario.v2 ?? false;
@@ -40,6 +42,29 @@ function page(text: string, scenario: Scenario) {
   const details = compile(source("src/components/vendor-link-details.tsx"), {
     "@/server/brand-v2": { brandV2Enabled: () => v2 }, "@/i18n/lanes/vendor-link": linkCopy,
   });
+  const notificationEntry = compile(text === baseline
+    ? legacyNotificationSource
+    : source("src/components/notification-center-entry.tsx"), {
+    "next/link": { default: ({ prefetch, ...props }: React.ComponentProps<"a"> & { prefetch?: boolean }) => {
+      assert.equal(prefetch, false); return <a {...props} />;
+    } },
+    "@/i18n/lanes/notification-center": notificationCopy,
+    "@/server/notification-center": { centerVendorAdmission: async (value: string) => {
+      assert.equal(value, token); return scenario.admission ?? "disabled";
+    } },
+  });
+  async function resolveEntries(node: React.ReactNode): Promise<React.ReactNode> {
+    if (Array.isArray(node)) return Promise.all(node.map(resolveEntries));
+    if (!React.isValidElement(node)) return node;
+    const element = node as React.ReactElement<{ children?: React.ReactNode }>;
+    if (element.type === notificationEntry.VendorNotificationCenterEntry) {
+      return (notificationEntry.VendorNotificationCenterEntry as (props: unknown) => Promise<React.ReactNode>)(element.props);
+    }
+    if (!("children" in element.props)) return element;
+    const children = await resolveEntries(element.props.children);
+    return Array.isArray(children) ? React.cloneElement(element, undefined, ...children)
+      : React.cloneElement(element, undefined, children);
+  }
   const mocks = {
     "@/i18n": i18n, "@/i18n/lanes/vendor-link": linkCopy,
     "@/components/v3/vendor/token-shell": { VendorTokenShell },
@@ -51,7 +76,7 @@ function page(text: string, scenario: Scenario) {
     "@/server/brand-v2": { brandV2Enabled: () => v2 },
     "@/server/session": { requestPrefs: async () => ({ locale }) },
     "@/server/line/vendor-entry": { vendorLineEntryEnabled: async () => { calls.push("line"); return scenario.line ?? false; } },
-    "@/components/notification-center-entry": { VendorNotificationCenterEntry: () => <aside data-testid="legacy-notifications" /> },
+    "@/components/notification-center-entry": notificationEntry,
     "@/components/vendor-link-details": details,
     "@/components/ticket-photos": { TicketPhotoUpload: (props: { inputTestId: string; signPath: string; confirmPath: string; extra: { token: string } }) => {
       assert.equal(props.extra.token, token);
@@ -63,7 +88,7 @@ function page(text: string, scenario: Scenario) {
     "./vendor-line-entry": { VendorLineEntry: () => <aside data-testid="line-entry" /> },
   };
   const render = compile(text, mocks).default as (props: { params: Promise<{token: string}>; searchParams: Promise<{error?: string}> }) => Promise<React.ReactNode>;
-  return { calls, async html() { return renderToStaticMarkup(await render({ params: Promise.resolve({ token }), searchParams: Promise.resolve({ error: "existing-error" }) })); } };
+  return { calls, async html() { return renderToStaticMarkup(await resolveEntries(await render({ params: Promise.resolve({ token }), searchParams: Promise.resolve({ error: "existing-error" }) }))); } };
 }
 
 test("OFF parity: actual page serialization is byte-identical to 3e87c93, including photo useId and all existing states", async () => {
@@ -74,11 +99,11 @@ test("OFF parity: actual page serialization is byte-identical to 3e87c93, includ
     }))),
   ];
   let comparisons = 0;
-  for (const locale of ["zh-TW", "en"] as const) for (const v2 of [false, true]) for (const fixture of jobs) for (const state of states) for (const line of [false, true]) {
-    const scenario = { job: fixture, locale, v2, state, line, enabled: false };
+  for (const locale of ["zh-TW", "en"] as const) for (const v2 of [false, true]) for (const fixture of jobs) for (const state of states) for (const line of [false, true]) for (const admission of ["enabled", "busy", "disabled", "denied"] as const) {
+    const scenario = { job: fixture, locale, v2, state, line, admission, enabled: false };
     assert.equal(await page(pageSource, scenario).html(), await page(baseline, scenario).html()); comparisons++;
   }
-  assert.equal(comparisons, 144);
+  assert.equal(comparisons, 576);
 });
 
 test("invalid / expired / revoked / unshared-invalid token response stays identical and never asks for brand", async () => {
@@ -98,6 +123,27 @@ test("ON: exact token job only; existing photo, report and appointment forms sur
   assert.match(html, /name="requestId" value="request"/); assert.match(html, /name="versionId" value="version"/);
   assert.match(html, /existing-error/);
   assert.doesNotMatch(html, /legacy-notifications|line-entry|href="\/login|Other job|History job/);
+});
+
+test("ON notification bell and tab match legacy admission and destination, including busy retry", async () => {
+  for (const admission of ["enabled", "busy", "disabled", "denied"] as const) {
+    for (const fixture of [job, ...[false, true].flatMap(sharingApproved =>
+      (["write", "read_only"] as const).map(capability => ({ ...job, vendorLink: { capability, sharingApproved, typeFields: [] } })))]) {
+      const legacy = await page(baseline, { admission, job: fixture }).html();
+      const html = await page(pageSource, { admission, job: fixture, enabled: true }).html();
+      const legacyHref = legacy.match(/data-testid="notification-center-entry" href="([^"]+)"/)?.[1];
+      if ((!fixture.vendorLink || fixture.vendorLink.sharingApproved) && (admission === "enabled" || admission === "busy")) {
+        assert.equal(legacyHref, `/v/${encodeURIComponent(token)}/notifications`);
+        assert.equal(html.split(`href="${legacyHref}"`).length - 1, 2, "bell and tab use legacy href");
+        assert.match(html, /class="v-token-bell"/);
+        assert.equal((html.match(/aria-haspopup="dialog"/g) ?? []).length, 2);
+      } else {
+        assert.equal(legacyHref, undefined);
+        assert.doesNotMatch(html, /class="v-token-bell"|href="[^"]*\/notifications"/);
+        assert.equal((html.match(/aria-haspopup="dialog"/g) ?? []).length, 3);
+      }
+    }
+  }
 });
 
 test("ON enhanced sharing and approval locks preserve all original capability restrictions", async () => {
@@ -150,7 +196,7 @@ test("server brand reader failure falls back to legacy without a new error or fa
 });
 
 test("estimate and document routes retain baseline bytes; this slice creates no new write path", () => {
-  for (const file of ["src/app/v/[token]/estimate/page.tsx", "src/app/v/[token]/estimate/estimate-form.tsx", "src/app/v/documents/[token]/page.tsx", "src/components/vendor-documents-panel.tsx", "src/server/vendor-repair.ts", "src/app/v/[token]/vendor-job-controls.tsx"]) {
+  for (const file of ["src/app/v/[token]/notifications/page.tsx", "src/app/v/[token]/estimate/page.tsx", "src/app/v/[token]/estimate/estimate-form.tsx", "src/app/v/documents/[token]/page.tsx", "src/components/vendor-documents-panel.tsx", "src/server/vendor-repair.ts", "src/app/v/[token]/vendor-job-controls.tsx"]) {
     assert.equal(source(file), execFileSync("git", ["show", `3e87c93:${file}`], { encoding: "utf8" }));
   }
 });

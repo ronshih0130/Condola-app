@@ -12,7 +12,7 @@ import { ownStatusCopy } from "../../../i18n/lanes/brand-v3-own-status";
 const props: VendorTokenShellProps = {
   locale: "zh-TW", context: { name: "陳師傅", company: "測試公司", property: "測試公寓", status: "assigned" },
   title: "水龍頭", address: "測試地址", window: "Monday", status: "已指派", reported: false, canReport: true,
-  children: <section data-testid="existing">Existing controls</section>,
+  notificationHref: null, children: <section data-testid="existing">Existing controls</section>,
 };
 
 test("V-TOKEN / OV-SH-PHONE: ven-off lead, scoped brand, exact job card, no avatar or login", () => {
@@ -21,7 +21,7 @@ test("V-TOKEN / OV-SH-PHONE: ven-off lead, scoped brand, exact job card, no avat
   assert.match(html, /href="#.*?"/);
   assert.match(html, /data-testid="existing"/);
   assert.doesNotMatch(html, /href="\/(?:login|v|api)|avatar|role="menu"|sidebar|登入後看全部未結案件/);
-  assert.equal((html.match(/aria-haspopup="dialog"/g) ?? []).length, 4, "three tabs plus bell");
+  assert.equal((html.match(/aria-haspopup="dialog"/g) ?? []).length, 3, "three restricted tabs; bell hidden");
 });
 
 test("V-TOKEN: reported handoff uses clock, no completion tick or report primary", () => {
@@ -60,9 +60,23 @@ test("V-TOKEN-TABS: each actual handler opens the same native modal, return clos
   }
   const nodes = all(Component(props));
   const tabs = nodes.filter(node => node.type === "button" && node.props["aria-haspopup"] === "dialog");
-  assert.equal(tabs.length, 4);
+  assert.equal(tabs.length, 3);
   for (const tab of tabs) (tab.props.onClick as () => void)();
-  assert.equal(opened, 4);
+  assert.equal(opened, 3);
+  const href = "/v/test%2Ftoken/notifications";
+  const admitted = all(Component({ ...props, notificationHref: href }));
+  const links = admitted.filter(node => node.type === "a" && node.props.href === href);
+  assert.equal(links.length, 2, "bell and notification tab link to legacy destination");
+  for (const link of links) {
+    assert.equal(link.props.onClick, undefined);
+    assert.equal(link.props["aria-haspopup"], undefined);
+  }
+  assert.ok(links.some(link => link.props.className === "v-token-bell"));
+  assert.ok(!nodes.some(node => node.props.className === "v-token-bell"));
+  const restricted = admitted.filter(node => node.type === "button" && node.props["aria-haspopup"] === "dialog");
+  assert.equal(restricted.length, 2, "workbench and payment tabs remain restricted");
+  for (const tab of restricted) (tab.props.onClick as () => void)();
+  assert.equal(opened, 5);
   const modal = nodes.find(node => node.type === "dialog")!;
   assert.ok(modal.props["aria-labelledby"]); assert.ok(modal.props["aria-describedby"]);
   const html = renderToStaticMarkup(modal);

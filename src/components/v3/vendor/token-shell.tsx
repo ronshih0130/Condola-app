@@ -21,9 +21,10 @@ const tokens = Object.fromEntries(
 export type VendorTokenShellProps = {
   locale: Locale; context: VendorTokenBrand; title: string; address: string; window: string;
   status: string; reported: boolean; canReport: boolean; children: ReactNode;
+  notificationHref: string | null;
 };
 
-export function VendorTokenShell({ locale, context, title, address, window, status, reported, canReport, children }: VendorTokenShellProps) {
+export function VendorTokenShell({ locale, context, title, address, window, status, reported, canReport, notificationHref, children }: VendorTokenShellProps) {
   const copy = vendorTokenCopy(locale);
   const dialog = useRef<HTMLDialogElement>(null);
   const sheetTitle = useId();
@@ -43,7 +44,7 @@ export function VendorTokenShell({ locale, context, title, address, window, stat
     <header className="v-token-bar">
       <div><strong>{copy.brand}</strong><p>{(context.name.trim() ? copy.context : copy.contextNoName)
         .replace("{name}", context.name).replace("{company}", context.company)}</p></div>
-      <button className="v-token-bell" type="button" aria-label={copy.notifications} aria-haspopup="dialog" onClick={open}><ShellIcon name="bell" /></button>
+      {notificationHref ? <a className="v-token-bell" href={notificationHref} aria-label={copy.notifications}><ShellIcon name="bell" /></a> : null}
     </header>
     <main className="v-token-main">
       <div className="v-token-lead"><h1>{copy.title}</h1></div>
@@ -61,7 +62,9 @@ export function VendorTokenShell({ locale, context, title, address, window, stat
       <div className="v-token-existing" id={reportId} tabIndex={-1}>{children}</div>
     </main>
     <nav className="v-token-tabs" aria-label={copy.navigation}>
-      {tabs.map(tab => <button key={tab.icon} type="button" onClick={open} aria-haspopup="dialog">
+      {tabs.map(tab => tab.icon === "bell" && notificationHref ? <a key={tab.icon} href={notificationHref}>
+        <ShellIcon name={tab.icon} /><span>{tab.label}</span>
+      </a> : <button key={tab.icon} type="button" onClick={open} aria-haspopup="dialog">
         <ShellIcon name={tab.icon} /><span>{tab.label}</span>
       </button>)}
     </nav>
