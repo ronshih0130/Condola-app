@@ -351,3 +351,20 @@ test("SH-TRIAL / MGT-98-AC1: the retained /m layout keeps the trial banner acros
   assert.equal(renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m" }).includes('data-testid="trial-banner"'), true);
   assert.equal(renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m/units" }).includes('data-testid="trial-banner"'), false);
 });
+
+test("SH-NONAME: no display name → context 「公司（角色）」, person-icon avatar without a letter, menu header without a name", () => {
+  const html = renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m/units", name: "" });
+  assert.match(html, /安居代管（管理員）/);
+  assert.doesNotMatch(html, /｜（/);
+  assert.match(html, /data-testid="avatar-noname"/);
+  assert.doesNotMatch(html.split('data-testid="avatar-menu-trigger"')[1].split("</button>")[0], />管</);
+  const named = renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m/units", name: "陳小明" });
+  assert.match(named, /安居代管｜陳小明（管理員）/);
+  assert.doesNotMatch(named, /avatar-noname/);
+});
+
+test("SH-NONAME: the open avatar menu header shows role and company only", () => {
+  const menu = renderShell({ path: "/m", open: "avatar", name: "" }).split('class="shell-menu-heading"')[1].split("</div>")[0];
+  assert.doesNotMatch(menu, /<b>/);
+  assert.match(menu, /管理員/); assert.match(menu, /安居代管/);
+});

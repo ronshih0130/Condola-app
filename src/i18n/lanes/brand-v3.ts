@@ -20,6 +20,8 @@ const navigationCopy = {
     import: "資料匯入",
     navigation: "主要導覽",
     context: "{company}｜{name}（{role}）",
+    // SH-NONAME: no display name → drop the name and its 「｜」.
+    contextNoName: "{company}（{role}）",
     brandParty: "{brand}・{party}",
   },
   en: {
@@ -31,6 +33,7 @@ const navigationCopy = {
     import: "Data import",
     navigation: "Main navigation",
     context: "{company} · {name} ({role})",
+    contextNoName: "{company} ({role})",
     brandParty: "{brand} · {party}",
   },
 };

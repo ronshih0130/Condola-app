@@ -11,6 +11,7 @@ const paths = {
   more: "M5 12h.01M12 12h.01M19 12h.01",
   bell: "M6 16V11a6 6 0 1112 0v5l2 2H4zM10 20h4",
   chat: "M4 5h16v11H9l-5 4z",
+  user: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 21c1-4 4-6 8-6s7 2 8 6",
 };
 export function ShellIcon({ name }: { name: keyof typeof paths }) {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;
