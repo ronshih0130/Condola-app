@@ -73,7 +73,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {showReset ? <ResetButton /> : null}
           </span>
         </header>}
-        {chrome.environment === "sandbox" ? <EnvBanner showBack={session?.kind === "staff" && Boolean(session.liveOrgId)} /> : null}
+        {!managerShell && chrome.environment === "sandbox" ? <EnvBanner showBack={session?.kind === "staff" && Boolean(session.liveOrgId)} /> : null}
         {children}
         <footer className="foot site-foot" data-testid="site-footer" style={{ margin: "16px" }}>
           <nav className="site-legal" aria-label={t("i_legal_nav")}>

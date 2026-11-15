@@ -15,7 +15,11 @@ export default async function MorePage() {
   if (session.kind !== "staff") notFound();
   if (!(await brandV3EnabledForOrg(session.orgId))) notFound();
   const tabs = tabsFor(session);
-  const remaining = areasFor(session).filter(area => !tabs.some(tab => tab.id === area.id));
+  const remaining = areasFor(session)
+    .filter(area => !tabs.some(tab => tab.id === area.id))
+    .map(area => ({ ...area, links: area.links.filter(item => item.href !== "/m/account") }))
+    // Some roles have only My account in Settings; leave that empty card out too.
+    .filter(area => area.href !== "/m/account" || area.links.length > 0);
   return <div className="v3-more">
     <h1>{brandV3NavigationCopy(session.locale).more}</h1>
     <div className="sheet">
