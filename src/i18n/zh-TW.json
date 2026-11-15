@@ -925,6 +925,7 @@
  "i_dismiss_guide": "關閉指引",
  "i_show_guide": "顯示試用清單",
  "i_forbidden": "這個身份不能做這件事。請改由有權限的人操作，或回到上一頁。",
+ "i_proxy_owner_mismatch": "屋主資料已變更，請重新整理後再試一次。",
  "i_required": "還有必填欄位沒有填。請補齊後再送出。",
  "i_generic": "沒有完成。請檢查欄位後再試一次。",
  "i_lease_failed": "租約沒有儲存成功，請稍後再試；若持續發生請聯絡 service@condola.app",
