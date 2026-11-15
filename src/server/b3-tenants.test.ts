@@ -102,8 +102,10 @@ test("mobile item OFF/absent ignores crafted missing URL, preserves phone, and o
 test("ON returns duplicate hint only with contact permission, from pre-filter org population",async()=>{
   const data=await brandTenants(session,{}, {...on,transaction:mock(sql=>sql===SUMMARY?[summary]:[row(10)])});
   if(data.state!=="ready")assert.fail();assert.equal(data.mobileRequired,true);assert.equal(data.rows[0].duplicateName,"Other tenant");
-  assert.match(LIST,/SELECT d.name FROM population d WHERE d.id<>f.id AND d.phone=f.phone/);
-  assert.match(LIST,/ORDER BY d.name,d.id LIMIT 1/);
+  // Same org, every unarchived tenant contact (not just the listed population), same normalised number (Codex r2).
+  assert.match(LIST,/SELECT d.display_name FROM contacts d WHERE d.org_id=\$1 AND d.is_tenant AND d.archived_at IS NULL/);
+  assert.match(LIST,/AND d.id<>f.id AND nullif\(btrim\(d.phone_e164\),''\)=f.phone/);
+  assert.match(LIST,/ORDER BY d.display_name,d.id LIMIT 1/);
   assert.match(LIST,/WHERE c.org_id=\$1 AND c.is_tenant/);
 });
 

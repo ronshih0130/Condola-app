@@ -73,12 +73,14 @@ export const TENANTS_SUMMARY_SQL = `${POPULATION}
    CASE WHEN $4::boolean AND $6::boolean THEN (SELECT count(*)::int FROM population WHERE nullif(btrim(phone),'') IS NULL) END AS missing,
    (SELECT count(*)::int FROM filtered) AS "filteredCount"`;
 // contacts.phone_e164 is normalized on write and constrained to E.164 by the schema.
-// Compare the admitted population before search/pagination; never fetch another org.
+// MGT-75-AC3 compares against every unarchived tenant contact of this org (not only the listed population, e.g.
+// co-tenants hidden when the directory gate is OFF); never another org. Only with phone authority and the mobile item.
 export const TENANTS_LIST_SQL = `${POPULATION}
  SELECT f.id::text,f.name,f.place,f.phone,f."lineLinked",
    CASE WHEN $4::boolean AND $6::boolean THEN
-     (SELECT d.name FROM population d WHERE d.id<>f.id AND d.phone=f.phone
-       ORDER BY d.name,d.id LIMIT 1) END AS "duplicateName"
+     (SELECT d.display_name FROM contacts d WHERE d.org_id=$1 AND d.is_tenant AND d.archived_at IS NULL
+        AND d.id<>f.id AND nullif(btrim(d.phone_e164),'')=f.phone
+       ORDER BY d.display_name,d.id LIMIT 1) END AS "duplicateName"
  FROM filtered f
  WHERE ($7::text IS NULL OR (f.name,f.id)>($7::text,$8::uuid))
  ORDER BY name,id LIMIT $9`;

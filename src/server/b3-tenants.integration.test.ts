@@ -220,3 +220,15 @@ test("sandbox uses selected-org gate and duplicate population, never live-parent
   result=await read(session,{filter:"missing"});assert.equal(result.mobileRequired,false);assert.equal(result.filter,"all");assert.equal(result.rows.length,2);
   for(const row of result.rows){assert.equal(row.phone,phone);assert.equal("duplicateName" in row,false);}
 });
+
+test("MGT-75-AC3 with the directory gate OFF: a listed tenant still sees a same-org co-tenant's identical number (Codex r2)",async()=>{
+  const f=await fixture(false,true),phone="+19995550456";
+  const primary=await contact(f,0,phone,"primary");const co=await contact(f,1,phone,"co_tenant");
+  const zeroLease=await contact(f,2,"+19995550457",null);await contact(f,3,"+19995550457",null,true);
+  const result=await read(f.staff.manager);
+  assert.ok(!result.rows.some(r=>r.id===co),"co-tenant is not listed while the directory gate is OFF");
+  assert.ok(!result.rows.some(r=>r.id===zeroLease),"zero-lease contact is not listed while the directory gate is OFF");
+  assert.equal(result.rows.find(r=>r.id===primary)?.duplicateName,"Person 001","duplicate found outside the listed population, same org");
+  const off=await fixture(false,false);await contact(off,0,phone,"primary");await contact(off,1,phone,"co_tenant");
+  for(const row of (await read(off.staff.manager)).rows)assert.equal("duplicateName" in row,false,"no hint while the mobile item is OFF");
+});
