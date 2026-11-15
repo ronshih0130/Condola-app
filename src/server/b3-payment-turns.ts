@@ -1,4 +1,5 @@
 import { brandV3ReadForOrg } from "./brand-v3";
+import { PENDING_TENANT_REPORT_SQL } from "./b3-payment-eligibility";
 import { guardEffectiveSession, withEffectiveReadAuthority } from "./b017-custom-role-governance";
 import { tx } from "./db";
 import { FlowError, logServerError } from "./errors";
@@ -78,7 +79,7 @@ WITH open_leases AS (
   SELECT p.id, 'P1'::text AS rule, 'manager'::text AS holder, 'confirm_payment'::text AS step,
          p.submitted_at AS since, true AS since_exact
     FROM payments p
-   WHERE p.org_id = $1 AND p.source = 'tenant_portal' AND p.status = 'submitted'
+   WHERE ${PENDING_TENANT_REPORT_SQL}
   UNION ALL
   SELECT p.id, 'P2', 'tenant', 're_report', p.updated_at, false
     FROM payments p JOIN p2 ON p2.id = p.id

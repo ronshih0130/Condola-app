@@ -4,9 +4,19 @@ on:
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
+  # Pushes run CI on main only; feature branches get CI from their pull request
+  # (one run per push instead of two). Any branch can still be run by hand.
   push:
     branches:
-      - "**"
+      - main
+
+# CI throughput (CEO, Ron-approved 2026-11-15): a newer push to the same pull
+# request cancels its older, superseded run. Push and workflow_dispatch runs each
+# get their own group (run_id), so a run on main is never cancelled or replaced,
+# not even while pending (GitHub replaces a pending run in a shared group).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
