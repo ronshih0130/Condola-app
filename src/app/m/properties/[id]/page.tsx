@@ -32,7 +32,7 @@ export default async function PropertyPage({
   const session = await getSession();
   if (await brandV3EnabledForOrg(session.orgId)) {
     // eslint-disable-next-line @next/next/no-css-tags
-    return <><link rel="stylesheet" href="/brand/v3/property.css" /><Suspense key={id} fallback={<PropertyLoading locale={session.locale} />}><PropertyV3Page session={session} id={id} query={query} /></Suspense></>;
+    return <><link rel="stylesheet" href="/brand/v3/property.css" /><link rel="stylesheet" href="/brand/v3/archive.css" /><Suspense key={id} fallback={<PropertyLoading locale={session.locale} />}><PropertyV3Page session={session} id={id} query={query} /></Suspense></>;
   }
   const t = makeT(session.locale);
   const detail = await propertyDetail(session, id);
