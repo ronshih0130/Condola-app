@@ -10,11 +10,12 @@ import type { Session } from "./types";
 export type IncomeReportInput = { mode?: string; month?: string; from?: string; to?: string; property?: string; owner?: string; cursor?: string };
 export type IncomeReportPeriod = { mode: "month" | "range"; month: string; start: string; end: string };
 export type IncomeReportLine = {
-  key: string; date: string; kind: "income" | "expense" | "deposit"; item: string;
+  key: string; date: string; kind: "income" | "expense" | "deposit" | "earlyRent" | "prepayment"; item: string;
+  paidOn: string | null; serviceMonthStart: string | null; leaseId: string | null;
   propertyId: string; property: string; ownerId: string | null; owner: string | null;
   currency: string; amountMinor: string; sourceAmountMinor: string; sourceId: string; invoiceId: string | null; allocationId: string | null;
 };
-export type IncomeReportTotal = { currency: string; incomeMinor: string; expenseMinor: string; netMinor: string; depositMinor: string };
+export type IncomeReportTotal = { currency: string; incomeMinor: string; expenseMinor: string; netMinor: string; depositMinor: string; earlyRentMinor: string; prepaymentMinor: string };
 export type IncomeReportReady = {
   state: "ready"; period: IncomeReportPeriod; timezone: string; count: number;
   totals: IncomeReportTotal[]; rows: IncomeReportLine[]; nextCursor: string | null;
@@ -47,10 +48,30 @@ function filterId(value?: string) {
   return value.toLowerCase();
 }
 
-/** Cash-date recognition switch point. Hub PENDING-RON PR-019 must define period
- * boundaries and later recognition before replacing this rule; early rent counts today.
- * This is a SQL policy expression, not a feature flag. */
+/** PR-019 C + a: service start is invoices.period_start, used exactly (not due_date,
+ * period_end or a guessed month). A rent portion is early only when that start is
+ * after the payment's calendar month. Same-month/late/unknown-period rent stays cash dated.
+ * Early rent is income at service start; only a payment in-range whose service start
+ * is beyond the range end is separately listed. A spanning range therefore counts it once. */
 export const INCOME_REPORT_CASH_DATE_SQL = "date BETWEEN $2::date AND $3::date";
+export const INCOME_REPORT_RECOGNITION_SQL = `classified_portions AS (
+  SELECT portions.*, CASE WHEN charge_type = 'rent' AND service_month_start > payment_month_end
+    THEN service_month_start ELSE date END AS income_date,
+    CASE WHEN charge_type = 'rent' AND service_month_start > payment_month_end
+      AND service_month_start > $3::date THEN 'earlyRent'
+      WHEN charge_type = 'deposit' THEN 'deposit' ELSE 'income' END AS kind
+  FROM portions
+), recognized_portions AS (
+  SELECT * FROM classified_portions WHERE amount > 0 AND
+    CASE WHEN kind = 'income' THEN income_date ELSE date END BETWEEN $2::date AND $3::date
+)`;
+/** Subtract allocations, not recognized invoice-line portions. An allocated deposit or
+ * future bill is not unallocated, even when it is outside the selected report period. */
+export const INCOME_REPORT_UNALLOCATED_SQL = `unallocated_payments AS (
+  SELECT pay.*, greatest(0, source_amount - coalesce((SELECT sum(a.amount_minor)
+    FROM payment_allocations a WHERE a.payment_id = pay.source_id AND a.org_id = $1), 0)) AS amount
+  FROM payment_inputs pay WHERE ${INCOME_REPORT_CASH_DATE_SQL}
+)`;
 
 /** Both ranges use integer minor units (PostgreSQL sum(bigint) is exact numeric).
  * Order allocations by paid_on, confirmed_at ASC NULLS LAST, payment id, allocation id:
@@ -97,30 +118,39 @@ export const INCOME_REPORT_POPULATION_SQL = `WITH props AS MATERIALIZED (
      AND ($5::uuid IS NULL OR EXISTS (SELECT 1 FROM property_owners po WHERE po.org_id = $1
        AND po.property_id = p.id AND po.owner_contact_id = $5
        AND po.effective_from <= $3::date AND (po.effective_to IS NULL OR po.effective_to >= $2::date)))
-), allocation_inputs AS (
+), payment_inputs AS (
   SELECT pay.id AS source_id, pay.amount_minor AS source_amount, pay.paid_on AS date, btrim(pay.currency) AS currency,
     p.id AS property_id, p.name AS property, p.owner_id, p.owner_name AS owner,
-    a.id AS allocation_id, i.id AS invoice_id, pay.confirmed_at, a.amount_minor AS allocated_amount
+    l.id AS lease_id, pay.confirmed_at,
+    (date_trunc('month', pay.paid_on) + interval '1 month - 1 day')::date AS payment_month_end
   FROM payments pay
   JOIN leases l ON l.id = pay.lease_id AND l.org_id = $1
   JOIN props p ON p.id = l.property_id
-  JOIN payment_allocations a ON a.payment_id = pay.id AND a.org_id = $1
-  JOIN invoices i ON i.id = a.invoice_id AND i.org_id = $1 AND i.lease_id = pay.lease_id AND i.currency = pay.currency
   WHERE pay.org_id = $1 AND pay.status = 'confirmed'
+), allocation_inputs AS (
+  SELECT pay.*, a.id AS allocation_id, i.id AS invoice_id, i.period_start AS service_month_start,
+    a.amount_minor AS allocated_amount
+  FROM payment_inputs pay
+  JOIN payment_allocations a ON a.payment_id = pay.source_id AND a.org_id = $1
+  JOIN invoices i ON i.id = a.invoice_id AND i.org_id = $1 AND i.lease_id = pay.lease_id AND btrim(i.currency) = pay.currency
 ), line_inputs AS (
   SELECT il.invoice_id, il.id AS line_id, il.charge_type, il.line_no, il.description AS item, il.amount_minor AS line_amount
   FROM invoice_lines il JOIN (SELECT DISTINCT invoice_id FROM allocation_inputs) i ON i.invoice_id = il.invoice_id
   WHERE il.org_id = $1
-), ${INCOME_REPORT_WATERFALL_SQL}, report_lines AS (
-  SELECT allocation_id::text || ':' || line_id::text AS key, date,
-    CASE WHEN charge_type = 'deposit' THEN 'deposit' ELSE 'income' END AS kind,
+), ${INCOME_REPORT_WATERFALL_SQL}, ${INCOME_REPORT_RECOGNITION_SQL}, ${INCOME_REPORT_UNALLOCATED_SQL}, report_lines AS (
+  SELECT allocation_id::text || ':' || line_id::text AS key,
+    CASE WHEN kind = 'income' THEN income_date ELSE date END AS date, kind,
     item, property_id, property, owner_id, owner, currency, amount,
-    source_id, invoice_id, allocation_id, source_amount
-  FROM portions WHERE amount > 0 AND ${INCOME_REPORT_CASH_DATE_SQL}
+    source_id, invoice_id, allocation_id, source_amount, date AS paid_on, service_month_start, lease_id
+  FROM recognized_portions
+  UNION ALL
+  SELECT source_id::text, date, 'prepayment', '', property_id, property, owner_id, owner, currency, amount,
+    source_id, NULL::uuid, NULL::uuid, source_amount, date, NULL::date, lease_id
+  FROM unallocated_payments WHERE amount > 0
   UNION ALL
   SELECT e.id::text, e.incurred_on, 'expense', coalesce(e.description, e.category),
     p.id, p.name, p.owner_id, p.owner_name, btrim(e.currency), e.amount_minor,
-    e.id, NULL::uuid, NULL::uuid, e.amount_minor
+    e.id, NULL::uuid, NULL::uuid, e.amount_minor, NULL::date, NULL::date, NULL::uuid
   FROM expenses e JOIN props p ON p.id = e.property_id
   WHERE e.org_id = $1 AND e.status IN ('approved','posted') AND e.bill_to IN ('owner','manager')
     AND e.incurred_on BETWEEN $2::date AND $3::date
@@ -131,10 +161,13 @@ SELECT (SELECT count(*)::int FROM report_lines) AS count,
     SELECT currency, coalesce(sum(amount) FILTER (WHERE kind = 'income'), 0)::text AS "incomeMinor",
       coalesce(sum(amount) FILTER (WHERE kind = 'expense'), 0)::text AS "expenseMinor",
       (coalesce(sum(amount) FILTER (WHERE kind = 'income'), 0) - coalesce(sum(amount) FILTER (WHERE kind = 'expense'), 0))::text AS "netMinor",
-      coalesce(sum(amount) FILTER (WHERE kind = 'deposit'), 0)::text AS "depositMinor"
+      coalesce(sum(amount) FILTER (WHERE kind = 'deposit'), 0)::text AS "depositMinor",
+      coalesce(sum(amount) FILTER (WHERE kind = 'earlyRent'), 0)::text AS "earlyRentMinor",
+      coalesce(sum(amount) FILTER (WHERE kind = 'prepayment'), 0)::text AS "prepaymentMinor"
     FROM report_lines GROUP BY currency) t`;
 export const INCOME_REPORT_LIST_SQL = `${INCOME_REPORT_POPULATION_SQL}
-SELECT key, date::text, kind, item, property_id::text AS "propertyId", property,
+SELECT key, date::text, kind, item, paid_on::text AS "paidOn",
+  service_month_start::text AS "serviceMonthStart", lease_id::text AS "leaseId", property_id::text AS "propertyId", property,
   owner_id::text AS "ownerId", owner, currency, amount::text AS "amountMinor",
   source_amount::text AS "sourceAmountMinor", source_id::text AS "sourceId", invoice_id::text AS "invoiceId", allocation_id::text AS "allocationId"
 FROM report_lines WHERE ($6::date IS NULL OR (date, key) > ($6::date, $7::text))

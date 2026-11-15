@@ -11,11 +11,14 @@ const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
 const textCell = (value: string) => quote(/^\s*[=+\-@\t\r\n]/.test(value) ? `'${value}` : value);
 export function incomeReportCsv(data: IncomeReportReady, locale: Locale) {
   const c = incomeReportCopy(locale);
-  const header = [c.date, c.item, c.property, c.owner, c.currency, c.amount, c.sourceId, c.income, c.expense, c.net, c.deposit].map(textCell).join(",");
-  const lines = data.rows.map(row => [textCell(row.date), textCell(`${c[row.kind]} · ${row.item}`), textCell(row.property), textCell(row.owner ?? ""),
-    textCell(row.currency), quote(reportMajor(row.amountMinor)), textCell(row.sourceId), "", "", "", ""].join(","));
-  const totals = data.totals.map(row => ["", textCell(c.total), "", "", textCell(row.currency), "", "",
-    quote(reportMajor(row.incomeMinor)), quote(reportMajor(row.expenseMinor)), quote(reportMajor(row.netMinor)), quote(reportMajor(row.depositMinor))].join(","));
+  const header = [c.section, c.date, c.item, c.property, c.owner, c.currency, c.amount, c.sourceId,
+    c.income, c.expense, c.net, c.deposit, c.earlyRent, c.prepayment, c.paidOn, c.lease, c.serviceMonth].map(textCell).join(",");
+  const lines = data.rows.map(row => [textCell(c[row.kind]), textCell(row.date), textCell(row.item), textCell(row.property), textCell(row.owner ?? ""),
+    textCell(row.currency), quote(reportMajor(row.amountMinor)), textCell(row.sourceId), "", "", "", "", "", "",
+    textCell(row.paidOn ?? ""), textCell(row.leaseId ?? ""), textCell(row.serviceMonthStart ?? "")].join(","));
+  const totals = data.totals.map(row => [textCell(c.total), "", textCell(c.total), "", "", textCell(row.currency), "", "",
+    quote(reportMajor(row.incomeMinor)), quote(reportMajor(row.expenseMinor)), quote(reportMajor(row.netMinor)), quote(reportMajor(row.depositMinor)),
+    quote(reportMajor(row.earlyRentMinor)), quote(reportMajor(row.prepaymentMinor)), "", "", ""].join(","));
   return `\uFEFF${[header, ...lines, ...totals].join("\r\n")}\r\n`;
 }
 export type IncomeReportExportAudit = {
