@@ -1,4 +1,8 @@
+import type { ReactNode } from "react";
+import { VendorTokenShell } from "@/components/v3/vendor/token-shell";
+import { vendorTokenBrand } from "@/server/vendor-token-brand";
 import { VendorNotificationCenterEntry } from "@/components/notification-center-entry";
+import { vendorLinkCopy } from "@/i18n/lanes/vendor-link";
 import { makeT } from "@/i18n";
 import { VendorLinkDetails } from "@/components/vendor-link-details";
 import { TicketPhotoUpload } from "@/components/ticket-photos";
@@ -35,10 +39,11 @@ export default async function VendorJobPage({
       </div>
     );
   }
+  const tokenBrand = await vendorTokenBrand(token, !job.vendorLink || job.vendorLink.sharingApproved);
   const vendorState = job.vendorLink && (!job.vendorLink.sharingApproved || job.vendorLink.capability !== "write")
     ? null : await resolveVendorJobState(token);
   // B-035: only while every strict vendor LINE gate is ON. OFF keeps the original child slot, so even useId output is unchanged.
-  const showLine = await vendorLineEntryEnabled(token);
+  const showLine = !tokenBrand && await vendorLineEntryEnabled(token);
   const lineEntry = showLine
     ? <VendorLineEntry token={token} copy={{ label: t("i_vendor_line_continue"), hint: t("i_vendor_line_hint"), failed: t("i_vendor_line_failed") }} />
     : null;
@@ -152,8 +157,26 @@ export default async function VendorJobPage({
       </VendorJobControls>
     );
   }
+  function wrapTokenPage(content: ReactNode) {
+    if (!tokenBrand) return content;
+    const reported = job!.reported || vendorState?.currentEvent === "vendor_completion_submitted";
+    const shared = !job!.vendorLink || job!.vendorLink.sharingApproved;
+    const writable = !job!.vendorLink || job!.vendorLink.capability === "write";
+    const statusKey = {
+      open: "i_st_open", triaged: "i_st_triaged", assigned: "i_st_assigned", in_progress: "i_st_progress",
+      on_hold: "i_st_hold", resolved: "i_st_resolved", closed: "i_st_closed", cancelled: "i_st_cancelled",
+    }[tokenBrand.status];
+    return <VendorTokenShell locale={prefs.locale} context={tokenBrand}
+      title={job!.title} address={job!.address} window={job!.window}
+      status={reported ? t("i_vendor_reported_awaiting_company")
+        : !shared ? vendorLinkCopy(prefs.locale).waiting : !writable ? t("i_vlink_read_only")
+        : vendorState?.locked ? t("i_vendor_pending_owner_approval")  : statusKey ? t(statusKey) : t("i_vlink_status")}
+      reported={reported} canReport={shared && writable && !vendorState?.locked && !reported}>
+      {content}
+    </VendorTokenShell>;
+  }
   if (job.vendorLink !== undefined) {
-    return (
+    return wrapTokenPage(
       <VendorLinkDetails
         job={job}
         vendorLink={job.vendorLink}
@@ -162,17 +185,17 @@ export default async function VendorJobPage({
         locale={prefs.locale}
       >
         <ErrorBanner t={t} error={query.error} />
-        {lineEntry ? <><VendorNotificationCenterEntry token={token} locale={prefs.locale} />{lineEntry}</>
+        {tokenBrand ? null : lineEntry ? <><VendorNotificationCenterEntry token={token} locale={prefs.locale} />{lineEntry}</>
           : <VendorNotificationCenterEntry token={token} locale={prefs.locale} />}
         {(vendorState === null || !vendorState.locked) && job.vendorLink.sharingApproved && job.vendorLink.capability === "write" ? renderReportControls(true) : null}
         {renderVendorJobControls()}
       </VendorLinkDetails>
     );
   }
-  return (
+  return wrapTokenPage(
     <div className="card pad" data-testid="vendor-job" data-v2-page={v2 ? "v-job" : undefined} style={{ maxWidth: 560, margin: "24px auto" }}>
       <h1>{t("i_vendor_page_title")}</h1>
-      {lineEntry ? <><VendorNotificationCenterEntry token={token} locale={prefs.locale} />{lineEntry}</>
+      {tokenBrand ? null : lineEntry ? <><VendorNotificationCenterEntry token={token} locale={prefs.locale} />{lineEntry}</>
         : <VendorNotificationCenterEntry token={token} locale={prefs.locale} />}
       <ErrorBanner t={t} error={query.error} />
       <p className="f">{t("i_vendor_address")}</p>

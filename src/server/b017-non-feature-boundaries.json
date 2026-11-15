@@ -285,7 +285,7 @@
   },
   "src/app/v/[token]/page.tsx#VendorJobPage": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",
-    "sha256": "7b60d284374ad77e21e56db4a88dacc1fbffaacd31069e6cd92565319bf1737c"
+    "sha256": "8f841d3d51f0564bfbd40c9f06bc80db535dc5d8fddef9ec76c26e3bb9ee90aa"
   },
   "src/server/notification-center.ts#centerVendorAdmission": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",
