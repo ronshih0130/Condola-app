@@ -131,6 +131,9 @@ test.before(async () => {
 });
 test.beforeEach(async () => {
   await db.query("BEGIN");
+  // Date-relative fixtures use the org-local date; boundary tests override both zones below.
+  await db.query("SET LOCAL TIME ZONE 'UTC'");
+  await db.query("UPDATE public.organizations SET timezone='UTC' WHERE id=$1", [ORG_ID]);
   const own = (await db.query("SELECT po.id,po.owner_contact_id,po.property_id,p.currency::text currency,r.minor_unit"
     + " FROM public.property_owners po JOIN public.contacts c ON c.org_id=po.org_id AND c.id=po.owner_contact_id"
     + " JOIN public.properties p ON p.org_id=po.org_id AND p.id=po.property_id"
@@ -237,7 +240,7 @@ async function assertOwnerDeniedWithoutWrites(version: string) {
 
 for (const timing of ["ended yesterday", "ends today", "starts tomorrow"] as const) {
   test("PR-015 property authority " + timing + " while owner remains current elsewhere", async () => {
-    // Align the two existing date rules for these boundary tests, independent of host time zone.
+    // Keep date-relative fixture values aligned with the org-local rule, independent of host time zone.
     await db.query("SET LOCAL TIME ZONE 'UTC'");
     await db.query("UPDATE public.organizations SET timezone='UTC' WHERE id=$1", [ORG_ID]);
     const first = await submit();
@@ -280,22 +283,60 @@ for (const state of ["archived", "not owner"] as const) {
   });
 }
 
-for (const boundary of ["end", "start"] as const) {
-  test("PR-015 CURRENT_DATE " + boundary + " boundary also applies when org-local date would admit", async () => {
+// These zones are 26 hours apart, so the dates differ at every time of day.
+async function setDifferentDates(direction: "org behind" | "org ahead") {
+  await db.query(direction === "org behind" ? "SET LOCAL TIME ZONE 'Pacific/Kiritimati'" : "SET LOCAL TIME ZONE 'Etc/GMT+12'");
+  await db.query("UPDATE public.organizations SET timezone=$2 WHERE id=$1",
+    [ORG_ID, direction === "org behind" ? "Etc/GMT+12" : "Pacific/Kiritimati"]);
+  const dates = (await db.query("SELECT CURRENT_DATE > (clock_timestamp() AT TIME ZONE timezone)::date session_ahead,"
+    + " CURRENT_DATE < (clock_timestamp() AT TIME ZONE timezone)::date session_behind"
+    + " FROM public.organizations WHERE id=$1", [ORG_ID])).rows[0];
+  assert.equal(dates.session_ahead, direction === "org behind");
+  assert.equal(dates.session_behind, direction === "org ahead");
+}
+
+for (const direction of ["org behind", "org ahead"] as const) {
+  test("PR-015 org-local current owner is admitted with " + direction + " session date", async () => {
     const version = await submit();
     const ownership = await retainOtherPropertyAuthority(version);
-    // These zones are 26 hours apart, so the dates differ at every time of day.
-    await db.query(boundary === "end" ? "SET LOCAL TIME ZONE 'Pacific/Kiritimati'" : "SET LOCAL TIME ZONE 'Etc/GMT+12'");
-    await db.query("UPDATE public.organizations SET timezone=$2 WHERE id=$1",
-      [ORG_ID, boundary === "end" ? "Etc/GMT+12" : "Pacific/Kiritimati"]);
-    await db.query(boundary === "end"
-      ? "UPDATE public.property_owners SET effective_from=CURRENT_DATE-10,effective_to=CURRENT_DATE WHERE id=$1"
-      : "UPDATE public.property_owners SET effective_from=CURRENT_DATE+1,effective_to=NULL WHERE id=$1", [ownership]);
-    assert.equal((await db.query("SELECT po.effective_from <= (clock_timestamp() AT TIME ZONE o.timezone)::date"
-      + " AND (po.effective_to IS NULL OR po.effective_to > (clock_timestamp() AT TIME ZONE o.timezone)::date) allowed"
-      + " FROM public.property_owners po JOIN public.organizations o ON o.id=po.org_id WHERE po.id=$1", [ownership])).rows[0].allowed, true);
-    await assertOwnerDeniedWithoutWrites(version);
+    await setDifferentDates(direction);
+    await db.query("UPDATE public.property_owners po"
+      + " SET effective_from=(clock_timestamp() AT TIME ZONE o.timezone)::date,"
+      + " effective_to=(clock_timestamp() AT TIME ZONE o.timezone)::date+1"
+      + " FROM public.organizations o WHERE o.id=po.org_id AND po.id=$1", [ownership]);
+    const authority = (await db.query("SELECT po.effective_from <= (clock_timestamp() AT TIME ZONE o.timezone)::date"
+      + " AND (po.effective_to IS NULL OR po.effective_to > (clock_timestamp() AT TIME ZONE o.timezone)::date) org_allowed,"
+      + " po.effective_from <= CURRENT_DATE AND (po.effective_to IS NULL OR po.effective_to > CURRENT_DATE) session_allowed"
+      + " FROM public.property_owners po JOIN public.organizations o ON o.id=po.org_id WHERE po.id=$1", [ownership])).rows[0];
+    assert.equal(authority.org_allowed, true);
+    assert.equal(authority.session_allowed, false);
+    assert.deepEqual((await read("b013_owner_pending")).map(row => row.version_id), [version]);
+    assert.deepEqual((await read("b013_owner_history")).map(row => row.version_id), [version]);
+    assert.equal((await decideEstimate(version)).status, "recorded");
+    assert.deepEqual(await read("b013_owner_pending"), []);
+    assert.equal((await read("b013_owner_history"))[0].decision, "approved");
+    assert.equal((await db.query("SELECT count(*)::int n FROM app.b013_estimate_decisions WHERE version_id=$1", [version])).rows[0].n, 1);
   });
+
+  for (const timing of ["ended yesterday", "ends today", "starts tomorrow"] as const) {
+    test("PR-015 org-local authority " + timing + " is denied with " + direction + " session date", async () => {
+      const version = await submit();
+      const ownership = await retainOtherPropertyAuthority(version);
+      await setDifferentDates(direction);
+      await db.query("UPDATE public.property_owners po"
+        + " SET effective_from=(clock_timestamp() AT TIME ZONE o.timezone)::date+$2::int,"
+        + " effective_to=CASE WHEN $3::int IS NULL THEN NULL ELSE (clock_timestamp() AT TIME ZONE o.timezone)::date+$3::int END"
+        + " FROM public.organizations o WHERE o.id=po.org_id AND po.id=$1",
+      [ownership, timing === "starts tomorrow" ? 1 : -10,
+        timing === "starts tomorrow" ? null : timing === "ends today" ? 0 : -1]);
+      assert.equal((await db.query("SELECT po.effective_from <= (clock_timestamp() AT TIME ZONE o.timezone)::date"
+        + " AND (po.effective_to IS NULL OR po.effective_to > (clock_timestamp() AT TIME ZONE o.timezone)::date) allowed"
+        + " FROM public.property_owners po JOIN public.organizations o ON o.id=po.org_id WHERE po.id=$1", [ownership])).rows[0].allowed, false);
+      // Admission elsewhere remains valid, so these denials exercise property authority.
+      assert.equal((await db.query("SELECT actor FROM app.b013_actor($1,$2)", [ORG_ID, sessions.owner])).rows[0].actor, USERS.owner);
+      await assertOwnerDeniedWithoutWrites(version);
+    });
+  }
 }
 
 for (const bounded of [false, true]) {

@@ -107,7 +107,9 @@ SQL
 } | psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q
 
 # PR-015 owner gateway ACL/config probe. The general scan below covers public;
-# these app gateways must retain service-only execution after CREATE OR REPLACE.
+# the two owner readers must retain service-only execution after CREATE OR REPLACE.
+# Also check the unchanged decision function's existing ACL/config and 3s lock timeout.
+# Reader authority uses the org-local date, same as the existing decision function.
 psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 DO $p015_owner_gateways$
 DECLARE signature text; fn record;

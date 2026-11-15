@@ -41,6 +41,14 @@ test("migration manifest includes every changed SQL file and classifies unsafe c
     assert.ok(p015);
     assert.match(p015, /\| A \| no \|/);
     assert.match(p015, /PR-015 \/ B-080 Tier 2/);
+    assert.match(p015, /only the two readers app\.b013_owner_pending and app\.b013_owner_history/);
+    assert.match(p015, /org-local date property-owner authority predicate/);
+    assert.match(p015, /Leaves app\.b013_decide_estimate unchanged/);
+    assert.doesNotMatch(p015, /CURRENT_DATE/i);
+    const p015Sql = readFileSync(path.join(out, "20261115130000_b013_current_owner_authority.sql"), "utf8");
+    assert.deepEqual([...p015Sql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)/g)].map(match => match[1]),
+      ["b013_owner_pending", "b013_owner_history"]);
+    assert.doesNotMatch(p015Sql, /CURRENT_DATE/i);
     assert.match(manifest, /20261025120000_id_consent_notice\.sql \| A \| yes \|/);
     assert.match(readFileSync(path.join(out, "PERMISSIONS.md"), "utf8"), /Live database check was not run/);
   } finally {

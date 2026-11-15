@@ -1,11 +1,10 @@
--- PR-015 / B-080: B-013 owner gateways require CURRENT property authority.
--- Reader bodies: 20261105180000; decision body: 20261107120000, with the
--- function-local 3s lock timeout from 20261107151000 preserved explicitly.
--- Mirror repair-approval.ts homeDetails CURRENT_DATE authority predicate.
--- Keep snapshot designation, org-local-date/row locks, replay, flags, errors,
--- return shapes, SECURITY DEFINER/search_path and service-only ACLs unchanged.
+-- PR-015 / B-080: B-013 owner readers require current property authority.
+-- Reader bodies: 20261105180000; use the org-local date, same as the decision
+-- function from 20261107120000 (with lock_timeout from 20261107151000 unchanged).
+-- Keep snapshot designation, flags, errors, return shapes,
+-- SECURITY DEFINER/search_path and service-only ACLs unchanged.
 -- History is also withheld after authority ends, including decided versions.
--- No schema/data/flag change beyond these three function replacements.
+-- No schema/data/flag change beyond these two reader replacements.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';
@@ -44,9 +43,11 @@ BEGIN
   AND EXISTS (
    SELECT 1 FROM public.property_owners po
    JOIN public.contacts c ON c.id=po.owner_contact_id AND c.org_id=po.org_id
+   JOIN public.organizations o ON o.id=po.org_id
    WHERE po.org_id=v.org_id AND po.property_id=v.property_id
     AND c.user_id=a.actor AND c.is_owner AND c.archived_at IS NULL
-    AND po.effective_from<=CURRENT_DATE AND (po.effective_to IS NULL OR po.effective_to>CURRENT_DATE)
+    AND po.effective_from <= (clock_timestamp() AT TIME ZONE o.timezone)::date
+    AND (po.effective_to IS NULL OR po.effective_to > (clock_timestamp() AT TIME ZONE o.timezone)::date)
   )
   AND NOT EXISTS (SELECT 1 FROM app.b013_estimate_decisions d
    WHERE d.org_id=v.org_id AND d.ticket_id=v.ticket_id AND d.version_id=v.id)
@@ -89,71 +90,15 @@ BEGIN
   AND EXISTS (
    SELECT 1 FROM public.property_owners po
    JOIN public.contacts c ON c.id=po.owner_contact_id AND c.org_id=po.org_id
+   JOIN public.organizations o ON o.id=po.org_id
    WHERE po.org_id=v.org_id AND po.property_id=v.property_id
     AND c.user_id=a.actor AND c.is_owner AND c.archived_at IS NULL
-    AND po.effective_from<=CURRENT_DATE AND (po.effective_to IS NULL OR po.effective_to>CURRENT_DATE)
+    AND po.effective_from <= (clock_timestamp() AT TIME ZONE o.timezone)::date
+    AND (po.effective_to IS NULL OR po.effective_to > (clock_timestamp() AT TIME ZONE o.timezone)::date)
   )
  ORDER BY v.version_no DESC;
 END $$;
 REVOKE ALL ON FUNCTION app.b013_owner_history(uuid,uuid,text,uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION app.b013_owner_history(uuid,uuid,text,uuid,uuid) TO service_role;
-
-CREATE OR REPLACE FUNCTION app.b013_decide_estimate(p_org uuid, p_live uuid, p_env text, p_session uuid, p_request uuid,
- p_version uuid, p_decision text, p_reason text, p_payload_sha256 bytea)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app,pg_temp SET lock_timeout='3s' AS $$
-DECLARE a record; v app.b013_estimate_versions; input jsonb; result jsonb; decision_id uuid;
-BEGIN
- SELECT * INTO a FROM app.b028_repair_actor(p_org, p_live, p_env, p_session);
- input := jsonb_build_array(p_version, p_decision, p_reason);
- result := app.b013_replay(p_org, a.actor, p_request, 'decision', p_payload_sha256, input);
- IF result IS NOT NULL THEN RETURN result; END IF;
- SELECT * INTO v FROM app.b013_estimate_versions WHERE org_id = p_org AND id = p_version;
- IF NOT FOUND THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE = '42501'; END IF;
- IF NOT app.b013_approvals_enabled(p_org) THEN
-  RETURN app.b013_store_result(p_org, a.actor, p_request, v.ticket_id, 'decision', NULL,
-   p_version, p_payload_sha256, input, '{"status":"rejected_disabled"}');
- END IF;
- v := app.b013_lock_version(p_org, p_version);
- IF a.actor <> v.designated_principal_id THEN
-  RAISE EXCEPTION 'errors.forbidden' USING ERRCODE = '42501';
- END IF;
- PERFORM 1 FROM public.property_owners po
- JOIN public.contacts c ON c.org_id = po.org_id AND c.id = po.owner_contact_id
- JOIN public.properties pr ON pr.org_id = po.org_id AND pr.id = po.property_id
- JOIN public.organizations o ON o.id = po.org_id
- WHERE po.org_id = p_org AND po.id = v.designated_ownership_id AND po.property_id = v.property_id
-  AND c.id = v.designated_contact_id AND c.user_id = a.actor AND c.is_owner AND c.archived_at IS NULL
-  AND pr.archived_at IS NULL AND pr.currency = v.currency
-  AND po.effective_from <= CURRENT_DATE
-  AND (po.effective_to IS NULL OR po.effective_to > CURRENT_DATE)
-  AND po.effective_from <= (clock_timestamp() AT TIME ZONE o.timezone)::date
-  AND (po.effective_to IS NULL OR po.effective_to > (clock_timestamp() AT TIME ZONE o.timezone)::date)
- FOR SHARE OF po, c, pr;
- IF NOT FOUND THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE = '42501'; END IF;
- IF EXISTS (SELECT 1 FROM app.b013_regional_defaults r JOIN public.organizations o
-  ON o.country_code::text = r.country_code WHERE o.id = p_org AND r.currency = v.currency
-  AND r.minor_unit <> v.minor_unit) THEN
-  RAISE EXCEPTION 'Repair currency changed' USING ERRCODE = '40001';
- END IF;
- IF NOT v.requires_owner_decision OR EXISTS (
-  SELECT 1 FROM app.b013_estimate_decisions WHERE org_id = p_org AND version_id = p_version
- ) THEN
-  result := '{"status":"rejected_conflict"}';
- ELSIF p_decision IS NULL OR p_decision NOT IN ('approved', 'rejected', 'more_information')
-  OR (p_reason IS NOT NULL AND length(btrim(p_reason)) NOT BETWEEN 1 AND 4000)
-  OR (p_decision <> 'approved' AND p_reason IS NULL) THEN
-  result := '{"status":"rejected_invalid"}';
- ELSE
-  INSERT INTO app.b013_estimate_decisions(org_id, ticket_id, version_id, decision, decided_by, reason)
-  VALUES (p_org, v.ticket_id, p_version, p_decision, a.actor, p_reason) RETURNING id INTO decision_id;
-  result := jsonb_build_object('status', 'recorded', 'version_id', p_version, 'decision_id', decision_id);
- END IF;
- PERFORM app.b028_repair_actor(p_org, p_live, p_env, p_session);
- RETURN app.b013_store_result(p_org, a.actor, p_request, v.ticket_id, 'decision', NULL,
-  p_version, p_payload_sha256, input, result);
-END $$;
-REVOKE ALL ON FUNCTION app.b013_decide_estimate(uuid, uuid, text, uuid, uuid, uuid, text, text, bytea)
- FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION app.b013_decide_estimate(uuid, uuid, text, uuid, uuid, uuid, text, text, bytea) TO service_role;
 
 COMMIT;

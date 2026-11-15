@@ -9,37 +9,29 @@ function read(path: string) {
   return readFileSync(path, "utf8");
 }
 
-test("PR-015 replaces only owner gateways, preserving bodies and security settings except current authority", () => {
+test("PR-015 replaces only two owner readers, preserving bodies and security except org-local authority", () => {
   const sql = read("supabase/migrations/20261115130000_b013_current_owner_authority.sql");
   const readers = read("supabase/migrations/20261105180000_b021_repair_approval_reads.sql");
-  const mutators = read("supabase/migrations/20261107120000_b028_repair_context_integrity.sql");
   function definition(source: string, name: string) {
     const match = source.match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app\\.${name}\\([\\s\\S]*?END \\$\\$;`));
     assert.ok(match, name);
     return match[0];
   }
-  const authority = /\n {2,3}SELECT 1 FROM public\.property_owners po\n {2,3}JOIN public\.contacts c ON c\.id=po\.owner_contact_id AND c\.org_id=po\.org_id\n {2,3}WHERE po\.org_id=v\.org_id AND po\.property_id=v\.property_id\n {3,4}AND c\.user_id=a\.actor AND c\.is_owner AND c\.archived_at IS NULL\n {3,4}AND po\.effective_from<=CURRENT_DATE AND \(po\.effective_to IS NULL OR po\.effective_to>CURRENT_DATE\)\n/;
+  const authority = /\n {2,3}SELECT 1 FROM public\.property_owners po\n {2,3}JOIN public\.contacts c ON c\.id=po\.owner_contact_id AND c\.org_id=po\.org_id\n {2,3}JOIN public\.organizations o ON o\.id=po\.org_id\n {2,3}WHERE po\.org_id=v\.org_id AND po\.property_id=v\.property_id\n {3,4}AND c\.user_id=a\.actor AND c\.is_owner AND c\.archived_at IS NULL\n {3,4}AND po\.effective_from <= \(clock_timestamp\(\) AT TIME ZONE o\.timezone\)::date\n {3,4}AND \(po\.effective_to IS NULL OR po\.effective_to > \(clock_timestamp\(\) AT TIME ZONE o\.timezone\)::date\)\n/;
   assert.equal((sql.match(new RegExp(authority.source, "g")) ?? []).length, 2);
-  const names = ["b013_owner_pending", "b013_owner_history", "b013_decide_estimate"];
+  const names = ["b013_owner_pending", "b013_owner_history"];
   assert.deepEqual([...sql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)/g)].map(match => match[1]), names);
   for (const name of names) {
-    let actual = definition(sql, name).replace("CREATE OR REPLACE FUNCTION", "CREATE FUNCTION");
-    if (name === "b013_decide_estimate") {
-      actual = actual.replace(" SET lock_timeout='3s'", "")
-        .replace("  AND po.effective_from <= CURRENT_DATE\n  AND (po.effective_to IS NULL OR po.effective_to > CURRENT_DATE)\n", "");
-    } else {
-      actual = actual.replace(new RegExp("  AND EXISTS \\(" + authority.source + "  \\)\\n"), "");
-    }
-    assert.equal(actual, definition(name === "b013_decide_estimate" ? mutators : readers, name), name);
+    const actual = definition(sql, name).replace("CREATE OR REPLACE FUNCTION", "CREATE FUNCTION")
+      .replace(new RegExp("  AND EXISTS \\(" + authority.source + "  \\)\\n"), "");
+    assert.equal(actual, definition(readers, name), name);
     const grants = (source: string) => source.match(new RegExp(`(?:REVOKE|GRANT)[^;]*FUNCTION app\\.${name}\\([^;]*;`, "g"));
-    assert.deepEqual(grants(sql), grants(name === "b013_decide_estimate" ? mutators : readers), name + " ACLs");
+    assert.deepEqual(grants(sql), grants(readers), name + " ACLs");
   }
   assert.match(sql, /SET LOCAL lock_timeout = '5s'/);
   assert.match(sql, /SET LOCAL statement_timeout = '60s'/);
-  assert.match(definition(sql, "b013_decide_estimate"), /SET lock_timeout='3s'/);
-  // Keep the new date checks in the existing locking query, so a concurrent
-  // authority update cannot pass an unlocked precheck and then a weaker lock check.
-  assert.match(definition(sql, "b013_decide_estimate"), /PERFORM 1 FROM public\.property_owners po[\s\S]*AND po\.effective_from <= CURRENT_DATE[\s\S]*FOR SHARE OF po, c, pr;/);
+  assert.doesNotMatch(sql, /CURRENT_DATE/i);
+  assert.doesNotMatch(sql, /app\.b013_decide_estimate/);
   assert.doesNotMatch(sql, /\b(?:DROP|ALTER TABLE|CREATE TABLE)\b/);
   assert.match(read("scripts/check-function-privileges.sh"), /PR-015 owner gateway ACL\/config probe/);
 });

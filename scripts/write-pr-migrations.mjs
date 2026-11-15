@@ -16,7 +16,7 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 const added = {
   "supabase/migrations/20261115130000_b013_current_owner_authority.sql": {
     addOnly: false,
-    reason: "PR-015 / B-080 Tier 2: CREATE OR REPLACE app.b013_owner_pending, app.b013_owner_history and app.b013_decide_estimate with their prior bodies plus the homepage CURRENT_DATE property-owner authority predicate. Preserves signatures, SECURITY DEFINER, search_path, decision lock_timeout=3s, existing snapshot/organization-date checks, replay and service-only EXECUTE. Not add-only because it tightens existing authorization behavior and reasserts privileges. No table, column, data, flag or outbound change.",
+    reason: "PR-015 / B-080 Tier 2: CREATE OR REPLACE only the two readers app.b013_owner_pending and app.b013_owner_history with their prior bodies plus the org-local date property-owner authority predicate, same as the existing decision function. Preserves signatures, SECURITY DEFINER, search_path, snapshot designation and service-only EXECUTE. Leaves app.b013_decide_estimate unchanged, including its org-local authorization, lock_timeout=3s, replay and ACLs. Not add-only because it tightens existing reader authorization behavior and reasserts privileges. No table, column, data, flag or outbound change.",
   },
   "supabase/migrations/20261114000000_b056_pr3a_pause_predicate.sql": {
     addOnly: false,
