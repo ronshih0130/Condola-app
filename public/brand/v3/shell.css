@@ -93,3 +93,5 @@ html[data-brand="v2"][data-brand-v3] .v3-shell .build-sha{ margin-top:24px; }
   html[data-brand="v2"][data-brand-v3] .v3-shell .shell-dim{ background:transparent; }
   html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup{ top:var(--shell-popup-top); left:var(--shell-popup-left); right:auto; bottom:auto; width:320px; max-height:calc(100dvh - var(--shell-popup-top) - 16px); border-radius:var(--r-lg); padding-bottom:16px; }
 }
+/* SH-NONAME: the same white avatar square, holding the 我的帳號 person icon instead of a letter. */
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-avatar-noname svg{ width:1.1em; height:1.1em; display:block; }
