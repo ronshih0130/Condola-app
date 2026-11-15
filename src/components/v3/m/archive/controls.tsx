@@ -49,7 +49,13 @@ export function ArchiveEntryV3({refValue,scope,locale,role,archived=false}:{refV
   </dialog>
  </span>;
 }
-export function ArchiveDetailV3({initial,scope,locale,role}:{initial:ArchiveReady;scope:RenderedArchiveScope;locale:string;role:string|null}) {
+type ArchiveDetailProps={initial:ArchiveReady;scope:RenderedArchiveScope;locale:string;role:string|null};
+// Remount on every new server version: router.refresh() after the dialog's archive (or a restore) brings new
+// `initial` data, which the controller's useState would otherwise ignore (Codex r1).
+export function ArchiveDetailV3(props:ArchiveDetailProps) {
+ return <ArchiveDetailV3Inner key={`${props.initial.observed.ref.kind}:${props.initial.observed.ref.id}:${String(props.initial.observed.version)}`} {...props}/>;
+}
+function ArchiveDetailV3Inner({initial,scope,locale,role}:ArchiveDetailProps) {
  const state=useArchiveController({initial,scope,locale}),{current}=state;
  return <ArchiveDetailView data={current} locale={locale} controls={<>
   <IntentStatus state={state}/>

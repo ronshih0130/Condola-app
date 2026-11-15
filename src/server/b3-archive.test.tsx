@@ -157,3 +157,12 @@ test('list route gates v3 before rendering it and validates Next searchParams wi
  for(const tab of [['unit','owner'],'invalid'])await assert.rejects(()=>Page({searchParams:Promise.resolve({tab})}),/NOT_FOUND/);
  on=false;const old=render(await Page({searchParams:Promise.resolve({tab:['invalid']})}));assert.doesNotMatch(old,/archive\.css/);assert.equal(captured.length,1);
 });
+
+test('R2-ARCH-ONE: the detail controller remounts on each new server version (refresh after archive/restore, Codex r1)',()=>{
+ const src=readFileSync('src/components/v3/m/archive/controls.tsx','utf8');
+ // The exported detail is a thin wrapper keyed on the record and its optimistic version; the controller lives inside.
+ assert.match(src,/export function ArchiveDetailV3\(props:ArchiveDetailProps\) \{\n return <ArchiveDetailV3Inner key=\{`\$\{props\.initial\.observed\.ref\.kind\}:\$\{props\.initial\.observed\.ref\.id\}:\$\{String\(props\.initial\.observed\.version\)\}`\} \{\.\.\.props\}\/>;/);
+ assert.match(src,/function ArchiveDetailV3Inner\(\{initial,scope,locale,role\}:ArchiveDetailProps\) \{\n const state=useArchiveController\(\{initial,scope,locale\}\)/);
+ const css=readFileSync('public/brand/v3/archive.css','utf8');
+ assert.match(css,/\.v3-archive \.pri \{ color:var\(--c-on-primary\); background:var\(--c-primary\); border-color:var\(--c-primary\); \}/);
+});
