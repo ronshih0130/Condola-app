@@ -60,7 +60,7 @@ for (const group of PAGES) {
         expect.soft(image, `${id}: flag OFF equals the v2 baseline`).toMatchSnapshot(`${id}.png`);
       } else {
         expect(v3, `${id}: v3 attribute`).toBe("1");
-        expect(v3Sheet, `${id}: v3 base, shell and today stylesheets`).toBe(3);
+        expect(v3Sheet, `${id}: v3 base, shell, today and owner stylesheets`).toBe(4);
         if (group.account === ACCOUNTS.admin && ["/m", "/m/payments"].includes(shot.path)) {
           await assertManagerShell(page, "admin", size.width, shot.path === "/m" ? "today" : "money");
         }
@@ -404,9 +404,10 @@ for (const size of SIZES) {
     }
     const areas = await nav.locator("[data-area]").evaluateAll(items => items.map(item => item.getAttribute("data-area")));
     if (desktop) {
-      expect(areas.slice(0, admitted ? 4 : 3)).toEqual(["home", "statements", ...(admitted ? ["notifications"] : []), "approvals"]);
-      expect(areas.slice(admitted ? 4 : 3).every(id => id?.startsWith("repair-policy-"))).toBeTruthy();
-    } else expect(areas).toEqual(["home", "statements", ...(admitted ? ["notifications"] : []), "more"]);
+      expect(areas.slice(0, admitted ? 3 : 2)).toEqual(["home", "statements", ...(admitted ? ["notifications"] : [])]);
+      expect(areas).not.toContain("approvals");
+      expect(areas.slice(admitted ? 3 : 2).every(id => id === "receipt-title" || id?.startsWith("repair-policy-"))).toBeTruthy();
+    } else expect(areas).toEqual(["home", "statements", ...(admitted ? ["notifications"] : []), ...(areas.includes("more") ? ["more"] : [])]);
     for (const control of await nav.locator("a,button").all()) await assertShellControl(control, "owner navigation");
 
     const avatar = bar.getByTestId("avatar-menu-trigger");
@@ -436,14 +437,14 @@ for (const size of SIZES) {
     await expect(menu).toHaveCount(0);
     await expect(avatar).toBeFocused();
 
-    if (!desktop) {
+    if (!desktop && areas.includes("more")) {
       const more = nav.locator('[data-area="more"]');
       await more.click();
       const sheet = page.getByTestId("more-menu");
-      await expect(sheet.locator('a[href="/o/approvals"]')).toBeFocused();
+      await expect(sheet.locator("a").first()).toBeFocused();
       const hrefs = await sheet.locator("a").evaluateAll(links => links.map(link => link.getAttribute("href")));
-      expect(hrefs[0]).toBe("/o/approvals");
-      expect(hrefs.slice(1).every(href => href?.startsWith("/o/repair-policy/"))).toBeTruthy();
+      expect(hrefs).not.toContain("/o/approvals");
+      expect(hrefs.every(href => href === "/o/receipt-title" || href?.startsWith("/o/repair-policy/"))).toBeTruthy();
       for (const control of await sheet.locator("a").all()) await assertShellControl(control, "owner more entry");
       const box = await sheet.boundingBox();
       expect(Math.abs(box!.y + box!.height - size.height)).toBeLessThanOrEqual(1);
@@ -451,8 +452,8 @@ for (const size of SIZES) {
       await expect(sheet).toHaveCount(0);
       await expect(more).toBeFocused();
       await more.click();
-      await sheet.locator('a[href="/o/approvals"]').click();
-      await expect(page).toHaveURL(/\/o\/approvals$/);
+      await sheet.locator("a").first().click();
+      await expect(page).toHaveURL(/\/o\/(repair-policy\/|receipt-title)/);
       await expect(sheet).toHaveCount(0);
       await expect(more).toHaveAttribute("aria-current", "page");
     }
@@ -514,5 +515,68 @@ for (const size of SIZES) {
     expect(solid).toBe(0);
     mkdirSync(OUT, { recursive: true });
     await page.screenshot({ path: resolve(OUT, `owner-report-${size.name}.png`), fullPage: true, animations: "disabled" });
+  });
+}
+
+for (const size of SIZES) {
+  test(`O-HOME/O-ROW/O-EMPTY/O-STATES / OWN-26-AC2/AC3/AC6 / P52: owner home at ${size.name}`, async ({ page }) => {
+    test.skip(MODE !== "on", "Owner home requires brand_v3 ON");
+    await page.setViewportSize(size);
+    await signIn(page, ACCOUNTS.owner);
+    await page.goto("/api/demo/locale?set=zh-TW&next=%2Fo");
+    await settle(page);
+    const home = page.getByTestId("owner-home-v3");
+    await expect(home).toBeVisible();
+    await expect(home).not.toContainText("0 件");
+    await expect(home.getByRole("alert")).toHaveCount(0);
+    const rows = home.getByTestId("owner-estimate-row");
+    const count = await rows.count();
+    if (count) {
+      await expect(home.locator("h2").first()).toContainText(`有 ${count} 件事要你處理。`);
+      for (const button of await rows.getByRole("button", { name: "核准估價" }).all()) await assertShellControl(button, "owner estimate");
+    } else {
+      await expect(home.locator("h2").first()).toHaveText("首頁");
+      await expect(home.locator('[data-v3-illustration="20"]')).toBeVisible();
+      await expect(home).toContainText("目前沒有要你處理的事，放心。");
+    }
+    await expect(home.locator(".owner-primary")).toHaveCount(0);
+    await expect(page.locator(".v3-owner-legacy table.t")).toBeVisible();
+    await expect(page.getByTestId("owner-shell-v3").locator('a[href="/o/approvals"]')).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    await page.goto("/o/approvals");
+    await expect(page).toHaveURL(/\/o$/);
+    mkdirSync(OUT, { recursive: true });
+    await page.screenshot({ path: resolve(OUT, `owner-home-${size.name}.png`), fullPage: true, animations: "disabled" });
+  });
+
+  test(`O-EST/O-EST-BACK / OWN-31-AC3/AC5: owner panel focus and no-write close at ${size.name}`, async ({ page }) => {
+    test.skip(MODE !== "on", "Owner panel requires brand_v3 ON");
+    await page.setViewportSize(size);
+    await signIn(page, ACCOUNTS.owner);
+    await page.goto("/api/demo/locale?set=zh-TW&next=%2Fo");
+    const home = page.getByTestId("owner-home-v3");
+    await expect(home).toBeVisible();
+    await expect(home.getByRole("alert")).toHaveCount(0);
+    const trigger = home.getByTestId("owner-estimate-row").first().getByRole("button", { name: "核准估價" });
+    test.skip(await trigger.count() === 0, "Disposable fixture has no pending owner estimates; panel requires an admitted pending version");
+    let writes = 0;
+    await page.route("**/api/owner-repair-decision", route => { writes++; return route.abort(); });
+    await trigger.click();
+    const panel = page.getByRole("dialog", { name: "核准這筆估價" });
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("h2")).toBeFocused();
+    await expect(panel.locator(".owner-primary")).toHaveCount(1);
+    const close = panel.getByRole("button", { name: "關閉", exact: true });
+    await close.focus(); await page.keyboard.press("Tab");
+    await expect(panel.getByRole("button", { name: "核准估價", exact: true })).toBeFocused();
+    await page.keyboard.press("Shift+Tab"); await expect(close).toBeFocused();
+    for (const button of await panel.getByRole("button").all()) await assertShellControl(button, "owner panel action");
+    await panel.getByRole("button", { name: "退回", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "原因", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    expect(writes).toBe(0);
   });
 }
