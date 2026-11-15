@@ -14,7 +14,7 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function OwnerHomePage({ searchParams }: { searchParams?: Promise<{ estimate?: string | string[] }> } = {}) {
+export default async function OwnerHomePage({ searchParams }: { searchParams: Promise<{ estimate?: string | string[] }> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await guardEffectiveSession(await getSession(), null);
   const v2 = await brandV2EnabledForOrg(session.orgId);

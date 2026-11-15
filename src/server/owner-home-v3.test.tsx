@@ -198,16 +198,16 @@ const pageFunction = (text: string, mocks: Record<string, unknown>) => compile(t
 test("O-HOME / OQ-055: OFF /o and approvals HTML equal baseline; ON preserves exact privacy table", async () => {
   for (const path of ["src/app/o/page.tsx", "src/app/o/approvals/page.tsx", "src/app/o/approvals/[ticketId]/page.tsx"]) {
     const before = execFileSync("git", ["show", `7adc7c343dd3f408655a815cf19b49b669e9f6ad:${path}`], { encoding: "utf8" });
-    const props = { params: Promise.resolve({ ticketId: row.ticketId }) };
+    const props = { params: Promise.resolve({ ticketId: row.ticketId }), searchParams: Promise.resolve({}) };
     const mocks = pageMocks(false);
     const baseline = renderToStaticMarkup(await pageFunction(before, mocks)(props));
     assert.equal(renderToStaticMarkup(await pageFunction(source(path), mocks)(props)), baseline);
   }
-  const html = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), pageMocks(true))());
-  const baseline = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), pageMocks(false))());
+  const html = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), pageMocks(true))({ searchParams: Promise.resolve({}) }));
+  const baseline = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), pageMocks(false))({ searchParams: Promise.resolve({}) }));
   assert.ok(html.includes(baseline)); assert.doesNotMatch(html, /Hidden Name|0912345678/);
   assert.ok(html.indexOf("owner-task-card") < html.indexOf("v3-owner-legacy"));
-  const failed = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), { ...pageMocks(true), "@/server/owner-home-v3": { ownerHomeEstimates: async () => ({ status: "error" }) } })());
+  const failed = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), { ...pageMocks(true), "@/server/owner-home-v3": { ownerHomeEstimates: async () => ({ status: "error" }) } })({ searchParams: Promise.resolve({}) }));
   assert.doesNotMatch(failed, /v3-owner-legacy|0 件/);
 });
 test("OQ-055 / O-EST: ON redirects list and pending detail; decided and unknown stay read-only", async () => {

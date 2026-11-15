@@ -61,8 +61,13 @@ test("B-021 service uses contracted gateways and the registered rendering contro
     // O-HOME: only display columns joined to the owner gateway's admitted rows.
     // No independent table scan, alternate admission, private notes or write path.
     if (match[1] === "public") {
-      assert.ok(["maintenance_tickets", "properties"].includes(match[2]));
-      assert.match(source.slice((match.index ?? 0) - 10, (match.index ?? 0)), /LEFT JOIN $/);
+      const before = source.slice(Math.max(0, (match.index ?? 0) - 40), match.index ?? 0);
+      if (["maintenance_tickets", "properties"].includes(match[2])) assert.match(before, /LEFT JOIN $/);
+      // The home projection's read-only authority clause: the owner's CURRENT property_owners row
+      // (ownerPropertyScope rule, bound to the session user). No other table and no write.
+      else if (match[2] === "property_owners") assert.match(before, /WHERE EXISTS \(SELECT 1 FROM $/);
+      else if (match[2] === "contacts") assert.match(before, /property_owners hpo JOIN $/);
+      else assert.fail(`unexpected public table ${match[2]}`);
       continue;
     }
     assert.equal(match[1], "app", "Only gateways and the two pinned home display joins");
