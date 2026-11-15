@@ -9,6 +9,33 @@ function read(path: string) {
   return readFileSync(path, "utf8");
 }
 
+test("PR-015 replaces only two owner readers, preserving bodies and security except org-local authority", () => {
+  const sql = read("supabase/migrations/20261115130000_b013_current_owner_authority.sql");
+  const readers = read("supabase/migrations/20261105180000_b021_repair_approval_reads.sql");
+  function definition(source: string, name: string) {
+    const match = source.match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app\\.${name}\\([\\s\\S]*?END \\$\\$;`));
+    assert.ok(match, name);
+    return match[0];
+  }
+  const authority = /\n {2,3}SELECT 1 FROM public\.property_owners po\n {2,3}JOIN public\.contacts c ON c\.id=po\.owner_contact_id AND c\.org_id=po\.org_id\n {2,3}JOIN public\.organizations o ON o\.id=po\.org_id\n {2,3}WHERE po\.org_id=v\.org_id AND po\.property_id=v\.property_id\n {3,4}AND c\.user_id=a\.actor AND c\.is_owner AND c\.archived_at IS NULL\n {3,4}AND po\.effective_from <= \(clock_timestamp\(\) AT TIME ZONE o\.timezone\)::date\n {3,4}AND \(po\.effective_to IS NULL OR po\.effective_to > \(clock_timestamp\(\) AT TIME ZONE o\.timezone\)::date\)\n/;
+  assert.equal((sql.match(new RegExp(authority.source, "g")) ?? []).length, 2);
+  const names = ["b013_owner_pending", "b013_owner_history"];
+  assert.deepEqual([...sql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)/g)].map(match => match[1]), names);
+  for (const name of names) {
+    const actual = definition(sql, name).replace("CREATE OR REPLACE FUNCTION", "CREATE FUNCTION")
+      .replace(new RegExp("  AND EXISTS \\(" + authority.source + "  \\)\\n"), "");
+    assert.equal(actual, definition(readers, name), name);
+    const grants = (source: string) => source.match(new RegExp(`(?:REVOKE|GRANT)[^;]*FUNCTION app\\.${name}\\([^;]*;`, "g"));
+    assert.deepEqual(grants(sql), grants(readers), name + " ACLs");
+  }
+  assert.match(sql, /SET LOCAL lock_timeout = '5s'/);
+  assert.match(sql, /SET LOCAL statement_timeout = '60s'/);
+  assert.doesNotMatch(sql, /CURRENT_DATE/i);
+  assert.doesNotMatch(sql, /app\.b013_decide_estimate/);
+  assert.doesNotMatch(sql, /\b(?:DROP|ALTER TABLE|CREATE TABLE)\b/);
+  assert.match(read("scripts/check-function-privileges.sh"), /PR-015 owner gateway ACL\/config probe/);
+});
+
 test("default privileges revoke future execute and do not touch existing functions", () => {
   const sql = read("supabase/migrations/20261030130000_default_function_privileges.sql");
   assert.match(sql, /FOR ROLE postgres IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated/);
