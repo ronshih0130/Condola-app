@@ -57,10 +57,13 @@ for (const group of PAGES) {
         expect(v3, `${id}: no v3 attribute`).toBeNull();
         expect(v3Sheet, `${id}: no v3 stylesheet`).toBe(0);
         // baseline mode writes the reference (--update-snapshots); off mode compares against it.
-        expect(image).toMatchSnapshot(`${id}.png`);
+        expect.soft(image, `${id}: flag OFF equals the v2 baseline`).toMatchSnapshot(`${id}.png`);
       } else {
         expect(v3, `${id}: v3 attribute`).toBe("1");
-        expect(v3Sheet, `${id}: v3 stylesheet`).toBe(1);
+        expect(v3Sheet, `${id}: v3 base and shell stylesheets`).toBe(2);
+        if (group.account === ACCOUNTS.admin && ["/m", "/m/payments"].includes(shot.path)) {
+          await assertManagerShell(page, "admin", size.width, shot.path === "/m" ? "today" : "money");
+        }
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         expect(overflow, `${id}: no horizontal overflow`).toBeLessThanOrEqual(0);
         // Every navy-filled action in the page body counts, whatever its class (review r1: not only .btn.pri).
@@ -133,3 +136,95 @@ test(`B-069 PLT-51-AC4 — brand v3 visual (${MODE}): reduced motion keeps the c
   expect(names.name === "none" || names.duration === "0s", `tick animation under reduced motion: ${JSON.stringify(names)}`).toBeTruthy();
   await context.close();
 });
+
+
+const SHELL_AREAS = {
+  admin: ["today", "messages", "properties", "leases", "money", "maintenance", "settings"],
+  manager: ["today", "messages", "properties", "leases", "money", "maintenance", "settings"],
+  accountant: ["today", "properties", "leases", "money", "maintenance", "settings"],
+  maintenance: ["maintenance", "settings"],
+};
+const SHELL_TABS = {
+  admin: ["today", "messages", "properties", "leases", "more"],
+  manager: ["today", "messages", "properties", "leases", "more"],
+  accountant: ["today", "properties", "leases", "money", "more"],
+  maintenance: ["maintenance", "settings"],
+};
+type StaffRole = keyof typeof SHELL_AREAS;
+async function assertManagerShell(page: Page, role: StaffRole, width: number, area: string) {
+  await expect(page.getByTestId("manager-shell-v3")).toBeVisible();
+  await expect(page.locator("header.top, aside.side")).toHaveCount(0);
+  await expect(page.getByTestId("tryout-panel")).toHaveCount(0);
+  const nav = page.getByTestId(width >= 1024 ? "v3-sidebar-nav" : "v3-phone-tabs");
+  await expect(nav).toBeVisible();
+  const expected = width >= 1024 ? SHELL_AREAS[role] : SHELL_TABS[role];
+  expect(await nav.locator("a[data-area]").evaluateAll(links => links.map(link => link.getAttribute("data-area")))).toEqual(expected);
+  const active = expected.includes(area) ? area : "more";
+  await expect(nav.locator(`a[data-area="${active}"]`)).toHaveAttribute("aria-current", "page");
+  await expect(nav.locator("a[data-area][aria-current=page]")).toHaveCount(1);
+  expect(await nav.locator("a").evaluateAll(links => links.filter(link => {
+    const box = link.getBoundingClientRect(); return box.width < 44 || box.height < 44;
+  }).map(link => link.textContent))).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  // Interim controls (OQ-032 until phase 1b): reachable, readable and 44px at both widths.
+  const tools = page.locator(".v3-shell .shell-tools");
+  for (const id of ["locale-zh", "locale-en", "sign-out", "org-switch"]) {
+    const control = tools.getByTestId(id);
+    await control.scrollIntoViewIfNeeded();
+    await expect(control, `${id} visible`).toBeVisible();
+    const contrast = await control.evaluate(el => {
+      const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+      const rgb = (c: string) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = "#000"; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)); };
+      const lum = (c: string) => { const [r, g, b] = rgb(c).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+      let node: Element | null = el; let bg = "transparent";
+      const clear = (c: string) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return ctx.getImageData(0, 0, 1, 1).data[3] === 0; };
+      while (node && clear(bg)) { bg = getComputedStyle(node).backgroundColor; node = node.parentElement; }
+      const [a, b] = [lum(getComputedStyle(el).color), lum(bg)].sort((x, y) => y - x);
+      return (a + .05) / (b + .05);
+    });
+    expect(contrast, `${id} text contrast`).toBeGreaterThanOrEqual(4.5);
+    const box = await control.boundingBox();
+    expect(Math.min(box?.width ?? 0, box?.height ?? 0), `${id} target`).toBeGreaterThanOrEqual(44);
+  }
+  await tools.getByTestId("org-switch").click();
+  await expect(tools.getByTestId("org-pick-sandbox")).toBeVisible();
+  await tools.getByTestId("org-switch").click();
+  if (width >= 1024) {
+    await expect(page.locator(".v3-shell .appbar.navy")).toBeHidden();
+    await expect(page.locator(".v3-shell .deskbar")).toBeVisible();
+    await expect(page.getByTestId("v3-phone-tabs")).toBeHidden();
+  } else {
+    await expect(page.locator(".v3-shell .appbar.navy")).toBeVisible();
+    await expect(page.locator(".v3-shell .deskbar")).toBeHidden();
+    await expect(page.getByTestId("v3-sidebar-nav")).toBeHidden();
+  }
+}
+
+for (const role of ["admin", "manager", "accountant", "maintenance"] as const) {
+  test(`B-043 MGT-47-AC3/AC4/AC7, MGT-48-AC5, MGT-49-AC5 / PLT-44: ${role} shell`, async ({ page }) => {
+    test.skip(MODE !== "on", "Preserve the existing OFF and baseline evidence set");
+    await signIn(page, ACCOUNTS[role]);
+    await page.goto("/auth/continue");
+    await expect(page).toHaveURL(new RegExp(`${role === "accountant" ? "/m/payments" : role === "maintenance" ? "/m/tickets" : "/m"}$`));
+    const paths = role === "maintenance" ? ["/m/tickets", "/m/account"] : ["/m", "/m/payments"];
+    for (const path of paths) for (const size of SIZES) {
+      await page.setViewportSize({ width: size.width, height: size.height });
+      await page.goto(`/api/demo/locale?set=zh-TW&next=${encodeURIComponent(path)}`);
+      await settle(page);
+      const area = path === "/m" ? "today" : path === "/m/payments" ? "money" : path === "/m/tickets" ? "maintenance" : "settings";
+      await assertManagerShell(page, role, size.width, area);
+      if (path === "/m/payments") {
+        const subnav = page.locator(size.width >= 1024 ? ".v3-shell .snav" : ".v3-shell .subchips");
+        await expect(subnav.locator('a[href="/m/payments"]')).toHaveAttribute("aria-current", "page");
+        await expect(subnav.locator('a[href="/m/bank"]')).toHaveCount(role === "manager" ? 0 : 1);
+      }
+      mkdirSync(OUT, { recursive: true });
+      writeFileSync(resolve(OUT, `shell-${role}-${area}-${size.name}.png`), await page.screenshot({ fullPage: true, animations: "disabled" }));
+    }
+    if (role === "manager") {
+      await page.goto("/m/bank");
+      await expect(page).toHaveURL(/\/m\/noperm\?need=bank.reconcile/);
+      await expect(page.getByTestId("forbidden").locator('a[href="/m"]')).toBeVisible();
+    }
+  });
+}

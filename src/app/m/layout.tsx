@@ -1,3 +1,6 @@
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { areasFor, tabsFor } from "@/server/nav-v3";
+import { ManagerShellV3 } from "@/components/v3/shell/manager-shell";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { BUILD_SHA } from "@/build-info";
@@ -23,6 +26,15 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   const banner = session.kind === "staff" ? await trialBannerFor(session) : null;
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    return <ManagerShellV3 areas={areasFor(session)} tabs={tabsFor(session)}
+      locale={session.locale} name={session.name} role={session.role} firm={firm.name}
+      sandbox={session.environment === "sandbox"} showReset={demoModeEnabled() && session.role === "admin"}
+      buildSha={BUILD_SHA}
+      trialBanner={banner ? <TrialBanner locale={session.locale} banner={banner} next={path || "/m"} /> : null}>
+      {children}
+    </ManagerShellV3>;
+  }
   return (
     <>
       {session.environment === "live" ? null : (

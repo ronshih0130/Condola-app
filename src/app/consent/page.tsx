@@ -6,7 +6,7 @@ import { ConsentGateForm } from "@/components/consent-check";
 import { actionAcceptReconsent } from "@/server/consent-actions";
 import { consentCoversCurrent, readConsent } from "@/server/consent";
 import { consentNextPath } from "@/server/consent-gate";
-import { roleHome } from "@/server/perms";
+import { roleHomeForSession } from "@/server/role-home-v3";
 import { readSignupIdentity } from "@/server/signup";
 import { readSession, requestPrefs } from "@/server/session";
 
@@ -17,7 +17,7 @@ export default async function ReconsentPage({ searchParams }: { searchParams: Pr
   const identity = await readSignupIdentity();
   if (!identity) redirect("/login");
   const session = await readSession();
-  const next = consentNextPath(params.next || "", session ? roleHome(session.kind, session.role) : "/signup/firm");
+  const next = consentNextPath(params.next || "", session ? await roleHomeForSession(session) : "/signup/firm");
   if (session && (session.kind === "owner" || session.kind === "tenant")) {
     redirect(`/consent/portal?next=${encodeURIComponent(next)}`);
   }
