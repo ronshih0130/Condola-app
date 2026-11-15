@@ -6,9 +6,12 @@ import { disposableDbUrl } from "./test-disposable-db";
 
 // B-042 PR-1 (narrowed) schema. Stories: MGT-36-AC5, MGT-44-AC1 (Ron 01:34 PT: only share /
 // copy / QR / print count). Synthetic data only. room_type 'unspecified' ships in PR-4a.
+// Fix-forward from the CEO GO on PR-1 (20261114100000_b042_fix_forward.sql): the session pin is
+// required, today_dash requires today_home, and anon / authenticated calls are denied.
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 const MIGRATION = readFileSync(new URL("../../supabase/migrations/20261113220000_b042_today_home_schema.sql", import.meta.url), "utf8");
+const FIX_FORWARD = readFileSync(new URL("../../supabase/migrations/20261114100000_b042_fix_forward.sql", import.meta.url), "utf8");
 const FUNCTIONS = [
   "app.b042_flag_on(text, uuid)",
   "app.b042_session_pin_ok(uuid)",
@@ -55,11 +58,13 @@ async function secret(orgId: string, unitId: string, opts: { revoked?: boolean; 
      VALUES ($1, $2, md5(random()::text), now() + CASE WHEN $3 THEN interval '-1 day' ELSE interval '14 days' END, CASE WHEN $4 THEN now() END) RETURNING id`,
     [orgId, unitId, !!opts.expired, !!opts.revoked])).rows[0].id;
 }
-async function asService<T>(sql: string, params: unknown[] = [], pin?: { env: string; org: string }): Promise<T[]> {
+type Pin = { env?: string; org?: string };
+async function asService<T>(sql: string, params: unknown[] = [], pin?: Pin): Promise<T[]> {
   await db.query("BEGIN");
   try {
     await db.query("SET LOCAL ROLE service_role");
-    if (pin) await db.query(`SELECT set_config('app.env', $1, true), set_config('app.active_org_id', $2, true)`, [pin.env, pin.org]);
+    if (pin?.env !== undefined) await db.query(`SELECT set_config('app.env', $1, true)`, [pin.env]);
+    if (pin?.org !== undefined) await db.query(`SELECT set_config('app.active_org_id', $1, true)`, [pin.org]);
     const r = await db.query(sql, params);
     await db.query("COMMIT");
     return r.rows as T[];
@@ -68,7 +73,9 @@ async function asService<T>(sql: string, params: unknown[] = [], pin?: { env: st
     throw e;
   }
 }
-const share = (o: { orgId: string }, actor: string, sec: string, channel = "copy", kind = "unit", pin?: { env: string; org: string }) =>
+// Recorders run pinned to the live org, as pinOrg does in the app. Pass a pin to override; {} = no pin.
+const livePin = (orgId: string): Pin => ({ env: "live", org: orgId });
+const share = (o: { orgId: string }, actor: string, sec: string, channel = "copy", kind = "unit", pin: Pin = livePin(o.orgId)) =>
   asService<{ r: boolean }>("SELECT app.b042_record_invite_share($1,$2,$3,$4,$5) AS r", [o.orgId, actor, kind, sec, channel], pin).then((x) => x[0].r);
 const shared = (orgId: string) => asService<{ r: boolean }>("SELECT app.b042_org_invite_shared($1) AS r", [orgId]).then((x) => x[0].r);
 
@@ -100,7 +107,7 @@ test("flag gate: OFF / not allowlisted / org flag missing / mixed allowlist → 
   const off = await makeOrg(false);
   const sec = await secret(off.orgId, off.unit);
   await assert.rejects(share(off, off.admin, sec), /b042_disabled/);
-  await assert.rejects(asService("SELECT app.b042_record_first_login($1,$2)", [off.orgId, off.admin]), /b042_disabled/);
+  await assert.rejects(asService("SELECT app.b042_record_first_login($1,$2)", [off.orgId, off.admin], livePin(off.orgId)), /b042_disabled/);
   assert.equal(await shared(off.orgId), false);
   // org flag on, not allowlisted (another org keeps the global switch on)
   await makeOrg(true);
@@ -122,7 +129,7 @@ test("flag gate: OFF / not allowlisted / org flag missing / mixed allowlist → 
 
 test("MGT-36-AC5: first sign-in recorded once per user per live org; members only; sandbox refused", async () => {
   const o = await makeOrg(true);
-  const rec = (u: string, org = o.orgId) => asService<{ r: boolean }>("SELECT app.b042_record_first_login($1,$2) AS r", [org, u]).then((x) => x[0].r);
+  const rec = (u: string, org = o.orgId) => asService<{ r: boolean }>("SELECT app.b042_record_first_login($1,$2) AS r", [org, u], livePin(org)).then((x) => x[0].r);
   const seen = (u: string) => asService<{ r: boolean }>("SELECT app.b042_first_login_seen($1,$2) AS r", [o.orgId, u]).then((x) => x[0].r);
   assert.equal(await seen(o.manager), false);
   assert.equal(await rec(o.manager), true);
@@ -189,7 +196,7 @@ test("Codex PR-1 r1: sample data never counts — sample unit, sample property, 
   assert.equal(await shared(o.orgId), false);
   const memberId = (await db.query(`SELECT id FROM org_members WHERE org_id = $1 AND user_id = $2`, [o.orgId, o.manager])).rows[0].id;
   await mark("org_members", memberId);
-  await assert.rejects(asService("SELECT app.b042_record_first_login($1,$2)", [o.orgId, o.manager]), /b042_forbidden/);
+  await assert.rejects(asService("SELECT app.b042_record_first_login($1,$2)", [o.orgId, o.manager], livePin(o.orgId)), /b042_forbidden/);
   await assert.rejects(share(o, o.manager, await secret(o.orgId, await newUnit(o.orgId, o.prop))), /b042_forbidden/);
 });
 
@@ -204,4 +211,143 @@ test("Codex PR-1 r1: a transaction pinned to sandbox or to another org cannot re
   assert.equal(await shared(o.orgId), false);
   // pinned to this live org: allowed
   assert.equal(await share(o, o.admin, sec, "copy", "unit", { env: "live", org: o.orgId }), true);
+});
+
+// ---- Fix-forward (CEO GO on #143; B-042-design-r3-final.md "Fix-forward carried into PR-4a") ----
+
+test("fix-forward: the migration replaces two functions only — no table, policy, enum or flag change", () => {
+  assert.equal((FIX_FORWARD.match(/CREATE OR REPLACE FUNCTION/g) ?? []).length, 2);
+  assert.match(FIX_FORWARD, /CREATE OR REPLACE FUNCTION app\.b042_flag_on\(p_key text, p_org uuid\) RETURNS boolean/);
+  assert.match(FIX_FORWARD, /CREATE OR REPLACE FUNCTION app\.b042_session_pin_ok\(p_org uuid\) RETURNS boolean/);
+  const code = FIX_FORWARD.split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
+  assert.doesNotMatch(code, /CREATE TABLE|ALTER TABLE|DROP |DELETE |TRUNCATE|CREATE POLICY|ALTER TYPE|INSERT INTO|UPDATE /i);
+  assert.doesNotMatch(code, /unspecified/);
+  assert.doesNotMatch(code, /GRANT [^;]*\b(anon|authenticated|PUBLIC)\b/i);
+});
+
+test("fix-forward 1: the session pin is required — no pin, half a pin or an empty pin is refused", async () => {
+  const o = await makeOrg(true);
+  const sec = await secret(o.orgId, o.unit);
+  const first = (pin: Pin) => asService<{ r: boolean }>("SELECT app.b042_record_first_login($1,$2) AS r", [o.orgId, o.admin], pin);
+  const pins: Pin[] = [{}, { env: "live" }, { org: o.orgId }, { env: "", org: o.orgId }, { env: "live", org: "" }, { env: "LIVE", org: o.orgId }];
+  for (const pin of pins) {
+    await assert.rejects(share(o, o.admin, sec, "copy", "unit", pin), /b042_forbidden/, JSON.stringify(pin));
+    await assert.rejects(first(pin), /b042_forbidden/, JSON.stringify(pin));
+  }
+  assert.equal(await shared(o.orgId), false);
+  assert.equal(Number((await db.query(`SELECT count(*) FROM app.b042_first_logins WHERE org_id = $1`, [o.orgId])).rows[0].count), 0);
+  // the helper itself never returns NULL (a NULL would slip past "IF NOT ...")
+  const ok = (org: string | null, pin: Pin) =>
+    asService<{ r: boolean | null }>("SELECT app.b042_session_pin_ok($1::uuid) AS r", [org], pin).then((x) => x[0].r);
+  assert.equal(await ok(o.orgId, {}), false);
+  assert.equal(await ok(null, livePin(o.orgId)), false);
+  assert.equal(await ok(o.orgId, { env: "sandbox", org: o.orgId }), false);
+  assert.equal(await ok(o.orgId, livePin(o.orgId)), true);
+  // pinned to this live org: both recorders work
+  assert.equal((await first(livePin(o.orgId)))[0].r, true);
+  assert.equal(await share(o, o.admin, sec), true);
+});
+
+test("fix-forward 2: today_dash is on only when today_home is also on for the org", async () => {
+  const on = (key: string | null, org: string | null) =>
+    asService<{ r: boolean | null }>("SELECT app.b042_flag_on($1, $2::uuid) AS r", [key, org]).then((x) => x[0].r);
+  const dashBefore = (await db.query(`SELECT value FROM platform_settings WHERE key = 'today_dash'`)).rows[0].value;
+  const homeBefore = (await db.query(`SELECT value FROM platform_settings WHERE key = 'today_home'`)).rows[0].value;
+  const o = await makeOrg(true); // today_home fully on for this org
+  const dashOnly = await makeOrg(false); // will get today_dash everywhere, today_home nowhere
+  try {
+    await db.query(`UPDATE platform_settings SET value = jsonb_build_object('enabled', true, 'allowed_org_ids', jsonb_build_array($1::text, $2::text)) WHERE key = 'today_dash'`, [o.orgId, dashOnly.orgId]);
+    // home on, dash allowlisted but the org flag is missing → dash off
+    assert.equal(await on("today_home", o.orgId), true);
+    assert.equal(await on("today_dash", o.orgId), false);
+    await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"today_dash":true}' WHERE id = ANY($1::uuid[])`, [[o.orgId, dashOnly.orgId]]);
+    assert.equal(await on("today_dash", o.orgId), true);
+    // dash fully on, home missing at every layer → dash off
+    assert.equal(await on("today_home", dashOnly.orgId), false);
+    assert.equal(await on("today_dash", dashOnly.orgId), false);
+    // home org flag on but home not allowlisted for this org → still off
+    await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"today_home":true}' WHERE id = $1`, [dashOnly.orgId]);
+    assert.equal(await on("today_dash", dashOnly.orgId), false);
+    // turning today_home off for the org (org flag) turns today_dash off with it
+    await db.query(`UPDATE organizations SET feature_flags = feature_flags - 'today_home' WHERE id = $1`, [o.orgId]);
+    assert.equal(await on("today_dash", o.orgId), false);
+    await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"today_home":"true"}' WHERE id = $1`, [o.orgId]);
+    assert.equal(await on("today_dash", o.orgId), false, "a string is not boolean true");
+    await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"today_home":true}' WHERE id = $1`, [o.orgId]);
+    assert.equal(await on("today_dash", o.orgId), true);
+    // with BOTH flags fully on for this org: an unknown or NULL key, or a NULL org, is still off (never NULL)
+    await db.query(`UPDATE organizations SET feature_flags = feature_flags || '{"pricing_trial":true,"today":true}' WHERE id = $1`, [o.orgId]);
+    for (const key of ["pricing_trial", "today", "today_home ", "TODAY_HOME", "", null]) assert.equal(await on(key, o.orgId), false, String(key));
+    assert.equal(await on("today_home", null), false);
+    assert.equal(await on("today_dash", null), false);
+    // an allowlist that is not an array admits nobody and does not raise (object, string, number, JSON null, missing)
+    const homeOn = (await db.query(`SELECT value FROM platform_settings WHERE key = 'today_home'`)).rows[0].value;
+    for (const bad of [`{"${o.orgId}":true}`, `"${o.orgId}"`, "1", "null"]) {
+      await db.query(`UPDATE platform_settings SET value = jsonb_set(value, '{allowed_org_ids}', $1::jsonb) WHERE key = 'today_home'`, [bad]);
+      assert.equal(await on("today_home", o.orgId), false, bad);
+      assert.equal(await on("today_dash", o.orgId), false, bad);
+    }
+    await db.query(`UPDATE platform_settings SET value = value - 'allowed_org_ids' WHERE key = 'today_home'`);
+    assert.equal(await on("today_home", o.orgId), false);
+    for (const whole of [`"on"`, "true", "[]", "null"]) {
+      await db.query(`UPDATE platform_settings SET value = $1::jsonb WHERE key = 'today_home'`, [whole]);
+      assert.equal(await on("today_home", o.orgId), false, whole);
+      assert.equal(await on("today_dash", o.orgId), false, whole);
+    }
+    await db.query(`UPDATE platform_settings SET value = $1 WHERE key = 'today_home'`, [homeOn]);
+    assert.equal(await on("today_dash", o.orgId), true);
+    // global today_home switch off → dash off for everyone
+    await db.query(`UPDATE platform_settings SET value = jsonb_set(value, '{enabled}', 'false') WHERE key = 'today_home'`);
+    assert.equal(await on("today_dash", o.orgId), false);
+    assert.equal(await on("today_home", o.orgId), false);
+  } finally {
+    await db.query(`UPDATE platform_settings SET value = $1 WHERE key = 'today_dash'`, [dashBefore]);
+    await db.query(`UPDATE platform_settings SET value = $1 WHERE key = 'today_home'`, [homeBefore]);
+  }
+});
+
+test("fix-forward 3: anon and authenticated actually calling each app.b042_* function are denied", async () => {
+  const o = await makeOrg(true);
+  const sec = await secret(o.orgId, o.unit);
+  const calls: [string, string, unknown[]][] = [
+    ["b042_flag_on", "SELECT app.b042_flag_on('today_home', $1)", [o.orgId]],
+    ["b042_session_pin_ok", "SELECT app.b042_session_pin_ok($1)", [o.orgId]],
+    ["b042_record_first_login", "SELECT app.b042_record_first_login($1, $2)", [o.orgId, o.admin]],
+    ["b042_first_login_seen", "SELECT app.b042_first_login_seen($1, $2)", [o.orgId, o.admin]],
+    ["b042_record_invite_share", "SELECT app.b042_record_invite_share($1, $2, 'unit', $3, 'copy')", [o.orgId, o.admin, sec]],
+    ["b042_org_invite_shared", "SELECT app.b042_org_invite_shared($1)", [o.orgId]],
+  ];
+  assert.deepEqual(calls.map((c) => `app.${c[0]}`), FUNCTIONS.map((f) => f.slice(0, f.indexOf("("))));
+  // The refusal must be the grant on this very object (or on its schema), not an error raised
+  // from inside the function body or by a table it reads.
+  const denied = (object: string, kind: "function" | "table") => (e: unknown) => {
+    const err = e as { code?: string; message?: string };
+    assert.equal(err.code, "42501", `${object}: ${err.message}`);
+    assert.match(err.message ?? "", new RegExp(`^permission denied for (schema app|${kind} ${object})$`), object);
+    return true;
+  };
+  for (const role of ["anon", "authenticated"]) {
+    for (const [name, sql, params] of calls) {
+      await db.query("BEGIN");
+      try {
+        await db.query(`SET LOCAL ROLE ${role}`);
+        // pinned and signed in as the org's own admin: the denial is the grant, not the data
+        await db.query(`SELECT set_config('app.env', 'live', true), set_config('app.active_org_id', $1, true), set_config('request.jwt.claim.sub', $2, true)`, [o.orgId, o.admin]);
+        await assert.rejects(db.query(sql, params), denied(name, "function"), `${role}: ${sql}`);
+      } finally {
+        await db.query("ROLLBACK");
+      }
+    }
+    for (const t of TABLES) {
+      await db.query("BEGIN");
+      try {
+        await db.query(`SET LOCAL ROLE ${role}`);
+        await assert.rejects(db.query(`SELECT count(*) FROM ${t}`), denied(t.slice(4), "table"), `${role}: ${t}`);
+      } finally {
+        await db.query("ROLLBACK");
+      }
+    }
+  }
+  assert.equal(await shared(o.orgId), false);
+  assert.equal(Number((await db.query(`SELECT count(*) FROM app.b042_first_logins WHERE org_id = $1`, [o.orgId])).rows[0].count), 0);
 });
