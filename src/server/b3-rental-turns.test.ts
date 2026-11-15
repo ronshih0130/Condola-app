@@ -46,9 +46,9 @@ test("ready DTO, uncapped counts, calendar boundary, shared list cap and scoped 
   let clocks = 0;
   const calls: string[] = [];
   const rows = [
-    { kind: "renewal_ask", target_kind: "room", target_id: "r", property_id: "p", place: "Property 2F A", lease_id: "l", date: "2030-05-01", day_number: 0, tenant_name: "Synthetic", rent_minor: null, rent_currency: null },
-    { kind: "early_vacancy", target_kind: "unit", target_id: "u", property_id: "p", place: "Property 3F", lease_id: "e", date: "2030-05-10", day_number: 9, tenant_name: null, rent_minor: null, rent_currency: null },
-    { kind: "vacant", target_kind: "unit", target_id: "v", property_id: "p", place: "Property 4F", lease_id: null, date: null, day_number: null, tenant_name: null, rent_minor: "900000", rent_currency: "TWD" },
+    { kind: "renewal_ask", target_kind: "room", target_id: "r", property_id: "p", place: "Property 2F A", lease_id: "l", date: "2030-05-01", day_number: 0, tenant_name: "Synthetic", rent_minor: null, rent_currency: null, reason: null },
+    { kind: "early_vacancy", target_kind: "unit", target_id: "u", property_id: "p", place: "Property 3F", lease_id: "e", date: "2030-05-10", day_number: 9, tenant_name: null, rent_minor: null, rent_currency: null, reason: "declined" },
+    { kind: "vacant", target_kind: "unit", target_id: "v", property_id: "p", place: "Property 4F", lease_id: null, date: null, day_number: null, tenant_name: null, rent_minor: "900000", rent_currency: "TWD", reason: null },
   ];
   const transaction: typeof tx = async (userId, fn, scope, options) => {
     assert.equal(userId, session.userId);
@@ -70,7 +70,7 @@ test("ready DTO, uncapped counts, calendar boundary, shared list cap and scoped 
   assert.equal(clocks, 1);
   assert.deepEqual(result, { state: "ready", counts: { vacant: 80, renewalAsk: 3, earlyVacancy: 2 }, mine: rows.map(r => ({
     kind: r.kind, targetKind: r.target_kind, targetId: r.target_id, propertyId: r.property_id, place: r.place,
-    tenantName: r.tenant_name, leaseId: r.lease_id, date: r.date, dayNumber: r.day_number, rentMinor: r.rent_minor, rentCurrency: r.rent_currency,
+    tenantName: r.tenant_name, leaseId: r.lease_id, date: r.date, dayNumber: r.day_number, rentMinor: r.rent_minor, rentCurrency: r.rent_currency, reason: r.reason,
   })) });
   assert.ok(calls.indexOf(COUNTS_SQL_FOR_TEST) < calls.indexOf(LISTS_SQL_FOR_TEST));
   // R6 ordering is executed in SQL before LIMIT, then preserved by the mapper above.
