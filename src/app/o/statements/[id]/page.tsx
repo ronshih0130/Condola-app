@@ -1,6 +1,7 @@
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { StatementDocument } from "@/components/statement-document";
@@ -26,6 +27,9 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
   const t = makeT(session.locale);
   const detail = await statementDetail(session, id);
   if (!detail) notFound();
+  if (detail.statement.status === "issued" && await brandV3EnabledForOrg(session.orgId)) {
+    redirect(`/o/statements?month=${detail.statement.period_start.slice(0, 7)}`);
+  }
   const privacy = await ownerPrivacy(session.orgId);
   const hidden = t("i_tenant_hidden");
   const names = privacy.showName ? [] : await tenantDisplayNames(session.orgId);
