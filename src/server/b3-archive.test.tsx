@@ -119,7 +119,7 @@ test('shared controller sends exact preconditions/reason/request ID, retains unc
  const h=harness('unknown',true);let state=h.rerender();(state.setReason as (s:string)=>void)('Reason');state=h.rerender();(state.submit as (s:string)=>void)('archived');await Promise.all(h.jobs);assert.ok(h.rerender().pending);assert.equal(h.calls.length,1);
 });
 test('v3 has no new write path and test registration has a separate integration segment',()=>{
- const originalCommand=source('src/server/record-archive.ts').split('export async function archiveCommand')[1];assert.equal(createHash('sha256').update('export async function archiveCommand'+originalCommand).digest('hex'),'8af6503415b881f29ef1d975970562db013a2f717559ba9cdcc15246cdbc5cac');
+ const originalCommand=source('src/server/record-archive.ts').split('export async function archiveCommand')[1];assert.equal(createHash('sha256').update('export async function archiveCommand'+originalCommand).digest('hex'),'e5c499d966f91edde722fc38b961c82b1c41eb79f7ab32cbdfb6f92d9ceb946f'); // re-pinned for app #175: admin-only restore (hub OQ-070)
  const s=source(controlsPath);assert.match(s,/useArchiveController/);assert.doesNotMatch(s,/fetch\(|UPDATE |INSERT |DELETE /);
  const scripts=JSON.parse(source('package.json')).scripts;assert.ok(scripts['test:unit'].split('&&')[0].includes('src/server/b3-archive.test.tsx'));assert.ok(scripts['test:rls'].split('&&').some((segment:string)=>segment.trim()==='tsx --test --test-concurrency=1 src/server/b3-archive.integration.test.ts'));
 });
