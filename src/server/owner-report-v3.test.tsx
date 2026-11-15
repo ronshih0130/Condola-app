@@ -53,7 +53,8 @@ function ui(loader: unknown = async () => { throw new Error("unavailable"); }) {
 function model(overrides: Record<string, unknown> = {}) {
   const reads: string[] = [];
   const queryMocks = {
-    listStatements: async (_s: Session, properties: boolean) => { assert.equal(properties, true); return [row]; },
+    listStatements: async (...args: unknown[]) => { assert.equal(args.length, 1); return [row]; },
+    ownerStatementPropertyNames: async (_s: Session, ids: string[]) => ids.map(id => ({ id, properties: "A" })),
     statementDetail: async (_s: Session, id: string) => { reads.push(id); return { statement: row, lines }; },
     ownerStatementRentSource: async () => ({ count: 1, date: "2026-10-05" }), ...overrides,
   };
@@ -114,10 +115,17 @@ test("O-RPT: latest default, invalid/absent/array months and nearest issued navi
 
 test("O-RPT / OWN-02: every issued statement in the month, ordered property then currency", async () => {
   const rows = [{ ...row, id: "b", properties: "B" }, { ...row, id: "usd", currency: "USD" }, row, { ...row, id: "void", status: "void" }];
-  const m = model({ listStatements: async () => rows });
+  const m = model({
+    listStatements: async () => [...rows, { ...row, id: "historical", period_start: "2025-12-01" }],
+    ownerStatementPropertyNames: async (_s: Session, ids: string[]) => {
+      assert.deepEqual([...ids].sort(), ["b", "s1", "usd"]);
+      return rows.filter(r => ids.includes(r.id)).map(r => ({ id: r.id, properties: r.properties }));
+    },
+  });
   const data = await m.loadOwnerReport(actor, "2026-10");
   assert.deepEqual(data.reports.map(r => r.id), ["s1", "usd", "b"]);
   assert.deepEqual(m.reads, ["s1", "usd", "b"]);
+  assert.equal(data.previous, "2025-12");
 });
 
 test("O-RPT / OWN-27-AC4 / OWN-02 / OWN-21: original document figures and lines, privacy retained; no invented one-off section", async () => {
@@ -153,7 +161,7 @@ test("O-RPT-SRC / D14: disclosure only within rent; hidden on unavailable or inc
 
 test("O-RPT-EMPTY / O-STATES: only shipped empty text, blank loading, in-place error and retry", async () => {
   const { OwnerReportView, OwnerReportLoading, OwnerReportPage } = ui();
-  const data = await model({ listStatements: async () => [] }).loadOwnerReport(actor, undefined);
+  const data = await model({ listStatements: async () => [], ownerStatementPropertyNames: async () => assert.fail("empty report has no property query") }).loadOwnerReport(actor, undefined);
   assert.deepEqual(data.reports, []);
   const empty = renderToStaticMarkup(<OwnerReportView data={data} locale="zh-TW" />);
   assert.match(empty, new RegExp(i18n.makeT("zh-TW")("i_statement_empty")));
@@ -202,6 +210,7 @@ test("O-RPT: ON list resolves required searchParams and streams blank loading; d
 function queryReaders(result: unknown) {
   const text = source("src/server/queries.ts");
   const list = text.slice(text.indexOf("export async function listStatements"), text.indexOf("export type RosterRow"));
+  const properties = text.slice(text.indexOf("export async function ownerStatementPropertyNames"), text.indexOf("/** O-RPT-SRC:"));
   const rent = text.slice(text.indexOf("export async function ownerStatementRentSource"), text.indexOf("export async function listTicketProperties"));
   const calls: Array<{ sql: string; params: unknown }> = []; const events: unknown[] = [];
   const deps = {
@@ -214,7 +223,7 @@ function queryReaders(result: unknown) {
     many: async (_client: unknown, sql: string, params: unknown) => { calls.push({ sql, params }); return []; },
   };
   const imports = `import { ${Object.keys(deps).join(",")} } from "test-deps";\n`;
-  return { calls, events, ...compile<{ listStatements: (s: Session, p?: boolean) => Promise<unknown>; ownerStatementRentSource: (s: Session, id: string) => Promise<unknown> }>(imports + list + rent, { "test-deps": deps }) };
+  return { calls, events, ...compile<{ listStatements: (s: Session) => Promise<unknown>; ownerStatementPropertyNames: (s: Session, ids: string[]) => Promise<unknown>; ownerStatementRentSource: (s: Session, id: string) => Promise<unknown> }>(imports + list + properties + rent, { "test-deps": deps }) };
 }
 
 test("O-RPT-SRC / OWN-02: bound owner SQL, B-017 guard, same scope, read-only snapshot; incomplete sources hidden", async () => {
@@ -225,7 +234,9 @@ test("O-RPT-SRC / OWN-02: bound owner SQL, B-017 guard, same scope, read-only sn
     assert.deepEqual(reader.calls[0].params, ["statement-id", actor.orgId]);
     const sql = reader.calls[0].sql;
     assert.ok(sql.includes(scope.ownerStatementScope)); assert.ok(sql.includes(scope.ownerPropertyScope("p.property_id")));
-    for (const fragment of ["p.ledger_transaction_id=sl.ledger_transaction_id", "p.status='confirmed'", "NOT p.is_deposit", "sum(sl.amount_minor)=s.rent_received_minor", "count(DISTINCT p.id)", "max(p.confirmed_at)", "p.updated_at<=s.issued_at"]) assert.ok(sql.includes(fragment), fragment);
+    for (const fragment of ["p.ledger_transaction_id=sl.ledger_transaction_id", "p.status='confirmed'", "NOT p.is_deposit", "sum(amount_minor)=rent_received_minor", "count(DISTINCT payment_id)", "max(confirmed_at)", "p.updated_at<=s.issued_at",
+      "sum(sl.amount_minor) OVER (PARTITION BY p.id)", "attributed_minor>0 AND attributed_minor<=payment_amount", "count(line_id)=count(DISTINCT line_id)",
+      "p.confirmed_at<=s.issued_at", "p.paid_on BETWEEN s.period_start AND s.period_end", "p.currency=s.currency", "p.property_id=sl.property_id"]) assert.ok(sql.includes(fragment), fragment);
     assert.deepEqual(reader.events[0], ["guard", actor, "stmt.view"]);
     assert.deepEqual(reader.events[1], ["tx", actor.userId, { orgId: actor.orgId, environment: actor.environment }, { isolation: "repeatable read", readOnly: true }]);
     assert.deepEqual(reader.events[2], ["authority", "stmt.view"]);
@@ -234,12 +245,26 @@ test("O-RPT-SRC / OWN-02: bound owner SQL, B-017 guard, same scope, read-only sn
   assert.equal(await denied.ownerStatementRentSource({ ...actor, kind: "staff" }, "id"), null); assert.equal(denied.calls.length, 0);
 });
 
-test("O-RPT / OWN-02: property sorting projection retains full owner scope and OFF SQL bytes", async () => {
+test("O-RPT / OWN-02: month property lookup is bounded, owner-scoped and read-only; legacy SQL bytes unchanged", async () => {
   const reader = queryReaders(null);
-  await reader.listStatements(actor); await reader.listStatements(actor, true);
+  await reader.listStatements(actor);
+  const ids = Array.from({ length: 205 }, (_, i) => `statement-${i}`);
+  await reader.ownerStatementPropertyNames(actor, [...ids, ids[0]]);
+  assert.equal(reader.calls.length, 4);
+  for (let i = 1; i <= 3; i++) {
+    assert.deepEqual(reader.calls[i].params, [ids.slice((i - 1) * 100, i * 100), actor.orgId]);
+    assert.match(reader.calls[i].sql, /s.id=ANY\(\$1::uuid\[\]\) AND s.org_id=\$2/);
+    assert.ok(reader.calls[i].sql.includes(scope.ownerStatementScope));
+  }
+  assert.ok(reader.events.some(e => JSON.stringify(e) === JSON.stringify(["tx", actor.userId,
+    { orgId: actor.orgId, environment: actor.environment }, { isolation: "repeatable read", readOnly: true }])));
+  const noQuery = queryReaders(null);
+  assert.deepEqual(await noQuery.ownerStatementPropertyNames(actor, []), []);
+  assert.deepEqual(await noQuery.ownerStatementPropertyNames({ ...actor, kind: "staff" }, ids), []);
+  assert.equal(noQuery.calls.length, 0);
   assert.ok(reader.calls[1].sql.includes(scope.ownerStatementScope)); assert.match(reader.calls[1].sql, /string_agg\(p.name/);
   assert.doesNotMatch(reader.calls[0].sql, /string_agg/);
-  // Pin the legacy SELECT literally; the optional projection adds zero OFF SQL bytes.
+  // Pin the legacy SELECT literally; property names are a separate month-only query.
   const original = old("src/server/queries.ts");
   const snippet = original.slice(original.indexOf("export async function listStatements"), original.indexOf("export type RosterRow"));
   const template = snippet.slice(snippet.indexOf("`SELECT") + 1, snippet.indexOf("`,\n      [session.orgId]"));

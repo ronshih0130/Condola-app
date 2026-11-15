@@ -1,6 +1,6 @@
 import { ownerPrivacy, tenantDisplayNames } from "./auth";
 import { maskTenantNames } from "./privacy";
-import { listStatements, statementDetail, ownerStatementRentSource } from "./queries";
+import { listStatements, statementDetail, ownerStatementRentSource, ownerStatementPropertyNames } from "./queries";
 import { ownerNetLedgerView } from "./owner-net-ledger";
 import { ledgerPanelView } from "./owner-net-ledger-presentation";
 import { ownerTransferHistory, reportRepliesView } from "./owner-finance-replies";
@@ -21,12 +21,15 @@ export function selectReportMonth<T extends { id: string; period_start: string; 
 
 /** Same detail readers, privacy masking and presentation as /o/statements/[id]. */
 export async function loadOwnerReport(session: Session, requested: unknown) {
-  const selected = selectReportMonth(await listStatements(session, true), requested);
+  const selected = selectReportMonth(await listStatements(session), requested);
   if (!selected.month) return { ...selected, reports: [] };
+  const properties = new Map((await ownerStatementPropertyNames(session, selected.rows.map(row => row.id)))
+    .map(row => [row.id, row.properties ?? ""]));
+  const named = selectReportMonth(selected.rows.map(row => ({ ...row, properties: properties.get(row.id) ?? "" })), selected.month);
   const t = makeT(session.locale);
   const privacy = await ownerPrivacy(session.orgId);
   const names = privacy.showName ? [] : await tenantDisplayNames(session.orgId);
-  const reports = await Promise.all(selected.rows.map(async listed => {
+  const reports = await Promise.all(named.rows.map(async listed => {
     const detail = await statementDetail(session, listed.id);
     // Authorization may have changed since listing: disclose no partial report.
     if (!detail || detail.statement.status !== "issued") throw new Error("Report unavailable");
@@ -42,6 +45,6 @@ export async function loadOwnerReport(session: Session, requested: unknown) {
       ledger: ledger ? ledgerPanelView(ledger, { statementId: listed.id, locale: session.locale }) : null,
       replies: transfers || replies ? repliesPanelView({ statementId: listed.id, locale: session.locale, transfers, replies, versionNumbers, displayedVersionId: ledger ? ledger.latest?.id ?? null : undefined }) : null };
   }));
-  return { ...selected, reports };
+  return { ...selected, rows: named.rows, reports };
 }
 export type OwnerReportData = Awaited<ReturnType<typeof loadOwnerReport>>;
