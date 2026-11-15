@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
-import { brandV3EnabledForOrg } from "./brand-v3";
+import { brandV3EnabledForOrg, brandV3ReadForOrg } from "./brand-v3";
 import { brandRoot } from "../lib/brand-root";
 import { BRAND_V2_PAGE_STYLES, brandV2EnabledForOrg } from "./brand-v2";
 import { RoleAvatar } from "../components/v3/role-avatar";
@@ -105,4 +105,16 @@ test("PLT-46-AC1: actual root layout OFF serialization matches the pre-v3 commit
     assert.equal((on.match(/href="\/brand\/v3\/theme.css"/g) ?? []).length, v2 && signedIn ? 1 : 0);
     if (v2 && signedIn) assert.ok(on.indexOf('/brand/v3/theme.css') > on.indexOf('/brand/v2/pages/m-home.css'));
   }
+});
+
+
+test("brandV3ReadForOrg: same on/off rule as the page helper, but a failed read throws (readers report unavailable)", async () => {
+  const flags = (v2: unknown, v3: unknown) => async () => ({ v2, v3 });
+  assert.equal(await brandV3ReadForOrg(null, {}, flags(true, true)), false);
+  assert.equal(await brandV3ReadForOrg("o", {}, flags(true, true)), true);
+  assert.equal(await brandV3ReadForOrg("o", {}, flags(false, true)), false);
+  assert.equal(await brandV3ReadForOrg("o", { BRAND_V2: "true" }, flags(false, true)), true);
+  assert.equal(await brandV3ReadForOrg("o", { BRAND_V2: "true" }, flags(false, "true")), false, "only JSON true");
+  assert.equal(await brandV3ReadForOrg("o", {}, async () => undefined), false, "unknown org is off");
+  await assert.rejects(brandV3ReadForOrg("o", {}, async () => { throw new Error("db down"); }), /db down/);
 });

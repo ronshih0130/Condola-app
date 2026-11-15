@@ -1,4 +1,4 @@
-import { brandV3EnabledForOrg } from "./brand-v3";
+import { brandV3ReadForOrg } from "./brand-v3";
 import { guardEffectiveSession, withEffectiveReadAuthority } from "./b017-custom-role-governance";
 import { query, tx } from "./db";
 import { FlowError, logServerError } from "./errors";
@@ -174,7 +174,7 @@ type ListRow = {
 };
 
 export async function staffRentalTurns(session: Session, deps: Deps = {}): Promise<StaffRentalTurns> {
-  const v3 = deps.v3 ?? brandV3EnabledForOrg;
+  const v3 = deps.v3 ?? brandV3ReadForOrg;
   const gates = deps.gates ?? rentalGates;
   const transaction = deps.transaction ?? tx;
   try {

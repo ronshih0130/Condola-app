@@ -89,3 +89,13 @@ test("empty success differs from failed or refused reads, including failure afte
       ? { state: "ready", counts: { vacant: 0, renewalAsk: 0, earlyVacancy: 0 }, mine: [] } : { state: "unavailable" });
   }
 });
+
+
+test("§6 failure contract through the real brand helper: a failed brand_v3 read is unavailable, never off", async () => {
+  const { brandV3ReadForOrg } = await import("./brand-v3");
+  const failingRead = (org: string) => brandV3ReadForOrg(org, {}, async () => { throw new Error("db down"); });
+  const offRead = (org: string) => brandV3ReadForOrg(org, {}, async () => ({ v2: true, v3: false }));
+  const never = async () => { throw new Error("no business transaction expected"); };
+  assert.deepEqual(await staffRentalTurns(session, { ...ON, v3: failingRead, transaction: never as never }), { state: "unavailable" });
+  assert.deepEqual(await staffRentalTurns(session, { ...ON, v3: offRead, transaction: never as never }), { state: "off" });
+});

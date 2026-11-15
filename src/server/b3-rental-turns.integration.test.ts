@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { COUNTS_SQL_FOR_TEST, LISTS_SQL_FOR_TEST, RENTAL_TURN_LIST_LIMIT, staffRentalTurns } from "./b3-rental-turns";
-import { governCustomRole } from "./b017-custom-role-governance";
+import { governCustomRole, resolveCustomRoleSession } from "./b017-custom-role-governance";
 import { query, tx } from "./db";
 import { FlowError } from "./errors";
 import { disposableDbUrl } from "./test-disposable-db";
@@ -387,7 +387,11 @@ test("R7 custom roles require both keys and revalidate each inside the read snap
     await assert.rejects(staffRentalTurns(o.staff.manager, { ...ON, transaction: counting }), denied);
     assert.equal(opened, 0, "missing leases.edit denied before business transaction");
     await governCustomRole(o.staff.admin, { operation: "revise", roleId, grants: ["leases.edit"], requestId: randomUUID() });
-    await assert.rejects(staffRentalTurns(o.staff.manager, { ...ON, transaction: counting }), denied);
+    // Reassign at the current revision so leases.edit is really held: the denial must come from props.view alone.
+    await governCustomRole(o.staff.admin, { operation: "assign", roleId, memberId, requestId: randomUUID() });
+    const leasesOnly = await staffSession(o.staff.manager.userId, o.orgId, "manager");
+    assert.ok((await resolveCustomRoleSession(leasesOnly)).customRole?.keys?.includes("leases.edit"), "leases.edit effective");
+    await assert.rejects(staffRentalTurns(leasesOnly, { ...ON, transaction: counting }), denied);
     assert.equal(opened, 0, "missing props.view denied before business transaction");
     await governCustomRole(o.staff.admin, { operation: "revise", roleId, grants: ["leases.edit", "props.view"], requestId: randomUUID() });
     // app.b017_effective honours an assignment only at the role's current revision: reassign after a revision.
@@ -403,6 +407,8 @@ test("R7 custom roles require both keys and revalidate each inside the read snap
       assert.deepEqual(targets(await ready(fresh)), [vacant.id], "fresh session admitted before the mid-read change");
       const changed: typeof tx = async (...args) => {
         await governCustomRole(o.staff.admin, { operation: "revise", roleId, grants: [retained], requestId: randomUUID() });
+        // Keep the assignment current so the retained key stays effective; only the removed key is missing.
+        await governCustomRole(o.staff.admin, { operation: "assign", roleId, memberId, requestId: randomUUID() });
         return tx(...args);
       };
       await assert.rejects(staffRentalTurns(fresh, { ...ON, transaction: changed }), denied);
@@ -546,4 +552,14 @@ test("MGT-101-AC3 rent lost: room base rent, else unit base rent, else previous 
   assert.deepEqual(rent(fromLease.id), ["1500000", "TWD"]);
   assert.deepEqual(rent(none.id), [null, null], "no rent source: omitted, never zero");
   for (const row of r.mine.filter(m => m.kind !== "vacant")) assert.deepEqual([row.rentMinor, row.rentCurrency], [null, null]);
+});
+
+
+test("MGT-101-AC3 precedence: the space's own base rent wins over the previous lease's rent", async () => {
+  const o = await makeOrg(); const unit = await space(o, "unit");
+  await query("UPDATE units SET base_rent_minor = 700000 WHERE id = $1", [unit.id]);
+  const prev = await lease(unit, { status: "ended", start: date(-400), end: date(-20) });
+  await query("UPDATE leases SET rent_amount_minor = 1500000 WHERE id = $1", [prev]);
+  const row = (await ready(o.staff.admin)).mine.find(m => m.kind === "vacant" && m.targetId === unit.id);
+  assert.deepEqual([row?.rentMinor, row?.rentCurrency], ["700000", "TWD"]);
 });
