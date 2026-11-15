@@ -5,9 +5,12 @@ import type { Locale } from "../index";
 const copy = {
   "zh-TW": {
     title: "收支報表", lead: "{period} 收入 {income}，支出 {expense}，淨額 {net}。",
-    // Interim until PENDING-RON PR-019 defines 預付: the approved sentence is 「只算已確認的。押金和預付另外列，不算收入。」; the
-    // prepayment section is not shown yet, so the hint names deposits only (P52, PR-018). Restore the approved sentence with the section.
-    hint: "只算已確認的。押金另外列，不算收入。", separate: "另外列", deposit: "押金",
+    hint: "只算已確認的。押金和預付另外列，不算收入。", separate: "另外列", deposit: "押金",
+    earlyRent: "預收租金",
+    earlyRentHeading: "另外列：預收租金",
+    prepayment: "預付",
+    serviceMonth: "服務月份", serviceMonthHint: "服務月份以帳單期間起日為準，在包含該起日的期間才算收入。",
+    lease: "租約", paidOn: "付款日期", section: "區塊",
     tax: "這是已記錄收支的整理，不是稅務證明，也不幫你算稅",
     period: "期間", source: "查來源", empty: "這個範圍沒有物件。",
     failed: "資料載入失敗", retry: "再試一次", date: "日期", item: "項目", amount: "金額",
@@ -16,8 +19,11 @@ const copy = {
   },
   en: {
     title: "Income and expenses", lead: "{period} Income {income}, expenses {expense}, net {net}.",
-    hint: "Confirmed records only. Deposits are listed separately, outside income.",
+    hint: "Confirmed records only. Deposits and prepayments are listed separately, outside income.",
     separate: "Listed separately", deposit: "Deposits",
+    earlyRent: "Rent received in advance", earlyRentHeading: "Listed separately: rent received in advance", prepayment: "Prepayments",
+    serviceMonth: "Service month", serviceMonthHint: "The service month is defined by the invoice period start date. Rent received in advance is income in the period containing that date.",
+    lease: "Lease", paidOn: "Payment date", section: "Section",
     tax: "This summarizes recorded income and expenses. It is not tax documentation and does not calculate your taxes.",
     period: "Period", source: "View source", empty: "No properties in this view.",
     failed: "Could not load data", retry: "Try again", date: "Date", item: "Item", amount: "Amount",

@@ -312,9 +312,12 @@ function readApprovals<T>(
       // The home projection reads CURRENT property/ticket fields, so it also requires the owner's current
       // property_owners authority (the ownerPropertyScope rule, bound to this session's user): a property whose
       // authorization ended is dropped here, never decorated with its current name, ticket title or vendor.
+      // Dates are organization-local, the same rule as the B-013 gateways (PR-015), so this cannot hide a row they admit.
       + " WHERE EXISTS (SELECT 1 FROM public.property_owners hpo JOIN public.contacts hc ON hc.id=hpo.owner_contact_id AND hc.org_id=hpo.org_id"
+      + " JOIN public.organizations ho ON ho.id=hpo.org_id"
       + " WHERE hpo.org_id=$1 AND hpo.property_id=r.property_id AND hc.user_id=$5 AND hc.is_owner AND hc.archived_at IS NULL"
-      + " AND hpo.effective_from<=current_date AND (hpo.effective_to IS NULL OR hpo.effective_to>current_date))" : "");
+      + " AND hpo.effective_from<=(clock_timestamp() AT TIME ZONE ho.timezone)::date"
+      + " AND (hpo.effective_to IS NULL OR hpo.effective_to>(clock_timestamp() AT TIME ZONE ho.timezone)::date))" : "");
   const params: unknown[] = [session.orgId, session.liveOrgId, session.environment, session.sessionId];
   if (ticketId !== undefined) params.push(ticketId);
   if (homeDetails) { if (ticketId !== undefined) throw new Error("homeDetails reads the pending list only"); params.push(session.userId); }

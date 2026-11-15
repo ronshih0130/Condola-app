@@ -49,11 +49,21 @@ function sourceFiles() {
   return out;
 }
 
-// Sole exception: one exact manager-area property, in its owning lane only.
+// Approved manager-area exception: one exact property in its owning lane only.
 function withoutManagerAreaName(source: string, rel: string) {
   const exact = /^    money: "收款",$/gm;
   if (rel !== "src/i18n/lanes/brand-v3.ts" || [...source.matchAll(exact)].length !== 1) return source;
   return source.replace(exact, '    money: "",');
+}
+
+// PR-018 / PR-019 P52: exact approved report section names only. Do not exempt
+// the containing file, the banned substring globally, or duplicate/extended values.
+function withoutApprovedReportRentNames(source: string, rel: string) {
+  if (rel !== "src/i18n/lanes/brand-v3-report.ts") return source;
+  for (const exact of [/^    earlyRent: "預收租金",$/gm, /^    earlyRentHeading: "另外列：預收租金",$/gm]) {
+    if ([...source.matchAll(exact)].length === 1) source = source.replace(exact, "");
+  }
+  return source;
 }
 
 // PENDING-RON PR-016 (Ron 2026-11-15 11:42 PT): exact owner/vendor own-status strings, in their own lane only.
@@ -70,7 +80,7 @@ function hitsFor(words: string[]) {
   const hits: string[] = [];
   for (const file of sourceFiles()) {
     const rel = relative(root, file);
-    const text = withoutOwnStatus(withoutManagerAreaName(decode(read(file)), rel), rel);
+    const text = withoutApprovedReportRentNames(withoutOwnStatus(withoutManagerAreaName(decode(read(file)), rel), rel), rel);
     if (file.endsWith(".json")) {
       const data = JSON.parse(text) as Record<string, unknown>;
       for (const [key, value] of Object.entries(data)) {
@@ -280,6 +290,19 @@ test("PLT-49-AC4: only the exact single manager navigation area value is exempt"
   const source = read(join(root, lane));
   assert.equal([...source.matchAll(/收款/g)].length, 1);
   assert.equal(withoutManagerAreaName(source, lane).includes("收款"), false);
+  assert.deepEqual(hitsFor(FORBIDDEN), []);
+});
+
+test("PR-019: only exact approved early-rent names in the report lane are exempt", () => {
+  const lane = "src/i18n/lanes/brand-v3-report.ts";
+  for (const allowed of ['    earlyRent: "預收租金",', '    earlyRentHeading: "另外列：預收租金",']) {
+    assert.equal(withoutApprovedReportRentNames(allowed, lane).includes("收租"), false);
+    for (const source of [allowed + "\n" + allowed, allowed + " // 收租", allowed.replace("預收租金", "預收租金紀錄"),
+      allowed.replace("earlyRent", "other"), 'const text = "收租";', allowed + '\n    other: "收租",']) {
+      assert.equal(withoutApprovedReportRentNames(source, lane).includes("收租"), true, source);
+    }
+    assert.equal(withoutApprovedReportRentNames(allowed, "src/i18n/lanes/brand-v3.ts").includes("收租"), true);
+  }
   assert.deepEqual(hitsFor(FORBIDDEN), []);
 });
 
