@@ -55,10 +55,10 @@ test('archive and restore preserve ancestry, audit, stale versions, and role bou
  const audit=await query<{actor:string;reason:string;request_id:string}>(`SELECT actor_user_id::text actor,reason,request_id FROM audit_log WHERE org_id=$1 AND table_name='properties' AND row_id=$2 AND request_id=$3`,[ORG_ID,f.property,requestId]);
  assert.equal(audit.rowCount,1);assert.equal(audit.rows[0].actor,admin.userId);assert.equal(audit.rows[0].reason,'Retired after operations');
  let r=await ready(manager,room);assert.equal(r.observed.inherited.length,1);assert.equal((await command(manager,room,'archived',r.observed.version)).state,'changed');
- r=await ready(manager,room);assert.equal((await command(manager,room,'active',r.observed.version)).state,'blocked');
- v=await ready(manager,property);assert.equal((await command(manager,property,'active',v.observed.version)).state,'changed');
+ r=await ready(manager,room);assert.equal((await command(manager,room,'active',r.observed.version)).state,'forbidden','only an admin restores (OQ-070)');assert.equal((await command(admin,room,'active',r.observed.version)).state,'blocked');
+ v=await ready(manager,property);assert.equal(v.canRestore,false,'a manager is not offered restore');assert.equal((await command(manager,property,'active',v.observed.version)).state,'forbidden');assert.equal((await ready(manager,property)).observed.version,v.observed.version,'a refused restore writes nothing');assert.equal((await command(admin,property,'active',v.observed.version)).state,'changed');
  assert.equal((await command(admin,property,'archived',oldVersion)).state,'stale');
- r=await ready(manager,room);assert.equal(r.observed.inherited.length,0);assert.notEqual(r.observed.archivedAtUtc,null);assert.equal((await command(manager,room,'active',r.observed.version)).state,'changed');
+ r=await ready(manager,room);assert.equal(r.observed.inherited.length,0);assert.notEqual(r.observed.archivedAtUtc,null);assert.equal((await command(admin,room,'active',r.observed.version)).state,'changed');
  const u=await ready(admin,unit);assert.equal((await command(admin,unit,'archived',u.observed.version)).state,'changed');
  const inherited=await ready(admin,room);assert.equal(inherited.observed.inherited[0]?.ref.kind,'unit');
  const archivedUnit=await ready(admin,unit);assert.equal((await command(admin,unit,'active',archivedUnit.observed.version)).state,'changed');assert.equal((await ready(admin,room)).observed.inherited.length,0);
