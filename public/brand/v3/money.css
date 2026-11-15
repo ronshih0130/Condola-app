@@ -1,0 +1,38 @@
+/* B3A-PAY; every selector is gated by the effective v3 root. Palette/type/radii use brand tokens. */
+html[data-brand="v2"][data-brand-v3] .v3-money { min-width: 0; color: var(--c-text); font-family: var(--font-sans); }
+html[data-brand="v2"][data-brand-v3] .v3-money-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-block-end: 16px; font-weight: 700; }
+html[data-brand="v2"][data-brand-v3] .v3-money-month { display: flex; align-items: center; gap: 8px; }
+html[data-brand="v2"][data-brand-v3] .v3-money-month a { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--c-border-strong); border-radius: var(--r-btn); color: var(--c-primary); text-decoration: none; }
+html[data-brand="v2"][data-brand-v3] .v3-money-lead { padding: 24px; margin-block-end: 20px; border-radius: var(--r-lg); background: var(--c-tint-soft); }
+html[data-brand="v2"][data-brand-v3] .v3-money-lead h1 { margin: 0; font-family: var(--font-display); font-size: 1.5rem; line-height: 1.5; }
+html[data-brand="v2"][data-brand-v3] .v3-money-lead p { margin: 8px 0 0; color: var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-money-card { padding: 0; min-width: 0; }
+html[data-brand="v2"][data-brand-v3] .v3-money-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px; }
+html[data-brand="v2"][data-brand-v3] .v3-money-tabs a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid var(--c-border); border-radius: var(--r-btn); color: var(--c-text-2); text-decoration: none; }
+html[data-brand="v2"][data-brand-v3] .v3-money-tabs a[aria-current="page"] { background: var(--c-primary-soft); color: var(--c-primary); border-color: var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-money-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+html[data-brand="v2"][data-brand-v3] .v3-money-table th { color: var(--c-text-2); background: var(--c-surface-2); text-align: start; font-weight: 500; }
+html[data-brand="v2"][data-brand-v3] .v3-money-table :is(th, td) { padding: 16px 12px; border-block-end: 1px solid var(--c-divider); vertical-align: top; overflow-wrap: anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-money-table th:first-child { width: 23%; }
+html[data-brand="v2"][data-brand-v3] .v3-money-table th:nth-child(2) { width: 14%; }
+html[data-brand="v2"][data-brand-v3] .v3-money-table th:last-child { width: 32%; }
+html[data-brand="v2"][data-brand-v3] .v3-money-sub { display: block; margin-block-start: 6px; font-size: .875rem; color: var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-money-amount { font-variant-numeric: tabular-nums; }
+html[data-brand="v2"][data-brand-v3] .v3-money-status { display: inline-flex; align-items: center; gap: 4px; border-radius: var(--r-sm); padding: 4px 8px; background: var(--c-surface-2); }
+html[data-brand="v2"][data-brand-v3] .v3-money-reported { color: var(--c-warning); background: var(--c-warning-soft); }
+html[data-brand="v2"][data-brand-v3] .v3-money-overdue { color: var(--c-danger); background: var(--c-danger-soft); }
+html[data-brand="v2"][data-brand-v3] .v3-money-paid { color: var(--c-success); background: var(--c-success-soft); }
+html[data-brand="v2"][data-brand-v3] .v3-money-report { display: grid; gap: 8px; }
+html[data-brand="v2"][data-brand-v3] .v3-money-report + .v3-money-report { margin-block-start: 16px; padding-block-start: 12px; border-block-start: 1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .v3-money-turn { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+html[data-brand="v2"][data-brand-v3] .v3-money .btn.o { border: 1px solid var(--c-primary); background: var(--c-surface); color: var(--c-primary); min-height: 44px; }
+html[data-brand="v2"][data-brand-v3] .v3-money-notice { padding: 16px; color: var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-money :is(a, button):focus-visible { outline: 2px solid var(--c-focus); outline-offset: 3px; }
+@media (max-width: 63.999em) {
+  html[data-brand="v2"][data-brand-v3] .v3-money-lead { padding: 20px; }
+  html[data-brand="v2"][data-brand-v3] .v3-money-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  html[data-brand="v2"][data-brand-v3] .v3-money-table :is(tbody, tr, td) { display: block; width: auto; }
+  html[data-brand="v2"][data-brand-v3] .v3-money-table tr { padding: 16px; border-block-start: 1px solid var(--c-divider); }
+  html[data-brand="v2"][data-brand-v3] .v3-money-table td { padding: 6px 0; border: 0; }
+  html[data-brand="v2"][data-brand-v3] .v3-money-table td[data-label]::before { content: attr(data-label); display: block; margin-block-end: 4px; color: var(--c-text-3); font-size: .75rem; }
+}

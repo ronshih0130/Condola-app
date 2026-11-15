@@ -60,7 +60,7 @@ for (const group of PAGES) {
         expect.soft(image, `${id}: flag OFF equals the v2 baseline`).toMatchSnapshot(`${id}.png`);
       } else {
         expect(v3, `${id}: v3 attribute`).toBe("1");
-        expect(v3Sheet, `${id}: v3 base, shell and today stylesheets`).toBe(3);
+        expect(v3Sheet, `${id}: v3 base, shell, today and money stylesheets`).toBe(4);
         if (group.account === ACCOUNTS.admin && ["/m", "/m/payments"].includes(shot.path)) {
           await assertManagerShell(page, "admin", size.width, shot.path === "/m" ? "today" : "money");
         }
@@ -331,9 +331,10 @@ for (const role of ["admin", "accountant"] as const) for (const size of SIZES) {
     await expect(page.getByTestId("today-monthly")).toHaveCount(1);
     await expect(page.getByTestId("confirmed-bills").first()).toBeVisible();
     await expect(today.getByRole("link", { name: "查來源", exact: true }).first()).toHaveAttribute("href", "/m/rent");
-    // B3A-TODAY-NUM interim: at most the three unplaced cards, only in their own block below the large number; no repair rows.
+    // B3A-TODAY-NUM interim: at most the two remaining cards, only in their own block below the large number; no repair rows.
     await expect(today.locator("[data-turn-kind=repair]")).toHaveCount(0);
-    expect(await today.locator(".kpi").count()).toBeLessThanOrEqual(3);
+    expect(await today.locator(".kpi").count()).toBeLessThanOrEqual(2);
+    await expect(today.getByTestId("dash-outstanding")).toHaveCount(0);
     await expect(today.locator(".kpi:not([data-testid=today-interim] .kpi)")).toHaveCount(0);
     await expect(today.getByRole("link", { name: "發送繳租提醒" })).toHaveCount(0);
     if (role === "accountant") {
@@ -370,5 +371,52 @@ for (const role of ["admin", "accountant"] as const) for (const size of SIZES) {
     await expect(page.getByTestId("today-headline")).toHaveText(before);
     await settle(page);
     await page.screenshot({ path: resolve(OUT, `today-phase2-${role}-${size.name}.png`), fullPage: true, animations: "disabled" });
+  });
+}
+
+for (const role of ["admin", "accountant"] as const) for (const size of SIZES) {
+  test(`B3A-PAY month page ${role} at ${size.name}`, async ({ page }) => {
+    test.skip(MODE !== "on", "The month page is gated by brand_v3");
+    await signIn(page, ACCOUNTS[role]);
+    await page.setViewportSize(size);
+    await page.goto("/api/demo/locale?set=zh-TW&next=%2Fm%2Fpayments");
+    await settle(page);
+    const money = page.getByTestId("money-v3");
+    await expect(money).toBeVisible();
+    await assertManagerShell(page, role, size.width, "money");
+    await expect(page.locator('link[href="/brand/v3/money.css"]')).toHaveCount(1);
+    await expect(money.locator("h1")).toContainText("筆應繳");
+    await expect(money.locator('[data-testid$="-unavailable"], [data-testid$="-off"], [data-testid$="-forbidden"]')).toHaveCount(0);
+    const month = await money.getAttribute("data-month");
+    expect(month).toMatch(/^\d{4}-\d{2}$/);
+    const heading = await money.locator("h1").textContent();
+    for (const tab of ["all", "yours", "overdue", "future", "paid"]) {
+      await money.getByTestId(`money-tab-${tab}`).click();
+      await expect(page).toHaveURL(new RegExp(`month=${month}&tab=${tab}$`));
+      await expect(money.getByTestId(`money-tab-${tab}`)).toHaveAttribute("aria-current", "page");
+      await expect(money.locator("h1")).toHaveText(heading!);
+      if (tab !== "yours") await expect(money.getByTestId("money-other")).toHaveCount(0);
+      if (["overdue", "future", "paid"].includes(tab)) {
+        for (const row of await money.getByTestId("money-bill").all()) await expect(row).toHaveAttribute("data-status", tab);
+      }
+    }
+    await money.getByTestId("money-tab-yours").click();
+    const buttons = money.getByTestId("confirm-payment");
+    for (const button of await buttons.all()) {
+      const rect = await button.boundingBox(); expect(rect!.height).toBeGreaterThanOrEqual(44);
+      await expect(button).toHaveClass(/\bo\b/);
+    }
+    expect(await money.getByRole("button", { name: "匯出對帳表" }).count()).toBe(0);
+    expect(await money.getByRole("button", { name: "復原" }).count()).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    const small = await money.locator("a, button").evaluateAll(nodes => nodes.filter(node => node.getBoundingClientRect().height < 44).length);
+    expect(small).toBe(0);
+    await money.locator(".v3-money-month a").first().click();
+    await expect(money).not.toHaveAttribute("data-month", month!);
+    await expect(page).toHaveURL(/tab=yours$/);
+    await page.goto(`/m/rent?month=${month}&tab=all`);
+    await expect(money.locator("h1")).toHaveText(heading!);
+    mkdirSync(OUT, { recursive: true });
+    writeFileSync(resolve(OUT, `money-${role}-${size.name}.png`), await page.screenshot({ fullPage: true, animations: "disabled" }));
   });
 }

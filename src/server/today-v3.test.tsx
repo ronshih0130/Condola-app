@@ -366,10 +366,10 @@ test("T-MORE / R6: the group's first 50 follow kind order then date, even when a
   assert.ok(view.mineMore.some(more => more.kind === "vacant" && more.count === 1), "the vacancy stays reachable through 看全部");
 });
 
-test("B3A-TODAY-NUM interim: 未結餘額, 報修 and 出租 stay below the large number with today's labels and links", () => {
+test("B3A-TODAY-NUM: money page owns 未結餘額; 報修 and 出租 stay unchanged", () => {
   const html = render({ interim: { outstanding: "4180000", owingCount: 3, tickets: 2, occupied: 4, rooms: 5 } });
   const after = html.split('data-testid="today-monthly"')[1] ?? "";
   assert.match(after, /data-testid="today-interim"/);
-  assert.match(after, /href="\/m\/rent"[^>]*>.*NT\$41,800/); assert.match(after, /href="\/m\/tickets"/); assert.match(after, /href="\/m\/leases"[^>]*>.*4\/5/);
+  assert.doesNotMatch(after, /dash-outstanding|未結餘額|NT\$41,800/); assert.match(after, /href="\/m\/tickets"/); assert.match(after, /href="\/m\/leases"[^>]*>.*4\/5/);
   assert.doesNotMatch(html, /dash-received|i_pending_pay|待確認繳款<\/div>/);
 });

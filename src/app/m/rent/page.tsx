@@ -1,3 +1,6 @@
+import { MoneyMonthPage } from "@/components/v3/m/money/page";
+import type { MoneyParams } from "@/server/money-page";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { monthlyBillingAvailable } from "@/server/monthly-billing-plan";
 import { monthlyBillingCopy } from "@/i18n/monthly-billing-preview";
 import { requireCurrentConsent } from "@/server/consent-gate";
@@ -21,9 +24,10 @@ function daysBetween(due: string, today: string) {
   return Math.round((end - start) / 86_400_000);
 }
 
-export default async function RentPage() {
+export default async function RentPage({ searchParams }: { searchParams?: Promise<MoneyParams> } = {}) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  if (await brandV3EnabledForOrg(session.orgId)) return <MoneyMonthPage session={session} params={await searchParams ?? {}} />;
   const t = makeT(session.locale);
   const [rows, remindersEnabled, monthlyAvailable] = await Promise.all([rentRoll(session), manualRemindersEnabled(session), monthlyBillingAvailable(session)]);
   const today = taipeiToday();

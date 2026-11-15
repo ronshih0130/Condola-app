@@ -1,3 +1,5 @@
+import { MoneyMonthPage } from "@/components/v3/m/money/page";
+import type { MoneyParams } from "@/server/money-page";
 import { CompletionCheck } from "@/components/v3/completion-check";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { ManagementEmptyState } from "@/components/management-empty-state";
@@ -14,12 +16,13 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function PaymentsPage({ searchParams }: { searchParams: Promise<MoneyParams> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const v3 = await brandV3EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
+  if (v3) return <MoneyMonthPage session={session} params={params} />;
   const rows = await listPayments(session);
   const canAct = can(session, "pay.record");
   const canReverse = can(session, "pay.reverse");
