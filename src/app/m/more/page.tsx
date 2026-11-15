@@ -10,9 +10,9 @@ import { ShellIcon } from "@/components/v3/shell/icon";
 export const dynamic = "force-dynamic";
 
 export default async function MorePage() {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   if (session.kind !== "staff") notFound();
-  await requireCurrentConsent(session, "page", "/m/more");
   if (!(await brandV3EnabledForOrg(session.orgId))) notFound();
   const tabs = tabsFor(session);
   const remaining = areasFor(session).filter(area => !tabs.some(tab => tab.id === area.id));

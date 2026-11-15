@@ -125,7 +125,7 @@ test("MGT-47-AC3: More is staff-only, navigation-only, admits custom roles, and 
   };
   assert.doesNotMatch(source("src/app/m/more/page.tsx"), /guardEffectiveSession|query\(|tx\(|svc\(/);
   const Page = compile(source("src/app/m/more/page.tsx"), mocks).default as () => Promise<React.ReactNode>;
-  await assert.rejects(Page, /404/); assert.deepEqual(calls, ["consent", "flag"]);
+  await assert.rejects(Page, /404/); assert.deepEqual(calls, ["consent", "flag"]);  // consent first (consent-entrypoints scanner), then the flag
   on = true; const html = renderToStaticMarkup(await Page());
   assert.match(html, /href="\/m\/rent"/); assert.match(html, /href="\/m\/tickets"/); assert.match(html, /href="\/m\/settings"/);
   assert.doesNotMatch(html, /href="\/m\/properties"|href="\/m\/messages"/);

@@ -168,7 +168,9 @@ async function assertManagerShell(page: Page, role: StaffRole, width: number, ar
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   // Interim controls (OQ-032 until phase 1b): reachable, readable and 44px at both widths.
   const tools = page.locator(".v3-shell .shell-tools");
-  for (const id of ["locale-zh", "locale-en", "sign-out", "org-switch"]) {
+  const resetShown = (await tools.getByTestId("reset-demo").count()) > 0;
+  await tools.getByTestId("org-switch").click();
+  for (const id of ["locale-zh", "locale-en", "sign-out", "org-switch", "org-pick-live", "org-pick-sandbox", ...(resetShown ? ["reset-demo"] : [])]) {
     const control = tools.getByTestId(id);
     await control.scrollIntoViewIfNeeded();
     await expect(control, `${id} visible`).toBeVisible();
@@ -187,8 +189,7 @@ async function assertManagerShell(page: Page, role: StaffRole, width: number, ar
     expect(Math.min(box?.width ?? 0, box?.height ?? 0), `${id} target`).toBeGreaterThanOrEqual(44);
   }
   await tools.getByTestId("org-switch").click();
-  await expect(tools.getByTestId("org-pick-sandbox")).toBeVisible();
-  await tools.getByTestId("org-switch").click();
+  if (role === "admin") expect(resetShown, "reset-demo shown for admin in demo mode").toBe(true);
   if (width >= 1024) {
     await expect(page.locator(".v3-shell .appbar.navy")).toBeHidden();
     await expect(page.locator(".v3-shell .deskbar")).toBeVisible();
