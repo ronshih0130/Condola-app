@@ -66,7 +66,7 @@ test("PLT-46-AC1: flag OFF preserves the exact legacy attributes and ordered v2 
   assert.deepEqual(brandRoot({ v2: true, v3: false }), baseline);
   assert.deepEqual(brandRoot({ v2: true, v3: true }), {
     attributes: { "data-brand": "v2", "data-brand-v3": "1" },
-    stylesheets: [...baseline.stylesheets, "/brand/v3/theme.css"],
+    stylesheets: [...baseline.stylesheets, "/brand/v3/theme.css", "/brand/v3/shell.css"],
   });
 });
 
@@ -77,6 +77,7 @@ test("PLT-46-AC1: actual root layout OFF serialization matches the pre-v3 commit
     const session = signedIn ? { orgId: "org", name: "陳小明", kind: "staff", role: "admin" } : null;
     const stub = () => null;
     const mocks = {
+      "next/headers": { headers: async () => ({ get: () => "/m" }) },
       "next/link": { __esModule: true, default: "a" },
       "@/i18n": { makeT: () => (key: string) => key },
       "@/components/auth-hash": { AuthHashForward: stub },

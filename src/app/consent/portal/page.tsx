@@ -6,7 +6,7 @@ import { ConsentGateForm } from "@/components/consent-check";
 import { actionAcceptPortalConsent } from "@/server/consent-actions";
 import { consentCoversCurrent, readConsent } from "@/server/consent";
 import { consentNextPath } from "@/server/consent-gate";
-import { roleHome } from "@/server/perms";
+import { roleHomeForSession } from "@/server/role-home-v3";
 import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function PortalConsentPage({ searchParams }: { searchParams
   const params = await searchParams;
   const session = await readSession();
   if (!session) redirect("/login");
-  const next = consentNextPath(params.next || "", roleHome(session.kind, session.role));
+  const next = consentNextPath(params.next || "", await roleHomeForSession(session));
   if (session.kind !== "owner" && session.kind !== "tenant") {
     redirect(`/consent?next=${encodeURIComponent(next)}`);
   }
