@@ -23,7 +23,9 @@ export function ManagerShellV3({ children, areas, tabs, locale, name, role, firm
   const moreOn = path === "/m/more" || Boolean(current && !tabs.some(tab => tab.id === current.id));
   const title = path === "/m" ? todayTitle : crumbsForAreas(path, areas, locale).join(" › ");
   const company = sandbox ? t("i_env_test") : firm;
-  const context = copy.context.replace("{company}", company).replace("{name}", name).replace("{role}", role ? t(`i_role_${role}`) : "");
+  const hasName = name.trim() !== "";
+  // SH-NONAME (hub screens.md): no name → 「{公司}（{角色}）」, a person icon in the avatar, no name line in the menu.
+  const context = (hasName ? copy.context : copy.contextNoName).replace("{company}", company).replace("{name}", name).replace("{role}", role ? t(`i_role_${role}`) : "");
   const brand = copy.brandParty.replace("{brand}", t("i_brand")).replace("{party}", brandV3Copy(locale).m);
   const next = encodeURIComponent(path);
   const shellCopy = brandV3ShellCopy(locale);
@@ -78,7 +80,7 @@ export function ManagerShellV3({ children, areas, tabs, locale, name, role, firm
   };
   const avatar = <button type="button" className="shell-avatar" data-testid="avatar-menu-trigger" aria-label={t("i_account")}
     aria-haspopup="menu" aria-expanded={popup?.kind === "avatar"} aria-controls={popup?.kind === "avatar" ? menuId : undefined}
-    onClick={event => open("avatar", event.currentTarget)}><RoleAvatar role="m" locale={locale} name={locale === "en" ? name.trim().split(/\s+/)[0] : name} decorative /></button>;
+    onClick={event => open("avatar", event.currentTarget)}>{hasName ? <RoleAvatar role="m" locale={locale} name={locale === "en" ? name.trim().split(/\s+/)[0] : name} decorative /> : <span className="party party-m party-name shell-avatar-noname" data-testid="avatar-noname" aria-hidden="true"><ShellIcon name="user" /></span>}</button>;
   const identity = canSwitchCompany ? <button type="button" className="cap shell-context" data-testid="org-switch"
     aria-haspopup="menu" aria-expanded={popup?.kind === "org"} aria-controls={popup?.kind === "org" ? menuId : undefined}
     onClick={event => open("org", event.currentTarget)}>{context}<span aria-hidden="true"> ▾</span></button> : <div className="cap">{context}</div>;
@@ -117,7 +119,7 @@ export function ManagerShellV3({ children, areas, tabs, locale, name, role, firm
           }
         }}>
         {popup.kind === "avatar" ? <>
-          <div className="shell-menu-heading" role="presentation"><b>{name}</b><p>{shellCopy.menuContext.replace("{role}", role ? t(`i_role_${role}`) : "").replace("{company}", company)}</p></div>
+          <div className="shell-menu-heading" role="presentation">{hasName ? <b>{name}</b> : null}<p>{shellCopy.menuContext.replace("{role}", role ? t(`i_role_${role}`) : "").replace("{company}", company)}</p></div>
           <Link role="menuitem" className="shell-account" data-testid="avatar-account" href="/m/account">{t("i_account")}</Link>
           <div className="shell-language" role="group" aria-label={t("s_ae41d00")}>
             <span data-testid="avatar-language">{t("s_ae41d00")}</span><LocaleLinks currentLocale={locale} />
