@@ -9,6 +9,26 @@ function read(path: string) {
   return readFileSync(path, "utf8");
 }
 
+test("B-104 adds only three stable definer helpers owned by the migration role", () => {
+  const sql = read("supabase/migrations/20261115160000_b104_vendor_b013_read_helpers.sql");
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]), [
+    "b104_current_repair_version", "b104_vendor_command_exists", "b104_vendor_latest_event",
+  ]);
+  assert.equal((sql.match(/LANGUAGE sql STABLE SECURITY DEFINER\nSET search_path = pg_catalog, pg_temp/g) ?? []).length, 3);
+  assert.match(sql, /RETURNS uuid/);
+  assert.match(sql, /RETURNS boolean/);
+  assert.match(sql, /RETURNS text/);
+  assert.match(sql, /SET LOCAL lock_timeout = '5s'/);
+  assert.match(sql, /SET LOCAL statement_timeout = '60s'/);
+  assert.doesNotMatch(sql, /\b(?:ALTER|DROP|INSERT|UPDATE|DELETE|CREATE OR REPLACE)\b/i);
+  assert.doesNotMatch(sql, /\bGRANT\b[^;]*\bTABLE\b/i);
+  const probe = read("scripts/check-function-privileges.sh");
+  assert.match(probe, /B-104 service-only helper ACL\/config probe/);
+  assert.match(probe, /fn\.provolatile <> 's'/);
+  assert.match(probe, /fn\.proowner <> 'postgres'::regrole/);
+  assert.match(probe, /B-104 private table privilege leaked/);
+});
+
 test("PR-015 replaces only two owner readers, preserving bodies and security except org-local authority", () => {
   const sql = read("supabase/migrations/20261115130000_b013_current_owner_authority.sql");
   const readers = read("supabase/migrations/20261105180000_b021_repair_approval_reads.sql");

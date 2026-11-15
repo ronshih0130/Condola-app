@@ -178,16 +178,16 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
           confirmedStart: "2027-01-01T10:00:00Z", confirmedEnd: "2027-01-01T11:00:00Z" },
       }));
       const completionBody = { token: job.token, versionId, requestId: randomUUID(), reason: "No photo available" };
-      // Existing B-024 SELECT permissions block open HTTP at the reader. Observe that
-      // boundary explicitly; closed controls below must reject BEFORE those readers.
+      // B-104: open HTTP now reaches the service-only readers and writer gateway.
+      // Closed controls below must still reject BEFORE those readers.
       for (const body of responseBodies) {
         const open = await trace(() => respond(request("/api/vendor-job-response", body)));
-        assert.equal(open.value.status, 403);
-        assert.ok(open.sql.some(sql => sql.includes("FROM app.b013_estimate_heads")));
+        assert.equal(open.value.status, 200);
+        assert.ok(open.sql.some(sql => sql.includes("app.b104_current_repair_version(")));
       }
       const openCompletion = await trace(() => complete(request("/api/vendor-job-completion", completionBody)));
-      assert.equal(openCompletion.value.status, 403);
-      assert.ok(openCompletion.sql.some(sql => sql.includes("FROM app.b013_repair_commands c")));
+      assert.equal(openCompletion.value.status, 200);
+      assert.ok(openCompletion.sql.some(sql => sql.includes("app.b104_vendor_command_exists(")));
       await withClient(async client => {
         await client.query("BEGIN");
         const event = (await client.query(`INSERT INTO app.b028_center_events(org_id,kind,ticket_id,job_id,occurred_at)
@@ -348,7 +348,7 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
         __setVendorLinkKillSwitchForTests(kill);
         await withClient(client => client.query("UPDATE organizations SET feature_flags=feature_flags||jsonb_build_object('vendor_link',$2::boolean) WHERE id=$1", [ORG_ID, org]));
         const response = await trace(() => respond(request("/api/vendor-job-response", body)));
-        const completion = await trace(() => complete(request("/api/vendor-job-completion", body)));
+        const completion = await trace(() => complete(request("/api/vendor-job-completion", { ...body, requestId: randomUUID() })));
         const policy = await orgVendorDispatchPolicy(ORG_ID);
         assert.equal(policy.enhanced, false);
         const gateway = await trace(() => recordVendorAppointment({ token: job.token, enhanced: policy.enhanced }, input));
@@ -367,18 +367,19 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
           assert.ok(notes.sql.some(sql => sql.includes("FROM app.b026_center_vendor(")));
         }
         notifications.push(normalized(notes));
-        assert.equal(response.value.status, 403); // baseline B-024 reader privilege failure
-        assert.equal(completion.value.status, 403);
+        assert.equal(response.value.status, 200);
+        assert.equal(completion.value.status, 200);
         assert.equal(gateway.value.status, "recorded");
-        for (const [operation, reader] of [[response, "FROM app.b013_estimate_heads"], [completion, "FROM app.b013_repair_commands c"]] as const) {
-          // Baseline: open-job tx, dispatch-flag tx, approval flag SELECT, reader tx.
-          assert.equal(operation.sql.length, 16);
+        for (const [operation, reader] of [[response, "app.b104_current_repair_version("], [completion, "app.b104_vendor_command_exists("]] as const) {
+          // B-104 fixes approval-ON reads; both vendor_link-OFF configurations
+          // retain the same open/policy/scope/writer transaction boundaries.
           assert.deepEqual(operation.sql.filter(sql => /^(BEGIN|COMMIT|ROLLBACK)$/.test(sql)),
-            ["BEGIN", "COMMIT", "BEGIN", "COMMIT", "BEGIN", "ROLLBACK"]);
+            ["BEGIN", "COMMIT", "BEGIN", "COMMIT", "BEGIN", "COMMIT", "BEGIN", "COMMIT"]);
           assert.match(operation.sql[3], /^SELECT job_id::text, org_id::text, ticket_id::text FROM app.open_vendor_job/);
           assert.equal(operation.sql[8], "SELECT environment::text, plan_tier::text, feature_flags, (SELECT value FROM platform_settings WHERE key = 'vendor_link') AS vendor_link FROM organizations WHERE id = $1");
           assert.ok(operation.sql[10].includes("FROM public.organizations o CROSS JOIN public.platform_settings f"));
           assert.ok(operation.sql[14].includes(reader));
+          assert.ok(operation.sql.some(sql => sql.includes("app.b013_record_vendor_appointment(")));
           assert.ok(!operation.sql.some(sql => /advisory|FOR UPDATE|SELECT feature_flags FROM/.test(sql)));
         }
         assert.equal(gateway.sql.length, 5);

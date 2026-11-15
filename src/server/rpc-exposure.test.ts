@@ -7,6 +7,21 @@ function read(file: string) {
   return readFileSync(file, "utf8");
 }
 
+test("B-104 helpers are app-only service gateways, absent from the RPC allowlist", () => {
+  const sql = read("supabase/migrations/20261115160000_b104_vendor_b013_read_helpers.sql");
+  assert.doesNotMatch(sql, /CREATE (?:OR REPLACE )?FUNCTION public\./);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of [
+    "b104_current_repair_version(uuid,uuid)", "b104_vendor_command_exists(uuid,uuid,uuid)",
+    "b104_vendor_latest_event(uuid,uuid,uuid,uuid)",
+  ]) {
+    assert.ok(compact.includes(`REVOKEEXECUTEONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`));
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+    assert.ok(!read("supabase/rpc-allowlist.txt").includes(signature.split("(")[0]));
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  }
+});
+
 function walkSources(dir: string): string {
   const chunks: string[] = [];
   function walk(current: string) {

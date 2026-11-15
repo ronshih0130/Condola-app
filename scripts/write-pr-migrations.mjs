@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261115160000_b104_vendor_b013_read_helpers.sql": {
+    addOnly: true,
+    reason: "B-104 / PR-024(a): creates three new service-only STABLE SECURITY DEFINER scalar read helpers in app for current repair version, vendor command existence and latest appointment event. Add-only: ACLs apply only to these new functions; no existing function, table grant, policy, column, data or flag changes. Migration role retains ownership; fixed pg_catalog, pg_temp search_path and org-scoped non-null inputs. Not RPC-exposed.",
+  },
   "supabase/migrations/20261115120000_pr012_drop_staging_only_objects.sql": {
     addOnly: false,
     reason: "PR-012 (a), Ron 2026-11-15 11:42 PT: DROP POLICY IF EXISTS files.receipt_file_read and DROP FUNCTION IF EXISTS app.read_request_session(text,text,text,text) — two staging-only objects never in main (no code or object depends on them). No-op on databases built from main; on staging it removes an extra permissive SELECT policy and an unused SECURITY DEFINER reader. No data change.",
