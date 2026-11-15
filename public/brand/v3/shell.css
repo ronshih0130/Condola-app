@@ -3,6 +3,9 @@
    font sizes resolve the mockup's fs-body=16, fs-small=14 and responsive fs-h1 tokens.
    Phase 1b controls follow SH-ME/SH-ORG/SH-SANDBOX/SH-TRIAL. */
 html[data-brand="v2"][data-brand-v3] .v3-shell{ min-height:100vh; display:flex; flex-direction:column; }
+/* The empty-state primary is fixed at the bottom on phones and sits above a bottom nav of this height
+   (globals.css .es-primary uses --m-bottom-nav-height). The v3 phone tab bar is 64px tall. */
+html[data-brand="v2"][data-brand-v3] .v3-shell{ --m-bottom-nav-height:64px; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy{ display:grid; grid-template-columns:minmax(0,1fr) 44px; grid-template-rows:auto auto; column-gap:8px; row-gap:2px; align-items:center; background:var(--c-primary); color:var(--c-on-primary); border-bottom:0; height:auto; min-height:56px; padding:max(10px,env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px)); position:sticky; top:0; z-index:30; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy .wm{ grid-column:1; grid-row:1; font-family:var(--font-display); font-weight:800; font-size:1.125rem; color:inherit; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy .cap{ grid-column:1 / -1; grid-row:2; min-width:0; color:inherit; opacity:.92; font-size:1rem; overflow-wrap:anywhere; text-align:left; }
@@ -29,6 +32,7 @@ html[data-brand="v2"][data-brand-v3] body:has(.v3-shell) .site-foot{ padding-bot
   html[data-brand="v2"][data-brand-v3] .v3-shell .shell-content{ max-width:640px; margin:0 auto; width:100%; }
 }
 @media(min-width:64em) {
+  html[data-brand="v2"][data-brand-v3] .v3-shell{ --m-bottom-nav-height:0px; }
   html[data-brand="v2"][data-brand-v3] .v3-shell{ display:grid; grid-template-columns:280px minmax(0,1fr); align-items:start; }
   html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy, html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar, html[data-brand="v2"][data-brand-v3] .v3-shell .subchips{ display:none; }
   html[data-brand="v2"][data-brand-v3] .v3-shell .sidebar{ display:flex; flex-direction:column; position:sticky; top:0; height:100vh; max-height:100vh; overflow-y:auto; padding:22px 14px 18px; background:var(--c-primary); color:var(--c-on-primary); }

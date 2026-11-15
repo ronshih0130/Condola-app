@@ -351,3 +351,11 @@ test("SH-TRIAL / MGT-98-AC1: the retained /m layout keeps the trial banner acros
   assert.equal(renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m" }).includes('data-testid="trial-banner"'), true);
   assert.equal(renderShell({ sandbox: false, hasLiveCompany: true, role: "admin", path: "/m/units" }).includes('data-testid="trial-banner"'), false);
 });
+
+
+test("PLT-44-AC1 / MGT-54: on phones the fixed empty-state primary sits above the v3 tab bar, not over it", () => {
+  const css = source("public/brand/v3/shell.css");
+  assert.match(css, /\.v3-shell\{ --m-bottom-nav-height:64px; \}/);
+  assert.match(css.split("@media(min-width:64em)")[1], /--m-bottom-nav-height:0px/);
+  assert.match(source("src/app/globals.css"), /\.es-primary\{position:fixed;bottom:calc\(var\(--m-bottom-nav-height,0px\)/);
+});
