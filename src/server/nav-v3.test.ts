@@ -62,7 +62,7 @@ test("MGT-47-AC4/AC7: custom sessions filter area and sub-link grants and hide e
   session.customRole = { orgId: session.orgId, userId: session.userId, sessionId: session.sessionId,
     nativeRole: "admin", keys: ["stmt.view", "pay.record"], audit: false, photos: false } as Session["customRole"];
   assert.deepEqual(ids(areasFor(session)), ["money", "settings"]);
-  assert.deepEqual(areasFor(session)[0].links.map(link => link.href), ["/m/rent", "/m/payments", "/m/statements"]);
+  assert.deepEqual(areasFor(session)[0].links.map(link => link.href), ["/m/rent", "/m/payments", "/m/statements", "/m/reports"]);
   assert.deepEqual(areasFor(session)[1].links.map(link => link.href), ["/m/account"]);
   for (const area of areasFor(session)) for (const item of [area, ...area.links]) {
     if (item.perm !== "any" && item.perm !== "admin") assert.ok(can(session, item.perm as PermKey));
