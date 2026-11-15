@@ -13,6 +13,8 @@ const zh = {
   property: "物件・租客", due: "應繳", status: "狀態", source: "來源", turn: "輪到誰",
   pending: "{count} 筆等你核對", confirm: "確認已繳款", confirmed: "已確認繳款",
   tenantReport: "租客回報", bank: "銀行明細", waiting: "等租客繳款", dueDate: "{date} 到期",
+  proxyConfirm: "代為確認", proxyTarget: "對象", proxyAmount: "金額", proxyDate: "日期", proxyOwner: "屋主",
+  proxyCancel: "取消", proxyClose: "關閉", proxyError: "沒有存成功，請再試一次。已填的內容都還在。",
 };
 // English translation; partial / partialAmounts were approved with them (PR-018, 2026-11-15 11:42 PT).
 const en: typeof zh = {
@@ -23,6 +25,8 @@ const en: typeof zh = {
   property: "Property · tenant", due: "Due", status: "Status", source: "Source", turn: "Whose turn",
   pending: "{count} awaiting your confirmation", confirm: "Confirm payment", confirmed: "Payment confirmed",
   tenantReport: "Tenant report", bank: "Bank statement", waiting: "Waiting for tenant payment", dueDate: "Due {date}",
+  proxyConfirm: "Confirm for owner", proxyTarget: "For", proxyAmount: "Amount", proxyDate: "Date", proxyOwner: "Owner",
+  proxyCancel: "Cancel", proxyClose: "Close", proxyError: "Could not save. Please try again. Your details are still here.",
 };
 export const moneyPageCopy = (locale: Locale) => ({
   ...(locale === "en" ? en : zh),

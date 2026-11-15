@@ -53,3 +53,28 @@ for (const [file, name, operation, permission] of [
     }
   }
 });
+
+test("M-PROXY reuses actionConfirmPayment: inline success, failures stay open, permission/consent precede the same write", async () => {
+  const source = ts.createSourceFile("actions.ts", readFileSync("src/server/actions.ts", "utf8"), ts.ScriptTarget.Latest, true);
+  const selected = source.statements.filter(node => ts.isFunctionDeclaration(node) && ["actionConfirmPayment", "bounce", "isRedirect"].includes(node.name?.text ?? ""));
+  const code = ts.transpileModule(selected.map(node => node.getText(source)).join("\n"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  for (const failAt of [null, "consent", "guard", "write"] as const) {
+    const events: string[] = [], exports: Record<string, (form: FormData) => Promise<void>> = {};
+    const session = { role: "manager" };
+    const failure = new FlowError("errors.forbidden");
+    const step = (name: string) => { events.push(name); if (failAt === name) throw failure; };
+    new Function("exports", "paymentReturnTo", "requireCurrentConsent", "text", "guardEffectiveSession", "getSession",
+      "confirmPayment", "redirect", "FlowError", "readProxyOwnerConfirmed", code)(exports, paymentReturnTo,
+      async () => step("consent"), (v: unknown) => String(v ?? ""),
+      async (s: unknown, key: string) => { assert.equal(s, session); assert.equal(key, "pay.record"); step("guard"); return s; },
+      async () => session,
+      async (s: unknown, id: string, options: unknown) => { assert.equal(s, session); assert.equal(id, "report");
+        assert.deepEqual(options, { proxyOwnerConfirmed: true, source: "staff_ui" }); step("write"); },
+      () => assert.fail("inline mode must not redirect"), FlowError, (value: unknown) => value === "true");
+    const form = new FormData(); form.set("paymentId", "report"); form.set("proxyOwnerConfirmed", "true");
+    form.set("presentation", "owner-proxy"); form.set("returnTo", "//untrusted");
+    if (failAt) await assert.rejects(exports.actionConfirmPayment(form), error => error === failure);
+    else assert.equal(await exports.actionConfirmPayment(form), undefined);
+    assert.deepEqual(events, failAt === "consent" ? ["consent"] : failAt === "guard" ? ["consent", "guard"] : ["consent", "guard", "write"]);
+  }
+});

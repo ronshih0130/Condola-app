@@ -349,8 +349,12 @@ export async function actionConfirmPayment(formData: FormData) {
       proxyOwnerConfirmed: readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed")),
       source: "staff_ui",
     });
+    // M-PROXY keeps the modal mounted for its completion state. This changes only
+    // presentation: the same consent, effective permission and domain write run above.
+    if (formData.get("presentation") === "owner-proxy") return;
     redirect(returnTo);
   } catch (error) {
+    if (formData.get("presentation") === "owner-proxy" && !isRedirect(error)) throw error;
     bounce(returnTo, error);
   }
 }

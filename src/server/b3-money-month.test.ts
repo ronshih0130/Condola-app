@@ -79,12 +79,33 @@ const bill = (n: number): MoneyMonthBill => ({ leaseId: id(n), month, place: "Sy
   currency: "USD", dueDate: "2030-05-01", totalMinor: "9007199254740993", confirmedMinor: "1", remainingMinor: "9007199254740992", status: "partial" });
 const report = (n: number, other = false): MoneyMonthReport => ({ id: id(n), leaseId: id(999), place: "Synthetic", tenantName: null,
   amountMinor: "9007199254740993", currency: "USD", paidOn: "2030-01-01", submittedAt: "2030-04-30T23:00:00.123456Z",
-  source: "tenant_portal", bankTransactionId: null, proofFileId: null,
+  source: "tenant_portal", ownerPayee: null, bankTransactionId: null, proofFileId: null,
   billRows: other ? [] : [{ leaseId: id(999), month }], attachment: other ? "other" : "oldest_unpaid" });
 const summary = { today: "2030-05-01", timezone: "UTC", invalid_currencies: 0, all_count: 80, counts: { due_today: 80 },
   totals: [{ currency: "USD", totalMinor: "720575940379279440", confirmedMinor: "80", billedRows: 80, paidRows: 0 }],
   owing: 90, outstanding: [{ currency: "USD", amountMinor: "810647932926689280", leaseCount: 90 }] };
 const reportSummary = { today: "2030-05-01", timezone: "UTC", count: 80, attached: 60, other: 20, invalid_currencies: 0 };
+
+test("M-PROXY payee projection is scoped to the assigned B-003 account and visible owner name only", () => {
+  assert.match(REPORTS_LIST_SQL_FOR_TEST, /payee\.id = l\.payee_bank_account_id AND payee\.org_id = \$1/);
+  assert.match(REPORTS_LIST_SQL_FOR_TEST, /payee\.archived_at IS NULL AND payee\.show_to_tenants/);
+  assert.match(REPORTS_LIST_SQL_FOR_TEST, /payee\.property_id IS NULL OR payee\.property_id = l\.property_id/);
+  assert.match(REPORTS_LIST_SQL_FOR_TEST, /payee_owner\.id = payee\.owner_contact_id AND payee_owner\.org_id = \$1/);
+  assert.match(REPORTS_LIST_SQL_FOR_TEST, /CASE WHEN payee\.owner_contact_id IS NOT NULL\s+THEN jsonb_build_object\('displayName', payee_owner\.display_name\) ELSE NULL END/);
+  assert.doesNotMatch(REPORTS_LIST_SQL_FOR_TEST, /payee_account_numbers|account_number|holder_name|app\.b010_lease_collectors/);
+});
+
+test("M-PROXY reports preserve owner payee metadata for attached and other rows in the existing snapshot", async () => {
+  const attached = { ...report(1), ownerPayee: { displayName: "Synthetic owner" } };
+  const other = { ...report(2, true), ownerPayee: { displayName: null } };
+  const ordinary = report(3);
+  const result = await moneyMonthReports(session, { month }, { ...ON, transaction: mockTx(sql =>
+    ({ rows: sql === REPORTS_SUMMARY_SQL_FOR_TEST ? [reportSummary] : [attached, other, ordinary] })) });
+  assert.equal(result.state, "ready");
+  if (result.state !== "ready") return;
+  assert.deepEqual(result.attached, [attached, ordinary]);
+  assert.deepEqual(result.other, [other]);
+});
 
 function mockTx(handler: (sql: string, args?: unknown[]) => { rows: unknown[] }): typeof tx {
   return async (user, fn, scope, options) => {

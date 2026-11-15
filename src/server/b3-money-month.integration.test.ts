@@ -573,3 +573,53 @@ test("mixed invoice currencies in one lease/month are unavailable, never silentl
   assert.deepEqual(await moneyMonthBills(o.staff.admin, { month: MONTH }, ON), { state: "unavailable" });
   assert.deepEqual(await moneyMonthReports(o.staff.admin, { month: MONTH }, ON), { state: "unavailable" });
 });
+
+// B-085 part 1 / M-PROXY. These cases intentionally use only fixture SQL + the
+// authenticated read-only reader: they never invoke a notification-producing writer.
+test("M-PROXY B-003 owner payee, company/default/unassigned, archived and property-mismatch accounts", async () => {
+  const o = await org(), l = await lease(o);
+  const owner = (await query<{ id: string }>(`INSERT INTO contacts (org_id, is_owner, display_name)
+    VALUES ($1, true, 'Synthetic visible owner') RETURNING id::text`, [o.orgId])).rows[0].id;
+  const ownerAccount = (await query<{ id: string }>(`INSERT INTO bank_accounts (org_id, property_id, nickname, currency, owner_contact_id, show_to_tenants)
+    VALUES ($1, $2, 'Synthetic owner account', 'TWD', $3, true) RETURNING id::text`, [o.orgId, o.property, owner])).rows[0].id;
+  const companyAccount = (await query<{ id: string }>(`INSERT INTO bank_accounts (org_id, nickname, currency, is_default_payee, show_to_tenants)
+    VALUES ($1, 'Synthetic company account', 'TWD', true, true) RETURNING id::text`, [o.orgId])).rows[0].id;
+  await invoice(l); const payment = await pay(l);
+  const read = async (s = o.staff.manager) => (await reports(s)).attached.find(row => row.id === payment)!;
+  assert.equal((await read()).ownerPayee, null, "unassigned uses company default, not a property owner");
+  await query("UPDATE leases SET payee_bank_account_id = $2 WHERE id = $1", [l.id, companyAccount]);
+  assert.equal((await read()).ownerPayee, null);
+  await query("UPDATE leases SET payee_bank_account_id = $2 WHERE id = $1", [l.id, ownerAccount]);
+  for (const role of ["admin", "manager", "accountant"] as const) {
+    const row = await read(o.staff[role]);
+    assert.deepEqual(row.ownerPayee, { displayName: "Synthetic visible owner" });
+    assert.doesNotMatch(JSON.stringify(row.ownerPayee), /account|phone|email|contactId/);
+  }
+  await assert.rejects(moneyMonthReports(o.staff.maintenance, { month: MONTH }, ON), denied);
+  const foreign = await org();
+  assert.equal((await reports(foreign.staff.admin)).attached.some(row => row.id === payment), false);
+  await query("UPDATE bank_accounts SET archived_at = now() WHERE id = $1", [ownerAccount]);
+  assert.equal((await read()).ownerPayee, null);
+  await query("UPDATE bank_accounts SET archived_at = NULL, show_to_tenants = false WHERE id = $1", [ownerAccount]);
+  assert.equal((await read()).ownerPayee, null);
+  await query("UPDATE bank_accounts SET show_to_tenants = true, property_id = $2 WHERE id = $1", [ownerAccount, await property(o.orgId)]);
+  assert.equal((await read()).ownerPayee, null, "a stale assignment cannot use a different property's account");
+  await query("UPDATE bank_accounts SET property_id = NULL WHERE id = $1", [ownerAccount]);
+  assert.deepEqual((await read()).ownerPayee, { displayName: "Synthetic visible owner" });
+  await query("UPDATE contacts SET archived_at = now() WHERE id = $1", [owner]);
+  assert.deepEqual((await read()).ownerPayee, { displayName: null }, "owner flow stays, archived contact name is withheld");
+  assert.deepEqual(await moneyMonthReports(o.staff.manager, { month: MONTH }, { v3: async () => false }), { state: "off" });
+});
+
+test("M-PROXY owner payee also survives the unmatched-report path", async () => {
+  const o = await org(), l = await lease(o);
+  const owner = (await query<{ id: string }>(`INSERT INTO contacts (org_id, is_owner, display_name)
+    VALUES ($1, true, 'Synthetic other owner') RETURNING id::text`, [o.orgId])).rows[0].id;
+  const account = (await query<{ id: string }>(`INSERT INTO bank_accounts (org_id, nickname, currency, owner_contact_id, show_to_tenants)
+    VALUES ($1, 'Synthetic owner account', 'TWD', $2, true) RETURNING id::text`, [o.orgId, owner])).rows[0].id;
+  await query("UPDATE leases SET payee_bank_account_id = $2 WHERE id = $1", [l.id, account]);
+  const payment = await pay(l);
+  const result = await reports(o.staff.accountant);
+  assert.deepEqual(result.other.find(row => row.id === payment)?.ownerPayee, { displayName: "Synthetic other owner" });
+  assert.equal(result.attached.length, 0);
+});

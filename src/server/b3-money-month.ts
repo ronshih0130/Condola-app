@@ -34,6 +34,8 @@ export type MoneyMonthBills = { state: "off" } | { state: "unavailable" } | {
 };
 export type MoneyMonthReport = {
   id: string; leaseId: string; place: string; tenantName: string | null;
+  /** B-003 assigned payee, projected under staff RLS; never bank details or a property-owner guess. */
+  ownerPayee: { displayName: string | null } | null;
   amountMinor: string; currency: string; paidOn: string; submittedAt: string;
   source: "tenant_portal"; bankTransactionId: string | null; proofFileId: string | null;
   /** Allocation can span months/leases. Each target appears once; each report is counted once. */
@@ -203,6 +205,8 @@ SELECT p.id::text, p.lease_id::text AS "leaseId", p.amount_minor::text AS "amoun
        p.paid_on::text AS "paidOn", to_char(p.submitted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "submittedAt",
        p.source, p.bank_transaction_id::text AS "bankTransactionId", p.proof_file_id::text AS "proofFileId",
        pr.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place, c.display_name AS "tenantName",
+       CASE WHEN payee.owner_contact_id IS NOT NULL
+         THEN jsonb_build_object('displayName', payee_owner.display_name) ELSE NULL END AS "ownerPayee",
        coalesce((SELECT jsonb_agg(jsonb_build_object('leaseId', a.lease_id::text, 'month', to_char(a.month, 'YYYY-MM'))
            ORDER BY a.month, a.lease_id) FROM attachments a WHERE a.report_id = p.id), '[]'::jsonb) AS "billRows",
        coalesce((SELECT min(a.attachment) FROM attachments a WHERE a.report_id = p.id), 'other') AS attachment
@@ -212,6 +216,13 @@ SELECT p.id::text, p.lease_id::text AS "leaseId", p.amount_minor::text AS "amoun
   JOIN units u ON u.id = l.unit_id AND u.org_id = $1
   LEFT JOIN rooms r ON r.id = l.target_room_id AND r.org_id = $1
   LEFT JOIN contacts c ON c.id = p.payer_contact_id AND c.org_id = $1
+  -- A company default cannot be an owner payee. Only the explicitly assigned,
+  -- active, property-compatible B-003 account can open M-PROXY. No sealed account-number read.
+  LEFT JOIN bank_accounts payee ON payee.id = l.payee_bank_account_id AND payee.org_id = $1
+    AND payee.archived_at IS NULL AND payee.show_to_tenants
+    AND (payee.property_id IS NULL OR payee.property_id = l.property_id)
+  LEFT JOIN contacts payee_owner ON payee_owner.id = payee.owner_contact_id AND payee_owner.org_id = $1
+    AND payee_owner.is_owner AND payee_owner.archived_at IS NULL
  WHERE ($4::int IS NULL OR (p.group_order, p.submitted_at, p.id) > ($4::int, $5::timestamptz, $6::uuid))
  ORDER BY p.group_order, p.submitted_at, p.id LIMIT $7`;
 
