@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { TenantOneV3Page } from "@/components/v3/m/tenants/tenant-one-page";
+import { TenantOneLoading } from "@/components/v3/m/tenants/tenant-one";
 import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
@@ -26,6 +30,10 @@ export default async function TenantPage({
   const { id } = await params;
   const query = await searchParams;
   const session = await getSession();
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/tenants.css" /><Suspense key={id} fallback={<TenantOneLoading locale={session.locale} />}><TenantOneV3Page session={session} id={id} /></Suspense></>;
+  }
   const t = makeT(session.locale);
   const directory=await tenantDirectoryHistory(session,id,query);
   if(directory.state==="enabled") {
