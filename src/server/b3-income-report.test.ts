@@ -23,8 +23,8 @@ test.before(() => { process.env.CUSTOM_ROLES_ORG_ALLOWLIST = ""; });
 test.after(() => { if (previous === undefined) delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST; else process.env.CUSTOM_ROLES_ORG_ALLOWLIST = previous; });
 const row = (n: number): IncomeReportLine => ({ key: id(n), date: "2030-05-01", kind: "expense", item: "=SUM(1,2)",
   propertyId: id(4), property: "Synthetic, \"property\"", ownerId: id(5), owner: "@owner", currency: "TWD", amountMinor: "9007199254740993",
-  sourceAmountMinor: "9007199254740993", sourceId: id(n), invoiceId: null, allocationId: null });
-const summary = { count: 80, totals: [{ currency: "TWD", incomeMinor: "100000", expenseMinor: "32000", netMinor: "68000", depositMinor: "1000" }] };
+  paidOn: null, serviceMonthStart: null, leaseId: null, sourceAmountMinor: "9007199254740993", sourceId: id(n), invoiceId: null, allocationId: null });
+const summary = { count: 80, totals: [{ currency: "TWD", incomeMinor: "100000", expenseMinor: "32000", netMinor: "68000", depositMinor: "1000", earlyRentMinor: "0", prepaymentMinor: "0" }] };
 function mockTx(rows: IncomeReportLine[] = [row(7)], overrides: { role?: boolean; summary?: typeof summary; capture?: (sql: string, args?: unknown[]) => void } = {}): typeof tx {
   return async (user, fn, scope, options) => {
     assert.equal(user, session.userId); assert.deepEqual(scope, { orgId: session.orgId, environment: "live" });
@@ -97,13 +97,13 @@ test("export uses all rows in one snapshot and revalidates current native member
 
 test("CSV exact lines/totals, formula escaping, multiline quoting, large integers, no currency conversion", () => {
   const csv = incomeReportCsv(ready, "en");
-  assert.equal(csv, '\uFEFF"Date","Item","Property","Owner","Currency","Amount","Source","Income","Expenses","Net","Deposits"\r\n'
-    + `"2030-05-01","Expenses · =SUM(1,2)","Synthetic, ""property""","'@owner","TWD","90071992547409.93","${id(7)}",,,,\r\n`
-    + '"","Total",,,"TWD",,,"1000.00","320.00","680.00","10.00"\r\n'.replace('"","Total"', ',"Total"'));
+  assert.equal(csv, '\uFEFF"Section","Date","Item","Property","Owner","Currency","Amount","Source","Income","Expenses","Net","Deposits","Rent received in advance","Prepayments","Payment date","Lease","Service month"\r\n'
+    + `"Expenses","2030-05-01","'=SUM(1,2)","Synthetic, ""property""","'@owner","TWD","90071992547409.93","${id(7)}",,,,,,,"","",""\r\n`
+    + '"Total",,"Total",,,"TWD",,,"1000.00","320.00","680.00","10.00","0.00","0.00",,,\r\n');
   assert.equal(reportMajor("-9007199254740993"), "-90071992547409.93");
   assert.equal(reportMoney("-101", "TWD", "zh-TW"), "−NT$1.01");
   const multi = incomeReportCsv({ ...ready, rows: [{ ...row(7), property: '\t=attack\n"value"' }],
-    totals: [...ready.totals, { currency: "USD", incomeMinor: "1", expenseMinor: "2", netMinor: "-1", depositMinor: "0" }] }, "en");
+    totals: [...ready.totals, { currency: "USD", incomeMinor: "1", expenseMinor: "2", netMinor: "-1", depositMinor: "0", earlyRentMinor: "0", prepaymentMinor: "0" }] }, "en");
   assert.ok(multi.includes('"\'\t=attack\n""value"""')); assert.ok(multi.includes('"USD",,,"0.01","0.02","-0.01","0.00"'));
 });
 
@@ -146,17 +146,32 @@ test("OFF page/export legacy bodies and legacy reader stay byte-identical", () =
   assert.equal(sha(readFileSync("src/server/income-expense.ts", "utf8")), "1e0d426e7d0f627bec41cd376f550b29077e100530ba70350f012dde4d3c8574");
 });
 
-test("financial SQL contract applies cash dates after cumulative allocation, retaining owner/company liability", () => {
+test("financial SQL contract classifies after cumulative allocation, retaining owner/company liability", () => {
   // Policy assertions, paired with executable real-row fixtures in the Mac integration suite.
   assert.ok(INCOME_REPORT_SUMMARY_SQL.indexOf("PARTITION BY invoice_id, currency") < INCOME_REPORT_SUMMARY_SQL.indexOf("date BETWEEN $2::date"));
-  assert.ok(!INCOME_REPORT_SUMMARY_SQL.includes("period_start"));
+  assert.ok(INCOME_REPORT_SUMMARY_SQL.includes("i.period_start AS service_month_start"));
   assert.ok(!INCOME_REPORT_SUMMARY_SQL.includes("unknown_periods"));
   assert.match(INCOME_REPORT_SUMMARY_SQL, /pay\.status = 'confirmed'\s*\)/);
-  assert.match(INCOME_REPORT_SUMMARY_SQL, /FROM portions WHERE amount > 0 AND date BETWEEN \$2::date AND \$3::date/);
+  assert.match(INCOME_REPORT_SUMMARY_SQL, /FROM recognized_portions/);
   assert.match(INCOME_REPORT_SUMMARY_SQL, /e\.status IN \('approved','posted'\) AND e\.bill_to IN \('owner','manager'\)/);
   assert.match(INCOME_REPORT_SUMMARY_SQL, /e\.incurred_on BETWEEN \$2::date AND \$3::date/);
   assert.ok(!INCOME_REPORT_SUMMARY_SQL.includes("repair_cost_on_statement"));
   assert.ok(!INCOME_REPORT_SUMMARY_SQL.includes("paid_by"));
   assert.match(INCOME_REPORT_SUMMARY_SQL, /WHEN charge_type = 'deposit' THEN 'deposit' ELSE 'income'/);
   assert.ok(!INCOME_REPORT_SUMMARY_SQL.includes("LIMIT 50"));
+});
+
+test("CSV sections retain allocated/unallocated amounts and provenance; totals never fold them into income", () => {
+  const csv = incomeReportCsv({ ...ready, rows: [
+    { ...row(7), kind: "earlyRent", item: "Rent", amountMinor: "10000", paidOn: "2030-05-01", serviceMonthStart: "2030-06-01", leaseId: id(20) },
+    { ...row(8), kind: "prepayment", item: "", amountMinor: "2500", paidOn: "2030-05-01", leaseId: id(20) },
+  ], totals: [{ currency: "TWD", incomeMinor: "0", expenseMinor: "0", netMinor: "0", depositMinor: "0", earlyRentMinor: "10000", prepaymentMinor: "2500" },
+    { currency: "USD", incomeMinor: "1", expenseMinor: "0", netMinor: "1", depositMinor: "0", earlyRentMinor: "0", prepaymentMinor: "2" }] }, "zh-TW");
+  const lines = csv.split("\r\n");
+  assert.ok(lines[0].startsWith('\uFEFF"區塊"'));
+  assert.ok(lines[1].startsWith('"預收租金","2030-05-01","Rent"'));
+  assert.ok(lines[1].endsWith(`"2030-05-01","${id(20)}","2030-06-01"`));
+  assert.ok(lines[2].startsWith('"預付"'));
+  assert.ok(lines[3].includes('"TWD",,,"0.00","0.00","0.00","0.00","100.00","25.00"'));
+  assert.ok(lines[4].includes('"USD",,,"0.01","0.00","0.01","0.00","0.00","0.02"'));
 });

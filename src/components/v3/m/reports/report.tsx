@@ -31,6 +31,9 @@ export function IncomeReportView({ session, input, data }: { session: Session; i
   const source = (row: IncomeReportLine) => <details className={styles.source}>
     <summary>{c.source}</summary>
     <dl><dt>{c.sourceId}</dt><dd>{row.sourceId}</dd><dt>{c.date}</dt><dd>{date(row.date)}</dd>
+      {row.paidOn && <><dt>{c.paidOn}</dt><dd>{date(row.paidOn)}</dd></>}
+      {row.leaseId && <><dt>{c.lease}</dt><dd>{row.leaseId}</dd></>}
+      {row.serviceMonthStart && <><dt>{c.serviceMonth}</dt><dd>{date(row.serviceMonthStart)}</dd></>}
       <dt>{c.item}</dt><dd>{c[row.kind]} · {row.item}</dd><dt>{c.amount}</dt><dd>{money(row.sourceAmountMinor, row.currency)}</dd></dl>
     {row.kind === "expense" && can(session, "exp.add") && <Link href={`/m/expenses/${row.sourceId}`}>{c.source}</Link>}
   </details>;
@@ -69,14 +72,19 @@ export function IncomeReportView({ session, input, data }: { session: Session; i
     </form>
     {!ready ? <div role="alert" className={styles.card}><p>{c.failed}</p><Link href={reportHref(input, input.cursor)}>{c.retry}</Link></div>
       : data.count === 0 ? <div className={styles.empty}><ReportDrawing /><p>{c.empty}</p></div>
-      : <div className={styles.columns}><section className={styles.card}>{table(data.rows.filter(row => row.kind !== "deposit"))}</section>
+      : <div className={styles.columns}><section className={styles.card}>{table(data.rows.filter(row => row.kind === "income" || row.kind === "expense"))}</section>
         <aside className={styles.card}><h2>{c.separate}</h2>
-          {/* Prepayment section waits on hub PENDING-RON PR-019. Keep the approved R1-RPT hint;
-              unallocated money is not income. Only deposits are listed separately for now. */}
-          {data.totals.map(total => <p key={total.currency}>{c.deposit} {money(total.depositMinor, total.currency)}</p>)}
-          {data.rows.filter(row => row.kind === "deposit").map(row => <div key={row.key} className={styles.deposit}>
-            <p>{date(row.date)} · {row.property} · {row.owner || "—"}</p><p>{row.item} · {money(row.amountMinor, row.currency)}</p>{source(row)}
-          </div>)}
+          {(["deposit", "earlyRent", "prepayment"] as const).map(kind => <section key={kind} data-testid={`report-separate-${kind}`}>
+            <h3>{kind === "earlyRent" ? c.earlyRentHeading : c[kind]}</h3>
+            {kind === "earlyRent" && <p>{c.serviceMonthHint}</p>}
+            {data.totals.map(total => <p key={total.currency}>{c[kind]} {money(total[kind === "deposit" ? "depositMinor" : kind === "earlyRent" ? "earlyRentMinor" : "prepaymentMinor"], total.currency)}</p>)}
+            {data.rows.filter(row => row.kind === kind).map(row => <div key={row.key} className={styles.deposit} data-kind={kind}>
+              <p>{date(row.date)} · {row.property} · {row.owner || "—"}</p><p>{row.item} · {money(row.amountMinor, row.currency)}</p>
+              {row.leaseId && <p>{c.lease} · {row.leaseId}</p>}
+              {row.serviceMonthStart && <p>{c.serviceMonth} · {date(row.serviceMonthStart)}</p>}
+              {source(row)}
+            </div>)}
+          </section>)}
           <p>{c.tax}</p>
         </aside></div>}
     {ready && (input.cursor || data.nextCursor) && <nav className={styles.pagination}>
