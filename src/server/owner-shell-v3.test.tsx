@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import * as i18n from "../i18n";
 import * as copy from "../i18n/lanes/brand-v3";
+import { receiptTitleCopy } from "../i18n/owner-finance-replies";
 import * as repairCopy from "../i18n/lanes/repair-owner-policy";
 import * as nav from "./nav-v3";
 import { RoleAvatar } from "../components/v3/role-avatar";
@@ -49,11 +50,11 @@ function components(locale: i18n.Locale, path: string, open: "avatar" | "more" |
     OwnerShell: compile(source("src/components/v3/shell/owner-shell.tsx"), { ...sharedMocks, "./shared-shell": shared }),
   };
 }
-function renderOwner({ path = "/o", locale = "zh-TW", name = owner.name, admission = "enabled", open = null, navigation }: {
-  path?: string; locale?: i18n.Locale; name?: string; admission?: CenterAdmission; open?: "avatar" | "more" | null; navigation?: nav.OwnerNavigationV3;
+function renderOwner({ path = "/o", locale = "zh-TW", name = owner.name, admission = "enabled", open = null, navigation, receiptTitleAvailable = false, canSwitchToTenant = false }: {
+  path?: string; locale?: i18n.Locale; name?: string; admission?: CenterAdmission; open?: "avatar" | "more" | null; navigation?: nav.OwnerNavigationV3; receiptTitleAvailable?: boolean; canSwitchToTenant?: boolean;
 } = {}) {
   const Shell = components(locale, path, open).OwnerShell.OwnerShellV3 as React.ComponentType<Record<string, unknown>>;
-  return renderToStaticMarkup(<Shell locale={locale} name={name} firm="安居代管" navigation={navigation ?? nav.ownerNavigationV3({ ...owner, locale }, properties, ["allowed", "unassigned"], admission)}><main data-testid="content">existing owner content</main></Shell>);
+  return renderToStaticMarkup(<Shell canSwitchToTenant={canSwitchToTenant} locale={locale} name={name} firm="安居代管" navigation={navigation ?? nav.ownerNavigationV3({ ...owner, locale }, properties, ["allowed", "unassigned"], admission, receiptTitleAvailable)}><main data-testid="content">existing owner content</main></Shell>);
 }
 
 test("OV-SH-PHONE / PLT-46-AC1: owner OFF preserves old readers, order, markup and redirects", async () => {
@@ -72,6 +73,7 @@ test("OV-SH-PHONE / PLT-46-AC1: owner OFF preserves old readers, order, markup a
       "@/server/queries": { ownerPropertyNames: async (s: Session) => { assert.equal(s, actor); calls.push("properties"); return properties; } },
       "@/server/repair-owner-policy": { ownerRepairPolicyEntryIds: async (s: Session, ids: string[]) => { assert.equal(s, actor); assert.deepEqual(ids, ["allowed", "hidden"]); calls.push("repair"); return ["allowed"]; } },
       "@/server/auth": { ownerPrivacy: () => assert.fail("OFF must not read firm") },
+      "@/server/owner-finance-replies": { ownerReceiptTitleView: () => assert.fail("OFF must not read receipt title") },
       "@/server/notification-center": { centerSessionAdmission: () => assert.fail("OFF must not read notification admission") },
       "@/server/nav-v3": nav, "@/components/owner-nav": ui.OwnerNav, "@/components/v3/shell/owner-shell": ui.OwnerShell,
     };
@@ -89,21 +91,25 @@ test("OV-SH-PHONE / PLT-46-AC1: owner OFF preserves old readers, order, markup a
 });
 
 test("OV-SH-ORG / OV-SH-NOTI: ON uses session firm and actual admission; read failures propagate", async () => {
-  for (const admission of ["enabled", "busy", "disabled", "denied"] as const) {
-    const ui = components("zh-TW", "/o");
+  for (const admission of ["enabled", "busy", "disabled", "denied"] as const) for (const receiptTitleAvailable of [false, true]) for (const portals of [undefined, { owner: false, tenant: false }, { owner: true, tenant: false }, { owner: false, tenant: true }, { owner: true, tenant: true }]) {
+    const actor = { ...owner, portals };
+    const ui = components("zh-TW", "/o", "avatar");
     const calls: string[] = []; let fail = false;
     const mocks = {
       "next/headers": { headers: async () => ({ get: () => "/o" }) }, "next/navigation": { redirect: () => assert.fail("owner admitted") },
-      "@/server/session": { getSession: async () => owner }, "@/server/brand-v2": { brandV2EnabledForOrg: async () => false },
+      "@/server/session": { getSession: async () => actor }, "@/server/brand-v2": { brandV2EnabledForOrg: async () => false },
       "@/server/brand-v3": { brandV3EnabledForOrg: async () => true }, "@/server/consent-gate": { requireCurrentConsent: async () => {} },
       "@/server/queries": { ownerPropertyNames: async () => properties }, "@/server/repair-owner-policy": { ownerRepairPolicyEntryIds: async () => ["allowed"] },
       "@/server/auth": { ownerPrivacy: async (id: string) => { assert.equal(id, owner.orgId); calls.push("firm"); return { name: "安居代管" }; } },
-      "@/server/notification-center": { centerSessionAdmission: async (s: Session) => { assert.equal(s, owner); calls.push("admission"); if (fail) throw new Error("reader unavailable"); return admission; } },
+      "@/server/notification-center": { centerSessionAdmission: async (s: Session) => { assert.equal(s, actor); calls.push("admission"); if (fail) throw new Error("reader unavailable"); return admission; } },
+      "@/server/owner-finance-replies": { ownerReceiptTitleView: async (s: Session) => { assert.equal(s, actor); calls.push("receipt-title"); return receiptTitleAvailable ? { title: null, revisions: [] } : null; } },
       "@/server/nav-v3": nav, "@/components/owner-nav": ui.OwnerNav, "@/components/v3/shell/owner-shell": ui.OwnerShell,
     };
     const Layout = compile(source("src/app/o/layout.tsx"), mocks).default as (p: { children: React.ReactNode }) => Promise<React.ReactNode>;
     const html = renderToStaticMarkup(await Layout({ children: <p>retained</p> }));
-    assert.deepEqual(calls, ["firm", "admission"]);
+    assert.deepEqual(calls, ["firm", "admission", "receipt-title"]);
+    assert.equal(html.includes('href="/o/receipt-title"'), receiptTitleAvailable);
+    assert.equal(html.includes('data-testid="switch-role"'), Boolean(portals?.owner && portals.tenant));
     assert.match(html, /owner-shell-v3/); assert.match(html, /安居代管/); assert.match(html, /retained/);
     assert.equal(html.includes('data-testid="shell-bell"'), admission === "enabled" || admission === "busy");
     assert.equal(html.includes('href="/o/notifications"'), admission === "enabled" || admission === "busy");
@@ -150,15 +156,22 @@ test("OV-SH-ME: owner bilingual menu has language links and POST logout, no unsh
 });
 
 test("OV-SH-MORE / OWN-27-AC5: only live entries, authorized property names, inline desktop order and empty hiding", () => {
-  for (const locale of ["zh-TW", "en"] as const) {
-    const html = renderOwner({ locale, open: "more" });
+  for (const locale of ["zh-TW", "en"] as const) for (const receiptTitleAvailable of [false, true]) {
+    const html = renderOwner({ locale, open: "more", receiptTitleAvailable });
     const menu = html.split('data-testid="more-menu"')[1].split('<nav class="tabbar"')[0];
-    assert.deepEqual([...menu.matchAll(/href="([^"]+)"/g)].map(m => m[1]), ["/o/approvals", "/o/repair-policy/allowed"]);
+    assert.deepEqual([...menu.matchAll(/href="([^"]+)"/g)].map(m => m[1]), ["/o/approvals", ...(receiptTitleAvailable ? ["/o/receipt-title"] : []), "/o/repair-policy/allowed"]);
+    assert.equal(menu.includes(receiptTitleCopy(locale).title), receiptTitleAvailable);
+    assert.equal(html.includes('href="/o/receipt-title"'), receiptTitleAvailable);
+    if (receiptTitleAvailable) {
+      const receiptPage = renderOwner({ locale, receiptTitleAvailable, path: "/o/receipt-title" });
+      assert.ok(receiptPage.includes(`<div class="shell-phone-lead"><h1>${receiptTitleCopy(locale).title}</h1></div>`));
+      assert.match(receiptPage, /data-area="receipt-title" class="on" aria-current="page"/);
+    }
     assert.ok(menu.includes(i18n.makeT(locale)("i_approvals")));
     assert.ok(menu.includes(`松山公寓 · ${repairCopy.ownerRepairCopy(locale).entry}`));
-    assert.doesNotMatch(html, /信義公寓|unassigned|\/o\/(account|receipt-title|invoices|documents|export|ledger|prepay)|請款單|預付與押金|款項紀錄|年度匯出|文件/);
+    assert.doesNotMatch(html, /信義公寓|unassigned|\/o\/(account|invoices|documents|export|ledger|prepay)|請款單|預付與押金|款項紀錄|年度匯出|文件/);
     const sidebar = html.split('data-testid="v3-sidebar-nav"')[1].split("</nav>")[0];
-    assert.deepEqual([...sidebar.matchAll(/data-area="([^"]+)"/g)].map(m => m[1]), ["home", "statements", "notifications", "approvals", "repair-policy-allowed"]);
+    assert.deepEqual([...sidebar.matchAll(/data-area="([^"]+)"/g)].map(m => m[1]), ["home", "statements", "notifications", "approvals", ...(receiptTitleAvailable ? ["receipt-title"] : []), "repair-policy-allowed"]);
     const empty = renderOwner({ navigation: { areas: nav.ownerNavigationV3(owner, [], [], "disabled").areas, more: [] } });
     assert.doesNotMatch(empty, /data-area="more"|href=""/);
   }
@@ -175,5 +188,25 @@ test("OV-SH-NOTI / PLT-44: every admission matches the shipped owner entry and n
     assert.equal(Boolean(await oldEntry({ session: owner })), model.areas.some(a => a.id === "notifications"));
     assert.deepEqual(nav.areasFor(owner), []); assert.deepEqual(nav.tabsFor(owner), []);
     assert.ok([...model.areas, ...model.more].every(item => item.href === "/o" || item.href.startsWith("/o/")));
+  }
+});
+
+
+test("OV-SH-ME: dual-role owners get the shipped tenant switch in the avatar menu only", () => {
+  for (const locale of ["zh-TW", "en"] as const) for (const canSwitchToTenant of [false, true]) {
+    const html = renderOwner({ locale, canSwitchToTenant, open: "avatar" });
+    const menu = html.split('data-testid="avatar-menu"')[1].split('<nav class="tabbar"')[0];
+    assert.equal(menu.includes('data-testid="switch-role"'), canSwitchToTenant);
+    if (canSwitchToTenant) assert.ok(menu.includes(`href="/t">${i18n.makeT(locale)("i_switch_role_tenant")}</a>`));
+    assert.doesNotMatch(renderOwner({ locale, canSwitchToTenant }), /data-testid="switch-role"/);
+  }
+});
+
+test("OV-SH-PHONE: mounted marker, title-only lead, and surname initials in both locales", () => {
+  for (const locale of ["zh-TW", "en"] as const) for (const [name, initial] of [["Jane Smith", "S"], ["  alex   chen  ", "C"], ["林小姐", "林"], ["𠮷田 太郎", "𠮷"], ["Alex", "A"]]) {
+    const html = renderOwner({ locale, name });
+    assert.match(html, /<div data-v3-shell="" class="v3-shell v3-owner-shell"/);
+    assert.match(html, /<div class="shell-phone-lead"><h1>[^<]+<\/h1><\/div>/);
+    assert.equal((html.match(new RegExp(`party-name" aria-hidden="true">${initial}</span>`, "gu")) ?? []).length, 2);
   }
 });

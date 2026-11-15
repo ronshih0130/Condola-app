@@ -1,3 +1,4 @@
+import { receiptTitleCopy } from "../i18n/owner-finance-replies";
 import { ownerRepairCopy } from "../i18n/lanes/repair-owner-policy";
 import { centerCopy } from "../i18n/lanes/notification-center";
 import type { CenterAdmission } from "./notification-center";
@@ -117,7 +118,7 @@ export type OwnerEntryV3 = { id: string; href: string; label: string; icon: "tod
 export type OwnerNavigationV3 = { areas: OwnerEntryV3[]; more: OwnerEntryV3[] };
 
 /** OWN-27-AC5: local interim live entries only; do not infer access from property membership alone. */
-export function ownerNavigationV3(session: Session, properties: { id: string; name: string }[], repairPolicyIds: string[], admission: CenterAdmission): OwnerNavigationV3 {
+export function ownerNavigationV3(session: Session, properties: { id: string; name: string }[], repairPolicyIds: string[], admission: CenterAdmission, receiptTitleAvailable = false): OwnerNavigationV3 {
   if (session.kind !== "owner") return { areas: [], more: [] };
   const copy = brandV3OwnerShellCopy(session.locale);
   const areas: OwnerEntryV3[] = [
@@ -128,6 +129,7 @@ export function ownerNavigationV3(session: Session, properties: { id: string; na
   if (admission !== "disabled" && admission !== "denied") areas.push({ id: "notifications", href: "/o/notifications", label: centerCopy(session.locale).title, icon: "bell" });
   const more: OwnerEntryV3[] = [
     { id: "approvals", href: "/o/approvals", label: makeT(session.locale)("i_approvals"), icon: "doc" },
+    ...(receiptTitleAvailable ? [{ id: "receipt-title", href: "/o/receipt-title", label: receiptTitleCopy(session.locale).title, icon: "doc" as const }] : []),
     ...properties.filter(property => repairPolicyIds.includes(property.id)).map(property => ({
       id: `repair-policy-${property.id}`, href: `/o/repair-policy/${property.id}`,
       label: `${property.name} · ${ownerRepairCopy(session.locale).entry}`, icon: "tool" as const,

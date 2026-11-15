@@ -75,3 +75,19 @@ test("PLT-50-AC3 / PLT-48-AC3 / PLT-47-AC4: sand blocks avoid cobalt/info text, 
   });
   assert.equal(rings.size, 2);
 });
+
+
+test("OV-SH-PHONE: title-only sand lead uses text at >= 4.5:1 and never info/cobalt", () => {
+  const css = postcss.parse(readFileSync("public/brand/v3/shell.css", "utf8"));
+  const values: Record<string, string> = {};
+  css.walkRules(rule => {
+    if (!rule.selector.includes(".shell-phone-lead")) return;
+    rule.walkDecls("color", d => assert.doesNotMatch(d.value, /var\(--c-(brand|info)\)/));
+    if (rule.selector === 'html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead') {
+      rule.walkDecls(d => { values[d.prop] = d.value; });
+    }
+  });
+  assert.equal(values.background, "var(--c-tint-soft)");
+  assert.equal(values.color, "var(--c-text)");
+  assert.ok(contrast("c-text", "c-tint-soft") >= 4.5);
+});

@@ -75,12 +75,12 @@ export function ShellV3({ children, areas, tabs, path, currentId, moreOn, locale
   };
   const avatar = <button type="button" className="shell-avatar" data-testid="avatar-menu-trigger" aria-label={t("i_account")}
     aria-haspopup="menu" aria-expanded={popup?.kind === "avatar"} aria-controls={popup?.kind === "avatar" ? menuId : undefined}
-    onClick={event => open("avatar", event.currentTarget)}>{hasName ? <RoleAvatar role={party} locale={locale} name={locale === "en" ? name.trim().split(/\s+/)[0] : name} decorative /> : <span className={`party party-${party} party-name shell-avatar-noname`} data-testid="avatar-noname" aria-hidden="true"><ShellIcon name="user" /></span>}</button>;
+    onClick={event => open("avatar", event.currentTarget)}>{hasName ? <RoleAvatar role={party} locale={locale} name={name} decorative /> : <span className={`party party-${party} party-name shell-avatar-noname`} data-testid="avatar-noname" aria-hidden="true"><ShellIcon name="user" /></span>}</button>;
   const identity = canSwitchCompany ? <button type="button" className="cap shell-context" data-testid="org-switch"
     aria-haspopup="menu" aria-expanded={popup?.kind === "org"} aria-controls={popup?.kind === "org" ? menuId : undefined}
     onClick={event => open("org", event.currentTarget)}>{context}<span aria-hidden="true"> ▾</span></button> : <div className="cap">{context}</div>;
   const bell = notification ? <Link className="shell-bell" data-testid="shell-bell" href={notification.href} aria-label={notification.label}><ShellIcon name="bell" /></Link> : null;
-  return <div className={`v3-shell${party === "o" ? " v3-owner-shell" : ""}`} data-testid={party === "m" ? "manager-shell-v3" : "owner-shell-v3"}>
+  return <div data-v3-shell="" className={`v3-shell${party === "o" ? " v3-owner-shell" : ""}`} data-testid={party === "m" ? "manager-shell-v3" : "owner-shell-v3"}>
     <header className="appbar navy"><div className="wm">{brand}</div>{identity}{bell}{avatar}</header>
     <aside className="sidebar">
       <div className="side-head"><div className="wm">{brand}</div>{identity}</div>

@@ -1,3 +1,7 @@
+/* Keep root controls mounted across client navigation and layout error fallbacks.
+   Only a mounted v3 shell replaces them with its own account controls and sandbox banner. */
+html[data-brand="v2"][data-brand-v3] body:has([data-v3-shell]) > header.top,
+html[data-brand="v2"][data-brand-v3] body:has([data-v3-shell]) > .env-banner{ display:none; }
 /* B-043 app.js/index.html/extra.css + approved shared-navy-shell.css (desktop B).
    Only shell selectors are ported. Colors/radii use the existing v3/v2 tokens;
    font sizes resolve the mockup's fs-body=16, fs-small=14 and responsive fs-h1 tokens.
@@ -102,7 +106,7 @@ html[data-brand="v2"][data-brand-v3] .v3-shell .shell-bell{ display:flex; align-
 html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy:has(.shell-bell){ grid-template-columns:minmax(0,1fr) 44px 44px; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy .shell-bell{ grid-column:2; grid-row:1; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy:has(.shell-bell) .shell-avatar{ grid-column:3; }
-html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead{ background:var(--c-bg); padding:8px 0 16px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead{ background:var(--c-tint-soft); color:var(--c-text); padding:8px 0 16px; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead h1{ margin:0; font-family:var(--font-display); }
 html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup-more{ left:0; right:0; bottom:0; padding-bottom:calc(16px + env(safe-area-inset-bottom,0px)); border-bottom-left-radius:0; border-bottom-right-radius:0; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .shell-more-entry{ padding:12px; gap:12px; }

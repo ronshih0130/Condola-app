@@ -7,8 +7,8 @@ import { brandV3Copy, brandV3NavigationCopy, brandV3OwnerShellCopy, brandV3Shell
 import { pathWithin, type OwnerNavigationV3 } from "../../../server/nav-v3";
 import { ShellV3, type ShellEntry } from "./shared-shell";
 
-export function OwnerShellV3({ children, locale, name, firm, navigation }: {
-  children: ReactNode; locale: Locale; name: string; firm: string; navigation: OwnerNavigationV3;
+export function OwnerShellV3({ children, locale, name, firm, navigation, canSwitchToTenant = false }: {
+  children: ReactNode; locale: Locale; name: string; firm: string; navigation: OwnerNavigationV3; canSwitchToTenant?: boolean;
 }) {
   const path = usePathname() || "/o";
   const copy = brandV3OwnerShellCopy(locale);
@@ -25,6 +25,7 @@ export function OwnerShellV3({ children, locale, name, firm, navigation }: {
     context={(name.trim() ? copy.context : copy.contextNoName).replace("{name}", name).replace("{company}", firm)}
     title={current?.label ?? copy.home}
     menuContext={brandV3ShellCopy(locale).menuContext.replace("{role}", party).replace("{company}", firm)}
+    menuExtra={canSwitchToTenant ? <a className="shell-account" role="menuitem" data-testid="switch-role" href="/t">{makeT(locale)("i_switch_role_tenant")}</a> : null}
     notification={navigation.areas.find(area => area.id === "notifications")}>
     {children}
   </ShellV3>;
