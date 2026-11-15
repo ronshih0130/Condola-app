@@ -18,9 +18,9 @@ export function PropertyLoading({locale}:{locale:Locale}) {
     <p role="status">{c.loading}</p><div className="v3-property-skeleton" aria-hidden="true" />
   </section>;
 }
-export function PropertyView({data,locale,id,invites=[],legacy,query={},auditHistory}:{
+export function PropertyView({data,locale,id,invites=[],legacy,query={},auditHistory,archiveEntries}:{
   data:PropertyResult | {state:"forbidden"};locale:Locale;id:string;invites?:{rowId:string;href:string}[];
-  legacy?:LegacyPropertyControls;query?:PropertyQuery;auditHistory?:React.ReactNode;
+  archiveEntries?:Record<string,React.ReactNode>;legacy?:LegacyPropertyControls;query?:PropertyQuery;auditHistory?:React.ReactNode;
 }) {
   const c=propertyCopy(locale);
   const t=makeT(locale);
@@ -43,7 +43,7 @@ export function PropertyView({data,locale,id,invites=[],legacy,query={},auditHis
       <h3>{t("s_a757163")}</h3>
       {legacy.detail.byRoomUnits.map(unit=><div className="n" key={unit.id} data-testid="by-room-unit">
         <b>{displaySampleName(unit.label)}</b><span className="sp" />
-        <ArchiveEntry refValue={{kind:"unit",id:unit.id}} locale={locale} />
+        {archiveEntries ? archiveEntries[unit.id] : <ArchiveEntry refValue={{kind:"unit",id:unit.id}} locale={locale} />}
       </div>)}
     </div>}
     {!data.rows.length ? <div className="v3-property-card v3-property-empty"><EmptyState id="UNIT" locale={locale} /></div> :
