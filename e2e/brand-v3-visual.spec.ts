@@ -523,6 +523,50 @@ for (const size of SIZES) {
   });
 }
 
+for (const size of SIZES) {
+  test(`O-RPT/O-RPT-SRC / OWN-27-AC4 / OWN-02: owner monthly report at ${size.name}`, async ({ page }) => {
+    test.skip(MODE !== "on", "Owner report requires brand_v3 ON; OFF is pinned by unit byte comparisons");
+    await page.setViewportSize(size);
+    await signIn(page, ACCOUNTS.owner);
+    await page.goto("/api/demo/locale?set=zh-TW&next=%2Fo%2Fstatements");
+    const report = page.getByTestId("owner-report");
+    // Existing seed issues a report for ACCOUNTS.owner. An error/empty screen is a failure here.
+    await expect(report).toBeVisible();
+    const month = await report.getAttribute("data-month");
+    expect(month).toMatch(/^\d{4}-\d{2}$/);
+    await expect(report.getByRole("heading", { name: `${Number(month!.slice(5))} 月月報`, exact: true })).toBeVisible();
+    const items = report.getByTestId("owner-report-item");
+    expect(await items.count()).toBeGreaterThan(0);
+    const ids = await items.evaluateAll(elements => elements.map(el => el.getAttribute("data-statement-id")));
+    const figures = await report.getByTestId("statement-document").allTextContents();
+    await expect(report.getByText("打開月報不構成確認或同意。", { exact: true })).toBeVisible();
+    await expect(report.getByTestId("report-next")).toHaveCount(0);
+    // The legacy seed does not persist rent-line payment links: no invented source count.
+    await expect(report.getByTestId("report-rent-source")).toHaveCount(0);
+    await page.goto("/o/statements?month=not-a-month");
+    await expect(report).toHaveAttribute("data-month", month!);
+    await expect(report.getByTestId("statement-document")).toHaveText(figures);
+    await page.goto(`/o/statements/${ids[0]}`);
+    await expect(page).toHaveURL(new RegExp(`/o/statements\\?month=${month}$`));
+    await expect(report.getByTestId("statement-document")).toHaveText(figures);
+    if (await report.getByTestId("report-previous").count()) {
+      const previous = await report.getByTestId("report-previous").getAttribute("href");
+      await report.getByTestId("report-previous").click();
+      await expect(report).toHaveAttribute("data-month", previous!.split("month=")[1]);
+      await report.getByTestId("report-next").click();
+      await expect(report).toHaveAttribute("data-month", month!);
+    }
+    await settle(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    for (const control of await report.locator("a, button, summary").all()) {
+      if (await control.isVisible()) await assertShellControl(control, "owner report control");
+    }
+    const solid = await report.locator("a,button").evaluateAll(elements => elements.filter(el => el.getClientRects().length > 0 && getComputedStyle(el).backgroundColor === "rgb(20, 50, 92)").length);
+    expect(solid).toBe(0);
+    mkdirSync(OUT, { recursive: true });
+    await page.screenshot({ path: resolve(OUT, `owner-report-${size.name}.png`), fullPage: true, animations: "disabled" });
+  });
+}
 
 for (const size of SIZES) {
   test(`O-HOME/O-ROW/O-EMPTY/O-STATES / OWN-26-AC2/AC3/AC6 / P52: owner home at ${size.name}`, async ({ page }) => {
