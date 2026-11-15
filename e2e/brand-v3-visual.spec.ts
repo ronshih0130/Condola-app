@@ -60,7 +60,7 @@ for (const group of PAGES) {
         expect.soft(image, `${id}: flag OFF equals the v2 baseline`).toMatchSnapshot(`${id}.png`);
       } else {
         expect(v3, `${id}: v3 attribute`).toBe("1");
-        expect(v3Sheet, `${id}: v3 base and shell stylesheets`).toBe(2);
+        expect(v3Sheet, `${id}: v3 base, shell and today stylesheets`).toBe(3);
         if (group.account === ACCOUNTS.admin && ["/m", "/m/payments"].includes(shot.path)) {
           await assertManagerShell(page, "admin", size.width, shot.path === "/m" ? "today" : "money");
         }
@@ -301,5 +301,71 @@ for (const size of SIZES) {
     await page.getByTestId("avatar-account").click();
     await expect(page).toHaveURL(/\/m\/account$/);
     await expect(page.getByTestId("avatar-menu")).toHaveCount(0);
+  });
+}
+
+// Phase 2 fixture prerequisite on the disposable local DB: brand_v3 and admitted
+// today_home/today_dash ON, P1 + P2/overdue rows, positive current-period bills.
+// Admin additionally has rental turns. This test never creates outbound jobs.
+for (const role of ["admin", "accountant"] as const) for (const size of SIZES) {
+  test(`B3A-TODAY / T-ROWS / T-NUM — ${role} at ${size.name}`, async ({ page }) => {
+    test.skip(MODE !== "on", "rebuilt Today is v3 ON only");
+    mkdirSync(OUT, { recursive: true });
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await signIn(page, ACCOUNTS[role]);
+    await page.goto("/api/demo/locale?set=zh-TW&next=%2Fm");
+    await settle(page);
+    const today = page.getByTestId("today-v3");
+    await expect(today).toBeVisible();
+    if (role === "admin") {
+      // The demo company has vacancies and leases near their end, so the admin always has turns.
+      await expect(page.getByTestId("today-headline")).toHaveText(/今天輪到你的有 [1-9]\d* 件。/);
+      await expect(page.getByTestId("today-mine")).toBeVisible();
+    } else {
+      // The accountant sees payment rows only; with no submitted report in the demo data it is the
+      // approved waiting-only (T-WAIT) or all-clear (T-CLEAR) state, never a count of 0.
+      await expect(page.getByTestId("today-headline")).toHaveText(/今天輪到你的有 [1-9]\d* 件。|今天沒有輪到你的事。|今天都處理好了/);
+      await expect(page.getByTestId("today-headline")).not.toHaveText(/有 0 件/);
+    }
+    await expect(page.getByTestId("today-others")).toBeVisible();
+    await expect(page.getByTestId("today-monthly")).toHaveCount(1);
+    await expect(page.getByTestId("confirmed-bills").first()).toBeVisible();
+    await expect(today.getByRole("link", { name: "查來源", exact: true }).first()).toHaveAttribute("href", "/m/rent");
+    await expect(today.locator(".grid5, .kpi, [data-turn-kind=repair]")).toHaveCount(0);
+    await expect(today.getByRole("link", { name: "發送繳租提醒" })).toHaveCount(0);
+    if (role === "accountant") {
+      await expect(today.locator('[data-turn-kind="vacant"], [data-turn-kind="renewal_ask"], [data-turn-kind="early_vacancy"]')).toHaveCount(0);
+      await expect(today.getByTestId("live-onboarding")).toHaveCount(0);
+    } else {
+      await expect(today.locator('[data-turn-kind="vacant"], [data-turn-kind="renewal_ask"], [data-turn-kind="early_vacancy"]').first()).toBeVisible();
+    }
+    const currencies = await page.getByTestId("confirmed-bills").evaluateAll(blocks => blocks.map(block => block.getAttribute("data-currency")));
+    expect(new Set(currencies).size, "one monthly block per currency").toBe(currencies.length);
+    const anatomy = await today.locator(".v3-today-row").evaluateAll(rows => rows.map(row => ({
+      avatars: row.querySelectorAll(".party").length, nested: row.querySelectorAll("a, button").length,
+      main: !!row.querySelector(".v3-today-row-main strong"), turn: !!row.querySelector(".v3-today-turn"),
+    })));
+    expect(anatomy.length).toBeGreaterThan(0);
+    expect(anatomy.filter(row => row.avatars !== 1 || row.nested !== 0 || !row.main || !row.turn)).toEqual([]);
+    for (const group of ["today-mine", "today-others"]) expect(await page.getByTestId(group).locator(".v3-today-row").count()).toBeLessThanOrEqual(50);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    const small = await today.locator("a, button, summary").evaluateAll(elements => elements.filter(el => el.getClientRects().length > 0).filter(el => {
+      const rect = el.getBoundingClientRect(); return rect.height < 44 || rect.width < 44;
+    }).map(el => el.textContent));
+    expect(small, "every Today interaction is at least 44px in each dimension").toEqual([]);
+    const solid = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".v3-shell .shell-content a, .v3-shell .shell-content button, .v3-shell .shell-content input[type=submit]")]
+      .filter(el => el.getClientRects().length > 0 && !el.closest("nav, dialog, [role=dialog]") && getComputedStyle(el).backgroundColor === "rgb(20, 50, 92)").length);
+    expect(solid, "setup supplies the screen's only possible solid primary").toBeLessThanOrEqual(1);
+    const before = await page.getByTestId("today-headline").innerText();
+    await page.goto("/m?dupFirm=1&code=list");
+    await expect(page.getByTestId("dup-firm")).toBeVisible();
+    await expect(page.getByTestId("code-list")).toBeVisible();
+    await expect.poll(() => new URL(page.url()).search).toBe("");
+    await page.reload();
+    await expect(page.getByTestId("dup-firm")).toHaveCount(0);
+    await expect(page.getByTestId("code-list")).toHaveCount(0);
+    await expect(page.getByTestId("today-headline")).toHaveText(before);
+    await settle(page);
+    await page.screenshot({ path: resolve(OUT, `today-phase2-${role}-${size.name}.png`), fullPage: true, animations: "disabled" });
   });
 }

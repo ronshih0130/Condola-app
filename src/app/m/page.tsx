@@ -1,3 +1,6 @@
+import { TodayPage } from "@/components/v3/m/today/today";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { readTodayMonthly, readTodayTurns, readTodayTurn } from "@/server/today-v3";
 import { NotificationCenterEntry } from "@/components/notification-center-entry";
 import { DashboardContent } from "@/components/dashboard-content";
 import { requireCurrentConsent } from "@/server/consent-gate";
@@ -12,6 +15,14 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ dupFirm?: string; code?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await guardEffectiveSession(await getSession(), "dash.view");
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    const [turns, monthly, setup, query] = await Promise.all([
+      readTodayTurns(session), readTodayMonthly(session),
+      session.role === "admin" || session.role === "manager" ? readTodayTurn(async () => ({ state: "ready" as const, setup: await readSetupStep(session) })) : undefined,
+      searchParams,
+    ]);
+    return <TodayPage session={session} turns={turns} monthly={monthly} setup={setup?.state === "ready" ? setup.setup : undefined} setupFailed={setup?.state === "unavailable"} query={query} />;
+  }
   const [v2, query, data, setup] = await Promise.all([
     brandV2EnabledForOrg(session.orgId), searchParams, dashboard(session), readSetupStep(session),
   ]);
