@@ -112,3 +112,28 @@ const ownerShellCopy = {
   en: { home: "Home", statements: "Monthly statements", context: "Hello {name} · Managed by: {company}", contextNoName: "Managed by: {company}" },
 };
 export function brandV3OwnerShellCopy(locale: Locale) { return ownerShellCopy[locale]; }
+
+// O-HOME / O-EST / O-EMPTY / O-STATES, revision 9; P52 zero lead uses the existing home title.
+export function brandV3OwnerHomeCopy(locale: Locale) {
+  return locale === "en" ? {
+    lead: "{name}, {count} items need your attention.", leadNoName: "{count} items need your attention.",
+    tasks: "Needs your attention", estimate: "Estimate", pending: "Awaiting approval", approve: "Approve estimate",
+    empty: "Nothing needs your attention", emptyDetail: "Nothing needs your attention right now. Rest easy.",
+    failure: "This is temporarily unavailable. Please try again.", title: "Approve this estimate",
+    prompt: "The estimate for {item} is {amount}. Approve it?", property: "Property", item: "Item", vendor: "Vendor",
+    description: "Description", version: "Version", versionNumber: "Version {n}",
+    note: "This exceeds the management company's threshold. Until you approve, the vendor cannot mark the job as in progress.",
+    back: "Send back", reason: "Reason", done: "Estimate approved", approvedVersion: "Approved version", amount: "Amount", status: "Status",
+    handoff: "The manager and vendor now see the same version. The vendor can start as agreed.",
+  } : {
+    lead: "{name}，有 {count} 件事要你處理。", leadNoName: "有 {count} 件事要你處理。",
+    tasks: "要你處理", estimate: "估價", pending: "待核准", approve: "核准估價",
+    empty: "目前沒有要你處理的事", emptyDetail: "目前沒有要你處理的事，放心。",
+    failure: "這裡暫時讀不到，請再試一次。", title: "核准這筆估價",
+    prompt: "{item}估價 {amount}，要不要核准？", property: "物件", item: "項目", vendor: "廠商",
+    description: "說明", version: "版本", versionNumber: "第 {n} 版",
+    note: "這筆超過管理公司門檻。你核准前，廠商不能把工單標成施工中。",
+    back: "退回", reason: "原因", done: "估價已核准", approvedVersion: "核准版本", amount: "金額", status: "狀態",
+    handoff: "管理方和廠商現在會看到同一版，廠商可以依約定開工。",
+  };
+}

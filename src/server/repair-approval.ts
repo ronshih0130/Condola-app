@@ -292,6 +292,7 @@ function readApprovals<T>(
   session: Session,
   gateway: "b013_owner_pending" | "b013_owner_history" | "b013_manager_view",
   ticketId?: string,
+  homeDetails = false,
 ): Promise<T[]> {
   assertIdentifiers(session.liveOrgId);
   if (!["live", "sandbox"].includes(session.environment)) throw new FlowError("errors.forbidden");
@@ -302,15 +303,34 @@ function readApprovals<T>(
   const sql = "SELECT coalesce(jsonb_agg(to_jsonb(r) || jsonb_build_object("
     + "'version_no',r.version_no::text,'amount_minor',r.amount_minor::text,"
     + "'captured_threshold_minor',r.captured_threshold_minor::text)"
+    + (homeDetails ? " || jsonb_build_object('property_name',p.name,'item',t.title,'vendor_name',t.vendor_name)" : "")
     + " ORDER BY r.submitted_at DESC,r.version_id),'[]'::jsonb) AS r FROM app."
-    + gateway + "(" + args + ") r";
+    + gateway + "(" + args + ") r"
+    + (homeDetails ? " LEFT JOIN public.maintenance_tickets t ON t.id=r.ticket_id AND t.org_id=$1 AND t.property_id=r.property_id"
+      + " LEFT JOIN public.properties p ON p.id=r.property_id AND p.org_id=$1"
+      // `run` reads with the service role, and the gateway admits by the estimate snapshot's designated owner.
+      // The home projection reads CURRENT property/ticket fields, so it also requires the owner's current
+      // property_owners authority (the ownerPropertyScope rule, bound to this session's user): a property whose
+      // authorization ended is dropped here, never decorated with its current name, ticket title or vendor.
+      + " WHERE EXISTS (SELECT 1 FROM public.property_owners hpo JOIN public.contacts hc ON hc.id=hpo.owner_contact_id AND hc.org_id=hpo.org_id"
+      + " WHERE hpo.org_id=$1 AND hpo.property_id=r.property_id AND hc.user_id=$5 AND hc.is_owner AND hc.archived_at IS NULL"
+      + " AND hpo.effective_from<=current_date AND (hpo.effective_to IS NULL OR hpo.effective_to>current_date))" : "");
   const params: unknown[] = [session.orgId, session.liveOrgId, session.environment, session.sessionId];
   if (ticketId !== undefined) params.push(ticketId);
+  if (homeDetails) { if (ticketId !== undefined) throw new Error("homeDetails reads the pending list only"); params.push(session.userId); }
   return run(session, sql, params, approvalRows<T>);
 }
 
-export function ownerPending(session: Session): Promise<OwnerPendingRow[]> {
-  return readApprovals(session, "b013_owner_pending");
+/** Presentation fields are joined only to rows admitted by the existing owner gateway.
+ * No private repair comments are projected as a management explanation. */
+export type OwnerPendingHomeRow = OwnerPendingRow & {
+  property_name: string; item: string; vendor_name: string | null;
+  management_explanation?: string | null;
+};
+export function ownerPending(session: Session): Promise<OwnerPendingRow[]>;
+export function ownerPending(session: Session, options: { homeDetails: true }): Promise<OwnerPendingHomeRow[]>;
+export function ownerPending(session: Session, options?: { homeDetails: true }): Promise<OwnerPendingRow[]> {
+  return readApprovals(session, "b013_owner_pending", undefined, options?.homeDetails);
 }
 export function ownerHistory(session: Session, input: { ticketId: string }): Promise<OwnerHistoryRow[]> {
   return readApprovals(session, "b013_owner_history", input.ticketId);
