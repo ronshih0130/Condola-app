@@ -277,13 +277,13 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
         const closed = await trace(() => respond(request("/api/vendor-job-response", body)));
         assert.equal(closed.value.status, 403);
         assert.ok(closed.sql.some(sql => sql.includes("FROM maintenance_tickets") && sql.includes("FOR UPDATE")));
-        assert.ok(!closed.sql.some(sql => /FROM app.b013_(estimate_heads|repair_commands)/.test(sql)));
+        assert.ok(!closed.sql.some(sql => /FROM app\.b013_(estimate_heads|repair_commands|repair_appointments)|app\.b104_(current_repair_version|vendor_command_exists|vendor_latest_event)\(/.test(sql)));
         assert.deepEqual(await snapshot(), before);
       }
       const closedCompletion = await trace(() => complete(request("/api/vendor-job-completion", completionBody)));
       assert.equal(closedCompletion.value.status, 403);
       assert.ok(closedCompletion.sql.some(sql => sql.includes("FROM maintenance_tickets") && sql.includes("FOR UPDATE")));
-      assert.ok(!closedCompletion.sql.some(sql => /FROM app.b013_(estimate_heads|repair_commands)/.test(sql)));
+      assert.ok(!closedCompletion.sql.some(sql => /FROM app\.b013_(estimate_heads|repair_commands|repair_appointments)|app\.b104_(current_repair_version|vendor_command_exists|vendor_latest_event)\(/.test(sql)));
       assert.deepEqual(await snapshot(), before);
       await assert.rejects(recordVendorAppointment({ token: job.token, enhanced: true }, {
         orgId: ORG_ID, vendorJobId: job.jobId, versionId, requestId: randomUUID(),
