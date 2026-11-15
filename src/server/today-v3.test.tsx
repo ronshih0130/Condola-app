@@ -19,7 +19,7 @@ import type { SetupProgress } from "./onboarding-progress";
 import type { Session } from "./types";
 import type { PaymentTurnMatter, StaffPaymentTurns } from "./b3-payment-turns";
 import type { RentalTurnRow, StaffRentalTurns } from "./b3-rental-turns";
-import type { StaffOverdueTurns } from "./b3-overdue-turns";
+import type { OverdueTurnRow, StaffOverdueTurns } from "./b3-overdue-turns";
 import type { TodayMonthly, TodayTurns } from "../lib/b3-today";
 
 const requireHere = createRequire(import.meta.url);
@@ -46,11 +46,12 @@ function payment(id = "p1", rule: "P1" | "P2" = "P1", since = "2026-11-10T00:00:
 }
 function rental(kind: RentalTurnRow["kind"] = "vacant"): RentalTurnRow {
   return { kind, targetKind: "room", targetId: `room-${kind}`, propertyId: "property", place: `民生社區 ${kind}`, tenantName: kind === "vacant" ? null : "周小姐",
-    leaseId: kind === "vacant" ? null : `lease-${kind}`, date: "2026-11-30", dayNumber: 16, rentMinor: kind === "vacant" ? "1200000" : null, rentCurrency: kind === "vacant" ? "TWD" : null };
+    leaseId: kind === "vacant" ? null : `lease-${kind}`, date: "2026-11-30", dayNumber: 16, rentMinor: kind === "vacant" ? "1200000" : null, rentCurrency: kind === "vacant" ? "TWD" : null,
+    reason: kind === "early_vacancy" ? "declined" : null };
 }
 const payments: StaffPaymentTurns = { state: "ready", counts: [{ holder: "manager", step: "confirm_payment", count: 1 }, { holder: "tenant", step: "re_report", count: 1 }], yourTurn: 1, mine: [payment()], others: [payment("p2", "P2")] };
 const rentals: StaffRentalTurns = { state: "ready", counts: { vacant: 1, renewalAsk: 1, earlyVacancy: 1 }, mine: [rental(), rental("renewal_ask"), rental("early_vacancy")] };
-const overdue: StaffOverdueTurns = { state: "ready", count: 1, others: [{ leaseId: "lease-overdue", currency: "TWD", amountMinor: "2800000", oldestDueDate: "2026-11-01", oldestMonth: 10, dayNumber: 13, tenantName: "林小姐", place: "忠孝大樓 3F", reminderCount: null }] };
+const overdue: StaffOverdueTurns = { state: "ready", count: 1, others: [{ leaseId: "lease-overdue", currency: "TWD", amountMinor: "2800000", oldestDueDate: "2026-11-01", oldestMonth: 10, singleRentInvoice: false, dayNumber: 13, tenantName: "林小姐", place: "忠孝大樓 3F", reminderCount: null }] };
 const turns: TodayTurns = { payments, rentals, overdue, roomUnits: { "room-vacant": "parent-unit", "room-early_vacancy": "parent-unit" } };
 const emptyTurns: TodayTurns = { payments: noPayments, rentals: noRentals, overdue: noOverdue, roomUnits: {} };
 const monthly: TodayMonthly = { rows: [{ currency: "TWD", due: "112000000", received: "103000000" }], month: 11, defaultCurrency: "TWD" };
@@ -90,9 +91,10 @@ test("B3A-TODAY / T-ROWS: both groups, uncapped counts, approved turn anatomy an
   assert.match(html, /輪到你・4 件/); assert.match(html, /等別人・2 件/);
   for (const href of ["/m/payments", "/m/rent", "/m/units/parent-unit/invite", "/m/leases/lease-renewal_ask"]) assert.ok(html.includes(`href="${href}"`));
   assert.match(html, /空了 16 天・每月少收 NT\$12,000/);
-  assert.match(html, /16 天後到期/); assert.match(html, /逾期 13 天/); assert.match(html, /林小姐・NT\$28,000/); assert.doesNotMatch(html, /10 月租金/);
+  assert.match(html, /16 天後到期/); assert.match(html, /逾期 13 天/); assert.match(html, /林小姐・逾期未繳 NT\$28,000/); assert.doesNotMatch(html, /10 月租金/); // several invoices or charges → 逾期未繳
   assert.match(html, /等租客陳先生重新回報/); assert.match(html, /等租客林小姐繳款/);
-  assert.doesNotMatch(html, /已提醒|不續約|發送繳租提醒|派工|等屋主|廠商/);
+  assert.match(html, /周小姐不續約・/); // declined renewal
+  assert.doesNotMatch(html, /已提醒|發送繳租提醒|派工|等屋主|廠商/);
   assert.equal((html.match(/class="party party-/g) ?? []).length, 6);
   assert.doesNotMatch(html, /<button|class="btn pri"/);
 });
@@ -185,7 +187,7 @@ test("SH-NONAME ready and SH-SANDBOX supporting line; English copy remains reada
   assert.match(sandbox, /這裡的人名、地址和金額都是範例。/); assert.doesNotMatch(sandbox, /另外 2 件在等租客/);
   const english = render({ session: { ...session, locale: "en" } });
   assert.match(english, /Good morning, 王怡君/); assert.match(english, /Waiting for the tenant 陳先生 to report again/);
-  assert.doesNotMatch(english, /not renewing|\{count\}|\{name\}/);
+  assert.doesNotMatch(english, /\{count\}|\{name\}|\{month\}|\{amount\}/);
 });
 
 function setup(step: 0 | 1 | 2 | 3 | 4, role: "admin" | "manager" = "admin", complete = false): SetupProgress {
@@ -265,7 +267,8 @@ test("Today CSS is wholly v3-scoped and reuses tokens; original readers stay byt
   const css = postcss.parse(source("public/brand/v3/today.css"));
   css.walkRules(rule => assert.ok(rule.selector.startsWith('html[data-brand="v2"][data-brand-v3]'), rule.selector));
   css.walkDecls(declaration => assert.doesNotMatch(declaration.value, /#[0-9a-f]{3,8}\b|rgba?\(/i));
-  for (const name of ["b3-payment-turns.ts", "b3-rental-turns.ts", "b3-overdue-turns.ts", "queries.ts", "onboarding-progress.ts"]) assert.equal(source(`src/server/${name}`), baseline(`src/server/${name}`));
+  // The rental and overdue readers gain two fields for the T-ROWS sublines (hub PR #15); their own tests cover them.
+  for (const name of ["b3-payment-turns.ts", "queries.ts", "onboarding-progress.ts"]) assert.equal(source(`src/server/${name}`), baseline(`src/server/${name}`));
 });
 
 test("Today composition gates P1/P2 without changing the shared payment reader", async () => {
@@ -338,4 +341,35 @@ test("v3 route preserves consent/dashboard guard; accountant skips setup and eve
     assert.match(html, /confirmed-bills/);
     if (role !== "accountant") assert.match(html, /today-failure/);
   }
+});
+
+
+test("T-ROWS (hub PR #15): overdue subline names the rent month only for exactly one rent invoice; early vacancy says 不續約 only for a declined renewal", () => {
+  const one = { ...turns, overdue: { state: "ready" as const, count: 1, others: [{ ...(overdue as { others: OverdueTurnRow[] }).others[0], singleRentInvoice: true }] } };
+  assert.match(render({ turns: one }), /林小姐・10 月租金 NT\$28,000/);
+  const notice = { ...turns, rentals: { ...(rentals as Extract<StaffRentalTurns, { state: "ready" }>), mine: [{ ...rental("early_vacancy"), reason: "notice" as const }] } };
+  const html = render({ turns: notice });
+  assert.match(html, /周小姐・2026年11月30日 搬出/); assert.doesNotMatch(html, /不續約/);
+});
+
+test("T-MORE / R6: the group's first 50 follow kind order then date, even when an older row of a later kind exists", async () => {
+  const { todayOverview } = await import("../lib/b3-today");
+  const renewals = Array.from({ length: 50 }, (_, i) => ({ ...rental("renewal_ask"), targetId: `r${i}`, leaseId: `l${i}`, date: "2026-12-20" }));
+  const oldVacancy = { ...rental("vacant"), targetId: "old", date: "2026-01-01" };
+  const view = todayOverview({ payments: noPayments, overdue: noOverdue, roomUnits: {},
+    rentals: { state: "ready", counts: { vacant: 1, renewalAsk: 50, earlyVacancy: 0 }, mine: [...renewals, oldVacancy] } });
+  assert.equal(view.state, "ready");
+  if (view.state !== "ready") return;
+  assert.equal(view.mineCount, 51);
+  assert.equal(view.mine.length, 50);
+  assert.ok(view.mine.every(item => item.type === "rental" && item.row.kind === "renewal_ask"), "R6: renewals come before vacancies");
+  assert.ok(view.mineMore.some(more => more.kind === "vacant" && more.count === 1), "the vacancy stays reachable through 看全部");
+});
+
+test("B3A-TODAY-NUM interim: 未結餘額, 報修 and 出租 stay below the large number with today's labels and links", () => {
+  const html = render({ interim: { outstanding: "4180000", owingCount: 3, tickets: 2, occupied: 4, rooms: 5 } });
+  const after = html.split('data-testid="today-monthly"')[1] ?? "";
+  assert.match(after, /data-testid="today-interim"/);
+  assert.match(after, /href="\/m\/rent"[^>]*>.*NT\$41,800/); assert.match(after, /href="\/m\/tickets"/); assert.match(after, /href="\/m\/leases"[^>]*>.*4\/5/);
+  assert.doesNotMatch(html, /dash-received|i_pending_pay|待確認繳款<\/div>/);
 });

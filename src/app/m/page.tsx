@@ -16,12 +16,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   await requireCurrentConsent(undefined, "page");
   const session = await guardEffectiveSession(await getSession(), "dash.view");
   if (await brandV3EnabledForOrg(session.orgId)) {
-    const [turns, monthly, setup, query] = await Promise.all([
+    // B3A-TODAY-NUM interim rule: 未結餘額, 報修 and 出租 stay below the large number until their destination pages show them.
+    const [turns, monthly, setup, query, legacy] = await Promise.all([
       readTodayTurns(session), readTodayMonthly(session),
       session.role === "admin" || session.role === "manager" ? readTodayTurn(async () => ({ state: "ready" as const, setup: await readSetupStep(session) })) : undefined,
       searchParams,
+      readTodayTurn(async () => ({ state: "ready" as const, data: await dashboard(session) })),
     ]);
-    return <TodayPage session={session} turns={turns} monthly={monthly} setup={setup?.state === "ready" ? setup.setup : undefined} setupFailed={setup?.state === "unavailable"} query={query} />;
+    return <TodayPage session={session} turns={turns} monthly={monthly} interim={legacy.state === "ready" ? legacy.data : undefined} setup={setup?.state === "ready" ? setup.setup : undefined} setupFailed={setup?.state === "unavailable"} query={query} />;
   }
   const [v2, query, data, setup] = await Promise.all([
     brandV2EnabledForOrg(session.orgId), searchParams, dashboard(session), readSetupStep(session),

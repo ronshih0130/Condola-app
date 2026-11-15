@@ -26,6 +26,8 @@ export type RentalTurnRow = {
    * previous lease's rent. Null when none exists (the money is omitted, never shown as zero). */
   rentMinor: string | null;
   rentCurrency: string | null;
+  /** 提早找租客 only (R4): "declined" renewal vs a recorded move-out "notice"; null for other kinds. */
+  reason: "declined" | "notice" | null;
 };
 export type StaffRentalTurns =
   | { state: "off" }
@@ -103,7 +105,8 @@ WITH spaces AS (
               WHEN h.departure BETWEEN h.start_date AND $2::date THEN h.departure END AS date,
          coalesce(s.base_rent_minor, h.rent_amount_minor) AS rent_minor,
          -- A lease's currency must equal its property's (enforced), so the property currency applies to every source.
-         CASE WHEN coalesce(s.base_rent_minor, h.rent_amount_minor) IS NULL THEN NULL ELSE s.currency END AS rent_currency
+         CASE WHEN coalesce(s.base_rent_minor, h.rent_amount_minor) IS NULL THEN NULL ELSE s.currency END AS rent_currency,
+         NULL::text AS reason
     FROM spaces s
     LEFT JOIN LATERAL (
       SELECT l.id, l.start_date, coalesce(l.moved_out_on, l.end_date, l.terminated_on) AS departure,
@@ -119,7 +122,9 @@ WITH spaces AS (
 ), current_leases AS (
   SELECT s.*, l.id AS lease_id, l.end_date, l.moved_out_on, l.renewal_status,
          CASE WHEN l.moved_out_on > $2::date THEN l.moved_out_on
-              WHEN l.moved_out_on IS NULL AND l.renewal_status = 'declined' THEN l.end_date END AS departure
+              WHEN l.moved_out_on IS NULL AND l.renewal_status = 'declined' THEN l.end_date END AS departure,
+         -- R4: a recorded future move-out date is a notice; otherwise the departure comes from a declined renewal.
+         CASE WHEN l.moved_out_on > $2::date THEN 'notice' ELSE 'declined' END AS departure_reason
     FROM spaces s JOIN scoped_leases l ON l.target_kind = s.target_kind AND l.target_id = s.target_id
    WHERE l.status = 'active' AND l.start_date <= $2::date AND l.terminated_on IS NULL
      AND NOT EXISTS (
@@ -129,7 +134,7 @@ WITH spaces AS (
 ), early AS (
   SELECT DISTINCT ON (target_kind, target_id)
          target_kind, target_id, property_id, place, created_on, base_rent_minor, currency, lease_id, 'early_vacancy'::text AS kind, departure AS date,
-         NULL::bigint AS rent_minor, NULL::text AS rent_currency
+         NULL::bigint AS rent_minor, NULL::text AS rent_currency, departure_reason AS reason
     FROM current_leases
    WHERE $5::boolean AND departure BETWEEN $2::date AND $2::date + 60
    ORDER BY target_kind, target_id, departure, lease_id
@@ -139,7 +144,7 @@ WITH spaces AS (
   SELECT * FROM early
   UNION ALL
   SELECT c.target_kind, c.target_id, c.property_id, c.place, c.created_on, c.base_rent_minor, c.currency, c.lease_id, 'renewal_ask', c.end_date,
-         NULL::bigint, NULL::text
+         NULL::bigint, NULL::text, NULL::text
     FROM current_leases c
    WHERE c.end_date BETWEEN $2::date AND $2::date + 60
      AND c.moved_out_on IS NULL AND c.renewal_status IN ('none','reminder_sent')
@@ -152,7 +157,7 @@ SELECT kind, count(*)::int AS count FROM matters GROUP BY kind`;
 export const LISTS_SQL_FOR_TEST = `${MATTERS_SQL}
 SELECT m.kind, m.target_kind, m.target_id::text, m.property_id::text, m.place, m.lease_id::text,
        m.date::text, CASE WHEN m.kind = 'vacant' THEN $2::date - m.date ELSE m.date - $2::date END AS day_number,
-       tenant.display_name AS tenant_name, m.rent_minor::text AS rent_minor, m.rent_currency
+       tenant.display_name AS tenant_name, m.rent_minor::text AS rent_minor, m.rent_currency, m.reason
   FROM (SELECT * FROM matters
          ORDER BY CASE kind WHEN 'renewal_ask' THEN 0 WHEN 'early_vacancy' THEN 1 ELSE 2 END,
                   date ASC NULLS LAST, coalesce(lease_id, target_id), target_kind
@@ -170,7 +175,7 @@ SELECT m.kind, m.target_kind, m.target_id::text, m.property_id::text, m.place, m
 type ListRow = {
   kind: RentalTurnKind; target_kind: RentalTurnRow["targetKind"]; target_id: string; property_id: string;
   place: string; lease_id: string | null; date: string | null; day_number: number | null; tenant_name: string | null;
-  rent_minor: string | null; rent_currency: string | null;
+  rent_minor: string | null; rent_currency: string | null; reason: "declined" | "notice" | null;
 };
 
 export async function staffRentalTurns(session: Session, deps: Deps = {}): Promise<StaffRentalTurns> {
@@ -204,7 +209,7 @@ export async function staffRentalTurns(session: Session, deps: Deps = {}): Promi
           return { state: "ready" as const, counts, mine: rows.map((r): RentalTurnRow => ({
             kind: r.kind, targetKind: r.target_kind, targetId: r.target_id, propertyId: r.property_id,
             place: r.place, tenantName: r.tenant_name, leaseId: r.lease_id, date: r.date, dayNumber: r.day_number,
-            rentMinor: r.rent_minor, rentCurrency: r.rent_currency,
+            rentMinor: r.rent_minor, rentCurrency: r.rent_currency, reason: r.reason,
           })) };
         }));
     }, requireOrgScope(admitted), { isolation: "repeatable read", readOnly: true });

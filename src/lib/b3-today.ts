@@ -15,8 +15,18 @@ export function rowKey(item: TodayRow): string {
 function rowDate(item: TodayRow): string | null {
   return item.type === "payment" ? item.row.since : item.type === "overdue" ? item.row.oldestDueDate : item.row.date;
 }
+/** R6 (accepted by Ron, PR-011): within a group, kind first, then the oldest/nearest date, then a stable key.
+ * 輪到你: 確認已繳款 → 詢問續約意願 → 提早找租客 → 找新租客; 等別人: 重新回報 → 逾期. Each reader already returns its
+ * first 50 in this order, so the first 50 of the merged group are exactly the group's first 50 (T-MORE). */
+export function kindRank(item: TodayRow): number {
+  if (item.type === "payment") return 0;
+  if (item.type === "overdue") return 1;
+  return { renewal_ask: 1, early_vacancy: 2, vacant: 3 }[item.row.kind] ?? 9;
+}
 export function oldestFirst(rows: TodayRow[]): TodayRow[] {
   return [...rows].sort((a, b) => {
+    const rank = kindRank(a) - kindRank(b);
+    if (rank) return rank;
     const left = rowDate(a), right = rowDate(b);
     const difference = (left ? Date.parse(left) : Infinity) - (right ? Date.parse(right) : Infinity);
     return (Number.isNaN(difference) ? 0 : difference) || rowKey(a).localeCompare(rowKey(b));

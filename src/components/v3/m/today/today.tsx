@@ -30,9 +30,9 @@ function TurnRow({ item, session, roomUnits }: { item: TodayRow; session: Sessio
     badge = mine ? copy.reported : "";
     turn = mine ? tr("yourStep", { step: copy.confirm }) : tr("reReport", { name: waitName });
   } else if (item.type === "overdue") {
-    // This is an all-period/all-charge balance, not just oldestMonth's rent.
-    // Keep the sourced tenant and amount; the approved rent-period clause needs a breakdown.
-    subline = [name, moneyLabel(item.row.amountMinor, item.row.currency, session.locale)].filter(Boolean).join("・");
+    // T-ROWS (hub PR #15): exactly one rent invoice → 「{租客}・{月} 月租金 NT$…」; otherwise 「{租客}・逾期未繳 NT$…」.
+    const amount = moneyLabel(item.row.amountMinor, item.row.currency, session.locale);
+    subline = [name, item.row.singleRentInvoice ? tr("overdueRent", { month: item.row.oldestMonth, amount }) : tr("overdueOpen", { amount })].filter(Boolean).join("・");
     badge = tr("overdue", { days: item.row.dayNumber });
     turn = tr("overdueTurn", { name: waitName });
     // Reminder history is unavailable, not a fabricated zero or successful delivery.
@@ -47,9 +47,9 @@ function TurnRow({ item, session, roomUnits }: { item: TodayRow; session: Sessio
       badge = rental.dayNumber !== null ? tr("renewalDays", { days: rental.dayNumber }) : "";
       turn = tr("yourStep", { step: copy.renewal });
     } else {
-      // Reader merges notice and declined-renewal cases without exposing the reason.
-      // Do not claim "不續約" for a notice-only case; keep the sourced name/date subset.
-      subline = [name, rental.date ? tr("departureDate", { date: date(rental.date) }) : ""].filter(Boolean).join("・");
+      // T-ROWS (hub PR #15): declined renewal → 「{租客}不續約・{date} 搬出」; a recorded notice → 「{租客}・{date} 搬出」.
+      const who = rental.reason === "declined" && name ? tr("declined", { name }) : name;
+      subline = [who, rental.date ? tr("departureDate", { date: date(rental.date) }) : ""].filter(Boolean).join("・");
       badge = copy.earlyBadge; turn = tr("yourStep", { step: copy.early });
     }
   }
@@ -115,8 +115,9 @@ function SetupCard({ setup, locale }: { setup: SetupProgress; locale: Locale }) 
     {needsEarlyAction && cta.primary && <EmptyPrimary action={cta.primary} locale={locale} />}
   </div>;
 }
-export function TodayPage({ session, turns, monthly, setup, setupFailed = false, query }: {
+export function TodayPage({ session, turns, monthly, setup, setupFailed = false, query, interim }: {
   session: Session; turns: TodayTurns; monthly?: TodayMonthly; setup?: SetupProgress; setupFailed?: boolean; query: { dupFirm?: string; code?: string };
+  interim?: InterimNumbers;
 }) {
   const copy = brandV3TodayCopy(session.locale), overview = setupFailed ? { state: "unavailable" as const } : todayOverview(turns);
   // The money area name exists only as the navigation string (copy guard, PLT-49): reuse it.
@@ -152,5 +153,21 @@ export function TodayPage({ session, turns, monthly, setup, setupFailed = false,
       <ClearDrawing /><h2>{copy.clear}</h2>{checkedAreas && <p>{translate(copy, "checked", { areas: checkedAreas })}</p>}
     </section>}
     {hasMonthlyFigure(monthly) && <ConfirmedBills data={monthly} locale={session.locale} />}
+    {interim ? <InterimCards data={interim} locale={session.locale} /> : null}
   </div>;
+}
+
+
+/** B3A-TODAY-NUM interim: the three numbers that have not reached their destination pages yet, unchanged from today's
+ * dashboard (same labels, values and links); each leaves 今天 in the PR that adds it to its page. 已繳 and 待確認 are not
+ * shown (the large number replaces 已繳; the to-confirm count is on the money page). */
+export type InterimNumbers = { outstanding: string | number; owingCount: number; tickets: number; occupied: number; rooms: number };
+export function InterimCards({ data, locale }: { data: InterimNumbers; locale: Locale }) {
+  const t = makeT(locale);
+  const cards = [
+    Number(data.outstanding) > 0 ? <Link key="outstanding" className="card kpi" href="/m/rent"><div className="lbl">{t("i_open_balance")}</div><div className="val" data-testid="dash-outstanding">{moneyLabel(data.outstanding, "TWD", locale)}</div><div className="sub">{t("i_tenant_count", { count: data.owingCount })}</div></Link> : null,
+    data.tickets > 0 ? <Link key="tickets" className="card kpi" href="/m/tickets"><div className="lbl">{t("i_nav_tickets")}</div><div className="val">{data.tickets}</div></Link> : null,
+    data.occupied > 0 ? <Link key="occupied" className="card kpi" href="/m/leases"><div className="lbl">{t("i_occ")}</div><div className="val">{data.occupied}/{data.rooms}</div></Link> : null,
+  ].filter(Boolean);
+  return cards.length ? <div className="grid5 v3-today-interim" data-testid="today-interim">{cards}</div> : null;
 }
