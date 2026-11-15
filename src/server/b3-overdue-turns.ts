@@ -15,6 +15,8 @@ export type OverdueTurnRow = {
   oldestDueDate: string;
   /** Month of the oldest overdue invoice's period, not its due date. */
   oldestMonth: number;
+  /** True when the row is exactly one invoice whose lines are all rent (T-ROWS subline choice). */
+  singleRentInvoice: boolean;
   /** Elapsed property-calendar days; yesterday is 1 (no inclusive +1). */
   dayNumber: number;
   tenantName: string | null;
@@ -73,7 +75,11 @@ const MATTERS_SQL = `${PAYMENT_TURN_MATTERS_SQL}, overdue_invoices AS (
   SELECT lease_id, currency, sum(balance_minor)::text AS amount_minor,
          min(due_date) AS oldest_due_date,
          (array_agg(extract(month FROM period_start)::int ORDER BY due_date, id))[1] AS oldest_month,
-         today - min(due_date) AS day_number
+         today - min(due_date) AS day_number,
+         count(*)::int AS invoice_count,
+         -- Subline choice (hub screens.md T-ROWS, PR #15): exactly one invoice with rent lines only.
+         bool_and(NOT EXISTS (SELECT 1 FROM invoice_lines il
+                               WHERE il.org_id = $1 AND il.invoice_id = overdue_invoices.id AND il.charge_type <> 'rent')) AS rent_only
     FROM overdue_invoices
    GROUP BY lease_id, currency, today
 )`;
@@ -81,7 +87,7 @@ export const COUNTS_SQL_FOR_TEST = `${MATTERS_SQL}
 SELECT count(*)::int AS count FROM overdue`;
 export const LISTS_SQL_FOR_TEST = `${MATTERS_SQL}
 SELECT m.lease_id::text, m.currency::text, m.amount_minor, m.oldest_due_date::text,
-       m.oldest_month, m.day_number, tenant.display_name AS tenant_name,
+       m.oldest_month, m.day_number, (m.invoice_count = 1 AND m.rent_only) AS single_rent_invoice, tenant.display_name AS tenant_name,
        pr.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place
   FROM (SELECT * FROM overdue ORDER BY oldest_due_date, lease_id, currency LIMIT $4) m
   JOIN leases l ON l.id = m.lease_id AND l.org_id = $1
@@ -99,7 +105,7 @@ SELECT m.lease_id::text, m.currency::text, m.amount_minor, m.oldest_due_date::te
 
 type ListRow = {
   lease_id: string; currency: string; amount_minor: string; oldest_due_date: string;
-  oldest_month: number | null; day_number: number; tenant_name: string | null; place: string;
+  oldest_month: number | null; day_number: number; tenant_name: string | null; place: string; single_rent_invoice: boolean;
 };
 
 export async function staffOverdueTurns(session: Session, deps: Deps = {}): Promise<StaffOverdueTurns> {
@@ -131,6 +137,7 @@ export async function staffOverdueTurns(session: Session, deps: Deps = {}): Prom
           return {
             leaseId: r.lease_id, currency: r.currency, amountMinor: r.amount_minor,
             oldestDueDate: r.oldest_due_date, oldestMonth: r.oldest_month, dayNumber: r.day_number,
+            singleRentInvoice: r.single_rent_invoice === true,
             tenantName: r.tenant_name, place: r.place,
             // B010 events/B028 claims and delivery attempts are definer-only. Phase 3 rule
             // 20 needs success on at least one channel; queued/captured is not proof. No

@@ -50,9 +50,9 @@ test("ready shape preserves exact money, nullable name/reminders, uncapped count
   let clocks = 0;
   const calls: string[] = [];
   const rows = [
-    { lease_id: "a", currency: "TWD", amount_minor: "9007199254740993", oldest_due_date: "2030-03-01", oldest_month: 2, day_number: 61, tenant_name: "Synthetic", place: "Property 2F A" },
-    { lease_id: "a", currency: "USD", amount_minor: "42", oldest_due_date: "2030-03-01", oldest_month: 2, day_number: 61, tenant_name: "Synthetic", place: "Property 2F A" },
-    { lease_id: "b", currency: "TWD", amount_minor: "100", oldest_due_date: "2030-04-30", oldest_month: 4, day_number: 1, tenant_name: null, place: "Property 3F" },
+    { lease_id: "a", currency: "TWD", amount_minor: "9007199254740993", oldest_due_date: "2030-03-01", oldest_month: 2, day_number: 61, tenant_name: "Synthetic", place: "Property 2F A", single_rent_invoice: true },
+    { lease_id: "a", currency: "USD", amount_minor: "42", oldest_due_date: "2030-03-01", oldest_month: 2, day_number: 61, tenant_name: "Synthetic", place: "Property 2F A", single_rent_invoice: false },
+    { lease_id: "b", currency: "TWD", amount_minor: "100", oldest_due_date: "2030-04-30", oldest_month: 4, day_number: 1, tenant_name: null, place: "Property 3F", single_rent_invoice: false },
   ];
   const transaction: typeof tx = async (userId, fn, scope, options) => {
     assert.equal(userId, session.userId);
@@ -73,7 +73,7 @@ test("ready shape preserves exact money, nullable name/reminders, uncapped count
   assert.deepEqual(await staffOverdueTurns(session, { ...ON, transaction, now: () => { clocks++; return ON.now(); } }), {
     state: "ready", count: 80, others: rows.map(r => ({ leaseId: r.lease_id, currency: r.currency, amountMinor: r.amount_minor,
       oldestDueDate: r.oldest_due_date, oldestMonth: r.oldest_month, dayNumber: r.day_number,
-      tenantName: r.tenant_name, place: r.place, reminderCount: null })),
+      tenantName: r.tenant_name, place: r.place, reminderCount: null, singleRentInvoice: r.single_rent_invoice === true })),
   });
   assert.equal(clocks, 1);
   assert.ok(calls.indexOf(COUNTS_SQL_FOR_TEST) < calls.indexOf(LISTS_SQL_FOR_TEST));

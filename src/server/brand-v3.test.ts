@@ -66,7 +66,7 @@ test("PLT-46-AC1: flag OFF preserves the exact legacy attributes and ordered v2 
   assert.deepEqual(brandRoot({ v2: true, v3: false }), baseline);
   assert.deepEqual(brandRoot({ v2: true, v3: true }), {
     attributes: { "data-brand": "v2", "data-brand-v3": "1" },
-    stylesheets: [...baseline.stylesheets, "/brand/v3/theme.css", "/brand/v3/shell.css"],
+    stylesheets: [...baseline.stylesheets, "/brand/v3/theme.css", "/brand/v3/shell.css", "/brand/v3/today.css"],
   });
 });
 

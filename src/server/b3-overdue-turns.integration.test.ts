@@ -439,3 +439,17 @@ test("invalid period or property timezone is unavailable; real timeout after cou
   assert.deepEqual(await staffOverdueTurns(o.staff.admin, { ...ON, transaction: slow }), { state: "unavailable" });
   assert.equal(code, "57014");
 });
+
+test("T-ROWS subline flag (hub PR #15): singleRentInvoice only for exactly one overdue invoice whose lines are all rent", async () => {
+  const o = await makeOrg();
+  const oneRent = await lease(o); await invoice(oneRent, { due: date(-5) });
+  const twoRent = await lease(o); await invoice(twoRent, { due: date(-40) }); await invoice(twoRent, { due: date(-5) });
+  const withUtility = await lease(o); const u = await invoice(withUtility, { due: date(-5) });
+  await query(`INSERT INTO invoice_lines (org_id, invoice_id, line_no, charge_type, description, unit_amount_minor, amount_minor)
+    VALUES ($1, $2, 2, 'utility', 'Synthetic electricity', 50000, 50000)`, [o.orgId, u]);
+  const rows = (await ready(o.staff.admin)).others;
+  const flag = (l: { id: string }) => rows.find(r => r.leaseId === l.id)?.singleRentInvoice;
+  assert.equal(flag(oneRent), true);
+  assert.equal(flag(twoRent), false, "two invoices");
+  assert.equal(flag(withUtility), false, "a non-rent line");
+});
