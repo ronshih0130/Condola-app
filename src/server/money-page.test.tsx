@@ -325,3 +325,17 @@ test("reported bills need an attached report only when the report list is comple
     if (expected === "unavailable") { assert.doesNotMatch(render(data), /v3-money-reported/); assert.match(render(data), /class="v3-money-status">—<\/span>/); }
   }
 });
+
+test("輪到你 without report access falls back to 全部: no `reported` bill filter, no foreign cursor (Codex r2 I1)", async () => {
+  const billOnly: Session = { ...session, customRole: { orgId: "org", userId: "user", sessionId: "session", nativeRole: "admin", assigned: true, keys: ["stmt.view"], photos: false, audit: false } };
+  for (const [actor, reportsRead] of [[billOnly, undefined], [session, "forbidden"]] as const) {
+    const billInputs: unknown[] = [];
+    const data = await model.readMoneyPage(actor, { month: "2026-11", tab: "yours", cursor: "report-cursor" }, { ...deps,
+      bills: async (_session, input) => { billInputs.push(input); return { ...bills, rows: [bill("paid")], nextCursor: null }; },
+      reports: async () => { if (reportsRead === "forbidden") throw new FlowError("errors.forbidden"); return assert.fail("bill-only viewer must not read reports"); },
+    });
+    assert.deepEqual(billInputs, [{ month: "2026-11", status: undefined, cursor: undefined }]);
+    assert.equal(data.tab, "all"); assert.equal(data.cursor, undefined); assert.equal(data.reports.state, "forbidden");
+    assert.doesNotMatch(render(data), /money-tab-yours/);
+  }
+});

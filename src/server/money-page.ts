@@ -32,21 +32,28 @@ async function safeRead<T>(read: () => Promise<T>): Promise<T | { state: "forbid
 export async function readMoneyPage(session: Session, params: MoneyParams, deps = {
   bills: moneyMonthBills, reports: moneyMonthReports, now: () => new Date(),
 }) {
-  const tab = moneyTab(params.tab);
+  // 輪到你 exists only for viewers whose reports read is allowed: it filters bills to `reported`, which
+  // would otherwise tell a stmt.view-only viewer which bills have a pending report (Codex r2 I1).
+  const requested = moneyTab(params.tab);
+  let tab = requested;
+  if (tab === "yours" && !can(session, "pay.record")) tab = "all";
   let month = validMoneyMonth(params.month) ? params.month : deps.now().toISOString().slice(0, 7);
-  const reportCursor = tab === "yours" ? params.cursor : undefined;
+  const reportCursor = () => tab === "yours" ? params.cursor : undefined;
   const readBills = () => safeRead(async (): Promise<MoneyBills> => can(session, "stmt.view")
     ? deps.bills(session, { month, status: tab === "all" ? undefined : tab === "yours" ? "reported" : tab,
-      cursor: tab === "yours" ? undefined : params.cursor }) : { state: "forbidden" });
+      cursor: tab === "yours" || tab !== requested ? undefined : params.cursor }) : { state: "forbidden" });
   const readReports = () => safeRead(async (): Promise<MoneyReports> => can(session, "pay.record")
-    ? deps.reports(session, { month, cursor: reportCursor }) : { state: "forbidden" });
-  let bills = await readBills();
+    ? deps.reports(session, { month, cursor: reportCursor() }) : { state: "forbidden" });
+  // Reports first: an effective denial (e.g. a custom role without pay.record) also drops 輪到你 before bills are filtered.
   let reports = await readReports();
+  if (tab === "yours" && reports.state === "forbidden") tab = "all";
+  let bills = await readBills();
   const calendar = bills.state === "ready" ? bills : reports.state === "ready" ? reports : undefined;
   if (!validMoneyMonth(params.month) && calendar && calendar.today.slice(0, 7) !== month) {
     month = calendar.today.slice(0, 7);
-    bills = await readBills();
     reports = await readReports();
+    if (tab === "yours" && reports.state === "forbidden") tab = "all";
+    bills = await readBills();
   }
   if (bills.state === "ready" && reports.state === "ready") {
     const visibleBills = new Map(bills.rows.map(row => [row.leaseId, row]));
@@ -56,10 +63,10 @@ export async function readMoneyPage(session: Session, params: MoneyParams, deps 
       const bill = visibleBills.get(id);
       return bill && bill.status !== "reported" && bill.status !== "paid";
     });
-    const completeReports = reportCursor === undefined && reports.nextCursor === null;
+    const completeReports = reportCursor() === undefined && reports.nextCursor === null;
     if (conflictingReport || (completeReports && bills.rows.some(row => row.status === "reported" && !attachedIds.has(row.leaseId)))) {
       reports = { state: "unavailable" };
     }
   }
-  return { month, tab, bills, reports, cursor: params.cursor };
+  return { month, tab, bills, reports, cursor: tab === requested ? params.cursor : undefined };
 }
