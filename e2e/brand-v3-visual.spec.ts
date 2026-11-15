@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ACCOUNTS, signIn } from "./session";
@@ -151,6 +151,23 @@ const SHELL_TABS = {
   maintenance: ["maintenance", "settings"],
 };
 type StaffRole = keyof typeof SHELL_AREAS;
+async function assertShellControl(control: Locator, id: string) {
+  await expect(control, `${id} visible`).toBeVisible();
+  const contrast = await control.evaluate(el => {
+    const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const rgb = (c: string) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = "#000"; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)); };
+    const lum = (c: string) => { const [r, g, b] = rgb(c).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+    let node: Element | null = el; let bg = "transparent";
+    const clear = (c: string) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return ctx.getImageData(0, 0, 1, 1).data[3] === 0; };
+    while (node && clear(bg)) { bg = getComputedStyle(node).backgroundColor; node = node.parentElement; }
+    const [a, b] = [lum(getComputedStyle(el).color), lum(bg)].sort((x, y) => y - x);
+    return (a + .05) / (b + .05);
+  });
+  expect(contrast, `${id} text contrast`).toBeGreaterThanOrEqual(4.5);
+  const box = await control.boundingBox();
+  expect(Math.min(box?.width ?? 0, box?.height ?? 0), `${id} target`).toBeGreaterThanOrEqual(44);
+}
+
 async function assertManagerShell(page: Page, role: StaffRole, width: number, area: string) {
   await expect(page.getByTestId("manager-shell-v3")).toBeVisible();
   await expect(page.locator("header.top, aside.side")).toHaveCount(0);
@@ -166,30 +183,65 @@ async function assertManagerShell(page: Page, role: StaffRole, width: number, ar
     const box = link.getBoundingClientRect(); return box.width < 44 || box.height < 44;
   }).map(link => link.textContent))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-  // Interim controls (OQ-032 until phase 1b): reachable, readable and 44px at both widths.
-  const tools = page.locator(".v3-shell .shell-tools");
-  const resetShown = (await tools.getByTestId("reset-demo").count()) > 0;
-  await tools.getByTestId("org-switch").click();
-  for (const id of ["locale-zh", "locale-en", "sign-out", "org-switch", "org-pick-live", "org-pick-sandbox", ...(resetShown ? ["reset-demo"] : [])]) {
-    const control = tools.getByTestId(id);
-    await control.scrollIntoViewIfNeeded();
-    await expect(control, `${id} visible`).toBeVisible();
-    const contrast = await control.evaluate(el => {
-      const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
-      const rgb = (c: string) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = "#000"; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)); };
-      const lum = (c: string) => { const [r, g, b] = rgb(c).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
-      let node: Element | null = el; let bg = "transparent";
-      const clear = (c: string) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return ctx.getImageData(0, 0, 1, 1).data[3] === 0; };
-      while (node && clear(bg)) { bg = getComputedStyle(node).backgroundColor; node = node.parentElement; }
-      const [a, b] = [lum(getComputedStyle(el).color), lum(bg)].sort((x, y) => y - x);
-      return (a + .05) / (b + .05);
-    });
-    expect(contrast, `${id} text contrast`).toBeGreaterThanOrEqual(4.5);
-    const box = await control.boundingBox();
-    expect(Math.min(box?.width ?? 0, box?.height ?? 0), `${id} target`).toBeGreaterThanOrEqual(44);
+  // SH-ME / SH-DESK / SH-PHONE: real interactions, focus, contrast and touch targets.
+  const bar = page.locator(width >= 1024 ? ".v3-shell .deskbar" : ".v3-shell .appbar.navy");
+  const avatar = bar.getByTestId("avatar-menu-trigger");
+  const menu = page.getByTestId("avatar-menu");
+  await expect(avatar).toHaveAttribute("aria-expanded", "false");
+  await avatar.click();
+  await expect(avatar).toHaveAttribute("aria-expanded", "true");
+  await expect(menu.getByTestId("avatar-account")).toHaveText(/我的帳號|My account/);
+  await expect(menu.getByTestId("avatar-language")).toHaveText(/介面語言|Language/);
+  await expect(menu.getByTestId("sign-out")).toHaveText(/登出|Log out/);
+  await expect(menu.getByTestId("avatar-account")).toBeFocused();
+  await expect(menu.locator('.seg a[aria-current="true"]')).toHaveCount(1);
+  const resetShown = (await menu.getByTestId("reset-demo").count()) > 0;
+  expect(resetShown, "SH-ME reset is admin + demo only").toBe(role === "admin");
+  for (const id of ["avatar-account", "avatar-language", "locale-zh", "locale-en", "sign-out", ...(resetShown ? ["reset-demo"] : [])]) {
+    await assertShellControl(menu.getByTestId(id), id);
   }
-  await tools.getByTestId("org-switch").click();
-  if (role === "admin") expect(resetShown, "reset-demo shown for admin in demo mode").toBe(true);
+  await page.keyboard.press("Tab");
+  await expect(menu.getByTestId("locale-zh")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(menu.getByTestId("avatar-account")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(menu.getByTestId(resetShown ? "reset-demo" : "sign-out")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(menu.getByTestId("avatar-account")).toBeFocused();
+  if (width === 390) {
+    const box = await menu.boundingBox();
+    expect(Math.abs((box!.y + box!.height) - page.viewportSize()!.height), "SH-PHONE bottom sheet reaches viewport bottom").toBeLessThanOrEqual(1);
+  } else if (width >= 1024) {
+    const box = await menu.boundingBox(); const anchor = await avatar.boundingBox();
+    expect(box!.y, "SH-DESK dropdown below avatar").toBeGreaterThanOrEqual(anchor!.y + anchor!.height);
+    expect(Math.abs(box!.x + box!.width - anchor!.x - anchor!.width)).toBeLessThanOrEqual(1);
+  }
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(avatar).toHaveAttribute("aria-expanded", "false");
+  await expect(avatar).toBeFocused();
+  await avatar.click();
+  await page.getByTestId("shell-dim").click({ position: { x: 2, y: 2 } });
+  await expect(menu).toHaveCount(0);
+  await expect(avatar).toBeFocused();
+
+  // SH-ORG: the existing live/sandbox pair, current checkmark, divider, sample last.
+  const context = page.locator(width >= 1024 ? ".v3-shell .side-head" : ".v3-shell .appbar.navy").getByTestId("org-switch");
+  await assertShellControl(context, "org-switch");
+  await context.click();
+  const orgMenu = page.getByTestId("org-menu");
+  await expect(orgMenu.locator('a').last()).toHaveAttribute("data-testid", "org-pick-sandbox");
+  await expect(orgMenu.locator('a').last()).toHaveText(/範例公司|Sample company/);
+  await expect(orgMenu.locator('a[aria-current="true"]')).toHaveCount(1);
+  await expect(orgMenu.locator('a[aria-current="true"]')).toContainText("✓");
+  expect(await orgMenu.locator(':scope > *').evaluateAll(nodes => nodes.map(n => n.tagName))).toEqual(["A", "HR", "A"]);
+  for (const id of ["org-pick-live", "org-pick-sandbox"]) await assertShellControl(orgMenu.getByTestId(id), id);
+  await page.keyboard.press("Escape");
+  await expect(orgMenu).toHaveCount(0);
+  await expect(context).toBeFocused();
+  await expect(page.getByTestId("build-sha")).toHaveCount(1);
+  // settle() masks the changing SHA for visual baselines; assert its presence and content.
+  await expect(page.getByTestId("build-sha")).toHaveText(/\S+/);
   if (width >= 1024) {
     await expect(page.locator(".v3-shell .appbar.navy")).toBeHidden();
     await expect(page.locator(".v3-shell .deskbar")).toBeVisible();
@@ -202,7 +254,7 @@ async function assertManagerShell(page: Page, role: StaffRole, width: number, ar
 }
 
 for (const role of ["admin", "manager", "accountant", "maintenance"] as const) {
-  test(`B-043 MGT-47-AC3/AC4/AC7, MGT-48-AC5, MGT-49-AC5 / PLT-44: ${role} shell`, async ({ page }) => {
+  test(`B-043 MGT-47-AC3/AC4/AC7, MGT-48-AC5, MGT-49-AC5 / PLT-44 / SH-ME/SH-ORG/SH-DESK/SH-PHONE: ${role} shell`, async ({ page }) => {
     test.skip(MODE !== "on", "Preserve the existing OFF and baseline evidence set");
     await signIn(page, ACCOUNTS[role]);
     await page.goto("/auth/continue");
@@ -227,5 +279,27 @@ for (const role of ["admin", "manager", "accountant", "maintenance"] as const) {
       await expect(page).toHaveURL(/\/m\/noperm\?need=bank.reconcile/);
       await expect(page.getByTestId("forbidden").locator('a[href="/m"]')).toBeVisible();
     }
+  });
+}
+
+for (const size of SIZES) {
+  test(`SH-ME language and account selections close the menu at ${size.name}`, async ({ page }) => {
+    test.skip(MODE !== "on", "Only the approved v3 shell has this menu");
+    await signIn(page, ACCOUNTS.admin);
+    await page.setViewportSize(size);
+    await page.goto("/api/demo/locale?set=zh-TW&next=%2Fm%2Funits");
+    const avatar = page.locator(size.width >= 1024 ? ".deskbar" : ".appbar.navy").getByTestId("avatar-menu-trigger");
+    await avatar.click();
+    await page.getByTestId("avatar-menu").getByTestId("locale-en").click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page).toHaveURL(/\/m\/units$/);
+    await expect(page.getByTestId("avatar-menu")).toHaveCount(0);
+    await page.waitForLoadState("networkidle"); // the locale switch reloads the page; click after hydration
+    await avatar.click();
+    await expect(page.getByTestId("locale-en")).toHaveAttribute("aria-current", "true");
+    await expect(page.getByTestId("sign-out")).toHaveText("Log out");
+    await page.getByTestId("avatar-account").click();
+    await expect(page).toHaveURL(/\/m\/account$/);
+    await expect(page.getByTestId("avatar-menu")).toHaveCount(0);
   });
 }
