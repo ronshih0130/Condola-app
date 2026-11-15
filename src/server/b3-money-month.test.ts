@@ -52,22 +52,31 @@ test("operational failures including real brandV3ReadForOrg failure are unavaila
   }
 });
 
-test("rules 1–2 precedence table: positive paid, pending, yesterday, today, tomorrow; no sixth partial status", () => {
+test("MGT-141 precedence: paid > reported > overdue > partial > due today > future", () => {
   const today = "2030-05-01";
   for (const [confirmed, pending, due, expected] of [
     ["100", true, "2030-04-30", "paid"], ["101", false, "2030-05-02", "paid"],
     ["20", true, "2030-04-30", "reported"], ["0", true, today, "reported"], ["0", true, "2030-05-02", "reported"],
     ["0", false, "2030-04-30", "overdue"], ["20", false, "2030-04-30", "overdue"],
-    ["0", false, today, "due_today"], ["20", false, today, "due_today"],
-    ["0", false, "2030-05-02", "future"], ["20", false, "2030-05-02", "future"],
+    ["0", false, today, "due_today"], ["20", false, today, "partial"],
+    ["0", false, "2030-05-02", "future"], ["20", false, "2030-05-02", "partial"],
   ] as const) assert.equal(moneyMonthStatus("100", confirmed, pending, due, today), expected);
   assert.notEqual(moneyMonthStatus("0", "0", false, today, today), "paid", "zero balance is not proof of paid");
-  assert.equal(moneyMonthStatus("9007199254740993", "9007199254740992", false, today, today), "due_today");
-  assert.equal(MONEY_MONTH_STATUSES.length, 5);
+  assert.equal(moneyMonthStatus("9007199254740993", "9007199254740992", false, today, today), "partial");
+  assert.equal(MONEY_MONTH_STATUSES.length, 6);
+});
+
+test("MGT-141 due-1/due/due+1: partial becomes overdue, full stays paid, pending beats both", () => {
+  const due = "2030-05-02";
+  for (const [today, expected] of [["2030-05-01", "partial"], [due, "partial"], ["2030-05-03", "overdue"]] as const) {
+    assert.equal(moneyMonthStatus("1000", "200", false, due, today), expected);
+    assert.equal(moneyMonthStatus("1000", "200", true, due, today), "reported");
+    for (const pending of [false, true]) assert.equal(moneyMonthStatus("1000", "1000", pending, due, today), "paid");
+  }
 });
 
 const bill = (n: number): MoneyMonthBill => ({ leaseId: id(n), month, place: "Synthetic 2F A", tenantName: null,
-  currency: "USD", dueDate: "2030-05-01", totalMinor: "9007199254740993", confirmedMinor: "1", remainingMinor: "9007199254740992", status: "due_today" });
+  currency: "USD", dueDate: "2030-05-01", totalMinor: "9007199254740993", confirmedMinor: "1", remainingMinor: "9007199254740992", status: "partial" });
 const report = (n: number, other = false): MoneyMonthReport => ({ id: id(n), leaseId: id(999), place: "Synthetic", tenantName: null,
   amountMinor: "9007199254740993", currency: "USD", paidOn: "2030-01-01", submittedAt: "2030-04-30T23:00:00.123456Z",
   source: "tenant_portal", bankTransactionId: null, proofFileId: null,
