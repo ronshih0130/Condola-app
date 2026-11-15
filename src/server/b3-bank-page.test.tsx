@@ -110,8 +110,9 @@ test("v3 submits unchanged decision payloads and file to the existing API; faile
 const baseline = (path: string) => execFileSync("git", ["show", `52e290f1219813968331b9294f58c995ff4e3925:${path}`], { encoding: "utf8" });
 test("OFF page is byte-identical after the v3 fork; existing read order and decision checks unchanged", async () => {
   const path = "src/app/m/bank/page.tsx", old = baseline(path), current = source(path);
-  const marker = "  if (await bankMatchingEnabled(session)) {";
-  assert.equal(current.slice(current.indexOf(marker)), old.slice(old.indexOf(marker)));
+  const marker = "  if (await bankMatchingEnabled(session)) {", now = "  if (matching) {";
+  // The legacy branches after the matching check are byte-identical; only the condition line now reuses the read value.
+  assert.ok(current.includes(now)); assert.equal(current.slice(current.indexOf(now) + now.length), old.slice(old.indexOf(marker) + marker.length));
   assert.match(current, /searchParams: Promise<BankSearchParams>/); assert.doesNotMatch(current, /BankPage\([^\n]*=\s*\{/);
   for (const file of ["src/server/bank-matching.ts", "src/server/bank-matching-actions.ts"]) assert.equal(source(file), baseline(file));
   // The JSON route changes in exactly one way: it forwards a client requestId to decideBankMatch (B009 idempotency, Codex r1).
@@ -192,3 +193,28 @@ test("R1-BANK-ROW / B009: the JSON decision route forwards requestId; the v3 pan
   assert.match(ui, /if \(operation\.current\?\.key !== key\) operation\.current = \{ key, id: crypto\.randomUUID\(\) \};/);
   assert.match(ui, /requestId: operation\.current\.id/);
 });
+
+test("R1-BANK: brand_v3 ON without bank_matching keeps today's import/match page (no v3 unavailable state)", async () => {
+  const trace: string[] = [];
+  const box = (name: string) => function Box() { return <div data-test={name} />; };
+  for (const [matching, expectV3] of [[false, false], [true, true]] as const) {
+    let v3Rendered = false;
+    const mocks = {
+      "@/server/consent-gate": { requireCurrentConsent: async () => {} },
+      "@/server/session": { getSession: async () => ({ orgId: "org", locale: "en" }) },
+      "@/i18n": { makeT: () => (key: string) => key }, "@/server/brand-v3": { brandV3EnabledForOrg: async () => { trace.push("v3"); return true; } },
+      "@/components/v3/m/bank/page": { BankV3Page: () => { v3Rendered = true; return <div data-test="v3" />; } },
+      "@/components/v3/m/bank/bank": { BankLoading: () => null },
+      "@/server/bank-matching": { bankMatchingEnabled: async () => matching, bankBoard: async () => ({ synthetic: true }) },
+      "@/server/queries": { latestUnmatchedPayment: async () => null, listMatches: async () => [] },
+      "@/components/management-empty-state": { ManagementEmptyState: box("empty") }, "@/components/bank-matching": { BankMatching: box("bank") },
+      "@/components/dialogs": { ApproveForm: box("approve"), BankImport: box("upload") }, "@/components/ui": { ErrorBanner: box("error"), PageHeader: box("header") },
+      "@/server/domain": { sampleCsv: () => "" }, "@/server/format": format, "@/server/sandbox-data": { displaySampleName: (x: string) => x },
+    };
+    const page = compile(source("src/app/m/bank/page.tsx"), mocks).default as (props: { searchParams: Promise<Record<string, string>> }) => Promise<React.ReactNode>;
+    const html = renderToStaticMarkup(await page({ searchParams: Promise.resolve({}) }));
+    if (expectV3) assert.match(html, /<link rel="stylesheet" href="\/brand\/v3\/bank.css"/);
+    else { assert.equal(v3Rendered, false); assert.match(html, /data-test="upload"/); assert.doesNotMatch(html, /bank\.css/); }
+  }
+});
+
