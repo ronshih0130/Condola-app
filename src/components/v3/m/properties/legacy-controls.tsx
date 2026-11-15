@@ -6,6 +6,7 @@ import { can } from "../../../../server/perms";
 import { displaySampleName } from "../../../../server/sandbox-data";
 import { moneyLabel } from "../../../../server/format";
 import { statusClass, statusKey } from "../../../ui";
+import { ArchiveEntry } from "../../../record-archive-entry";
 import type { Session } from "../../../../server/types";
 import type { propertyDetail } from "../../../../server/queries";
 import type * as actions from "../../../../server/actions";
@@ -26,6 +27,7 @@ export function PropertyLegacyControls({ session, detail, actionSetMeter, action
     <section className="v3-property-card v3-property-legacy" aria-labelledby="property-settings">
       <h2 id="property-settings">{propertyCopy(session.locale).settings}</h2>
       <div className="v3-property-legacy-links">
+        <ArchiveEntry refValue={{kind:"property",id}} locale={session.locale} />
         {!archived && can(session, "props.edit") ? (
           <Link href={`/m/properties/${id}/edit`} data-testid="edit-property">{t("i_edit")}</Link>
         ) : null}
@@ -80,7 +82,7 @@ export function PropertyLegacyControls({ session, detail, actionSetMeter, action
         <form action={actionPhoneVisibility}>
           <input type="hidden" name="propertyId" value={id} />
           <input type="hidden" name="propertyOwnerId" value={detail.owner.id} />
-          <label className="small">
+          <label className="small v3-property-phone-visibility">
             <input type="checkbox" name="canView" defaultChecked={detail.owner.phone_visible} /> {t("i_owner_phone_vis")}
           </label>
           <div style={{ marginTop: 8 }}>

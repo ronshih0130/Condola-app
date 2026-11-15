@@ -7,8 +7,11 @@ import type { Session } from "../../../../server/types";
 import { PropertyView } from "./property";
 import { propertyDetail } from "../../../../server/queries";
 import { actionSetMeter, actionPhoneVisibility } from "../../../../server/actions";
+import { AuditHistory } from "../../../audit-log";
 
-export async function PropertyV3Page({session,id,query}:{session:Session;id:string;query?:{error?:string;created?:string}}) {
+export type PropertyQuery = {error?:string;audit?:string;created?:string};
+
+export async function PropertyV3Page({session,id,query}:{session:Session;id:string;query:PropertyQuery}) {
   let data;
   let detail;
   let invites:{rowId:string;href:string}[]=[];
@@ -29,5 +32,6 @@ export async function PropertyV3Page({session,id,query}:{session:Session;id:stri
   }
   if(data.state==="not_found" || (data.state==="ready" && !detail)) notFound();
   return <PropertyView data={data} locale={session.locale} id={id} invites={invites} query={query}
+    auditHistory={<AuditHistory table="properties" rowId={id} cursor={query.audit} path={`/m/properties/${id}`} preserve={{ error: query.error }} />}
     legacy={detail ? {session,detail,actionSetMeter,actionPhoneVisibility} : undefined} />;
 }

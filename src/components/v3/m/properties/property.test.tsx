@@ -7,6 +7,8 @@ import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { PropertyView, PropertyLoading } from "./property";
+import { ArchiveEntry } from "../../../record-archive-entry";
+import type { PropertyQuery } from "./page";
 import { PropertyLegacyControls, type LegacyPropertyControls } from "./legacy-controls";
 import { makeT } from "../../../../i18n";
 import { archiveCopy } from "../../../../i18n/record-archive";
@@ -63,7 +65,7 @@ const detail:LegacyPropertyControls["detail"]={
   property:{id:"p",name:"Sample",address_display:"Address",currency:"TWD",rental_mode:"by_room",archiveState:"active"},
   owner:{id:"association",contact_id:"owner",name:"Owner",phone_visible:true},
   rooms:[{id:"r",unit_label:"3F",label:"A",room_type:"suite",base_rent_minor:"1000",lease_id:"lease",tenant:"Tenant"}],
-  wholes:[],byRoomUnits:[],meterSerial:"M123",
+  wholes:[],byRoomUnits:[{id:"u",label:"3F"},{id:"zero-room-unit",label:"Empty unit"}],meterSerial:"M123",
   repairs:[{id:"ticket",number:"10",title:"Repair",status:"open",place:"A",vendor_name:null,scheduled_on:null,completed_on:null,final_cost:null,currency:null}],
 };
 const actions:Pick<LegacyPropertyControls,"actionSetMeter"|"actionPhoneVisibility">={actionSetMeter:async()=>{assert.fail("Render must not submit meter");},actionPhoneVisibility:async()=>{assert.fail("Render must not submit visibility");}};
@@ -73,22 +75,53 @@ const nativeRequire=createRequire(import.meta.url);
 function loadRoute(file:string,mocks:Record<string,unknown>) {
   const code=ts.transpileModule(readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
   const exports:Record<string,unknown>={};
-  runInNewContext(code,{exports,require:(name:string)=>name in mocks?mocks[name]:nativeRequire(name)});
+  runInNewContext(code,{exports,URLSearchParams,require:(name:string)=>name in mocks?mocks[name]:nativeRequire(name)});
   return exports;
 }
-async function legacyPage(s:typeof session,d:typeof detail) {
+function auditComponent(s:typeof session,query:PropertyQuery={}) {
+  const loaded=loadRoute("src/components/audit-log.tsx",{
+    "@/i18n":{makeT},"@/sample-name":{displaySampleName},
+    "@/server/session":{getSession:async()=>s},
+    "@/server/demo":{showDemoLineCopy:()=>false},
+    "@/server/audit-read":{loadAuditHistory:async(actual:typeof session,table:string,id:string,cursor?:string)=>{
+      assert.equal(actual,s);assert.equal(table,"properties");assert.equal(id,"p");assert.equal(cursor,query.audit);
+      return {hasMore:true,entries:[{cursor:"next +/&",who:"Actor",actionKey:"i_edit",recordKey:"i_owner",recordText:"Sample",found:true,fields:[],other:false,masked:false,reason:null,href:null,when:"2026-11-15"}]};
+    }},
+  });
+  return loaded.AuditHistory as (props:Record<string,unknown>)=>Promise<React.ReactElement|null>;
+}
+const auditProps=(query:PropertyQuery)=>({table:"properties",rowId:"p",cursor:query.audit,path:"/m/properties/p",preserve:{error:query.error}});
+async function v3Page(s:typeof session,d:typeof detail,ready:PropertyReady,query:PropertyQuery={}) {
+  const AuditHistory=auditComponent(s,query);
+  const loaded=loadRoute("src/components/v3/m/properties/page.tsx",{
+    "next/navigation":{notFound:()=>assert.fail("Unexpected not found")},
+    "../../../../server/b3-property":{brandProperty:async()=>ready},
+    "../../../../server/b040-staff-ui":{staffInviteVisible:async()=>false},
+    "../../../../server/errors":{FlowError:Error,logServerError:()=>assert.fail("Unexpected error")},
+    "../../../../server/queries":{propertyDetail:async()=>d},
+    "../../../../server/actions":actions,"./property":{PropertyView},
+    "../../../audit-log":{AuditHistory},
+  });
+  const node=await (loaded.PropertyV3Page as (props:unknown)=>Promise<React.ReactElement<React.ComponentProps<typeof PropertyView>>>)({session:s,id:"p",query});
+  const audit=node.props.auditHistory as React.ReactElement<Record<string,unknown>>;
+  assert.equal(audit.type,AuditHistory);
+  assert.deepEqual({...audit.props,preserve:{...(audit.props.preserve as Record<string,unknown>)}},auditProps(query));
+  return React.cloneElement(node,{auditHistory:await AuditHistory(audit.props)});
+}
+async function legacyPage(s:typeof session,d:typeof detail,query:PropertyQuery={}) {
+  const audit=await auditComponent(s,query)(auditProps(query));
   const loaded=loadRoute("src/app/m/properties/[id]/page.tsx",{
     "@/server/brand-v3":{brandV3EnabledForOrg:async()=>false},
     "@/components/v3/m/properties/page":{},"@/components/v3/m/properties/property":{},
     "@/server/consent-gate":{requireCurrentConsent:async()=>{}},
     "next/navigation":{notFound:()=>assert.fail("Unexpected not found")},
-    "@/components/record-archive-entry":{ArchiveEntry:()=>null},
+    "@/components/record-archive-entry":{ArchiveEntry},
     "@/i18n/record-archive":{archiveCopy},"@/i18n":{makeT},"@/server/actions":actions,
-    "@/components/audit-log":{AuditHistory:()=>null},"@/components/ui":ui,
+    "@/components/audit-log":{AuditHistory:(props:Record<string,unknown>)=>{assert.deepEqual({...props,preserve:{...(props.preserve as Record<string,unknown>)}},auditProps(query));return audit;}},"@/components/ui":ui,
     "@/server/sandbox-data":{displaySampleName},"@/server/format":{moneyLabel},"@/server/perms":{can},
     "@/server/queries":{propertyDetail:async()=>d},"@/server/session":{getSession:async()=>s},
   });
-  return (loaded.default as (props:unknown)=>Promise<React.ReactElement>)({params:Promise.resolve({id:"p"}),searchParams:Promise.resolve({})});
+  return (loaded.default as (props:unknown)=>Promise<React.ReactElement>)({params:Promise.resolve({id:"p"}),searchParams:Promise.resolve(query)});
 }
 function elements(node:React.ReactNode):React.ReactElement<Record<string,unknown>>[] {
   if(Array.isArray(node))return node.flatMap(elements);
@@ -100,15 +133,38 @@ function controls(html:string) {
     .map(([,href,label])=>({href,label:label.replace(/<[^>]+>/g,"").replace(/\s+/g," ").trim()}))
     .sort((a,b)=>a.href.localeCompare(b.href));
 }
-test("v3 preserves every legacy control, label, form payload and role/archive condition",async()=>{
+const formMarkup=(node:React.ReactElement)=>renderToStaticMarkup(node).replace('class="small v3-property-phone-visibility"','class="small"');
+function sections(html:string) {
+  return [...html.matchAll(/data-testid="(by-room-unit|whole-unit-saved|repair-history|property-repair-[^"]+|shared-meter|meter-number(?:-prompt)?|audit-history(?:-list|-latest|-next)?)"/g)].map(match=>match[1]).sort();
+}
+function textParts(html:string) {
+  return html.split(/<[^>]*>/).map(text=>text.replace(/\s+/g," ").trim()).filter(Boolean);
+}
+test("v3 preserves real legacy archive, audit, forms and section inventory for every role",async()=>{
   for(const locale of ["zh-TW","en"] as const)for(const role of ["admin","manager","accountant"] as const)for(const archived of [false,true]){
     const s={...session,role,locale};
-    const d={...detail,property:{...detail.property,archiveState:archived?"archived" as const:"active" as const}};
-    const legacy=await legacyPage(s,d);
+    const whole=propertyRoomState({...row,id:"whole",unitId:"whole",kind:"whole_unit",label:"Whole",unitLabel:"Whole"});
+    const d={...detail,byRoomUnits:archived?[]:detail.byRoomUnits,wholes:[{id:"whole",label:"Whole",base_rent_minor:"123456"}],property:{...detail.property,archiveState:archived?"archived" as const:"active" as const}};
+    const query={audit:"previous cursor",error:"forbidden",created:"1"};
+    const legacy=await legacyPage(s,d,query);
     const props={session:s,detail:d,...actions};
-    const v3=<PropertyView data={{...data,archived,canInvite:role!=="accountant"&&!archived}} locale={locale} id="p" legacy={props}/>;
+    const v3=await v3Page(s,d,{...data,rows:[row,whole],...propertyTotals([row,whole]),archived,canInvite:role!=="accountant"&&!archived},query);
     const html=renderToStaticMarkup(v3);
-    assert.deepEqual(controls(html),controls(renderToStaticMarkup(legacy)),`${locale}/${role}/${archived}`);
+    const oldHtml=renderToStaticMarkup(legacy);
+    assert.deepEqual(controls(html),controls(oldHtml),`${locale}/${role}/${archived}`);
+    assert.deepEqual(sections(html),sections(oldHtml));
+    const visibleText=textParts(html).join(" ");
+    for(const text of textParts(oldHtml))assert.ok(visibleText.includes(text),`Missing legacy text: ${locale}/${role}/${text}`);
+    for(const key of ["s_a757163","i_owner","i_repair_history","s_66a6e8b"] as const)assert.ok(html.includes(renderToStaticMarkup(<h3>{makeT(locale)(key)}</h3>)),`${locale}/${role}/${key}`);
+    assert.ok(html.includes(d.property.address_display));
+    for(const saved of [...d.rooms,...d.wholes])assert.ok(html.includes(moneyLabel(Number(saved.base_rent_minor),d.property.currency,locale)));
+    assert.equal(controls(html).filter(link=>link.href.startsWith("/m/archive/")).length,archived?1:3);
+    assert.equal(html.includes('href="/m/archive/unit/zero-room-unit"'),!archived);
+    assert.equal(html.includes('data-testid="audit-history"'),role==="admin");
+    if(role==="admin"){
+      assert.ok(controls(html).some(link=>link.href==="/m/properties/p?error=forbidden"));
+      assert.ok(controls(html).some(link=>link.href==="/m/properties/p?error=forbidden&amp;audit=next+%2B%2F%26"));
+    }
     const oldForms=elements(legacy).filter(e=>e.type==="form");
     const newForms=elements(PropertyLegacyControls(props)).filter(e=>e.type==="form");
     assert.equal(newForms.length,oldForms.length);
@@ -116,7 +172,7 @@ test("v3 preserves every legacy control, label, form payload and role/archive co
     for(const form of oldForms){
       const next=newForms.find(e=>e.props.action===form.props.action);
       assert.ok(next);
-      assert.equal(renderToStaticMarkup(next),renderToStaticMarkup(form));
+      assert.equal(formMarkup(next),formMarkup(form));
     }
     const rowHtml=html.match(/<tr><th scope="row">[\s\S]*?<\/tr>/)?.[0]??"";
     assert.match(rowHtml,/href="\/m\/leases\/lease"/);
@@ -138,7 +194,45 @@ test("custom edit restrictions and unchecked visibility retain the legacy condit
   const oldForms=elements(old).filter(e=>e.type==="form");
   const newForms=elements(PropertyLegacyControls(props)).filter(e=>e.type==="form");
   assert.equal(newForms.length,2); // Legacy checks native role for these forms.
-  for(const form of oldForms)assert.equal(renderToStaticMarkup(newForms.find(e=>e.props.action===form.props.action)!),renderToStaticMarkup(form));
+  for(const form of oldForms)assert.equal(formMarkup(newForms.find(e=>e.props.action===form.props.action)!),formMarkup(form));
+});
+test("real phone checkbox belongs to a v3 label with a 44px hit area",()=>{
+  for(const role of ["admin","manager"] as const){
+    const tree=PropertyLegacyControls({session:{...session,role},detail,...actions});
+    const wrapper=elements(tree).find(e=>e.type==="label" && elements(e.props.children as React.ReactNode).some(child=>child.type==="input" && child.props.name==="canView"));
+    assert.ok(wrapper);
+    assert.equal(wrapper.props.className,"small v3-property-phone-visibility");
+    assert.match(renderToStaticMarkup(wrapper),/<input type="checkbox" name="canView" checked=""/);
+    const css=readFileSync("public/brand/v3/property.css","utf8");
+    assert.match(css,/html\[data-brand="v2"\]\[data-brand-v3\] \.v3-property \.v3-property-phone-visibility \{[^}]*display:inline-flex;[^}]*min-height:44px;[^}]*min-width:44px;/);
+  }
+});
+test("zero-room units survive an empty rentable list with the real archive entry",async()=>{
+  const d={...detail,rooms:[],wholes:[],byRoomUnits:[detail.byRoomUnits[1]]};
+  for(const role of ["admin","manager","accountant"] as const){
+    const s={...session,role};
+    const html=renderToStaticMarkup(await v3Page(s,d,{...data,rows:[],...propertyTotals([])}));
+    const old=renderToStaticMarkup(await legacyPage(s,d));
+    assert.deepEqual(controls(html),controls(old));
+    assert.deepEqual(sections(html),sections(old));
+    assert.match(html,/data-testid="by-room-unit"/);
+    assert.match(html,/href="\/m\/archive\/unit\/zero-room-unit"/);
+    assert.ok(html.includes(d.byRoomUnits[0].label));
+  }
+});
+test("legacy room and whole-unit rents keep currency formatting for every role",async()=>{
+  const whole=propertyRoomState({...row,id:"whole",unitId:"whole",kind:"whole_unit",label:"Whole",unitLabel:"Whole"});
+  for(const currency of ["TWD","USD","JPY"])for(const locale of ["zh-TW","en"] as const)for(const role of ["admin","manager","accountant"] as const){
+    const s={...session,locale,role};
+    const d={...detail,property:{...detail.property,currency},rooms:[{...detail.rooms[0],base_rent_minor:"123456"}],wholes:[{id:"whole",label:"Whole",base_rent_minor:"987654"}]};
+    const html=renderToStaticMarkup(await v3Page(s,d,{...data,rows:[row,whole],...propertyTotals([row,whole])}));
+    const old=renderToStaticMarkup(await legacyPage(s,d));
+    assert.ok(html.includes(d.property.address_display));
+    for(const saved of [...d.rooms,...d.wholes]){
+      const rent=moneyLabel(Number(saved.base_rent_minor),currency,locale);
+      assert.ok(old.includes(rent));assert.ok(html.includes(rent));
+    }
+  }
 });
 test("unavailable and forbidden views cannot expose supplied legacy controls",()=>{
   for(const state of ["forbidden","off","unavailable"] as const){
@@ -160,7 +254,7 @@ test("missing owner, lease, meter and repairs preserve legacy empty controls",as
 });
 test("v3 wrapper wires the existing reader/actions and preserves action error query",async()=>{
   let reads=0;
-  const query={error:"forbidden",created:"1"};
+  const query={error:"forbidden",created:"1",audit:"previous cursor"};
   const loaded=loadRoute("src/components/v3/m/properties/page.tsx",{
     "next/navigation":{notFound:()=>assert.fail("Unexpected not found")},
     "../../../../server/b3-property":{brandProperty:async()=>data},
@@ -168,6 +262,7 @@ test("v3 wrapper wires the existing reader/actions and preserves action error qu
     "../../../../server/errors":{FlowError:Error,logServerError:()=>assert.fail("Unexpected error")},
     "../../../../server/queries":{propertyDetail:async(s:typeof session,id:string)=>{assert.equal(s,session);assert.equal(id,"p");reads++;return detail;}},
     "../../../../server/actions":actions,"./property":{PropertyView},
+    "../../../audit-log":{AuditHistory:()=> <div data-testid="audit-slot"/>},
   });
   const node=await (loaded.PropertyV3Page as (props:unknown)=>Promise<React.ReactElement<React.ComponentProps<typeof PropertyView>>>)({session,id:"p",query});
   assert.equal(reads,1);assert.equal(node.type,PropertyView);assert.equal(node.props.query,query);
@@ -175,6 +270,9 @@ test("v3 wrapper wires the existing reader/actions and preserves action error qu
   assert.equal(node.props.legacy?.actionPhoneVisibility,actions.actionPhoneVisibility);
   const html=renderToStaticMarkup(node);
   assert.match(html,/data-testid="error-banner"/);assert.match(html,/data-testid="property-created"/);
+  assert.match(html,/data-testid="audit-slot"/);
+  const audit=node.props.auditHistory as React.ReactElement<Record<string,unknown>>;
+  assert.deepEqual({...audit.props,preserve:{...(audit.props.preserve as Record<string,unknown>)}},auditProps(query));
   const route=readFileSync("src/app/m/properties/[id]/page.tsx","utf8");
   assert.match(route,/<PropertyV3Page session=\{session\} id=\{id\} query=\{query\}/);
   const css=readFileSync("public/brand/v3/property.css","utf8");
