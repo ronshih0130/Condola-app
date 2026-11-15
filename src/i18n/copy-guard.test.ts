@@ -66,11 +66,21 @@ function withoutApprovedReportRentNames(source: string, rel: string) {
   return source;
 }
 
+// PENDING-RON PR-016 (Ron 2026-11-15 11:42 PT): exact owner/vendor own-status strings, in their own lane only.
+const OWN_STATUS_LANE = "src/i18n/lanes/brand-v3-own-status.ts";
+const OWN_STATUS_EXACT = ["代屋主確認收款", "收款帳戶是屋主的，你只是代他在系統裡記下「已收到」，不是代他收錢。", "已代{屋主}記下這筆收款。", "收款", "待收款", "待收款紀錄"];
+function withoutOwnStatus(source: string, rel: string) {
+  if (rel !== OWN_STATUS_LANE) return source;
+  let out = source;
+  for (const exact of OWN_STATUS_EXACT) out = out.split(`"${exact}"`).join('""');
+  return out;
+}
+
 function hitsFor(words: string[]) {
   const hits: string[] = [];
   for (const file of sourceFiles()) {
     const rel = relative(root, file);
-    const text = withoutApprovedReportRentNames(withoutManagerAreaName(decode(read(file)), rel), rel);
+    const text = withoutApprovedReportRentNames(withoutOwnStatus(withoutManagerAreaName(decode(read(file)), rel), rel), rel);
     if (file.endsWith(".json")) {
       const data = JSON.parse(text) as Record<string, unknown>;
       for (const [key, value] of Object.entries(data)) {
@@ -295,3 +305,13 @@ test("PR-019: only exact approved early-rent names in the report lane are exempt
   }
   assert.deepEqual(hitsFor(FORBIDDEN), []);
 });
+
+test("PR-016: the owner/vendor own-status lane holds exactly the approved 「收款」 strings, each once, and nothing else with 收款", () => {
+  const source = read(join(root, OWN_STATUS_LANE));
+  for (const exact of OWN_STATUS_EXACT) assert.equal(source.split(`"${exact}"`).length - 1, 1, exact);
+  const stripped = withoutOwnStatus(decode(source), OWN_STATUS_LANE).replace(/^\s*\/\/.*$/gm, "");
+  assert.equal(stripped.includes("收款"), false, "only the exact approved literals may contain 收款");
+  // The exemption is file-scoped: the same literal elsewhere is still a hit.
+  assert.equal(withoutOwnStatus('"代屋主確認收款"', "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
+});
+

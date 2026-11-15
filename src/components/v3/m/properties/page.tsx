@@ -1,3 +1,6 @@
+import {can} from "../../../../server/perms";
+import {ArchiveEntryV3} from '../archive/controls';
+import {archiveScope} from '../../../../server/record-archive';
 import React from "react";
 import { notFound } from "next/navigation";
 import { brandProperty } from "../../../../server/b3-property";
@@ -33,5 +36,6 @@ export async function PropertyV3Page({session,id,query}:{session:Session;id:stri
   if(data.state==="not_found" || (data.state==="ready" && !detail)) notFound();
   return <PropertyView data={data} locale={session.locale} id={id} invites={invites} query={query}
     auditHistory={<AuditHistory table="properties" rowId={id} cursor={query.audit} path={`/m/properties/${id}`} preserve={{ error: query.error }} />}
-    legacy={detail ? {session,detail,actionSetMeter,actionPhoneVisibility} : undefined} />;
+    archiveEntries={detail ? Object.fromEntries(detail.byRoomUnits.map(unit=>[unit.id,<ArchiveEntryV3 key={unit.id} refValue={{kind:'unit',id:unit.id}} scope={archiveScope(session)} locale={session.locale} role={can(session,"props.edit")?session.role:null} archived={data.state==='ready'&&data.archived}/>])) : undefined}
+    legacy={detail ? {session,detail,actionSetMeter,actionPhoneVisibility,archiveEntry:<ArchiveEntryV3 refValue={{kind:'property',id}} scope={archiveScope(session)} locale={session.locale} role={can(session,"props.edit")?session.role:null} archived={detail.property.archiveState==='archived'}/>} : undefined} />;
 }

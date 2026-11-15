@@ -4,7 +4,7 @@ export type ArchiveRef = { kind: ArchiveKind; id: string };
 export type RenderedArchiveScope = { actorId: string; orgId: string; liveOrgId: string; environment: "live" | "sandbox" };
 export type ArchiveCategory = "leases" | "signing" | "repairs" | "dispatch" | "utilities" | "finance" | "invitations";
 export type ArchiveCoverage = { category: ArchiveCategory; state: "verified" | "unknown" };
-export type ArchiveItem = { category: ArchiveCategory; label: string; href: string | null };
+export type ArchiveItem = { category: ArchiveCategory; label: string; href: string | null; count?: number };
 export type ArchiveObserved = {
   ref: ArchiveRef;
   propertyId: string;
@@ -18,6 +18,9 @@ export type ArchiveObserved = {
   archivedAtUtc: string | null;
   inherited: Array<{ ref: ArchiveRef; archivedAtUtc: string }>;
   version: string;
+  /** Optional v3 presentation, never part of the optimistic version. */
+  archivedBy?: string | null;
+  restoreEligible?: boolean;
 };
 export type ArchiveReady = {
   state: "ready";
@@ -31,7 +34,9 @@ export type ArchiveReady = {
   history: ArchiveItem[];
 };
 export type ArchiveView = ArchiveReady | { state: "unavailable" };
-export type ArchiveList = { state: "ready"; rows: ArchiveObserved[]; hasMore: boolean; nextCursor: string | null } | { state: "unavailable" };
+export type ArchiveTab = "all" | "property" | "unit" | "owner";
+export type ArchiveCounts = { property: number; unit: number; owner: number; total: number };
+export type ArchiveList = { state: "ready"; rows: ArchiveObserved[]; hasMore: boolean; nextCursor: string | null; counts?: ArchiveCounts } | { state: "unavailable"; readFailed?: boolean };
 export type ArchiveCommandInput = { ref: ArchiveRef; desired: "archived" | "active"; expectedVersion: string; renderedScope: RenderedArchiveScope; reason: string; requestId: string };
 export type ArchiveOutcome = { state: "changed" | "already_in_desired_state" | "stale" | "blocked" | "disabled" | "forbidden" | "busy" | "conflict" | "unknown" };
 

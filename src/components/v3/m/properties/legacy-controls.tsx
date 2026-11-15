@@ -12,6 +12,7 @@ import type { propertyDetail } from "../../../../server/queries";
 import type * as actions from "../../../../server/actions";
 
 export type LegacyPropertyControls = {
+  archiveEntry?:React.ReactNode;
   session: Session;
   detail: NonNullable<Awaited<ReturnType<typeof propertyDetail>>>;
 } & Pick<typeof actions, "actionSetMeter" | "actionPhoneVisibility">;
@@ -19,7 +20,7 @@ export type LegacyPropertyControls = {
 // Interim controls retain the OFF page's labels, conditions and action payloads.
 // In particular, its new-lease link checks archive state only; the destination
 // continues to enforce leases.edit, including for accountants.
-export function PropertyLegacyControls({ session, detail, actionSetMeter, actionPhoneVisibility }: LegacyPropertyControls) {
+export function PropertyLegacyControls({ session, detail, actionSetMeter, actionPhoneVisibility, archiveEntry }: LegacyPropertyControls) {
   const t = makeT(session.locale);
   const id = detail.property.id;
   const archived = detail.property.archiveState === "archived";
@@ -27,7 +28,7 @@ export function PropertyLegacyControls({ session, detail, actionSetMeter, action
     <section className="v3-property-card v3-property-legacy" aria-labelledby="property-settings">
       <h2 id="property-settings">{propertyCopy(session.locale).settings}</h2>
       <div className="v3-property-legacy-links">
-        <ArchiveEntry refValue={{kind:"property",id}} locale={session.locale} />
+        {archiveEntry ?? <ArchiveEntry refValue={{kind:"property",id}} locale={session.locale} />}
         {!archived && can(session, "props.edit") ? (
           <Link href={`/m/properties/${id}/edit`} data-testid="edit-property">{t("i_edit")}</Link>
         ) : null}
