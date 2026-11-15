@@ -24,7 +24,7 @@ function daysBetween(due: string, today: string) {
   return Math.round((end - start) / 86_400_000);
 }
 
-export default async function RentPage({ searchParams }: { searchParams?: Promise<MoneyParams> } = {}) {
+export default async function RentPage({ searchParams }: { searchParams: Promise<MoneyParams> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   if (await brandV3EnabledForOrg(session.orgId)) return <MoneyMonthPage session={session} params={await searchParams ?? {}} />;
