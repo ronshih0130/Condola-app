@@ -4,7 +4,7 @@ import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 
 import { redirect } from "next/navigation";
 import { passConsentGate, consentNextPath } from "./consent-gate";
-import { roleHome } from "./perms";
+import { roleHomeForSession } from "./role-home-v3";
 import { readSignupIdentity } from "./signup";
 import { readSession } from "./session";
 
@@ -19,7 +19,9 @@ export async function actionAcceptReconsent(formData: FormData) {
   const identity = await readSignupIdentity();
   if (!identity) redirect("/login");
   const session = await guardEffectiveSession(await readSession(), null);
-  const next = consentNextPath(text(formData.get("next")), session ? roleHome(session.kind, session.role) : "/signup/firm");
+  const raw = text(formData.get("next"));
+  // The brand lookup runs only when `next` gives no usable destination (flag OFF adds no query otherwise).
+  const next = consentNextPath(raw, "") || (session ? await roleHomeForSession(session) : "/signup/firm");
   if (session && (session.kind === "owner" || session.kind === "tenant")) {
     redirect(`/consent/portal?next=${encodeURIComponent(next)}`);
   }
@@ -31,7 +33,8 @@ export async function actionAcceptReconsent(formData: FormData) {
 export async function actionAcceptPortalConsent(formData: FormData) {
   const session = await guardEffectiveSession(await readSession(), null);
   if (!session) redirect("/login");
-  const next = consentNextPath(text(formData.get("next")), roleHome(session.kind, session.role));
+  const raw = text(formData.get("next"));
+  const next = consentNextPath(raw, "") || await roleHomeForSession(session);
   if (session.kind !== "owner" && session.kind !== "tenant") {
     redirect(`/consent?next=${encodeURIComponent(next)}`);
   }

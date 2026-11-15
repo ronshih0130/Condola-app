@@ -53,3 +53,18 @@ test("3a is read-only: the reader's SQL only selects, and only tenant-portal rep
     assert.equal((sql.match(/source = 'tenant_portal'/g) ?? []).length >= 3, true);
   }
 });
+
+test("MGT-125-AC3 failure contract through the real brand helper: a failed brand_v3 read is unavailable, never off", async () => {
+  const { staffPaymentTurns } = await import("./b3-payment-turns");
+  const { brandV3ReadForOrg } = await import("./brand-v3");
+  const session = {
+    kind: "staff", role: "admin", orgId: "00000000-0000-4000-8000-000000000001", liveOrgId: "00000000-0000-4000-8000-000000000001",
+    userId: "00000000-0000-4000-8000-000000000002", sessionId: "00000000-0000-4000-8000-000000000003",
+    name: "Synthetic", email: "", environment: "live", locale: "zh-TW", calendar: "gregorian", leaseId: null,
+  } as const;
+  const never = (async () => { throw new Error("no business transaction expected"); }) as never;
+  const failingRead = (org: string) => brandV3ReadForOrg(org, {}, async () => { throw new Error("db down"); });
+  const offRead = (org: string) => brandV3ReadForOrg(org, {}, async () => ({ v2: true, v3: false }));
+  assert.deepEqual(await staffPaymentTurns(session, { v3: failingRead, transaction: never }), { state: "unavailable" });
+  assert.deepEqual(await staffPaymentTurns(session, { v3: offRead, transaction: never }), { state: "off" });
+});

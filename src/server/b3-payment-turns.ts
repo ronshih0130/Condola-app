@@ -1,4 +1,4 @@
-import { brandV3EnabledForOrg } from "./brand-v3";
+import { brandV3ReadForOrg } from "./brand-v3";
 import { guardEffectiveSession, withEffectiveReadAuthority } from "./b017-custom-role-governance";
 import { tx } from "./db";
 import { FlowError, logServerError } from "./errors";
@@ -126,7 +126,7 @@ type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx 
  * Any other failure, at any step including admission, is "unavailable", never zero (MGT-125-AC3).
  */
 export async function staffPaymentTurns(session: Session, deps: Deps = {}): Promise<StaffPaymentTurns> {
-  const v3 = deps.v3 ?? brandV3EnabledForOrg;
+  const v3 = deps.v3 ?? brandV3ReadForOrg;
   const transaction = deps.transaction ?? tx;
   try {
     if (!(await v3(session.orgId))) return { state: "off" };

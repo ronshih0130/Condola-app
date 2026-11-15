@@ -1,3 +1,7 @@
+import { shellTodayTitle } from "@/i18n/lanes/brand-v3";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { areasFor, tabsFor } from "@/server/nav-v3";
+import { ManagerShellV3 } from "@/components/v3/shell/manager-shell";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { BUILD_SHA } from "@/build-info";
@@ -23,6 +27,21 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   const banner = session.kind === "staff" ? await trialBannerFor(session) : null;
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    // /api/env accepts native staff roles; its null-key guard refuses assigned custom roles.
+    return <ManagerShellV3 areas={areasFor(session)} tabs={tabsFor(session)}
+      locale={session.locale} name={session.name} role={session.role} firm={firm.name}
+      sandbox={session.environment === "sandbox"} showReset={demoModeEnabled() && session.role === "admin"}
+      hasLiveCompany={Boolean(session.liveOrgId)}
+      canSwitchCompany={session.kind === "staff" && Boolean(session.role && session.liveOrgId) && (!session.customRole || session.customRole.assigned === false)}
+      todayTitle={shellTodayTitle(new Date(), session.locale)}
+      buildSha={BUILD_SHA}
+      // The layout is kept across client navigation, so eligibility must not depend on the first path;
+      // the shell shows the banner only on /m (SH-TRIAL), and dismissal returns to /m.
+      trialBanner={banner && session.role === "admin" && session.environment === "live" ? <TrialBanner shellV3 locale={session.locale} banner={banner} next="/m" /> : null}>
+      {children}
+    </ManagerShellV3>;
+  }
   return (
     <>
       {session.environment === "live" ? null : (

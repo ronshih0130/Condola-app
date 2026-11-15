@@ -49,11 +49,18 @@ function sourceFiles() {
   return out;
 }
 
+// Sole exception: one exact manager-area property, in its owning lane only.
+function withoutManagerAreaName(source: string, rel: string) {
+  const exact = /^    money: "收款",$/gm;
+  if (rel !== "src/i18n/lanes/brand-v3.ts" || [...source.matchAll(exact)].length !== 1) return source;
+  return source.replace(exact, '    money: "",');
+}
+
 function hitsFor(words: string[]) {
   const hits: string[] = [];
   for (const file of sourceFiles()) {
-    const text = decode(read(file));
     const rel = relative(root, file);
+    const text = withoutManagerAreaName(decode(read(file)), rel);
     if (file.endsWith(".json")) {
       const data = JSON.parse(text) as Record<string, unknown>;
       for (const [key, value] of Object.entries(data)) {
@@ -249,4 +256,19 @@ test("the build stamps a short git SHA into the staff footer and /api/version", 
   assert.match(layout, /BUILD_SHA/);
   const route = read(join(root, "src/app/api/version/route.ts"));
   assert.match(route, /sha: BUILD_SHA/);
+});
+
+
+test("PLT-49-AC4: only the exact single manager navigation area value is exempt", () => {
+  const lane = "src/i18n/lanes/brand-v3.ts";
+  const allowed = '    money: "收款",';
+  assert.equal(withoutManagerAreaName(allowed, lane).includes("收款"), false);
+  for (const source of [allowed + "\n" + allowed, '    other: "收款",', '    money: "待收款",', '    money: "收款紀錄",', allowed + ' // 收款', 'const text = "收款";']) {
+    assert.equal(withoutManagerAreaName(source, lane).includes("收款"), true, source);
+  }
+  assert.equal(withoutManagerAreaName(allowed, "src/i18n/zh-TW.json").includes("收款"), true);
+  const source = read(join(root, lane));
+  assert.equal([...source.matchAll(/收款/g)].length, 1);
+  assert.equal(withoutManagerAreaName(source, lane).includes("收款"), false);
+  assert.deepEqual(hitsFor(FORBIDDEN), []);
 });

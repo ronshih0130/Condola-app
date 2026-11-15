@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -37,6 +38,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const showReset = demoModeEnabled() && session?.kind === "staff" && session.role === "admin";
   const v2 = await brandV2EnabledForOrg(session?.orgId);
   const v3 = await brandV3EnabledForOrg(session?.orgId);
+  const managerShell = v3 && session?.kind === "staff" && ((await headers()).get("x-pathname") || "").startsWith("/m");
   const root = brandRoot({ v2, v3 });
   const pageStylesheets = root.stylesheets.slice(1);
   const body = (
@@ -45,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <RequiredValidity message={t("i_field_required")} />
         <AuthHashForward />
         <ChunkReloadListener />
-        <header className="top">
+        {managerShell ? null : <header className="top">
           <label htmlFor="nav-open" className="nav-toggle" data-testid="nav-toggle" aria-label={t("i_menu")}>
             <span aria-hidden="true">☰</span>
           </label>
@@ -70,8 +72,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {session ? <SignOutButton /> : null}
             {showReset ? <ResetButton /> : null}
           </span>
-        </header>
-        {chrome.environment === "sandbox" ? <EnvBanner showBack={session?.kind === "staff" && Boolean(session.liveOrgId)} /> : null}
+        </header>}
+        {!managerShell && chrome.environment === "sandbox" ? <EnvBanner showBack={session?.kind === "staff" && Boolean(session.liveOrgId)} /> : null}
         {children}
         <footer className="foot site-foot" data-testid="site-footer" style={{ margin: "16px" }}>
           <nav className="site-legal" aria-label={t("i_legal_nav")}>
