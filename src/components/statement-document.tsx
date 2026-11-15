@@ -10,6 +10,8 @@ export function StatementDocument({
   lines,
   note,
   v2,
+  rentSource,
+  rentLabel,
 }: {
   t: T;
   locale: Locale;
@@ -26,6 +28,8 @@ export function StatementDocument({
   };
   note?: ReactNode;
   v2?: boolean;
+  rentSource?: ReactNode;
+  rentLabel?: string;
 }) {
   const figures = ownerSettlement({
     opening: Number(row.opening),
@@ -55,7 +59,7 @@ export function StatementDocument({
         <tbody>
           {summary.map(([key, value, testid]) => (
             <tr key={key}>
-              <td>{t(key)}</td>
+              <td>{key === "i_rent_received" && rentLabel ? rentLabel : t(key)}{key === "i_rent_received" && rentSource}</td>
               <td className="num" data-testid={testid || undefined}>
                 {amount(value)}
               </td>

@@ -130,3 +130,20 @@ html[data-brand="v2"][data-brand-v3] .main:has(.setup-checklist .es-primary) .em
 /* A modal form may be mounted inside its triggering table row. */
 html[data-brand="v2"][data-brand-v3] :is(dialog, [role="dialog"]) .btn.pri { background: var(--c-primary); color: var(--c-on-primary); border-color: var(--c-primary); }
 html[data-brand="v2"][data-brand-v3] :is(dialog, [role="dialog"]) .btn.pri:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+
+/* Batch 2 O-RPT: unchanged document content within the owner shell. */
+html[data-brand="v2"][data-brand-v3] .v3-owner-report { display: grid; gap: var(--sp-6, 24px); min-width: 0; color: var(--c-text); }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .report-title-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-4, 16px); }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .report-title-row h2 { margin: 0; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .report-month { display: flex; align-items: center; gap: var(--sp-2, 8px); }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .report-month a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--c-border-strong); border-radius: var(--r-btn); text-decoration: none; color: var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report :is(a, button, summary) { min-width: 44px; min-height: 44px; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report :is(a, button, summary):focus-visible { outline: 2px solid var(--c-focus); outline-offset: 2px; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .report-source summary { display: flex; align-items: center; cursor: pointer; color: var(--c-primary); text-decoration: underline; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .report-source p { color: var(--c-text-2); white-space: normal; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report article { min-width: 0; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report article > .card { margin-block: var(--sp-4, 16px); max-width: 100%; overflow-x: auto; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report :is(td, h3) { overflow-wrap: anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .btn,
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .btn:hover { background: var(--c-surface); color: var(--c-primary); border: 1px solid var(--c-border-strong); box-shadow: none; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-report .report-skeleton { min-height: calc(4 * var(--sp-10, 40px)); border-radius: var(--r-lg); background: var(--c-surface-2); }

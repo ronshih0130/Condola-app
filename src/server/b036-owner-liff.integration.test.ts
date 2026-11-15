@@ -13,7 +13,7 @@ import { GET as vendorAccount } from "../app/api/vendor-account/route";
 import { createSession } from "./auth";
 import { readSessionOn } from "./session";
 import { resolveIdentity } from "./identity";
-import { tenantLeases, ownerPropertyNames, ownerHome, listStatements, statementDetail, statementPdfSource } from "./queries";
+import { tenantLeases, ownerPropertyNames, ownerHome, listStatements, statementDetail, statementPdfSource, ownerStatementRentSource } from "./queries";
 import { lineHash, type LinePersona } from "./line/login-token";
 import { randomProof } from "./line/login-link";
 import { LINE_BROWSER_COOKIE, LINE_CSRF_COOKIE } from "./line/login-routes";
@@ -165,6 +165,14 @@ test("owner invitation derives company/persona atomically; only own properties/r
  assert.ok(properties.some(p => p.id === property)); assert.ok(reports.some(r => r.id === report));
  assert.ok(!reports.some(r => r.id === foreignReport)); assert.ok(await statementDetail(s, report));
  assert.equal(await statementDetail(s, foreignReport), null); assert.equal(await statementPdfSource(s, foreignReport), null);
+ // O-RPT (Brand 3.0 Batch 2 slice 3): the v3 list variant returns the same authorized reports, with property names;
+ // the 查來源 reader runs under the same owner scope and stays null for a report without linked payments and for a foreign one.
+ const withNames = await listStatements(s, true);
+ assert.deepEqual(withNames.map(r => r.id).sort(), reports.map(r => r.id).sort());
+ const own = withNames.find(r => r.id === report) as { properties?: string | null } | undefined;
+ assert.ok(own && typeof own.properties === "string" && own.properties.length > 0, "own report carries its property names");
+ assert.equal(await ownerStatementRentSource(s, report), null);
+ assert.equal(await ownerStatementRentSource(s, foreignReport), null);
  assert.equal((await pdf(report, a.token)).status, 200);
  const foreign = await pdf(foreignReport, a.token), missing = await pdf(randomUUID(), a.token);
  assert.equal(foreign.status, 404); assert.equal(missing.status, 404); assert.equal(await foreign.text(), await missing.text());

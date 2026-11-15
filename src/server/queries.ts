@@ -900,11 +900,12 @@ export async function latestUnmatchedPayment(session: Session) {
   );
 }
 
-export async function listStatements(session: Session) {
+export async function listStatements(session: Session, withProperties = false) {
   session = await guardEffectiveSession(session, "stmt.view");
   await admitCustomRead(session, "stmt.view");
   return tx(session.userId, async (client) =>
     withEffectiveReadAuthority(client, session, "stmt.view", async () => many<{
+      properties?: string;
       id: string;
       owner_id: string;
       owner_name: string;
@@ -924,7 +925,10 @@ export async function listStatements(session: Session) {
               s.period_start::text, s.currency, s.rent_received_minor::text AS rent,
               s.other_income_minor::text AS other, s.management_fee_minor::text AS fee,
               s.expenses_minor::text AS expenses, s.opening_balance_minor::text AS opening,
-              s.payouts_minor::text AS payouts, s.closing_balance_minor::text AS closing, s.status::text
+              s.payouts_minor::text AS payouts, s.closing_balance_minor::text AS closing, s.status::text${withProperties ? `,
+              (SELECT string_agg(p.name, '・' ORDER BY p.name, p.id) FROM properties p
+                WHERE p.org_id=s.org_id AND p.id IN
+                  (SELECT sl.property_id FROM owner_statement_lines sl WHERE sl.statement_id=s.id)) AS properties` : ""}
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.org_id = $1 AND s.status <> 'void'
@@ -1126,6 +1130,37 @@ export async function statementDetail(session: Session, id: string) {
     );
     return { statement, lines };
   }), requireOrgScope(session), effectiveReadOptions(session));
+}
+
+/** O-RPT-SRC: new narrow SQL; Tier 2 review required. Never reconstruct provenance
+ * from current month totals. Legacy generated rent lines have no ledger link and
+ * therefore intentionally return null. No new SQL objects or RLS bypass. */
+export async function ownerStatementRentSource(session: Session, id: string) {
+  session = await guardEffectiveSession(session, "stmt.view");
+  await admitCustomRead(session, "stmt.view");
+  if (session.kind !== "owner") return null;
+  return tx(session.userId, async client => withEffectiveReadAuthority(client, session, "stmt.view", async () => {
+    const row = await maybe<{ count: string; date: string | null; complete: boolean }>(client,
+      `SELECT count(DISTINCT p.id)::text AS count,
+              (max(p.confirmed_at) AT TIME ZONE o.timezone)::date::text AS date,
+              (count(sl.id)>0 AND count(sl.id)=count(DISTINCT sl.id)
+               AND bool_and(p.id IS NOT NULL AND sl.amount_minor>0 AND sl.amount_minor<=p.amount_minor)
+               AND sum(sl.amount_minor)=s.rent_received_minor) AS complete
+         FROM owner_statements s JOIN contacts c ON c.id=s.owner_contact_id
+         JOIN organizations o ON o.id=s.org_id
+         JOIN owner_statement_lines sl ON sl.statement_id=s.id AND sl.org_id=s.org_id AND sl.line_type='rent'
+         LEFT JOIN payments p ON p.ledger_transaction_id=sl.ledger_transaction_id
+          AND p.org_id=s.org_id AND p.property_id=sl.property_id AND p.currency=s.currency
+          AND p.status='confirmed' AND NOT p.is_deposit
+          AND p.paid_on BETWEEN s.period_start AND s.period_end
+          AND p.confirmed_at<=s.issued_at AND p.updated_at<=s.issued_at
+          AND ${ownerPropertyScope("p.property_id")}
+        WHERE s.id=$1 AND s.org_id=$2 AND ${ownerStatementScope}
+        GROUP BY s.id, o.timezone`, [id, session.orgId]);
+    const count = Number(row?.count);
+    return row?.complete === true && row.date && Number.isSafeInteger(count) && count > 0
+      ? { count, date: row.date } : null;
+  }), requireOrgScope(session), { isolation: "repeatable read", readOnly: true });
 }
 
 export async function listTicketProperties(session: Session) {
