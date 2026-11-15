@@ -563,3 +563,14 @@ test("MGT-101-AC3 precedence: the space's own base rent wins over the previous l
   const row = (await ready(o.staff.admin)).mine.find(m => m.kind === "vacant" && m.targetId === unit.id);
   assert.deepEqual([row?.rentMinor, row?.rentCurrency], ["700000", "TWD"]);
 });
+
+test("T-ROWS early-vacancy reason (hub PR #15): a declined renewal is 'declined'; a recorded future move-out date is 'notice'", async () => {
+  const o = await makeOrg();
+  const declined = await space(o); await lease(declined, { end: date(20), renewal: "declined" });
+  const notice = await space(o); await lease(notice, { moved: date(15), end: date(90) });
+  const rows = (await ready(o.staff.admin)).mine.filter(m => m.kind === "early_vacancy");
+  const reason = (s: { id: string }) => rows.find(m => m.targetId === s.id)?.reason;
+  assert.equal(reason(declined), "declined");
+  assert.equal(reason(notice), "notice");
+  for (const m of (await ready(o.staff.admin)).mine.filter(m => m.kind !== "early_vacancy")) assert.equal(m.reason, null);
+});
