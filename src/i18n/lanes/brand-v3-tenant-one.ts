@@ -1,6 +1,6 @@
 import type { Locale } from "../index";
 // R2-TEN-ONE + tenant-mobile m-detail + login-phone mgr-entry, approved sources.
-// P52 / PENDING-RON PR-018: where no active, dated lease proves the lead,
+// Approved by Ron 2026-11-15 11:42 PT (PENDING-RON PR-018): where no active, dated lease proves the lead,
 // retain the shipped name + lease status display; do not compose a new sentence.
 const copy = {
   "zh-TW": {

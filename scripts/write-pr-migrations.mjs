@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261115120000_pr012_drop_staging_only_objects.sql": {
+    addOnly: false,
+    reason: "PR-012 (a), Ron 2026-11-15 11:42 PT: DROP POLICY IF EXISTS files.receipt_file_read and DROP FUNCTION IF EXISTS app.read_request_session(text,text,text,text) — two staging-only objects never in main (no code or object depends on them). No-op on databases built from main; on staging it removes an extra permissive SELECT policy and an unused SECURITY DEFINER reader. No data change.",
+  },
   "supabase/migrations/20261115130000_b013_current_owner_authority.sql": {
     addOnly: false,
     reason: "PR-015 / B-080 Tier 2: CREATE OR REPLACE only the two readers app.b013_owner_pending and app.b013_owner_history with their prior bodies plus the org-local date property-owner authority predicate, same as the existing decision function. Preserves signatures, SECURITY DEFINER, search_path, snapshot designation and service-only EXECUTE. Leaves app.b013_decide_estimate unchanged, including its org-local authorization, lock_timeout=3s, replay and ACLs. Not add-only because it tightens existing reader authorization behavior and reasserts privileges. No table, column, data, flag or outbound change.",

@@ -51,7 +51,7 @@ type BillsInput = { month: string; status?: MoneyMonthFilterStatus; cursor?: str
 type ReportsInput = { month: string; cursor?: string };
 
 /** MGT-141 round 6 supersedes screens.md month-page B.2 / phase-3 spec §3.1's
- * five-display-status restriction. P52 pending, PENDING-RON PR-018 (wording).
+ * five-display-status restriction. Wording approved by Ron 2026-11-15 11:42 PT (PENDING-RON PR-018).
  * Paid > reported > overdue > partial (before/on due) > due today > future.
  * Only confirmed allocations determine partial/paid; invoice status/balance cannot override them.
  * The SQL CASE mirrors this projection, with separate due-state filter buckets. */
