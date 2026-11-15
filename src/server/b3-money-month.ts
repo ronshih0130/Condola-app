@@ -10,7 +10,9 @@ import type { Session } from "./types";
 // Brand 3.0 phase 3 §3.1, accepted §4 rules 1–9. Read projections only.
 // brand_v3 (including its v2 prerequisite) is the only item gate for this page.
 export const MONEY_MONTH_LIST_LIMIT = 50;
-export const MONEY_MONTH_STATUSES = ["paid", "reported", "overdue", "due_today", "future"] as const;
+export const MONEY_MONTH_FILTER_STATUSES = ["paid", "reported", "overdue", "due_today", "future"] as const;
+export type MoneyMonthFilterStatus = typeof MONEY_MONTH_FILTER_STATUSES[number];
+export const MONEY_MONTH_STATUSES = [...MONEY_MONTH_FILTER_STATUSES, "partial"] as const;
 export type MoneyMonthStatus = typeof MONEY_MONTH_STATUSES[number];
 export type MoneyMonthBill = {
   leaseId: string; month: string; place: string; tenantName: string | null; currency: string;
@@ -23,7 +25,8 @@ export type MoneyMonthBills = { state: "off" } | { state: "unavailable" } | {
   state: "ready"; month: string; today: string; timezone: string;
   /** No separately reviewed ended/archive expansion exists in rule 8. */
   population: "rent_roll_active_unarchived";
-  counts: Record<MoneyMonthStatus, number> & { all: number }; filteredCount: number;
+  /** Counts retain the underlying due-state buckets; partial is a display status, not a new tab. */
+  counts: Record<MoneyMonthFilterStatus, number> & { all: number }; filteredCount: number;
   totals: MoneyMonthCurrencyTotal[];
   /** All periods, including ended/archived debt, just like dashboard. Count is leases, not people. */
   outstanding: { leaseCount: number; currencies: { currency: string; amountMinor: string; leaseCount: number }[] };
@@ -44,14 +47,19 @@ export type MoneyMonthReports = { state: "off" } | { state: "unavailable" } | {
   attached: MoneyMonthReport[]; other: MoneyMonthReport[]; nextCursor: string | null;
 };
 type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx; now?: () => Date };
-type BillsInput = { month: string; status?: MoneyMonthStatus; cursor?: string };
+type BillsInput = { month: string; status?: MoneyMonthFilterStatus; cursor?: string };
 type ReportsInput = { month: string; cursor?: string };
 
-/** Row projection. The SQL CASE uses the same precedence for uncapped counts/filtering. */
+/** MGT-141 round 6 supersedes screens.md month-page B.2 / phase-3 spec §3.1's
+ * five-display-status restriction. P52 pending, PENDING-RON PR-018 (wording).
+ * Paid > reported > overdue > partial (before/on due) > due today > future.
+ * Only confirmed allocations determine partial/paid; invoice status/balance cannot override them.
+ * The SQL CASE mirrors this projection, with separate due-state filter buckets. */
 export function moneyMonthStatus(total: string, confirmed: string, pending: boolean, dueDate: string, today: string): MoneyMonthStatus {
   if (BigInt(total) > BigInt(0) && BigInt(confirmed) >= BigInt(total)) return "paid";
   if (pending) return "reported";
   if (dueDate < today) return "overdue";
+  if (BigInt(confirmed) > BigInt(0) && BigInt(confirmed) < BigInt(total)) return "partial";
   return dueDate === today ? "due_today" : "future";
 }
 
@@ -126,14 +134,22 @@ WITH calendar AS (
 ), selected_bill_facts AS (
   SELECT b.*, EXISTS (SELECT 1 FROM attachments a WHERE a.lease_id = b.lease_id AND a.month = b.month) AS has_pending_report
     FROM bill_rows b WHERE b.month = $2::date
-), selected_bills AS (
+), selected_bill_states AS (
   SELECT b.*, CASE
            WHEN b.confirmed >= b.total THEN 'paid'
            WHEN b.has_pending_report THEN 'reported'
            WHEN b.due_date < c.today THEN 'overdue'
+           WHEN b.confirmed > 0 AND b.confirmed < b.total THEN 'partial'
            WHEN b.due_date = c.today THEN 'due_today'
            ELSE 'future' END AS status
     FROM selected_bill_facts b CROSS JOIN calendar c
+), selected_bills AS (
+  -- Keep five filter buckets: partial before due is future; on due is due_today
+  -- (no dedicated due_today tab). Pending reports still belong to reported.
+  SELECT b.*, CASE WHEN b.status = 'partial'
+                  THEN CASE WHEN b.due_date = c.today THEN 'due_today' ELSE 'future' END
+                  ELSE b.status END AS filter_status
+    FROM selected_bill_states b CROSS JOIN calendar c
 ), selected_reports AS (
   SELECT p.*, CASE WHEN EXISTS (SELECT 1 FROM attachments a WHERE a.report_id = p.id) THEN 1 ELSE 0 END AS group_order
     FROM pending_reports p
@@ -146,7 +162,7 @@ SELECT c.today::text, c.timezone,
        (SELECT count(*)::int FROM selected_bills WHERE currency_count <> 1) AS invalid_currencies,
        (SELECT count(*)::int FROM selected_bills) AS all_count,
        (SELECT coalesce(jsonb_object_agg(status, n), '{}'::jsonb) FROM
-         (SELECT status, count(*)::int AS n FROM selected_bills GROUP BY status) s) AS counts,
+         (SELECT filter_status AS status, count(*)::int AS n FROM selected_bills GROUP BY filter_status) s) AS counts,
        (SELECT coalesce(jsonb_agg(t ORDER BY t.currency), '[]'::jsonb) FROM (
          SELECT currency, sum(total)::text AS "totalMinor", sum(confirmed)::text AS "confirmedMinor",
                 count(*)::int AS "billedRows", count(*) FILTER (WHERE status = 'paid')::int AS "paidRows"
@@ -169,7 +185,7 @@ SELECT b.lease_id::text AS "leaseId", to_char(b.month, 'YYYY-MM') AS month, b.pl
     SELECT c.display_name FROM lease_parties lp JOIN contacts c ON c.id = lp.contact_id AND c.org_id = $1
      WHERE lp.org_id = $1 AND lp.lease_id = b.lease_id AND lp.role = 'primary' ORDER BY lp.id LIMIT 1
   ) tenant ON true
- WHERE ($4::text IS NULL OR b.status = $4)
+ WHERE ($4::text IS NULL OR b.filter_status = $4)
    AND ($5::date IS NULL OR (b.due_date, b.lease_id) > ($5::date, $6::uuid))
  ORDER BY b.due_date, b.lease_id LIMIT $7`;
 
@@ -225,7 +241,7 @@ const cursorFor = (c: Cursor) => Buffer.from(JSON.stringify(c)).toString("base64
 
 type BillsSummary = {
   today: string; timezone: string; invalid_currencies: number; all_count: number;
-  counts: Partial<Record<MoneyMonthStatus, number>>; totals: MoneyMonthCurrencyTotal[];
+  counts: Partial<Record<MoneyMonthFilterStatus, number>>; totals: MoneyMonthCurrencyTotal[];
   owing: number; outstanding: { currency: string; amountMinor: string; leaseCount: number }[];
 };
 type ReportsSummary = { today: string; timezone: string; count: number; attached: number; other: number; invalid_currencies: number };
@@ -239,7 +255,7 @@ export async function moneyMonthBills(session: Session, input: BillsInput, deps:
     const admitted = await guardEffectiveSession(session, "stmt.view");
     assertPerm(admitted, "stmt.view");
     const month = inputMonth(input.month);
-    if (input.status !== undefined && !MONEY_MONTH_STATUSES.includes(input.status)) throw new Error("Invalid status");
+    if (input.status !== undefined && !MONEY_MONTH_FILTER_STATUSES.includes(input.status)) throw new Error("Invalid status");
     const scope = { kind: "bills" as const, org: admitted.orgId, month: input.month, status: input.status ?? null };
     const cursor = readCursor(input.cursor, scope);
     const now = (deps.now ?? (() => new Date()))().toISOString();
