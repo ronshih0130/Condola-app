@@ -367,6 +367,7 @@ test("SH-NONAME: the open avatar menu header shows role and company only", () =>
   const menu = renderShell({ path: "/m", open: "avatar", name: "" }).split('class="shell-menu-heading"')[1].split("</div>")[0];
   assert.doesNotMatch(menu, /<b>/);
   assert.match(menu, /管理員/); assert.match(menu, /安居代管/);
+});
 
 test("PLT-44-AC1 / MGT-54: on phones the fixed empty-state primary sits above the v3 tab bar, not over it", () => {
   const css = source("public/brand/v3/shell.css");
