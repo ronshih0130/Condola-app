@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261114000000_b056_pr3a_pause_predicate.sql": {
+    addOnly: false,
+    reason: "B-056 PR-3a: adds nullable app.b056_org_trials.kept_member_id (composite FK to org_members ON DELETE RESTRICT), changes the b056_org_trials org FK from ON DELETE CASCADE to ON DELETE RESTRICT (#139 GO fix-forward), adds definer-only app.b056_member_paused(org,user) (EXECUTE revoked from PUBLIC/anon/authenticated, granted to service_role), and CREATE OR REPLACEs app.is_member, app.has_role, app.b010_confirmation_audit, app.b010_lock_payment_context, app.b017_denied_orgs and the API-reachable definer helpers app.b008_capture_first_period, app.b017_effective, app.b017_invite_guard, app.b017_member_guard, app.b027_scope, app.b015_edit_context and public.esign_version_guard with their current bodies plus AND NOT app.b056_member_paused(m.org_id, m.user_id) on each active-membership test; grants and owners unchanged. With pricing_trial OFF (seed) the predicate is a constant false, so every changed function returns what it returned before. Not add-only because of the FK change, CREATE OR REPLACE of live RLS helpers and privilege statements. No row rewritten, no enum or flag change, no outbound, no delete.",
+  },
   "supabase/migrations/20261114100000_b042_fix_forward.sql": {
     addOnly: false,
     reason: "B-042 fix-forward (CEO GO on #143): CREATE OR REPLACE of app.b042_flag_on and app.b042_session_pin_ok with the same signatures; today_dash now also requires today_home, and the recorders require a transaction pinned to the live org (a missing pin was accepted before). Privileges re-asserted (REVOKE ALL, EXECUTE to service_role only). No table, column, policy, enum or flag-value change; flags stay OFF and nothing in the app calls these functions yet. Not add-only: it tightens existing function behavior.",

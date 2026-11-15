@@ -3,12 +3,12 @@
 
 [rent_overdue -> staff]
 Subject: Overdue bill reminder
-林雅婷, 松信住宅管理: bill due 2026-11-03; outstanding $1,800.00. View the rent overview.
+黃志明, 松信住宅管理: bill due 2026-11-10; outstanding NT$12,000. View the rent overview.
 
 [rent_overdue -> tenant]
 Subject: Overdue bill reminder
-Alex Kim, 松信住宅管理: bill due 2026-11-03; outstanding $1,800.00. View your bill in the tenant portal.
+王小美, 松信住宅管理: bill due 2026-11-10; outstanding NT$12,000. View your bill in the tenant portal.
 
 [rent_manual -> tenant]
 Subject: Bill reminder
-王小美, 松信住宅管理: bill due 2026-11-03; outstanding NT$12,000. View your bill in the tenant portal.
+王小美, 松信住宅管理: bill due 2026-11-10; outstanding NT$12,000. View your bill in the tenant portal.
