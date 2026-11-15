@@ -341,7 +341,7 @@
   },
   "src/app/o/approvals/[ticketId]/page.tsx#ApprovalHistoryPage": {
     "reason": "Owner portal page checks owner identity before its rollout and decision queries",
-    "sha256": "abdb51db44c67546bbd9a2b0c4ff17c51213ed02d41f8d15d985960bc3a8c805"
+    "sha256": "bf9ee15b7ae3ed903ea3a7a897301dcbe3dbe3322bb89ce7753a353f7a63c28e"
   },
   "src/app/api/mock-subscription/route.ts#POST": {
     "reason": "Local HMAC-signed mock provider fixture webhook, loopback host only; no member session",
