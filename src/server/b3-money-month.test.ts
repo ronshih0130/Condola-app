@@ -17,7 +17,11 @@ const session: Session = { userId: id(1), sessionId: id(2), orgId: id(3), liveOr
 const month = "2030-05";
 const ON = { v3: async () => true, now: () => new Date("2030-05-01T00:30:00Z") };
 const forbidden = (e: unknown) => e instanceof FlowError && e.key === "errors.forbidden";
-const never: typeof tx = async () => { assert.fail("must not open business transaction"); };
+// The readers catch every non-forbidden error as "unavailable", so a failing transaction alone cannot prove
+// it was never opened: count calls outside the reader and check after every test.
+let neverCalls = 0;
+const never: typeof tx = async () => { neverCalls++; throw new Error("must not open business transaction"); };
+test.afterEach(() => { const calls = neverCalls; neverCalls = 0; assert.equal(calls, 0, "a business transaction was opened"); });
 const savedCustom = process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
 test.before(() => { process.env.CUSTOM_ROLES_ORG_ALLOWLIST = ""; });
 test.after(() => { if (savedCustom === undefined) delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST; else process.env.CUSTOM_ROLES_ORG_ALLOWLIST = savedCustom; });
