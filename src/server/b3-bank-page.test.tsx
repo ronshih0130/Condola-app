@@ -113,7 +113,11 @@ test("OFF page is byte-identical after the v3 fork; existing read order and deci
   const marker = "  if (await bankMatchingEnabled(session)) {";
   assert.equal(current.slice(current.indexOf(marker)), old.slice(old.indexOf(marker)));
   assert.match(current, /searchParams: Promise<BankSearchParams>/); assert.doesNotMatch(current, /BankPage\([^\n]*=\s*\{/);
-  for (const file of ["src/server/bank-matching.ts", "src/server/bank-matching-actions.ts", "src/app/api/bank/matching/route.ts"]) assert.equal(source(file), baseline(file));
+  for (const file of ["src/server/bank-matching.ts", "src/server/bank-matching-actions.ts"]) assert.equal(source(file), baseline(file));
+  // The JSON route changes in exactly one way: it forwards a client requestId to decideBankMatch (B009 idempotency, Codex r1).
+  assert.equal(source("src/app/api/bank/matching/route.ts"), baseline("src/app/api/bank/matching/route.ts").replace(
+    'suggestionId:typeof body.suggestionId === "string" ? body.suggestionId : undefined});',
+    'suggestionId:typeof body.suggestionId === "string" ? body.suggestionId : undefined,...(typeof body.requestId === "string" ? {requestId:body.requestId} : {})});'));
   for (const matching of [false, true]) {
     const trace: string[] = [];
     const box = (name: string) => function Box(props: Record<string, unknown>) { return <div data-test={name}>{JSON.stringify(props, (_key, v) => typeof v === "function" ? undefined : v)}</div>; };
@@ -164,4 +168,27 @@ test("existing API executes consent + literal bank.reconcile + existing ops for 
 test("client uses the existing closed reason set without importing server crypto", () => {
   for (const locale of ["zh-TW", "en"] as const) assert.deepEqual(Object.keys(bankCopy.bankMatchingStrings(locale).reasons), [...rules.BANK_MATCH_REASON_CODES]);
   assert.doesNotMatch(source("src/components/v3/m/bank/bank.tsx"), /import.*bank-matching-rules|node:crypto/);
+});
+
+test("R1-BANK-ROW / B009: the JSON decision route forwards requestId; the v3 panel reuses one id per operation (Codex r1)", async () => {
+  const seen: unknown[] = [];
+  const route = compile(source("src/app/api/bank/matching/route.ts"), {
+    "@/server/b017-custom-role-governance": { guardEffectiveSession: async () => ({ orgId: "org", userId: "user" }) },
+    "@/server/consent-gate": { requireCurrentConsent: async () => null },
+    "@/server/bank-matching": { decideBankMatch: async (_session: unknown, input: unknown) => { seen.push(input); return true; }, importBankFile: async () => null },
+    "@/server/session": { readSession: async () => ({}) },
+    "next/server": { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } },
+  }).POST as (request: Request) => Promise<Response>;
+  const id = "0b9c3a52-5d0e-4c6b-9a3a-2f6f1b6f8c11";
+  const post = (body: Record<string, string>) => route(new Request("http://x/api/bank/matching", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+  assert.equal((await post({ bankId: "bank1", decision: "match", reason: "r", suggestionId: "s", requestId: id })).status, 200);
+  assert.equal((seen[0] as { requestId?: string }).requestId, id);
+  await post({ bankId: "bank1", decision: "reject", reason: "r", suggestionId: "s" });
+  assert.equal((seen[1] as { requestId?: string }).requestId, undefined, "absent id stays absent (legacy callers)");
+  // Client: the operation key covers bank row, decision, candidate and reason; the same key keeps its id (retry after a
+  // lost response returns the stored receipt), a different key gets a fresh id.
+  const ui = source("src/components/v3/m/bank/bank.tsx");
+  assert.match(ui, /const key = JSON\.stringify\(\[row\.id, mode, candidateKey\(selected\), reason\]\);/);
+  assert.match(ui, /if \(operation\.current\?\.key !== key\) operation\.current = \{ key, id: crypto\.randomUUID\(\) \};/);
+  assert.match(ui, /requestId: operation\.current\.id/);
 });

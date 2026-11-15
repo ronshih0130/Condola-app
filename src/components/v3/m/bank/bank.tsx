@@ -57,12 +57,18 @@ export function BankDecision({ row, locale, mode, onClose, onSuccess }: {
   const [choice, setChoice] = useState(suggestions.length === 1 ? candidateKey(suggestions[0]) : "");
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   const sending = useRef(false);
+  // One request id per operation (B009 idempotency, as the legacy form sends): a retry of the same decision after a
+  // lost response reuses it and gets the stored receipt; changing the decision, candidate or reason starts a new one.
+  const operation = useRef<{ key: string; id: string } | null>(null);
   const selected = row.candidates.find(c => candidateKey(c) === choice);
   async function submit(form: FormData) {
     if (sending.current || !selected) return;
     sending.current = true; setBusy(true); setError(null);
+    const reason = String(form.get("reason") ?? "");
+    const key = JSON.stringify([row.id, mode, candidateKey(selected), reason]);
+    if (operation.current?.key !== key) operation.current = { key, id: crypto.randomUUID() };
     try {
-      await submitBankRequest({ bankId: row.id, decision: mode, reason: String(form.get("reason") ?? ""),
+      await submitBankRequest({ bankId: row.id, decision: mode, reason, requestId: operation.current.id,
         ...(selected.suggestionId ? { suggestionId: selected.suggestionId } : { paymentId: selected.paymentId }) });
       onSuccess();
     } catch (e) { setError(t(e instanceof Error && e.message === "errors.forbidden" ? "errors.forbidden" : "errors.generic")); }
