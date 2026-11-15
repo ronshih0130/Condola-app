@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { TenantsV3Page } from "@/components/v3/m/tenants/page";
+import { TenantsLoading } from "@/components/v3/m/tenants/tenants";
 import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
@@ -12,10 +16,14 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function TenantsPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
+export default async function TenantsPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string; filter?: string; cursor?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const raw = await searchParams;
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/tenants.css" /><Suspense key={`${raw.q ?? ""}:${raw.filter ?? "all"}:${raw.cursor ?? ""}`} fallback={<TenantsLoading locale={session.locale} />}><TenantsV3Page session={session} params={raw} /></Suspense></>;
+  }
   const t = makeT(session.locale);
   const directory=await tenantDirectory(session,raw);
   if(directory.state==="enabled") return <TenantDirectoryList locale={session.locale} result={directory} empty={<ManagementEmptyState session={session} page={directory.q || directory.page > 1 ? "SRCH" : "TEN"} actionHref={directory.q || directory.page > 1 ? "/m/tenants" : undefined} />}/>;
