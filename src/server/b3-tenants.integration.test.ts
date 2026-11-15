@@ -29,10 +29,12 @@ test.after(async()=>{
   if(saved===undefined)delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST;else process.env.CUSTOM_ROLES_ORG_ALLOWLIST=saved;
 });
 type Role="admin"|"manager"|"accountant"|"maintenance";
-async function fixture(directory=false) {
+async function fixture(directory=false,mobile=true) {
   const org=(await db.query(`INSERT INTO organizations(name,country_code,default_currency,timezone,feature_flags)
-    VALUES('R2 TEN synthetic','US','USD','America/Los_Angeles',$1::jsonb) RETURNING id::text`,[JSON.stringify({tenant_directory_edit:directory})])).rows[0].id as string;
+    VALUES('R2 TEN synthetic','US','USD','America/Los_Angeles',$1::jsonb) RETURNING id::text`,[JSON.stringify({tenant_directory_edit:directory,tenant_mobile_required:mobile})])).rows[0].id as string;
   if(directory) await db.query(`INSERT INTO platform_settings(key,value) VALUES('tenant_directory_edit',jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)))
+    ON CONFLICT(key) DO UPDATE SET value=jsonb_build_object('enabled',true,'allowed_org_ids',coalesce(platform_settings.value->'allowed_org_ids','[]'::jsonb)||jsonb_build_array($1::text))`,[org]);
+  if(mobile) await db.query(`INSERT INTO platform_settings(key,value) VALUES('tenant_mobile_required',jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)))
     ON CONFLICT(key) DO UPDATE SET value=jsonb_build_object('enabled',true,'allowed_org_ids',coalesce(platform_settings.value->'allowed_org_ids','[]'::jsonb)||jsonb_build_array($1::text))`,[org]);
   const staff={} as Record<Role,Session>;
   for(const role of ["admin","manager","accountant","maintenance"] as const){
@@ -89,7 +91,7 @@ test("admin/manager phones and accountant omission/search privacy, forged native
   }
   for(const s of [f.staff.accountant,{...f.staff.accountant,role:"admin" as const}]){
     const a=await read(s);assert.equal(a.rows.length,1);assert.equal(a.canViewPhone,false);assert.equal(a.missing,null);
-    for(const key of ["phone","verified","staffUpdated"])assert.equal(key in a.rows[0],false);
+    for(const key of ["phone","verified","staffUpdated","duplicateName"])assert.equal(key in a.rows[0],false);
     const b=await read(s,{q:"+19995550987"});assert.equal(b.filteredCount,0);assert.deepEqual(b.rows,[]);
     await assert.rejects(brandTenants(s,{filter:"missing"},ON),denied);
   }
@@ -103,7 +105,7 @@ test("cross-org, wrong environment, expired session, portal and anon denial",asy
     await assert.rejects(brandTenants(s,{},ON),denied);
   await db.query("UPDATE auth_sessions SET expires_at=now()-interval '1 second' WHERE id=$1",[f.staff.manager.sessionId]);
   await assert.rejects(brandTenants(f.staff.manager,{},ON),denied);
-  const args=[f.org,null,false,true,false];
+  const args=[f.org,null,false,true,false,true];
   for(const [sql,params] of [[ADMIT,[f.org,f.staff.admin.sessionId,f.staff.admin.userId,"live",f.org]],[SUMMARY,args],[LIST,[...args,null,null,51]]] as const){
     await db.query("BEGIN");try{await db.query("SET LOCAL ROLE anon");await assert.rejects(db.query(sql,[...params]),(e:unknown)=>(e as {code?:string}).code==="42501");}finally{await db.query("ROLLBACK");}
   }
@@ -125,7 +127,7 @@ test("LINE uses current org-scoped linked records, never legacy ids or pending/u
 });
 
 test("B-017 props.view without tenants.contact masks before search/counts; revoked entry denied in snapshot",async()=>{
-  const f=await fixture();await contact(f,0,"+19995550987");
+  const f=await fixture();await contact(f,0,"+19995550987");await contact(f,1,"+19995550987");
   await db.query("UPDATE org_members SET is_billing_owner=true WHERE org_id=$1 AND user_id=$2",[f.org,f.staff.admin.userId]);
   const previous=process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
   try{
@@ -141,7 +143,7 @@ test("B-017 props.view without tenants.contact masks before search/counts; revok
       return {...f.staff.manager,sessionId};
     };
     await assign();const limited=await fresh();
-    const names=await read(limited);assert.equal(names.total,1);assert.equal(names.missing,null);assert.equal(names.canViewPhone,false);assert.equal("phone" in names.rows[0],false);
+    const names=await read(limited);assert.equal(names.total,2);assert.equal(names.missing,null);assert.equal(names.canViewPhone,false);assert.equal("phone" in names.rows[0],false);assert.equal("duplicateName" in names.rows[0],false);
     assert.equal((await read(limited,{q:"+19995550987"})).filteredCount,0);
     await assert.rejects(brandTenants(limited,{filter:"missing"},ON),denied);
     await governCustomRole(f.staff.admin,{operation:"revise",roleId,grants:["props.view","tenants.contact"],requestId:randomUUID()});await assign();
@@ -151,4 +153,70 @@ test("B-017 props.view without tenants.contact masks before search/counts; revok
     };
     await assert.rejects(brandTenants(allowed,{}, {...ON,transaction:revoked}),denied);
   }finally{if(previous===undefined)delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST;else process.env.CUSTOM_ROLES_ORG_ALLOWLIST=previous;}
+});
+
+test("item gate requires platform enabled, selected-org allowlist and org opt-in; OFF/absent ignores missing URL",async()=>{
+  const f=await fixture(true,false);
+  await contact(f,0,null,null);await contact(f,1,"+19995550123",null);
+  const enabled={enabled:true,allowed_org_ids:[f.org]};
+  const cases:[unknown,unknown,boolean][]=[
+    [null,{},false], [null,{tenant_mobile_required:true},false],
+    [{enabled:false,allowed_org_ids:[f.org]},{tenant_mobile_required:true},false],
+    [enabled,{},false], [enabled,{tenant_mobile_required:false},false],
+    [enabled,{tenant_mobile_required:"true"},false],
+    [{enabled:"true",allowed_org_ids:[f.org]},{tenant_mobile_required:true},false],
+    [{enabled:true,allowed_org_ids:[]},{tenant_mobile_required:true},false],
+    [{enabled:true,allowed_org_ids:[randomUUID()]},{tenant_mobile_required:true},false],
+    [{enabled:true,allowed_org_ids:f.org},{tenant_mobile_required:true},false],
+    [enabled,{tenant_mobile_required:true},true],
+  ];
+  for(const [platform,flags,on] of cases){
+    await db.query("DELETE FROM platform_settings WHERE key='tenant_mobile_required'");
+    if(platform!==null)await db.query("INSERT INTO platform_settings(key,value) VALUES('tenant_mobile_required',$1::jsonb)",[JSON.stringify(platform)]);
+    await db.query("UPDATE organizations SET feature_flags=$2::jsonb WHERE id=$1",[f.org,JSON.stringify({tenant_directory_edit:true,...flags as object})]);
+    const result=await read(f.staff.manager,{filter:"missing"});
+    assert.equal(result.mobileRequired,on);assert.equal(result.filter,on?"missing":"all");
+    assert.equal(result.missing,on?1:null);assert.equal(result.filteredCount,on?1:2);
+    const all=await read(f.staff.manager);assert.equal(all.rows[1].phone,"+19995550123");
+    assert.equal("verified" in all.rows[1],on);assert.equal("staffUpdated" in all.rows[1],on);
+    assert.deepEqual(await brandTenants(f.staff.manager,{filter:"missing"},{v3:async()=>false}),{state:"off"});
+    if(!on){const accountant=await read(f.staff.accountant,{filter:"missing"});assert.equal(accountant.filter,"all");assert.equal(accountant.rows.length,2);}
+  }
+});
+test("same-org E.164 duplicates on each row, stable first other, before search/pagination; cross-org excluded",async()=>{
+  const f=await fixture(true),other=await fixture(true);
+  const phone="+19995550123",unique="+19995550999";
+  // Same normalized stored number, distinct tenants; third duplicate is beyond page one.
+  const a=await contact(f,0,phone,null),b=await contact(f,1,phone,null);
+  for(let n=2;n<52;n++)await contact(f,n,null,null);
+  const c=await contact(f,52,phone,null);await contact(f,53,unique,null);
+  await contact(other,0,unique,null);await contact(other,1,phone,null);
+  await contact(f,90,unique,null,true);await contact(f,91,unique,null,false,false);
+  const first=await read(f.staff.manager);assert.ok(first.nextCursor);
+  const second=await read(f.staff.manager,{cursor:first.nextCursor});
+  const rows=[...first.rows,...second.rows];
+  assert.equal(rows.find(r=>r.id===a)?.duplicateName,"Person 001");
+  assert.equal(rows.find(r=>r.id===b)?.duplicateName,"Person 000");
+  assert.equal(rows.find(r=>r.id===c)?.duplicateName,"Person 000");
+  assert.equal(rows.find(r=>r.name==="Person 053")?.duplicateName,null);
+  const searched=await read(f.staff.manager,{q:"Person 052"});assert.equal(searched.rows[0].duplicateName,"Person 000");
+  const isolated=await read(other.staff.manager);for(const row of isolated.rows)assert.equal(row.duplicateName,null);
+  const accountant=await read(f.staff.accountant);
+  for(const row of accountant.rows)for(const key of ["phone","duplicateName","verified","staffUpdated"])assert.equal(key in row,false);
+});
+
+test("sandbox uses selected-org gate and duplicate population, never live-parent phone matches",async()=>{
+  const live=await fixture(true),sandbox=await fixture(true);
+  await db.query("UPDATE organizations SET environment='sandbox',live_org_id=$2 WHERE id=$1",[sandbox.org,live.org]);
+  const phone="+19995550123";
+  await contact(live,0,phone,null);await contact(sandbox,1,phone,null);
+  const session={...live.staff.manager,orgId:sandbox.org,environment:"sandbox" as const};
+  let result=await read(session);assert.equal(result.mobileRequired,true);assert.equal(result.rows.length,1);assert.equal(result.rows[0].duplicateName,null);
+  await contact(sandbox,2,phone,null);
+  result=await read(session);assert.deepEqual(result.rows.map(r=>r.duplicateName),["Person 002","Person 001"]);
+  assert.equal((await read(live.staff.manager)).rows[0].duplicateName,null);
+  // Only live parent admitted: sandbox must not inherit the item gate.
+  await db.query("UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='tenant_mobile_required'",[live.org]);
+  result=await read(session,{filter:"missing"});assert.equal(result.mobileRequired,false);assert.equal(result.filter,"all");assert.equal(result.rows.length,2);
+  for(const row of result.rows){assert.equal(row.phone,phone);assert.equal("duplicateName" in row,false);}
 });

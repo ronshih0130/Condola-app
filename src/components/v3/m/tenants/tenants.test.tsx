@@ -4,7 +4,7 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TenantsView, TenantsLoading, tenantsHref } from "./tenants";
 import type { TenantsResult } from "../../../../server/b3-tenants";
-const data:Extract<TenantsResult,{state:"ready"}>={state:"ready",q:"",filter:"all",canViewPhone:true,total:73,missing:4,filteredCount:73,nextCursor:null,
+const data:Extract<TenantsResult,{state:"ready"}>={state:"ready",q:"",filter:"all",canViewPhone:true,mobileRequired:true,total:73,missing:4,filteredCount:73,nextCursor:null,
   rows:[{id:"test-id",name:"Synthetic",place:"Unit",phone:"+19995550123",verified:false,staffUpdated:true,lineLinked:true}]};
 const render=(d:Parameters<typeof TenantsView>[0]["data"], params={})=>renderToStaticMarkup(<TenantsView data={d} locale="zh-TW" params={params} canInvite />);
 test("approved lead, columns, source chips, accessible tooltip and existing detail link",()=>{
@@ -35,4 +35,16 @@ test("permission, retry, loading and cursor navigation",()=>{
   assert.ok(render({...data,nextCursor:"next"},{cursor:"prev"}).includes("返回第一頁"));
   assert.match(renderToStaticMarkup(<TenantsLoading locale="en" />),/aria-busy="true"/);
   assert.equal(tenantsHref({q:"a&b",filter:"missing",cursor:"next"}),"/m/tenants?q=a%26b&filter=missing&cursor=next");
+});
+
+test("item OFF omits badges, missing lead/chip and crafted filter links but retains permitted phone",()=>{
+  const html=render({...data,mobileRequired:false,filter:"missing",rows:[{...data.rows[0],duplicateName:"Other tenant"}]},{filter:"missing"});
+  assert.ok(html.includes("有 73 位租客。"));assert.ok(html.includes("+19995550123"));
+  for(const text of ["未驗證","管理方更新","缺手機","還沒留手機","filter=missing",'name="filter"',"Other tenant"])assert.ok(!html.includes(text),text);
+});
+test("same-number hint renders exact AC3 copy on each row and never for accountant",()=>{
+  const rows=[{...data.rows[0],name:"Alex",duplicateName:"Blair"},{...data.rows[0],id:"second",name:"Blair",duplicateName:"Alex"}];
+  const html=render({...data,rows});
+  assert.ok(html.includes("和 Blair 的號碼相同"));assert.ok(html.includes("和 Alex 的號碼相同"));
+  assert.ok(!render({...data,rows,canViewPhone:false}).includes("的號碼相同"));
 });

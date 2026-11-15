@@ -9,9 +9,9 @@ import type { Session } from "./types";
 
 export type TenantsInput = { q?: string; filter?: string; cursor?: string };
 export type TenantRow = { id: string; name: string; place: string | null; lineLinked: boolean;
-  phone?: string | null; verified?: boolean; staffUpdated?: boolean };
+  phone?: string | null; verified?: boolean; staffUpdated?: boolean; duplicateName?: string | null };
 export type TenantsResult = { state: "off" | "unavailable" } | {
-  state: "ready"; q: string; filter: "all" | "missing"; canViewPhone: boolean;
+  state: "ready"; q: string; filter: "all" | "missing"; canViewPhone: boolean; mobileRequired: boolean;
   total: number; missing: number | null; filteredCount: number; rows: TenantRow[]; nextCursor: string | null;
 };
 type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx };
@@ -19,14 +19,19 @@ export const TENANTS_PAGE_SIZE = 50;
 
 // Match the two existing /m/tenants populations: directory ON includes zero-lease
 // and co-tenant contacts; OFF retains the legacy primary-lease population.
+// Same platform + selected-org allowlist admission as tenant-directory.ts CONTEXT_SQL.
 export const TENANTS_ADMISSION_SQL = `SELECT m.role::text AS role,
  coalesce(o.feature_flags->'tenant_directory_edit'='true'::jsonb
    AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array'
-   AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text),false) AS directory
+   AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text),false) AS directory,
+ coalesce(o.feature_flags->'tenant_mobile_required'='true'::jsonb
+   AND mobile.value->'enabled'='true'::jsonb AND jsonb_typeof(mobile.value->'allowed_org_ids')='array'
+   AND mobile.value->'allowed_org_ids' @> jsonb_build_array(o.id::text),false) AS "mobileRequired"
  FROM organizations o
  JOIN org_members m ON m.org_id=CASE WHEN o.environment='sandbox' THEN o.live_org_id ELSE o.id END
  JOIN auth_sessions s ON s.id=$2::uuid AND s.user_id=auth.uid() AND s.user_id=$3::uuid
  LEFT JOIN platform_settings f ON f.key='tenant_directory_edit'
+ LEFT JOIN platform_settings mobile ON mobile.key='tenant_mobile_required'
  WHERE o.id=$1::uuid AND o.environment::text=$4
  AND ((o.environment='live' AND o.id=$5::uuid AND o.live_org_id IS NULL)
    OR (o.environment='sandbox' AND o.live_org_id=$5::uuid))
@@ -34,7 +39,7 @@ export const TENANTS_ADMISSION_SQL = `SELECT m.role::text AS role,
  AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()`;
 
 // $1 org, $2 literal search pattern, $3 directory population, $4 phone authority,
-// $5 missing filter. Search all eligible units, not just the latest displayed unit.
+// $5 missing filter, $6 mobile item gate. Search all eligible units, not just the latest displayed unit.
 // Return only the org-scoped LINE link state, never LINE identifiers or account data.
 const POPULATION = `WITH population AS MATERIALIZED (
  SELECT c.id, c.display_name AS name, coalesce(c.legal_name,'') AS legal_name,
@@ -61,18 +66,24 @@ const POPULATION = `WITH population AS MATERIALIZED (
  SELECT * FROM population
  WHERE ($2::text IS NULL OR ${textSearch(["name", "legal_name", "coalesce(places,'')"])}
    OR ($4::boolean AND ${textSearch(["coalesce(phone,'')"])}))
- AND (NOT $5::boolean OR ($4::boolean AND nullif(btrim(phone),'') IS NULL))
+ AND (NOT ($5::boolean AND $6::boolean) OR ($4::boolean AND nullif(btrim(phone),'') IS NULL))
 )`;
 export const TENANTS_SUMMARY_SQL = `${POPULATION}
  SELECT (SELECT count(*)::int FROM population) AS total,
-   CASE WHEN $4::boolean THEN (SELECT count(*)::int FROM population WHERE nullif(btrim(phone),'') IS NULL) END AS missing,
+   CASE WHEN $4::boolean AND $6::boolean THEN (SELECT count(*)::int FROM population WHERE nullif(btrim(phone),'') IS NULL) END AS missing,
    (SELECT count(*)::int FROM filtered) AS "filteredCount"`;
+// contacts.phone_e164 is normalized on write and constrained to E.164 by the schema.
+// Compare the admitted population before search/pagination; never fetch another org.
 export const TENANTS_LIST_SQL = `${POPULATION}
- SELECT id::text,name,place,phone,"lineLinked" FROM filtered
- WHERE ($6::text IS NULL OR (name,id)>($6::text,$7::uuid))
- ORDER BY name,id LIMIT $8`;
+ SELECT f.id::text,f.name,f.place,f.phone,f."lineLinked",
+   CASE WHEN $4::boolean AND $6::boolean THEN
+     (SELECT d.name FROM population d WHERE d.id<>f.id AND d.phone=f.phone
+       ORDER BY d.name,d.id LIMIT 1) END AS "duplicateName"
+ FROM filtered f
+ WHERE ($7::text IS NULL OR (f.name,f.id)>($7::text,$8::uuid))
+ ORDER BY name,id LIMIT $9`;
 
-type Cursor = { v: 1; org: string; q: string; filter: string; directory: boolean; phone: boolean; name: string; id: string };
+type Cursor = { v: 1; org: string; q: string; filter: string; directory: boolean; phone: boolean; mobile: boolean; name: string; id: string };
 function decodeCursor(value: string | undefined, scope: Omit<Cursor,"v" | "name" | "id">): Cursor | null {
   if (value === undefined) return null;
   if (!value || value.length>4096 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Invalid cursor");
@@ -89,30 +100,36 @@ export async function brandTenants(session: Session, input: TenantsInput = {}, d
     assertPerm(admitted, "props.view");
     if (admitted.needsSandbox) throw new FlowError("errors.forbidden");
     const { q } = parseListQuery(input);
-    const filter = input.filter ?? "all";
-    if (filter!=="all" && filter!=="missing") throw new Error("Invalid filter");
+    const requestedFilter = input.filter ?? "all";
+    if (requestedFilter!=="all" && requestedFilter!=="missing") throw new Error("Invalid filter");
     return await (deps.transaction ?? tx)(admitted.userId, async client => {
       await client.query("SET LOCAL statement_timeout = '2s'");
       return withEffectiveReadAuthority(client, admitted, "props.view", async () => {
-        const context = (await client.query<{ role: string; directory: boolean }>(TENANTS_ADMISSION_SQL,
+        const context = (await client.query<{ role: string; directory: boolean; mobileRequired: boolean }>(TENANTS_ADMISSION_SQL,
           [admitted.orgId,admitted.sessionId,admitted.userId,admitted.environment,admitted.liveOrgId])).rows[0];
         if (!context) throw new FlowError("errors.forbidden");
         const canViewPhone = ["admin","manager","maintenance"].includes(context.role)
           && await customAuthorityAllowsOn(client, admitted, "tenants.contact");
+        const mobileRequired = context.mobileRequired === true;
+        const filter = mobileRequired ? requestedFilter : "all";
         if (filter==="missing" && !canViewPhone) throw new FlowError("errors.forbidden");
-        const scope = { org: admitted.orgId,q,filter,directory: context.directory,phone: canViewPhone };
+        const scope = { org: admitted.orgId,q,filter,directory: context.directory,phone: canViewPhone,mobile: mobileRequired };
         const cursor = decodeCursor(input.cursor,scope);
-        const args = [admitted.orgId,ilikePattern(q),context.directory,canViewPhone,filter==="missing"];
+        const args = [admitted.orgId,ilikePattern(q),context.directory,canViewPhone,filter==="missing",mobileRequired];
         const summary = (await client.query<{ total: number; missing: number | null; filteredCount: number }>(TENANTS_SUMMARY_SQL,args)).rows[0];
         if (!summary) throw new Error("Missing tenant counts");
         const page = (await client.query<TenantRow>(TENANTS_LIST_SQL,
           [...args,cursor?.name ?? null,cursor?.id ?? null,TENANTS_PAGE_SIZE+1])).rows;
-        const rows = page.slice(0,TENANTS_PAGE_SIZE).map(({ phone, ...row }): TenantRow => canViewPhone
+        const rows = page.slice(0,TENANTS_PAGE_SIZE).map((record): TenantRow => {
+          const { id,name,place,lineLinked,phone,duplicateName } = record;
+          const row = { id,name,place,lineLinked };
           // This checkout has no B-048 phone_source / phone_verified_at schema.
           // Approved B-048 spec §2 treats existing numbers as staff, unconfirmed.
-          ? { ...row,phone,verified:false,staffUpdated:!!phone } : row);
+          return canViewPhone
+            ? { ...row,phone,...(mobileRequired ? {verified:false,staffUpdated:!!phone,duplicateName} : {}) } : row;
+        });
         const last = rows.at(-1);
-        return { state:"ready" as const,q,filter,canViewPhone,...summary,missing:canViewPhone ? summary.missing : null,rows,
+        return { state:"ready" as const,q,filter,canViewPhone,mobileRequired,...summary,missing:canViewPhone && mobileRequired ? summary.missing : null,rows,
           nextCursor:page.length>TENANTS_PAGE_SIZE && last
             ? Buffer.from(JSON.stringify({ v:1,...scope,name:last.name,id:last.id })).toString("base64url") : null };
       });

@@ -3,6 +3,8 @@ import type { Locale } from "../index";
 const copy = {
   "zh-TW": {
     title: "租客", area: "物件與租客", lead: "有 {n} 位租客，{k} 位還沒留手機。",
+    // P52 / PENDING-RON PR-018: first-clause fallback for the item flag OFF state.
+    leadOff: "有 {n} 位租客。", duplicate: "和 {name} 的號碼相同",
     search: "搜尋姓名、單位、電話", searchPrivate: "搜尋姓名、單位", submit: "搜尋",
     all: "全部租客", missing: "缺手機（{n}）", unit: "單位", phone: "手機", line: "LINE",
     unverified: "未驗證", unverifiedTip: "還沒用簡訊確認過，號碼可能有誤。", staff: "管理方更新",
@@ -14,6 +16,7 @@ const copy = {
   },
   en: {
     title: "Tenants", area: "Properties and tenants", lead: "{n} tenants; {k} have not provided a mobile number.",
+    leadOff: "{n} tenants.", duplicate: "Same number as {name}",
     search: "Search name, unit or phone", searchPrivate: "Search name or unit", submit: "Search",
     all: "All tenants", missing: "Missing phone ({n})", unit: "Unit", phone: "Mobile", line: "LINE",
     unverified: "Unverified", unverifiedTip: "This number has not been confirmed by SMS and may be incorrect.", staff: "Updated by management",

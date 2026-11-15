@@ -27,13 +27,14 @@ export function TenantsView({ data,locale,params,canInvite=false }: {
   if (data.state!=="ready") return <section className="v3-tenants"><h1>{c.title}</h1>
     {data.state==="forbidden" ? <p role="status">{c.permission}</p> : <div role="alert"><p>{c.failed}</p>
       <Link className="btn" href={tenantsHref({q:params.q,filter:params.filter})}>{c.retry}</Link></div>}</section>;
-  const { q,filter,rows,canViewPhone } = data;
+  const { q,rows,canViewPhone,mobileRequired } = data;
+  const filter = mobileRequired ? data.filter : "all";
   const base = { q,filter };
   const searchLabel = canViewPhone ? c.search : c.searchPrivate;
   return <section className="v3-tenants" data-testid="v3-tenant-list">
     <p className="v3-tenants-crumb">{c.area} › {c.title}</p>
     <header className="v3-tenants-lead"><h1>{canViewPhone
-      ? c.lead.replace("{n}",String(data.total)).replace("{k}",String(data.missing))
+      ? (mobileRequired ? c.lead : c.leadOff).replace("{n}",String(data.total)).replace("{k}",String(data.missing))
       : <>{c.all} <span className="num">{data.total}</span></>}</h1></header>
     <div className="v3-tenants-card">
       <div className="v3-tenants-toolbar">
@@ -46,7 +47,7 @@ export function TenantsView({ data,locale,params,canInvite=false }: {
         </form>
         <nav className="v3-tenants-chips" aria-label={c.title}>
           <Link className="btn" href={tenantsHref({q})} aria-current={filter==="all" ? "page" : undefined}>{c.all} <span className="num">{data.total}</span></Link>
-          {canViewPhone && <Link className="btn" href={tenantsHref({q,filter:"missing"})} aria-current={filter==="missing" ? "page" : undefined}>{c.missing.replace("{n}",String(data.missing))}</Link>}
+          {canViewPhone && mobileRequired && <Link className="btn" href={tenantsHref({q,filter:"missing"})} aria-current={filter==="missing" ? "page" : undefined}>{c.missing.replace("{n}",String(data.missing))}</Link>}
         </nav>
       </div>
       {!rows.length ? q ? <section className="v3-tenants-empty" role="status">
@@ -65,10 +66,11 @@ export function TenantsView({ data,locale,params,canInvite=false }: {
             <strong>{displaySampleName(row.name)}</strong></Link></td>
           <td data-label={c.unit}>{row.place ? displaySampleName(row.place) : c.absent}</td>
           {canViewPhone && <td data-label={c.phone}>{row.phone ? <><span className="num">{row.phone}</span>
-            <span className="v3-tenants-badges">{!row.verified && <span className="v3-tenants-tooltip" tabIndex={0} aria-describedby={`phone-tip-${row.id}`}>
+            {mobileRequired && <span className="v3-tenants-badges">{!row.verified && <span className="v3-tenants-tooltip" tabIndex={0} aria-describedby={`phone-tip-${row.id}`}>
               <span className="v3-tenants-badge">{c.unverified}</span>
               <span role="tooltip" id={`phone-tip-${row.id}`}>{c.unverifiedTip}</span></span>}
-              {row.staffUpdated && <span className="v3-tenants-badge">{c.staff}</span>}</span></> : c.absent}</td>}
+              {row.staffUpdated && <span className="v3-tenants-badge">{c.staff}</span>}</span>}
+            {mobileRequired && row.duplicateName && <span className="v3-tenants-badges">{c.duplicate.replace("{name}",displaySampleName(row.duplicateName))}</span>}</> : c.absent}</td>}
           <td data-label={c.line}>{row.lineLinked ? c.joined : c.notJoined}</td>
         </tr>)}</tbody>
       </table>}
