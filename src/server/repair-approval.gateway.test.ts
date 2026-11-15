@@ -67,6 +67,8 @@ test("B-021 service uses contracted gateways and the registered rendering contro
       // (ownerPropertyScope rule, bound to the session user). No other table and no write.
       else if (match[2] === "property_owners") assert.match(before, /WHERE EXISTS \(SELECT 1 FROM $/);
       else if (match[2] === "contacts") assert.match(before, /property_owners hpo JOIN $/);
+      // PR-015: the organization's time zone for the org-local current-owner date (same rule as the gateways).
+      else if (match[2] === "organizations") assert.match(before, /" JOIN $/);
       else assert.fail(`unexpected public table ${match[2]}`);
       continue;
     }
