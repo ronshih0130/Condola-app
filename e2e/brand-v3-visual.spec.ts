@@ -331,7 +331,10 @@ for (const role of ["admin", "accountant"] as const) for (const size of SIZES) {
     await expect(page.getByTestId("today-monthly")).toHaveCount(1);
     await expect(page.getByTestId("confirmed-bills").first()).toBeVisible();
     await expect(today.getByRole("link", { name: "查來源", exact: true }).first()).toHaveAttribute("href", "/m/rent");
-    await expect(today.locator(".grid5, .kpi, [data-turn-kind=repair]")).toHaveCount(0);
+    // B3A-TODAY-NUM interim: at most the three unplaced cards, only in their own block below the large number; no repair rows.
+    await expect(today.locator("[data-turn-kind=repair]")).toHaveCount(0);
+    expect(await today.locator(".kpi").count()).toBeLessThanOrEqual(3);
+    await expect(today.locator(".kpi:not([data-testid=today-interim] .kpi)")).toHaveCount(0);
     await expect(today.getByRole("link", { name: "發送繳租提醒" })).toHaveCount(0);
     if (role === "accountant") {
       await expect(today.locator('[data-turn-kind="vacant"], [data-turn-kind="renewal_ask"], [data-turn-kind="early_vacancy"]')).toHaveCount(0);
