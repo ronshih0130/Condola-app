@@ -358,4 +358,6 @@ test("PLT-44-AC1 / MGT-54: on phones the fixed empty-state primary sits above th
   assert.match(css, /\.v3-shell\{ --m-bottom-nav-height:64px; \}/);
   assert.match(css.split("@media(min-width:64em)")[1], /--m-bottom-nav-height:0px/);
   assert.match(source("src/app/globals.css"), /\.es-primary\{position:fixed;bottom:calc\(var\(--m-bottom-nav-height,0px\)/);
+  // The shell's own content padding must not shrink the room globals.css leaves for the fixed button + tab bar.
+  assert.match(css, /@media\(max-width:600px\) \{\s*html\[data-brand="v2"\]\[data-brand-v3\] \.v3-shell \.shell-content:has\(\.es-primary\)\{ padding-bottom:calc\(120px \+ var\(--m-bottom-nav-height,0px\)/);
 });

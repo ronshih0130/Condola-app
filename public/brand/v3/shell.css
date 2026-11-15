@@ -28,6 +28,10 @@ html[data-brand="v2"][data-brand-v3] .v3-shell :is(a,button,summary):focus-visib
 html[data-brand="v2"][data-brand-v3] .v3-shell .subchips a.on:focus-visible{ outline-color:var(--c-on-primary); outline-offset:-4px; }
 /* Keep legal links reachable above the fixed phone tabs, without changing their tree. */
 html[data-brand="v2"][data-brand-v3] body:has(.v3-shell) .site-foot{ padding-bottom:calc(64px + env(safe-area-inset-bottom,0px)); }
+/* Phones: when the empty-state primary is fixed (globals.css, ≤600px), leave room for the button and the tab bar. */
+@media(max-width:600px) {
+  html[data-brand="v2"][data-brand-v3] .v3-shell .shell-content:has(.es-primary){ padding-bottom:calc(120px + var(--m-bottom-nav-height,0px) + env(safe-area-inset-bottom,0px)); }
+}
 @media(min-width:37.5em) and (max-width:63.99em) {
   html[data-brand="v2"][data-brand-v3] .v3-shell .shell-content{ max-width:640px; margin:0 auto; width:100%; }
 }
