@@ -99,6 +99,8 @@ export async function archiveList(s:Session,after?:string):Promise<ArchiveList> 
 export async function archiveCommand(s:Session,input:ArchiveCommandInput):Promise<ArchiveOutcome> {
   s = await guardEffectiveSession(s, "props.edit");
  if(!isArchiveCommand(input)||!eligible(s)||!can(s,'props.edit')||!sameArchiveScope(input.renderedScope,archiveScope(s)))return {state:'forbidden'};
+ // Round 2 (Ron 2026-11-14 ~19:29 PT): admins and managers archive; only an admin restores (hub OQ-070).
+ if(input.desired==='active' && s.role!=='admin')return {state:'forbidden'};
  try{return await tx<ArchiveOutcome>(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {
   if(!await current(c,s))return {state:'forbidden'};
   if(!await enabled(c,s))return {state:'disabled'};
@@ -111,6 +113,7 @@ export async function archiveCommand(s:Session,input:ArchiveCommandInput):Promis
   if(locked.rowCount!==1)return {state:'forbidden'};
   if(!await current(c,s))return {state:'forbidden'};
   if(!await enabled(c,s))return {state:'disabled'};
+  if(input.desired==='active' && (await c.query<{ok:boolean|null}>(`SELECT app.has_role($1::uuid,'{admin}'::org_role[]) AS ok`,[s.orgId])).rows[0]?.ok!==true)return {state:'forbidden'};
   const observed=await observe(c,s,input.ref);if(!observed)return {state:'forbidden'};
   if(observed.version!==input.expectedVersion)return {state:'stale'};
   const archived=observed.archivedAtUtc!==null;
