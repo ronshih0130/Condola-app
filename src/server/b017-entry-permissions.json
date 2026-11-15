@@ -436,5 +436,6 @@
   "src/server/b3-rental-turns.ts#staffRentalTurns": "leases.edit",
   "src/server/b3-overdue-turns.ts#staffOverdueTurns": "pay.record",
   "src/server/b3-money-month.ts#moneyMonthBills": "stmt.view",
-  "src/server/b3-money-month.ts#moneyMonthReports": "pay.record"
+  "src/server/b3-money-month.ts#moneyMonthReports": "pay.record",
+  "src/server/b3-bank-month.ts#bankMonth": "bank.reconcile"
 }
