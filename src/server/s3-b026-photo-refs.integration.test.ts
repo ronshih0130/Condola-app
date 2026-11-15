@@ -88,6 +88,11 @@ async function exposed(job: Job, ownerSession: Session) {
   const manager = (await managerVendorEstimates(admin, job.ticketId)).flatMap(row => row.photos.map(photo => photo.id));
   const pending = (await ownerPending(ownerSession)).filter(row => (row as { ticket_id?: string }).ticket_id === job.ticketId)
     .flatMap(row => ((row as { evidence_snapshot?: { id: string }[] }).evidence_snapshot ?? []).map(photo => photo.id));
+  // O-HOME (Batch 2 slice 2): the display projection must see the same admitted rows under the owner's own RLS,
+  // with the property name and item filled — a NULL here would make the owner home fail closed for every owner.
+  const home = (await ownerPending(ownerSession, { homeDetails: true })).filter(row => row.ticket_id === job.ticketId);
+  assert.deepEqual(home.map(row => row.version_id), (await ownerPending(ownerSession)).filter(row => row.ticket_id === job.ticketId).map(row => row.version_id));
+  for (const row of home) { assert.ok(row.property_name, "property_name visible to owner"); assert.ok(row.item, "ticket title visible to owner"); }
   return { manager, pending };
 }
 

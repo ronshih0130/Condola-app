@@ -118,7 +118,7 @@ test("OV-SH-ORG / OV-SH-NOTI: ON uses session firm and actual admission; read fa
 });
 
 test("OV-SH-PHONE / OV-SH-DESK / OV-SH-ORG / PLT-44: shared markup, plain context and nested current area", () => {
-  for (const path of ["/o", "/o/statements", "/o/statements/statement-id", "/o/notifications", "/o/approvals", "/o/repair-policy/allowed"]) {
+  for (const path of ["/o", "/o/statements", "/o/statements/statement-id", "/o/notifications", "/o/repair-policy/allowed"]) {
     const html = renderOwner({ path });
     assert.match(html, /租多啦・屋主/); assert.match(html, /<div class="cap">林小姐 你好｜管理方：安居代管<\/div>/);
     assert.match(html, /class="appbar navy"/); assert.match(html, /class="sidebar"/); assert.match(html, /class="deskbar"/);
@@ -159,7 +159,7 @@ test("OV-SH-MORE / OWN-27-AC5: only live entries, authorized property names, inl
   for (const locale of ["zh-TW", "en"] as const) for (const receiptTitleAvailable of [false, true]) {
     const html = renderOwner({ locale, open: "more", receiptTitleAvailable });
     const menu = html.split('data-testid="more-menu"')[1].split('<nav class="tabbar"')[0];
-    assert.deepEqual([...menu.matchAll(/href="([^"]+)"/g)].map(m => m[1]), ["/o/approvals", ...(receiptTitleAvailable ? ["/o/receipt-title"] : []), "/o/repair-policy/allowed"]);
+    assert.deepEqual([...menu.matchAll(/href="([^"]+)"/g)].map(m => m[1]), [...(receiptTitleAvailable ? ["/o/receipt-title"] : []), "/o/repair-policy/allowed"]);
     assert.equal(menu.includes(receiptTitleCopy(locale).title), receiptTitleAvailable);
     assert.equal(html.includes('href="/o/receipt-title"'), receiptTitleAvailable);
     if (receiptTitleAvailable) {
@@ -167,11 +167,11 @@ test("OV-SH-MORE / OWN-27-AC5: only live entries, authorized property names, inl
       assert.ok(receiptPage.includes(`<div class="shell-phone-lead"><h1>${receiptTitleCopy(locale).title}</h1></div>`));
       assert.match(receiptPage, /data-area="receipt-title" class="on" aria-current="page"/);
     }
-    assert.ok(menu.includes(i18n.makeT(locale)("i_approvals")));
+    assert.doesNotMatch(menu, /href="\/o\/approvals"/);
     assert.ok(menu.includes(`松山公寓 · ${repairCopy.ownerRepairCopy(locale).entry}`));
     assert.doesNotMatch(html, /信義公寓|unassigned|\/o\/(account|invoices|documents|export|ledger|prepay)|請款單|預付與押金|款項紀錄|年度匯出|文件/);
     const sidebar = html.split('data-testid="v3-sidebar-nav"')[1].split("</nav>")[0];
-    assert.deepEqual([...sidebar.matchAll(/data-area="([^"]+)"/g)].map(m => m[1]), ["home", "statements", "notifications", "approvals", ...(receiptTitleAvailable ? ["receipt-title"] : []), "repair-policy-allowed"]);
+    assert.deepEqual([...sidebar.matchAll(/data-area="([^"]+)"/g)].map(m => m[1]), ["home", "statements", "notifications", ...(receiptTitleAvailable ? ["receipt-title"] : []), "repair-policy-allowed"]);
     const empty = renderOwner({ navigation: { areas: nav.ownerNavigationV3(owner, [], [], "disabled").areas, more: [] } });
     assert.doesNotMatch(empty, /data-area="more"|href=""/);
   }

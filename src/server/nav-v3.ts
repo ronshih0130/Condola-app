@@ -128,7 +128,6 @@ export function ownerNavigationV3(session: Session, properties: { id: string; na
   // Exactly NotificationCenterEntry's admission rule, including its busy/retry destination.
   if (admission !== "disabled" && admission !== "denied") areas.push({ id: "notifications", href: "/o/notifications", label: centerCopy(session.locale).title, icon: "bell" });
   const more: OwnerEntryV3[] = [
-    { id: "approvals", href: "/o/approvals", label: makeT(session.locale)("i_approvals"), icon: "doc" },
     ...(receiptTitleAvailable ? [{ id: "receipt-title", href: "/o/receipt-title", label: receiptTitleCopy(session.locale).title, icon: "doc" as const }] : []),
     ...properties.filter(property => repairPolicyIds.includes(property.id)).map(property => ({
       id: `repair-policy-${property.id}`, href: `/o/repair-policy/${property.id}`,
