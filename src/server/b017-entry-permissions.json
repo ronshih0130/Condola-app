@@ -441,5 +441,6 @@
   "src/server/b3-money-month.ts#moneyMonthBills": "stmt.view",
   "src/server/b3-money-month.ts#moneyMonthReports": "pay.record",
   "src/server/b3-bank-month.ts#bankMonth": "bank.reconcile",
-  "src/server/b3-tenants.ts#brandTenants": "props.view"
+  "src/server/b3-tenants.ts#brandTenants": "props.view",
+  "src/server/b3-tenant-one.ts#brandTenantOne": "props.view"
 }

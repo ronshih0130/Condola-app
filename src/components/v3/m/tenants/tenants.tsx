@@ -32,7 +32,6 @@ export function TenantsView({ data,locale,params,canInvite=false }: {
   const base = { q,filter };
   const searchLabel = canViewPhone ? c.search : c.searchPrivate;
   return <section className="v3-tenants" data-testid="v3-tenant-list">
-    <p className="v3-tenants-crumb">{c.area} › {c.title}</p>
     <header className="v3-tenants-lead"><h1>{canViewPhone
       ? (mobileRequired ? c.lead : c.leadOff).replace("{n}",String(data.total)).replace("{k}",String(data.missing))
       : <>{c.all} <span className="num">{data.total}</span></>}</h1></header>
