@@ -158,14 +158,14 @@ export function TodayPage({ session, turns, monthly, setup, setupFailed = false,
 }
 
 
-/** B3A-TODAY-NUM interim: the three numbers that have not reached their destination pages yet, unchanged from today's
+/** B3A-TODAY-NUM interim: the two numbers that have not reached their destination pages yet, unchanged from today's
  * dashboard (same labels, values and links); each leaves 今天 in the PR that adds it to its page. 已繳 and 待確認 are not
- * shown (the large number replaces 已繳; the to-confirm count is on the money page). */
+ * shown (the large number replaces 已繳; the to-confirm count is on the money page).
+ * 未結餘額 moved to the money month page in phase 3 PR 2. */
 export type InterimNumbers = { outstanding: string | number; owingCount: number; tickets: number; occupied: number; rooms: number };
 export function InterimCards({ data, locale }: { data: InterimNumbers; locale: Locale }) {
   const t = makeT(locale);
   const cards = [
-    Number(data.outstanding) > 0 ? <Link key="outstanding" className="card kpi" href="/m/rent"><div className="lbl">{t("i_open_balance")}</div><div className="val" data-testid="dash-outstanding">{moneyLabel(data.outstanding, "TWD", locale)}</div><div className="sub">{t("i_tenant_count", { count: data.owingCount })}</div></Link> : null,
     data.tickets > 0 ? <Link key="tickets" className="card kpi" href="/m/tickets"><div className="lbl">{t("i_nav_tickets")}</div><div className="val">{data.tickets}</div></Link> : null,
     data.occupied > 0 ? <Link key="occupied" className="card kpi" href="/m/leases"><div className="lbl">{t("i_occ")}</div><div className="val">{data.occupied}/{data.rooms}</div></Link> : null,
   ].filter(Boolean);
