@@ -19,6 +19,7 @@ import { CompletionCheck } from "../components/v3/completion-check";
 import type { MoneyPage as View } from "../components/v3/m/money/money";
 import type * as Model from "./money-page";
 import type { MoneyMonthBills, MoneyMonthReports, MoneyMonthBill, MoneyMonthReport } from "./b3-money-month";
+import { moneyMonthStatus } from "./b3-money-month";
 import type { Session } from "./types";
 
 const source = (file: string) => readFileSync(file, "utf8");
@@ -97,6 +98,50 @@ test("其他回報 only at top of 輪到你; multiple attached reports oldest fi
 test("paid is the only state with the existing completion mark; unpaid rows never animate confirmation", () => {
   assert.match(render({ tab: "paid" }), /v3-check/);
   for (const tab of ["yours", "overdue", "future"] as const) assert.doesNotMatch(render({ tab }), /v3-check/);
+});
+
+test("MGT-141: due-state tab membership, remaining line, headline and completion across the due boundary", () => {
+  const due = "2026-11-15";
+  for (const [today, bucket] of [["2026-11-14", "future"], [due, "due_today"], ["2026-11-16", "overdue"]] as const) {
+    for (const full of [false, true]) for (const pending of [false, true]) {
+      const confirmed = full ? "3200000" : "1000000";
+      const status = moneyMonthStatus("3200000", confirmed, pending, due, today);
+      const row = { ...bill(status), dueDate: due, confirmedMinor: confirmed, remainingMinor: full ? "0" : "2200000" };
+      const expectedBucket = full ? "paid" : pending ? "reported" : bucket;
+      const counts = { all: 1, paid: 0, reported: 0, overdue: 0, due_today: 0, future: 0, [expectedBucket]: 1 };
+      const snapshot = { ...bills, today, counts, rows: [row], totals: [{ currency: "TWD", totalMinor: "3200000", confirmedMinor: confirmed, billedRows: 1, paidRows: full ? 1 : 0 }] };
+      for (const tab of ["all", "yours", "overdue", "future", "paid"] as const) {
+        const visible = tab === "all" || (tab === "yours" ? expectedBucket === "reported" : expectedBucket === tab);
+        assert.equal(model.moneyBillMatchesTab(row, today, tab), visible);
+        const html = render({ tab, bills: snapshot, reports: { ...reports, attached: [], other: [], yourTurn: 0 } });
+        assert.equal((html.match(/data-testid="money-bill"/g) ?? []).length, visible ? 1 : 0);
+        assert.match(html, new RegExp(`11 月 1 筆應繳，${full ? 1 : 0} 筆已確認繳款。`));
+        if (visible) {
+          assert.match(html, new RegExp(`data-status="${status}"`));
+          if (full) { assert.match(html, /v3-check/); assert.doesNotMatch(html, /money-partial-amounts/); }
+          else {
+            assert.doesNotMatch(html, /v3-check/);
+            assert.match(html, /已繳 NT\$10,000・還差 NT\$22,000/);
+            if (!pending && bucket !== "overdue") { assert.match(html, /部分已繳/); assert.match(html, /等租客繳款/); }
+          }
+        }
+      }
+    }
+  }
+});
+
+test("MGT-141 partial amounts use existing formatting in both locales and currencies; unpaid has no paid line", () => {
+  for (const locale of ["zh-TW", "en"] as const) for (const currency of ["TWD", "USD"] as const) {
+    const row = { ...bill("partial"), dueDate: "2026-11-15", currency };
+    const html = render({ session: { ...session, locale }, bills: { ...bills, rows: [row] } });
+    const line = locale === "en"
+      ? `Paid ${format.moneyLabel(row.confirmedMinor, currency, locale)} · Remaining ${format.moneyLabel(row.remainingMinor, currency, locale)}`
+      : `已繳 ${format.moneyLabel(row.confirmedMinor, currency, locale)}・還差 ${format.moneyLabel(row.remainingMinor, currency, locale)}`;
+    assert.ok(html.includes(line));
+    assert.ok(html.includes(locale === "en" ? "Partially paid" : "部分已繳"));
+    assert.equal((html.match(/data-testid="money-tab-/g) ?? []).length, 5);
+  }
+  assert.doesNotMatch(render({ bills: { ...bills, rows: [{ ...bill("due_today"), confirmedMinor: "0", remainingMinor: "3200000" }] } }), /money-partial-amounts|部分已繳/);
 });
 
 test("no pay.record: bills remain, but no report source, turn count, row action, or reported-state disclosure", async () => {

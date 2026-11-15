@@ -6,7 +6,7 @@ import { moneyPageCopy } from "../../../../i18n/lanes/brand-v3-money";
 import { brandV3NavigationCopy, brandV3TodayCopy } from "../../../../i18n/lanes/brand-v3";
 import { actionConfirmPayment } from "../../../../server/actions";
 import type { MoneyMonthBill, MoneyMonthReport } from "../../../../server/b3-money-month";
-import { adjacentMoneyMonth, moneyHref, type MoneyBills, type MoneyReports, type MoneyTab } from "../../../../server/money-page";
+import { adjacentMoneyMonth, moneyBillMatchesTab, moneyHref, type MoneyBills, type MoneyReports, type MoneyTab } from "../../../../server/money-page";
 import { formatDate, moneyLabel } from "../../../../server/format";
 import { displaySampleName } from "../../../../server/sandbox-data";
 import { can } from "../../../../server/perms";
@@ -30,7 +30,7 @@ export function MoneyPage({ session, month, tab, bills, reports, error, cursor }
   const forBill = (bill: MoneyMonthBill) => attached.filter(report => report.billRows.some(target => target.leaseId === bill.leaseId && target.month === month));
   const count = (key: MoneyTab) => key === "yours" ? reportReady ? reports.yourTurn : undefined
     : bills.state === "ready" ? bills.counts[key] : undefined;
-  const visible = bills.state === "ready" ? bills.rows.filter(row => tab === "all" || (tab === "yours" ? row.status === "reported" : row.status === tab)) : [];
+  const visible = bills.state === "ready" ? bills.rows.filter(row => moneyBillMatchesTab(row, bills.today, tab)) : [];
   const supporting = [reportReady && reports.yourTurn > 0 ? text("pending", { count: reports.yourTurn }) : "",
     ...(bills.state === "ready" ? bills.outstanding.currencies.filter(value => BigInt(value.amountMinor) > BigInt(0)).map(value =>
       `${t("i_open_balance")} ${moneyLabel(value.amountMinor, value.currency, locale)}・${t("i_tenant_count", { count: value.leaseCount })}`) : []),
@@ -86,9 +86,12 @@ export function MoneyPage({ session, month, tab, bills, reports, error, cursor }
               <td data-label={copy.due} className="v3-money-amount">{moneyLabel(bill.status === "paid" ? bill.totalMinor : bill.remainingMinor, bill.currency, locale)}</td>
               <td data-label={copy.status}><span className={`v3-money-status${bill.status === "reported" && !reportReady ? "" : ` v3-money-${bill.status}`}`}>
                 {bill.status === "paid" && <CompletionCheck />}{bill.status === "reported" && !reportReady ? "—" : copy[bill.status]}
-              </span></td>
+              </span>{BigInt(bill.confirmedMinor) > BigInt(0) && BigInt(bill.confirmedMinor) < BigInt(bill.totalMinor) &&
+                <span className="v3-money-sub" data-testid="money-partial-amounts">{text("partialAmounts", {
+                  paid: moneyLabel(bill.confirmedMinor, bill.currency, locale), balance: moneyLabel(bill.remainingMinor, bill.currency, locale),
+                })}</span>}</td>
               <td data-label={copy.source}>{items.length ? copy.tenantReport : "—"}{items.some(item => item.bankTransactionId) ? `・${copy.bank}` : ""}</td>
-              <td data-label={copy.turn}>{items.map(reportDetails)}{reportReady && !items.length && (bill.status === "overdue" || bill.status === "due_today") &&
+              <td data-label={copy.turn}>{items.map(reportDetails)}{reportReady && !items.length && (bill.status === "overdue" || bill.status === "due_today" || bill.status === "partial") &&
                 <span className="v3-money-turn"><RoleAvatar role="t" locale={locale} decorative /><span>{copy.waiting}</span></span>}</td>
             </tr>;
           })}

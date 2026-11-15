@@ -113,6 +113,18 @@ const ownerShellCopy = {
 };
 export function brandV3OwnerShellCopy(locale: Locale) { return ownerShellCopy[locale]; }
 
+// Batch 2 O-STATES, shared by owner lanes (screens.md). EN translation.
+export function brandV3OwnerStateCopy(locale: Locale) {
+  return locale === "en"
+    ? { error: "This is temporarily unavailable. Please try again.", retry: "Try again" }
+    : { error: "這裡暫時讀不到，請再試一次。", retry: "再試一次" };
+}
+// O-RPT / O-RPT-SRC, D14. No P52 empty/one-off/other-source proposals.
+export function brandV3OwnerReportCopy(locale: Locale) {
+  return locale === "en"
+    ? { rent: "Rent income", title: "Monthly report · {month}", note: "Opening this report does not constitute confirmation or agreement.", source: "View source", sourceLine: "{n} confirmed payments · {date}" }
+    : { rent: "租金收入", title: "{month} 月月報", note: "打開月報不構成確認或同意。", source: "查來源", sourceLine: "{n} 筆已確認的繳款・{date}" };
+}
 // O-HOME / O-EST / O-EMPTY / O-STATES, revision 9; P52 zero lead uses the existing home title.
 export function brandV3OwnerHomeCopy(locale: Locale) {
   return locale === "en" ? {

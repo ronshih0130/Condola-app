@@ -6,6 +6,7 @@ import { BILLS_LIST_SQL_FOR_TEST, BILLS_SUMMARY_SQL_FOR_TEST, REPORTS_LIST_SQL_F
   moneyMonthBills, moneyMonthReports, type MoneyMonthStatus } from "./b3-money-month";
 import { governCustomRole, resolveCustomRoleSession } from "./b017-custom-role-governance";
 import { staffPaymentTurns } from "./b3-payment-turns";
+import { staffOverdueTurns } from "./b3-overdue-turns";
 import { query, tx } from "./db";
 import { FlowError } from "./errors";
 import { disposableDbUrl } from "./test-disposable-db";
@@ -135,7 +136,7 @@ test("reports expose the organization calendar even when no reports exist", asyn
   assert.equal(r.yourTurn, 0); assert.deepEqual(r.attached, []); assert.deepEqual(r.other, []);
 });
 
-test("rules 1–2: all five statuses, paid wins over report, partial remaining, earliest unpaid invoice due date", async () => {
+test("MGT-141: underlying five buckets, paid wins over report, partial remaining, earliest unpaid invoice due date", async () => {
   const o = await org();
   const expected = new Map<string, { status: MoneyMonthStatus; total: string; confirmed: string; remaining: string }>();
   for (const [kind, due] of [["paid", "2030-04-30"], ["reported", "2030-04-30"], ["overdue", "2030-04-30"],
@@ -144,7 +145,8 @@ test("rules 1–2: all five statuses, paid wins over report, partial remaining, 
     const confirmed = kind === "paid" ? "1000" : "200";
     await settle(l, inv, confirmed);
     if (kind === "paid" || kind === "reported") { const p = await pay(l); await allocate(l, p, inv); }
-    expected.set(l.id, { status: kind, total: "1000", confirmed, remaining: kind === "paid" ? "0" : "800" });
+    expected.set(l.id, { status: kind === "due_today" || kind === "future" ? "partial" : kind,
+      total: "1000", confirmed, remaining: kind === "paid" ? "0" : "800" });
   }
   const r = await bills(o.staff.accountant);
   assert.deepEqual(r.counts, { all: 5, paid: 1, reported: 1, overdue: 1, due_today: 1, future: 1 });
@@ -158,7 +160,7 @@ test("rules 1–2: all five statuses, paid wins over report, partial remaining, 
   await invoice(l, { due: "2030-05-02", amount: "500" });
   const combined = (await bills(o.staff.admin)).rows.find(x => x.leaseId === l.id)!;
   assert.deepEqual([combined.totalMinor, combined.confirmedMinor, combined.remainingMinor, combined.dueDate, combined.status],
-    ["1500", "1000", "500", "2030-05-02", "future"]);
+    ["1500", "1000", "500", "2030-05-02", "partial"]);
 });
 
 test("organization calendar, not property/server calendar: yesterday/today/tomorrow around local midnight", async () => {
@@ -167,6 +169,88 @@ test("organization calendar, not property/server calendar: yesterday/today/tomor
   const r = await bills(o.staff.admin, { month: MONTH }, { ...ON, now: () => new Date("2030-05-01T00:30:00Z") });
   assert.equal(r.today, "2030-04-30"); assert.equal(r.timezone, "America/Los_Angeles");
   assert.deepEqual(r.rows.map(x => x.status), ["overdue", "due_today", "future"]);
+});
+
+test("MGT-141 real confirmed allocations: org midnight, tab counts, pending precedence, 今天 remaining, then fully paid", async () => {
+  const o = await org();
+  await query("UPDATE organizations SET timezone = 'America/Los_Angeles' WHERE id = $1", [o.orgId]);
+  // 今天 intentionally retains its approved property calendar; align it here to compare the same boundary.
+  await query("UPDATE properties SET timezone = 'America/Los_Angeles' WHERE id = $1", [o.property]);
+  const partial = await lease(o), full = await lease(o);
+  const inv = await invoice(partial, { due: "2030-05-02" });
+  await settle(partial, inv, "200");
+  await settle(full, await invoice(full, { due: "2030-05-02" }));
+  const stored = (await query("SELECT status, paid_minor::text, balance_minor::text FROM invoices WHERE id = $1", [inv])).rows[0];
+  assert.deepEqual(stored, { status: "partially_paid", paid_minor: "200", balance_minor: "800" });
+  const boundaries = [
+    ["2030-05-02T06:59:59Z", "2030-05-01", "partial", "future"],
+    ["2030-05-02T07:00:00Z", "2030-05-02", "partial", "due_today"],
+    ["2030-05-03T06:59:59Z", "2030-05-02", "partial", "due_today"],
+    ["2030-05-03T07:00:00Z", "2030-05-03", "overdue", "overdue"],
+  ] as const;
+  for (const [instant, today, status, bucket] of boundaries) {
+    const deps = { ...ON, now: () => new Date(instant) };
+    const r = await bills(o.staff.accountant, { month: MONTH }, deps);
+    assert.equal(r.today, today); assert.equal(r.timezone, "America/Los_Angeles");
+    assert.deepEqual(r.rows.map(row => [row.leaseId, row.status, row.confirmedMinor, row.remainingMinor]).sort(),
+      [[partial.id, status, "200", "800"], [full.id, "paid", "1000", "0"]].sort());
+    assert.deepEqual(r.counts, { all: 2, paid: 1, reported: 0, overdue: 0, due_today: 0, future: 0, [bucket]: 1 });
+    assert.deepEqual(r.totals, [{ currency: "TWD", totalMinor: "2000", confirmedMinor: "1200", billedRows: 2, paidRows: 1 }]);
+    for (const filter of ["future", "due_today", "overdue", "paid", "reported"] as const) {
+      const filtered = await bills(o.staff.accountant, { month: MONTH, status: filter }, deps);
+      const expected = filter === "paid" ? [full.id] : filter === bucket ? [partial.id] : [];
+      assert.deepEqual(filtered.rows.map(row => row.leaseId), expected);
+      assert.equal(filtered.filteredCount, expected.length); assert.deepEqual(filtered.counts, r.counts);
+      assert.deepEqual(filtered.totals, r.totals, "headline totals never depend on the selected tab");
+    }
+    const turns = await staffOverdueTurns(o.staff.accountant, { ...deps, gates: async () => ({ enabled: true }) });
+    assert.equal(turns.state, "ready"); if (turns.state !== "ready") throw new Error("overdue reader not ready");
+    assert.equal(turns.count, status === "overdue" ? 1 : 0);
+    assert.deepEqual(turns.others.map(row => [row.leaseId, row.amountMinor, row.dayNumber]), status === "overdue" ? [[partial.id, "800", 1]] : []);
+  }
+  // Submitted allocations neither inflate confirmed money nor resolve the balance.
+  const pending = await pay(partial, { amount: "800" }); await allocate(partial, pending, inv, "800");
+  for (const [instant] of boundaries) {
+    const deps = { ...ON, now: () => new Date(instant) };
+    const r = await bills(o.staff.admin, { month: MONTH }, deps);
+    assert.equal(r.rows.find(row => row.leaseId === partial.id)?.status, "reported");
+    assert.equal(r.counts.reported, 1); assert.equal(r.counts.paid, 1);
+    assert.equal(r.totals[0].confirmedMinor, "1200");
+    const turns = await staffOverdueTurns(o.staff.admin, { ...deps, gates: async () => ({ enabled: true }) });
+    assert.equal(turns.state, "ready"); if (turns.state === "ready") assert.equal(turns.count, 0, "pending report keeps its payment turn, no duplicate overdue row");
+  }
+  // Confirm the actual remainder through the DB's existing recalculation triggers; no outbound writer.
+  await query("UPDATE payments SET status = 'confirmed', confirmed_by = $2, confirmed_at = now() WHERE id = $1", [pending, partial.admin]);
+  for (const [instant] of boundaries) {
+    const deps = { ...ON, now: () => new Date(instant) };
+    const r = await bills(o.staff.admin, { month: MONTH }, deps);
+    assert.equal(r.counts.paid, 2); assert.equal(r.totals[0].confirmedMinor, "2000");
+    assert.ok(r.rows.every(row => row.status === "paid" && row.remainingMinor === "0"));
+    const turns = await staffOverdueTurns(o.staff.admin, { ...deps, gates: async () => ({ enabled: true }) });
+    assert.equal(turns.state, "ready"); if (turns.state === "ready") assert.equal(turns.count, 0);
+  }
+});
+
+test("MGT-141 stale invoice status/paid/balance cannot override confirmed allocation truth", async () => {
+  const o = await org();
+  for (const [confirmed, storedStatus, storedPaid, expected] of [
+    ["0", "partially_paid", "600", "due_today"],
+    ["200", "open", "0", "partial"],
+    ["1000", "partially_paid", "200", "paid"],
+  ] as const) {
+    const l = await lease(o); const inv = await invoice(l);
+    if (confirmed !== "0") await settle(l, inv, confirmed);
+    await query("UPDATE invoices SET status = $2::invoice_status, paid_minor = $3::bigint WHERE id = $1", [inv, storedStatus, storedPaid]);
+    const raw = (await query("SELECT status, balance_minor::text FROM invoices WHERE id = $1", [inv])).rows[0];
+    assert.equal(raw.status, storedStatus); assert.equal(raw.balance_minor, String(BigInt(1000) - BigInt(storedPaid)));
+    const r = await bills(o.staff.admin);
+    const row = r.rows.find(row => row.leaseId === l.id)!;
+    assert.equal(row.status, expected); assert.equal(row.confirmedMinor, confirmed);
+    assert.equal(row.remainingMinor, String(BigInt(1000) - BigInt(confirmed)));
+  }
+  const r = await bills(o.staff.admin);
+  assert.equal(r.counts.paid, 1); assert.equal(r.counts.due_today, 2);
+  assert.equal(r.totals[0].confirmedMinor, "1200");
 });
 
 test("rules 5–6/8: selected invoice period, all charge types, 3a denominator, currencies, no cash-date attribution", async () => {

@@ -1,4 +1,4 @@
-import { moneyMonthBills, moneyMonthReports, type MoneyMonthBills, type MoneyMonthReports } from "./b3-money-month";
+import { moneyMonthBills, moneyMonthReports, type MoneyMonthBill, type MoneyMonthBills, type MoneyMonthReports } from "./b3-money-month";
 import { FlowError, logServerError } from "./errors";
 import { can } from "./perms";
 import type { Session } from "./types";
@@ -7,6 +7,13 @@ export type MoneyBills = MoneyMonthBills | { state: "forbidden" };
 export type MoneyReports = MoneyMonthReports | { state: "forbidden" };
 export type MoneyTab = "all" | "yours" | "overdue" | "future" | "paid";
 export type MoneyParams = { month?: string; tab?: string; error?: string; cursor?: string };
+// MGT-141: keep the five tabs and the reader's underlying due-state buckets.
+// Partial on the due day appears in all (there is no due_today tab), never paid.
+// A pending report retains precedence and belongs to yours, even on a partial bill.
+export function moneyBillMatchesTab(row: MoneyMonthBill, today: string, tab: MoneyTab): boolean {
+  const bucket = row.status === "partial" ? row.dueDate > today ? "future" : "due_today" : row.status;
+  return tab === "all" || bucket === (tab === "yours" ? "reported" : tab);
+}
 export function moneyTab(value?: string): MoneyTab {
   return value === "yours" || value === "overdue" || value === "future" || value === "paid" ? value : "all";
 }
