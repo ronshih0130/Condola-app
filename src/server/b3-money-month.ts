@@ -67,31 +67,39 @@ const POPULATION_SQL = `
 WITH calendar AS (
   SELECT timezone, ($3::timestamptz AT TIME ZONE timezone)::date AS today
     FROM organizations WHERE id = $1
-), confirmed_allocations AS (
+), confirmed_allocations AS MATERIALIZED (
   SELECT pa.invoice_id, sum(pa.amount_minor) AS confirmed
     FROM payment_allocations pa
     JOIN payments p ON p.id = pa.payment_id AND p.org_id = $1 AND p.status = 'confirmed'
    WHERE pa.org_id = $1 GROUP BY pa.invoice_id
-), eligible_invoices AS (
-  -- Driven from the invoice and its lease's own target (one row per invoice), with the rent roll's
-  -- eligibility: a room-targeted lease counts on a non-archived room of a by-room unit; a unit-targeted
-  -- lease counts on a whole unit, or on a by-room unit that has no non-archived room. Starting from
-  -- properties × units × rooms with an OR join made the plan quadratic (4.4 s for 57 invoices).
-  SELECT i.id, l.id AS lease_id, date_trunc('month', i.period_start)::date AS month,
-         i.currency::text AS currency, i.due_date, i.total_minor,
-         coalesce(a.confirmed, 0) AS confirmed,
-         pr.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place
-    FROM invoices i
-    JOIN leases l ON l.id = i.lease_id AND l.org_id = $1 AND l.status IN ('pending_signature','active')
+), lease_targets AS MATERIALIZED (
+  -- The rent roll's eligibility, resolved once per lease: a room-targeted lease counts on a non-archived
+  -- room of a by-room unit; a unit-targeted lease counts on a whole unit, or on a by-room unit that has no
+  -- non-archived room. Each step is materialized so a fresh table without planner statistics cannot turn
+  -- this into a rescanned units x leases loop (measured: 2 s in CI with 58 invoices; spaces x OR join: 4.4 s).
+  SELECT l.id AS lease_id, r.id AS room_id, r.label AS room_label,
+         CASE WHEN r.id IS NOT NULL THEN r.unit_id ELSE l.target_unit_id END AS unit_id
+    FROM leases l
     LEFT JOIN rooms r ON r.id = l.target_room_id AND r.org_id = $1 AND r.archived_at IS NULL
-    JOIN units u ON u.org_id = $1 AND u.id = CASE WHEN r.id IS NOT NULL THEN r.unit_id ELSE l.target_unit_id END
+   WHERE l.org_id = $1 AND l.status IN ('pending_signature','active')
+), eligible_leases AS MATERIALIZED (
+  SELECT t.lease_id, pr.name || ' ' || u.label || coalesce(' ' || t.room_label, '') AS place
+    FROM lease_targets t
+    JOIN units u ON u.org_id = $1 AND u.id = t.unit_id
     JOIN properties pr ON pr.id = u.property_id AND pr.org_id = $1 AND pr.archived_at IS NULL
+   WHERE (t.room_id IS NOT NULL AND u.rental_mode = 'by_room')
+      OR (t.room_id IS NULL AND (u.rental_mode = 'whole_unit' OR NOT EXISTS (
+            SELECT 1 FROM rooms rx WHERE rx.unit_id = u.id AND rx.org_id = $1 AND rx.archived_at IS NULL)))
+), eligible_invoices AS MATERIALIZED (
+  -- Driven from the invoice (one row per invoice) joined to its eligible lease.
+  SELECT i.id, e.lease_id, date_trunc('month', i.period_start)::date AS month,
+         i.currency::text AS currency, i.due_date, i.total_minor,
+         coalesce(a.confirmed, 0) AS confirmed, e.place
+    FROM invoices i
+    JOIN eligible_leases e ON e.lease_id = i.lease_id
     LEFT JOIN confirmed_allocations a ON a.invoice_id = i.id
    WHERE i.org_id = $1
      AND i.status NOT IN ('draft','void') AND i.total_minor > 0 AND i.period_start IS NOT NULL
-     AND ((r.id IS NOT NULL AND u.rental_mode = 'by_room')
-       OR (r.id IS NULL AND l.target_unit_id = u.id AND (u.rental_mode = 'whole_unit' OR NOT EXISTS (
-            SELECT 1 FROM rooms rx WHERE rx.unit_id = u.id AND rx.org_id = $1 AND rx.archived_at IS NULL))))
 ), bill_rows AS (
   SELECT lease_id, month, min(currency) AS currency, count(DISTINCT currency)::int AS currency_count,
          min(place) AS place, sum(total_minor) AS total, sum(confirmed) AS confirmed,
