@@ -26,7 +26,7 @@ const day = (value: string, { locale, calendar }: View) => formatDate(value, loc
 const amount = (row: { amountMinor: string; currency: string; minorUnit: number }) => ownerEstimateAmount(row.amountMinor, row.currency, row.minorUnit);
 const Title = ({ locale }: { locale: Locale }) => <h2 className="decided-sr">{brandV3OwnerDecidedCopy(locale).title}</h2>;
 function Result({ decision, locale }: { decision: Decision; locale: Locale }) {
-  return <span className={`decided-badge ${TONE[decision]}`}>{repairApprovalCopy(locale)[decision]}</span>;
+  return <span className={`decided-badge ${TONE[decision]}`}>{brandV3OwnerDecidedCopy(locale).result[decision]}</span>;
 }
 
 /** GS-02 loading: skeletons only, never a number, count or NT$0. */
