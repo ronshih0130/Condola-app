@@ -55,6 +55,8 @@ test("PLT-46-AC1 / MGT-47-AC1: SH-SANDBOX root OFF is byte-identical to 529b4fa,
       "@/server/sandbox": { sandboxChrome: async () => ({ environment }) },
       "@/server/session": { requestPrefs: async () => ({ locale }), readSession: async () => actor },
       "@/lib/brand-root": { brandRoot }, "@/components/v3/role-avatar": { RoleAvatar },
+      // B-063: only a /vendor-account path with the workbench open returns an organization; elsewhere null.
+      "@/server/vendor-workbench": { vendorWorkbenchBrandOrg: async () => null },
     };
     assert.equal(await renderLayout(source("src/app/layout.tsx"), mocks), await renderLayout(old, mocks));
     on = true;

@@ -136,6 +136,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/signup/unit-qr/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/t/history/[leaseId]/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/t/lease/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/vendor-account/jobs/[jobId]/route.ts:1 | Enumerated only; outside representative selection |
 
 ## Reader boundaries
 

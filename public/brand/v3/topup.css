@@ -1,0 +1,44 @@
+/* MO-TOPUP (MGT-151): 退租結算 top-up card and the 「記錄已收」 sheet. Loaded only by the three brand_v3
+   settlement pages. Tokens only; desktop centers the sheet, a phone slides it up from the bottom. */
+html[data-brand="v2"][data-brand-v3] .v3-topup { display:grid; gap:16px; min-width:0; margin-bottom:20px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup :is(h1,h2,h3,p,ul) { margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-crumb { display:flex; flex-wrap:wrap; align-items:center; gap:4px; color:var(--c-text-2); font-weight:600; font-size:.9em; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-crumb a { display:inline-flex; align-items:center; min-height:44px; min-width:44px; color:var(--c-brand-ink); text-decoration:none; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-crumb a:focus-visible { outline:2px solid var(--c-focus); outline-offset:2px; border-radius:4px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-crumb > span:last-child { overflow-wrap:anywhere; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-head { background:var(--c-tint-soft); border-radius:var(--r-lg); padding:16px 20px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-head h1 { overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-head p { margin-top:4px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-card { display:grid; gap:10px; background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); box-shadow:var(--shadow-1); padding:20px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-card h2 { font-size:1.05em; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-card h3 { font-size:.9em; color:var(--c-text-2); margin-top:6px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-kv { display:flex; justify-content:space-between; gap:12px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-kv span { color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-topup-sum { padding-top:10px; border-top:1px solid var(--c-divider); overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-entries { list-style:none; padding:0; display:grid; gap:4px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-entries li { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .v3-topup .btn { min-height:44px; min-width:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-record { justify-self:start; margin-top:6px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-layer { position:fixed; inset:0; z-index:60; display:grid; place-items:center; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-dim { position:absolute; inset:0; background:rgb(0 0 0 / .4); }
+html[data-brand="v2"][data-brand-v3] .v3-topup-sheet { position:relative; display:grid; gap:12px; width:min(480px,calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:20px; background:var(--c-surface); color:var(--c-text); border:1px solid var(--c-border); border-radius:var(--r-lg); box-shadow:var(--shadow-1); }
+html[data-brand="v2"][data-brand-v3] .v3-topup-sheet form { display:grid; gap:12px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-grab { display:none; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-sheet-head h2 { margin:0; font-size:1.1em; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-field { display:grid; gap:4px; font-weight:600; font-size:.9em; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-field input { min-height:44px; font:inherit; font-weight:400; font-size:1rem; padding:8px 12px; border:1px solid var(--c-border-strong); border-radius:var(--r-md); background:var(--c-surface); color:var(--c-text); }
+html[data-brand="v2"][data-brand-v3] .v3-topup-field input:focus-visible { outline:2px solid var(--c-focus); outline-offset:1px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-warn { margin:0; padding:10px 14px; border-radius:var(--r-md); background:var(--c-warning-soft); color:var(--c-text); }
+html[data-brand="v2"][data-brand-v3] .v3-topup-fail { margin:0; color:var(--c-text); font-weight:600; }
+/* The two message regions stay mounted (live regions announce text changes); empty, they leave the grid flow. */
+html[data-brand="v2"][data-brand-v3] :is(.v3-topup-warn,.v3-topup-fail):empty { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-sheet .btn { min-height:44px; min-width:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-topup-sheet .btn.block { width:100%; }
+@media (max-width:50em) {
+ html[data-brand="v2"][data-brand-v3] .v3-topup-head { padding:14px 16px; }
+ html[data-brand="v2"][data-brand-v3] .v3-topup-card { padding:16px; }
+ html[data-brand="v2"][data-brand-v3] .v3-topup-layer { place-items:end stretch; }
+ html[data-brand="v2"][data-brand-v3] .v3-topup-sheet { width:100%; max-height:90dvh; border-radius:var(--r-lg) var(--r-lg) 0 0; padding:12px 16px calc(16px + env(safe-area-inset-bottom)); }
+ html[data-brand="v2"][data-brand-v3] .v3-topup-grab { display:block; justify-self:center; width:40px; height:4px; border-radius:2px; background:var(--c-border-strong); }
+}

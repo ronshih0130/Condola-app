@@ -68,7 +68,7 @@ export const vendorMatchPOST = (request: Request) => lineResponse(async () => {
   if (b.action === "remove") return { jobs: review.jobs, snapshot: review.snapshot };
   await credentialsOn(c, review.userId, { sessionToken }, false);
   const token = await lineSessionOn(c, f, review.userId, review.identityId, meta(request), sessionToken);
-  // Existing B026 portal exists. B063 workbench is deliberately not implemented here.
+  // B026 portal path. B-063: /vendor-account itself is the workbench (V-HOME) when it is open for that org.
   const next = await consentNextOn(c, review.userId, { persona: "vendor", return_path: "/vendor-account" });
   return { next, token, orgId: review.orgId };
  });

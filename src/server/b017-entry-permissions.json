@@ -452,5 +452,7 @@
   "src/server/b3-today-kinds.ts#todayMonthCloseTurn": "month.close",
   "src/server/b3-today-kinds.ts#todayReplyTurn": "messages.send",
   "src/server/b093-owner-decided.ts#ownerDecidedList": null,
-  "src/server/b093-owner-decided.ts#ownerDecidedTicket": null
+  "src/server/b093-owner-decided.ts#ownerDecidedTicket": null,
+  "src/server/mf3-deposit-topup.ts#depositTopupView": null,
+  "src/server/mf3-deposit-topup.ts#recordDepositTopup": null
 }

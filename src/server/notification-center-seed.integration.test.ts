@@ -164,6 +164,7 @@ test("synthetic absence of 100214, 100215 and optional 100217 tables remains res
   if(producer) await db.query(`DROP TABLE app.b017_center_resolutions`);
   await db.query(`DROP TABLE app.b028_center_mark_contexts,app.b028_center_cursors,app.b028_center_reads,app.b028_center_recipients,app.b028_center_events`);
   if(producer) await db.query(`DROP TABLE app.b017_old_source_transactions,app.b017_occurrences`);
+  await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_topups`);
   await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_payments`);
   await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_confirmations`);
   await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_revisions`);

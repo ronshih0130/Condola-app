@@ -178,6 +178,49 @@ BEGIN
   END IF;
  END LOOP;
 END $b093_gateways$;
+-- MF-3 / MGT-151 service-only top-up gateway ACL/config probe; the table keeps RLS and no application grants.
+DO $mf3_topup$
+DECLARE signature text; fn record; role_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.mf3_topup_record(uuid,uuid,text,uuid,uuid,uuid,uuid,bigint,date,text)',
+  'app.mf3_topup_view(uuid,uuid,text,uuid,text,uuid)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'MF-3 top-up gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.deposit_settlement_topups'::regclass) THEN
+  RAISE EXCEPTION 'MF-3 top-up table RLS is off';
+ END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  IF has_table_privilege(role_name,'app.deposit_settlement_topups','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+   RAISE EXCEPTION 'MF-3 top-up table grant to %',role_name;
+  END IF;
+ END LOOP;
+END $mf3_topup$;
+-- B-063 service-only gateway ACL/config probe, migration-owned VOLATILE vendor workbench reader.
+DO $b063_gateway$
+DECLARE fn record;
+BEGIN
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b063_vendor_workbench(text,uuid)'::regprocedure;
+ IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+  OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+  OR has_function_privilege('anon',fn.oid,'EXECUTE')
+  OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+    WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-063 gateway ACL/config mismatch: app.b063_vendor_workbench(text,uuid)';
+ END IF;
+END $b063_gateway$;
 -- B-105 service-only gateways and internal helpers, migration-owned VOLATILE definers; private table revoked.
 DO $b105_gateways$
 DECLARE signature text; fn record; role_name text;
