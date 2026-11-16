@@ -127,8 +127,13 @@ test("ACL: only service_role may EXECUTE; anon and authenticated are denied; the
   assert.equal((await db.query("SELECT relrowsecurity FROM pg_class WHERE oid='app.deposit_settlement_topups'::regclass")).rows[0].relrowsecurity, true);
   // Effective privileges (inherited and PUBLIC included), one by one.
   for (const role of ["anon", "authenticated", "service_role"])
-    for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"])
+    for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
       assert.equal((await db.query("SELECT has_table_privilege($1,'app.deposit_settlement_topups',$2) ok", [role, privilege])).rows[0].ok, false, `${role} ${privilege}`);
+  // Column-level grants too: no column of the table is readable or writable by an application role.
+  for (const role of ["anon", "authenticated", "service_role"])
+    assert.equal((await db.query(`SELECT count(*)::int n FROM pg_attribute a WHERE a.attrelid='app.deposit_settlement_topups'::regclass AND a.attnum>0 AND NOT a.attisdropped
+      AND (has_column_privilege($1,a.attrelid,a.attnum,'SELECT') OR has_column_privilege($1,a.attrelid,a.attnum,'INSERT')
+        OR has_column_privilege($1,a.attrelid,a.attnum,'UPDATE') OR has_column_privilege($1,a.attrelid,a.attnum,'REFERENCES'))`, [role])).rows[0].n, 0, `${role} column grants`);
   for (const role of ["anon", "authenticated", "service_role"]) {
     await db.query("BEGIN");
     try { await db.query(`SET LOCAL ROLE ${role}`); await assert.rejects(db.query("SELECT 1 FROM app.deposit_settlement_topups LIMIT 1"), { code: "42501" }); }
@@ -338,4 +343,6 @@ test("one cap: the total paid may reach the cap and stays readable; a write past
   if (staff.state === "ready") assert.equal(staff.view.paidMinor, CAP.toString());
   const tenant2 = await depositTopupView({ ...session("tenant2", "tenant"), leaseId: otherLease }, otherLease, { v3 });
   assert.equal(tenant2.state, "ready");
+  if (tenant2.state === "ready") assert.equal(tenant2.view.paidMinor, CAP.toString());
+  if (staff.state === "ready" && tenant2.state === "ready") assert.equal(tenant2.view.paidMinor, staff.view.paidMinor);
 });
