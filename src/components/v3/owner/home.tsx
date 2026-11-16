@@ -50,7 +50,7 @@ export function OwnerHomeV3({ name, locale, state, estimate }: {
       else heading.current?.focus();
     });
   };
-  const title = state.status === "error" || rows.length === 0 ? brandV3OwnerShellCopy(locale).home
+  const title = state.status === "error" || rows.length === 0 || rows.some(row => row.emergency) ? brandV3OwnerShellCopy(locale).home
     : (name.trim() ? copy.lead : copy.leadNoName).replace("{name}", name).replace("{count}", String(rows.length));
   return <section className="v3-owner-home" data-testid="owner-home-v3">
     <h2 ref={heading} tabIndex={-1}>{title}</h2>
@@ -59,7 +59,7 @@ export function OwnerHomeV3({ name, locale, state, estimate }: {
       {state.status === "error" ? <div role="alert"><p>{copy.failure}</p>
         <button className="owner-action owner-primary" onClick={() => router.refresh()}>{brandV3TodayCopy(locale).retry}</button>
       </div> : rows.length ? <ul className="owner-estimates">{rows.map(row => <li key={row.versionId} data-testid="owner-estimate-row">
-        <div><b>{row.property}{row.item}</b><div className="owner-badges"><span>{copy.estimate} {row.amount}</span><span>{copy.pending}</span></div></div>
+        <div><b>{row.property}{row.item}</b><div className="owner-badges"><span>{copy.estimate} {row.amount}</span><span>{row.emergency ? copy.emergencyNote : copy.pending}</span></div></div>
         <button className="owner-action" onClick={event => { trigger.current = event.currentTarget; setSelected(row); setNotice(""); }}>{copy.approve}</button>
       </li>)}</ul> : <div className="owner-empty"><Illustration name="20" /><h4>{copy.empty}</h4><p>{copy.emptyDetail}</p></div>}
       {notice ? <p role="status">{notice}</p> : null}
@@ -139,7 +139,7 @@ export function EstimatePanel({ row, locale, onClose, onReturned }: {
           <dt>{copy.description}</dt><dd><p>{row.scope}</p>{row.managementExplanation ? <p>{row.managementExplanation}</p> : null}</dd>
           {BigInt(row.version) > BigInt(1) ? <><dt>{copy.version}</dt><dd>{version}</dd></> : null}</dl>
         {row.emergency ? <Emergency row={row.emergency} copy={existing} /> : null}
-        <p>{copy.note}</p>
+        <p>{row.emergency ? copy.emergencyNote : copy.note}</p>
       </> : <>
         <div className="owner-outcomes" role="group" aria-label={existing.decision}>
           <button type="button" className="owner-action" aria-pressed={decision === "rejected"} disabled={busy}

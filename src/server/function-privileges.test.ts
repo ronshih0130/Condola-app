@@ -279,3 +279,17 @@ test("privilege checks reject implicit or redirected targets before any database
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+test("B3b new gateways preserve migration ownership and lock-compatible volatile service-only ACLs", () => {
+  for (const [file, signature] of [
+    ["20261115170100_b3_staff_repair_turns.sql", "b3_staff_repair_turns(uuid,uuid,text,uuid,uuid,uuid,text,jsonb,integer)"],
+    ["20261115170200_b3_vendor_repair_turn.sql", "b3_vendor_repair_turn(text)"],
+  ]) {
+    const sql = read(`supabase/migrations/${file}`), compact = sql.replace(/\s+/g, "");
+    assert.match(sql, /VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp/);
+    assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /ALTER.*OWNER|CREATE OR REPLACE|GRANT.*TABLE|READ ONLY/i);
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`));
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  }
+});

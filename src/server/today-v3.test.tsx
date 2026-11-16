@@ -74,13 +74,14 @@ function render(input: Partial<Parameters<typeof TodayPage>[0]> = {}) {
 function readers() {
   const unexpected = () => { throw new Error("Unexpected infrastructure call"); };
   return compile(source("src/server/today-v3.ts"), {
+    "./b3-repair-turns": { staffRepairTurns: async () => off },
     "./b3-payment-turns": { staffPaymentTurns: unexpected }, "./b3-rental-turns": { staffRentalTurns: unexpected },
     "./b3-overdue-turns": { staffOverdueTurns: unexpected }, "./b017-custom-role-governance": {}, "./db": { tx: unexpected },
     "./errors": { FlowError, logServerError: () => undefined }, "./org-guard": {}, "./perms": perms, "./queries": { rentRoll: unexpected },
   }) as typeof import("./today-v3");
 }
 function readDeps() {
-  return { enabled: async () => true, payments: async () => payments, rentals: async () => rentals, overdue: async () => overdue, roomUnits: async () => turns.roomUnits };
+  return { repairs: async () => off, enabled: async () => true, payments: async () => payments, rentals: async () => rentals, overdue: async () => overdue, roomUnits: async () => turns.roomUnits };
 }
 
 test("B3A-TODAY / T-ROWS: both groups, uncapped counts, approved turn anatomy and destinations", () => {
@@ -138,7 +139,7 @@ test("forbidden/off contributes nothing; unexpected rejection becomes unavailabl
   assert.doesNotMatch(render({ turns: result }), /找新租客|詢問續約意願/);
 });
 
-test("accountant payment-only and maintenance has no turn reads", async () => {
+test("accountant payment-only and maintenance has no payment/rental reads", async () => {
   const api = readers();
   const forbiddenRental = async () => { assert.fail("accountant must not read rentals"); };
   const result = await api.readTodayTurns({ ...session, role: "accountant" }, { ...readDeps(), rentals: forbiddenRental });
@@ -147,7 +148,7 @@ test("accountant payment-only and maintenance has no turn reads", async () => {
   assert.doesNotMatch(html, /找新租客|詢問續約|live-onboarding/);
   const nothing = async () => { assert.fail("maintenance must not read turns"); };
   const maintenance = await api.readTodayTurns({ ...session, role: "maintenance" }, { ...readDeps(), payments: nothing, rentals: nothing, overdue: nothing });
-  assert.deepEqual(maintenance, { payments: off, rentals: off, overdue: off, roomUnits: {} });
+  assert.deepEqual(maintenance, { payments: off, rentals: off, overdue: off, repairs: off, roomUnits: {} });
 });
 
 test("T-NUM-ZERO and multi-currency: positive bills, zero confirmed; default first and independent totals", () => {
@@ -279,7 +280,7 @@ test("Today composition gates P1/P2 without changing the shared payment reader",
   const api = readers();
   const never = async () => { assert.fail("disabled Today must not load turn readers"); };
   const result = await api.readTodayTurns(session, { ...readDeps(), enabled: async () => false, payments: never, rentals: never, overdue: never });
-  assert.deepEqual(result, { payments: off, rentals: off, overdue: off, roomUnits: {} });
+  assert.deepEqual(result, { payments: off, rentals: off, overdue: off, repairs: off, roomUnits: {} });
   const html = render({ turns: result });
   assert.doesNotMatch(html, /今天都處理好了|today-clear|0 件/); assert.match(html, /confirmed-bills/);
   assert.match(render({ turns: result, session: { ...session, name: "" } }), /<h1[^>]*>今天<\/h1>/);
@@ -292,7 +293,7 @@ test("effective pay.record denial removes payment and overdue rows while stmt.vi
     nativeRole: "accountant", assigned: true, keys: ["dash.view", "stmt.view"], photos: false, audit: false } };
   const never = async () => { assert.fail("no effective payment grant"); };
   const result = await readers().readTodayTurns(limited, { ...readDeps(), payments: never, rentals: never, overdue: never });
-  assert.deepEqual(result, { payments: off, rentals: off, overdue: off, roomUnits: {} });
+  assert.deepEqual(result, { payments: off, rentals: off, overdue: off, repairs: off, roomUnits: {} });
   assert.equal(perms.can(limited, "stmt.view"), true);
 });
 
@@ -376,4 +377,14 @@ test("B3A-TODAY-NUM: money page owns 未結餘額; 報修 and 出租 stay unchan
   assert.match(after, /data-testid="today-interim"/);
   assert.doesNotMatch(after, /dash-outstanding|未結餘額|NT\$41,800/); assert.match(after, /href="\/m\/tickets"/); assert.match(after, /href="\/m\/leases"[^>]*>.*4\/5/);
   assert.doesNotMatch(html, /dash-received|i_pending_pay|待確認繳款<\/div>/);
+});
+
+test("3b repair-only custom manager is not skipped; failed admitted repair source suppresses data headline", async () => {
+  const limited: Session = { ...session, role: "manager", customRole: { orgId: session.orgId, userId: session.userId, sessionId: session.sessionId,
+    nativeRole: "manager", assigned: true, keys: ["tickets.update"], photos: true, audit: false } };
+  let calls = 0;
+  const result = await readers().readTodayTurns(limited, { ...readDeps(), repairs: async () => { calls++; return { state: "unavailable" }; } });
+  assert.equal(calls, 1); assert.equal(result.payments.state, "off"); assert.equal(result.rentals.state, "off");
+  assert.deepEqual(model.todayTurnCounts(result), { state: "unavailable" });
+  assert.deepEqual(model.todayOverview(result), { state: "unavailable" });
 });

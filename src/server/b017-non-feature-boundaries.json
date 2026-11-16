@@ -522,5 +522,25 @@
   "src/server/brand-v3.ts#brandV3EnabledForOrg": {
     "reason": "Presentation-only organization brand flag reader: exact JSON opt-in plus effective v2; fails closed, reads no business records, grants no permission and performs no mutation.",
     "sha256": "d0f24ea47ac673125dbda63c4be7c71d514775b96df2d011ab4b70327d3b4faf"
+  },
+  "src/server/b3-vendor-repair-turn.ts#loadVendorRepairTurns": {
+    "reason": "Vendor token boundary: full loader/capability/sharing admission and one writable repeatable-read projection; OFF delegates to existing loaders.",
+    "sha256": "6802fc5f98fb4e0e753628d6e49edb8a0b78bec39576558aa0a361009cb89b19"
+  },
+  "src/server/vendor-repair.ts#loadVendorJobOn": {
+    "reason": "Internal vendor token loader: caller-owned client and token lookup; repeats capability/sharing/identity admission on that client; no independent transaction.",
+    "sha256": "f6f123ecfde27e694234128d35c36644ca62b35527640f6ed4d7e9c0821aa8e0"
+  },
+  "src/server/brand-v3.ts#brandV3ReadForOrg": {
+    "reason": "Presentation flag lookup only, before business admission. Failure throws; does not disclose business data or authorize any party.",
+    "sha256": "63a8cc5d8075c80ddcc5c9589be4f9eaef7677ae1bef08850a51dfdb1f5b997a"
+  },
+  "src/server/b3-vendor-repair-turn.ts#loadVendorRepairTurnsOn": {
+    "reason": "Internal vendor token boundary: caller-owned writable repeatable-read client; repeats token, policy, identity, sharing, capability and final expiry checks; no nested transaction.",
+    "sha256": "81d71ed33c7b90abfb2dd23cd8e4aceb81414af29c8cf98daf0a8b485441a2b2"
+  },
+  "src/server/vendor-job.ts#resolveVendorJobStateOn": {
+    "reason": "Internal vendor action-state read: invoked only after complete token capability/sharing admission by loadVendorRepairTurnsOn; token-derived scope, same client, B-104 helpers only.",
+    "sha256": "28268a97928d7c1690ccdc81e53f97e4e4cc98d4472e762f08b1a6db46a22fca"
   }
 }

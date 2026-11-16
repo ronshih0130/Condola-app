@@ -148,3 +148,13 @@ test("the lock migration checks caller org and revokes the country trigger", () 
   assert.match(sql, /ALTER FUNCTION public\.condola_property_address_key\(text\) SET search_path = pg_catalog/);
   assert.match(sql, /sort before this one, so the\n-- REVOKEs apply and do not NOTICE-skip/);
 });
+
+test("B3b exact signatures are inventoried without authenticated RPC permission", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b3_staff_repair_turns(uuid,uuid,text,uuid,uuid,uuid,text,jsonb,integer)", "app.b3_vendor_repair_turn(text)"]) {
+    assert.ok(allow.includes(`# service-only: ${signature}`));
+    assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).includes(signature));
+  }
+  assert.doesNotMatch(read("supabase/migrations/20261115170100_b3_staff_repair_turns.sql"), /CREATE FUNCTION public\./);
+  assert.doesNotMatch(read("supabase/migrations/20261115170200_b3_vendor_repair_turn.sql"), /CREATE FUNCTION public\./);
+});

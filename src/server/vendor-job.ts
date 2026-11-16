@@ -48,7 +48,10 @@ export async function resolveVendorJobState(token: string): Promise<VendorJobSta
   if (!vendorTokenAcceptable(token)) return null;
   const job = await openJob(token);
   if (!job || !(await flagsOn(job.org_id)).enabled) return null;
-  return svc(null, async (client) => {
+  return svc(null, client => stateForJobOn(client, job));
+}
+
+async function stateForJobOn(client: Client, job: OpenJob): Promise<VendorJobState | null> {
     const versionId = await currentRepairVersionId(client, job.org_id, job.ticket_id);
     if (!versionId) return null;
     const dispatchAllowed = await repairDispatchAllowed(client, job.org_id, versionId);
@@ -58,7 +61,22 @@ export async function resolveVendorJobState(token: string): Promise<VendorJobSta
       versionId, dispatchAllowed, locked: !dispatchAllowed, currentEvent,
       requestId: randomUUID(),
     };
-  });
+
+}
+
+/** Internal: only after the combined loader has admitted sharing/capability on this same client. */
+export async function resolveVendorJobStateOn(client: Client, token: string): Promise<VendorJobState | null> {
+  if (!vendorTokenAcceptable(token)) return null;
+  const job = await maybe<OpenJob>(client,
+    "SELECT job_id::text,org_id::text,ticket_id::text FROM app.open_vendor_job($1::text)", [hashVendorToken(token)]);
+  if (!job) return null;
+  const flags = await maybe<{ enabled: boolean }>(client,
+    `SELECT coalesce((SELECT o.feature_flags->'repair_approvals'='true'::jsonb
+      AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array'
+      AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)
+      FROM public.organizations o CROSS JOIN public.platform_settings f
+      WHERE o.id=$1 AND f.key='repair_approvals'),false) AS enabled`, [job.org_id]);
+  return flags?.enabled ? stateForJobOn(client, job) : null;
 }
 
 async function mutationScope(token: string, pinnedVersionId: string, completionRequestId?: string) {

@@ -1,8 +1,9 @@
+import type { StaffRepairTurns } from "../server/b3-repair-turns";
 import type { StaffPaymentTurns } from "../server/b3-payment-turns";
 import type { StaffRentalTurns } from "../server/b3-rental-turns";
 import type { StaffOverdueTurns } from "../server/b3-overdue-turns";
 
-export type TodayTurns = { payments: StaffPaymentTurns; rentals: StaffRentalTurns; overdue: StaffOverdueTurns; roomUnits: Record<string, string> };
+export type TodayTurns = { repairs?: StaffRepairTurns; payments: StaffPaymentTurns; rentals: StaffRentalTurns; overdue: StaffOverdueTurns; roomUnits: Record<string, string> };
 export type TodayRow =
   | { type: "payment"; row: Extract<StaffPaymentTurns, { state: "ready" }>["mine"][number] }
   | { type: "rental"; row: Extract<StaffRentalTurns, { state: "ready" }>["mine"][number] }
@@ -32,8 +33,8 @@ export function oldestFirst(rows: TodayRow[]): TodayRow[] {
     return (Number.isNaN(difference) ? 0 : difference) || rowKey(a).localeCompare(rowKey(b));
   }).slice(0, 50);
 }
-export function todayOverview({ payments, rentals, overdue }: TodayTurns) {
-  if ([payments, rentals, overdue].some(source => source.state === "unavailable")) return { state: "unavailable" as const };
+export function todayOverview({ payments, rentals, overdue, repairs }: TodayTurns) {
+  if (repairs?.state === "unavailable" || [payments, rentals, overdue].some(source => source.state === "unavailable")) return { state: "unavailable" as const };
   if ([payments, rentals, overdue].every(source => source.state === "off")) return { state: "off" as const };
   const p = payments.state === "ready" ? payments : undefined;
   const r = rentals.state === "ready" ? rentals : undefined;
@@ -82,3 +83,15 @@ export type TodayMonthly = { rows: BillRow[]; month: number; defaultCurrency: st
 export function hasMonthlyFigure(data: TodayMonthly | undefined): data is TodayMonthly {
   return data !== undefined && monthlyBillTotals(data.rows).length > 0;
 }
+
+/** Data API only. Repair row/overflow rendering remains gated by §10b. */
+export function todayTurnCounts(sources: TodayTurns) {
+  const original = todayOverview(sources), repair = sources.repairs;
+  if (original.state === "unavailable" || repair?.state === "unavailable") return { state: "unavailable" as const };
+  if (original.state === "off" && (!repair || repair.state === "off")) return { state: "off" as const };
+  return { state: "ready" as const,
+    mine: (original.state === "ready" ? original.mineCount : 0) + (repair?.state === "ready" ? repair.yourTurn : 0),
+    others: (original.state === "ready" ? original.othersCount : 0) + (repair?.state === "ready"
+      ? repair.counts.filter(c => !(c.holder === "manager" && c.canAct)).reduce((n, c) => n + c.count, 0) : 0) };
+}
+export function repairTodayKey(ticketId: string) { return `repair:${ticketId}`; }
