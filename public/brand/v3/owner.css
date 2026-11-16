@@ -36,3 +36,32 @@ html[data-brand="v2"][data-brand-v3] .owner-estimate-panel textarea { display:bl
 @media(min-width:64em) {
   html[data-brand="v2"][data-brand-v3] .owner-estimate-panel { inset:0 0 0 auto; width:520px; height:100dvh; max-height:100dvh; border-radius:var(--r-lg) 0 0 var(--r-lg); padding:32px; }
 }
+/* RO-DECIDED (更多 › 核准紀錄, B-093): read-only list and view; tokens only, 44px targets, no solid primary. */
+html[data-brand="v2"][data-brand-v3] .v3-owner-decided { color:var(--c-text); overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-decided .decided-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-decided > h2 { margin:0 0 16px; font-size:clamp(1.25rem, 1.15rem + .4vw, 1.5rem); }
+html[data-brand="v2"][data-brand-v3] .decided-card { background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); padding:8px 20px; margin:0 0 16px; }
+html[data-brand="v2"][data-brand-v3] .decided-card > p { margin:12px 0; }
+html[data-brand="v2"][data-brand-v3] .decided-card[role="alert"] { padding:20px; }
+html[data-brand="v2"][data-brand-v3] .decided-lines { list-style:none; padding:0; margin:0; }
+html[data-brand="v2"][data-brand-v3] .decided-lines li + li { border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .decided-line { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; padding:14px 0; color:inherit; text-decoration:none; }
+html[data-brand="v2"][data-brand-v3] .decided-line:focus-visible { outline:2px solid var(--c-focus); outline-offset:2px; border-radius:var(--r-sm); }
+html[data-brand="v2"][data-brand-v3] .decided-main { display:flex; flex-direction:column; gap:4px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .decided-sub { color:var(--c-text-2); font-size:.875rem; }
+html[data-brand="v2"][data-brand-v3] .decided-badge { flex:none; padding:4px 10px; border-radius:var(--r-pill); background:var(--c-surface-2); color:var(--c-text-2); font-size:.875rem; white-space:nowrap; }
+html[data-brand="v2"][data-brand-v3] .decided-badge.decided-approved { background:var(--c-tint-mid); color:var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .decided-badge.decided-rejected { background:var(--c-warning-soft); color:var(--c-warning); }
+html[data-brand="v2"][data-brand-v3] .decided-skeleton { display:flex; flex-direction:column; gap:8px; padding:16px 0; }
+html[data-brand="v2"][data-brand-v3] .decided-skeleton + .decided-skeleton { border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .decided-skeleton span { display:block; height:14px; width:60%; border-radius:var(--r-sm); background:var(--c-tint-soft); }
+html[data-brand="v2"][data-brand-v3] .decided-skeleton span + span { width:35%; }
+html[data-brand="v2"][data-brand-v3] .decided-pager { display:flex; justify-content:flex-end; }
+html[data-brand="v2"][data-brand-v3] .decided-facts { display:grid; grid-template-columns:minmax(4em,auto) minmax(0,1fr); gap:12px 16px; margin:12px 0 16px; }
+html[data-brand="v2"][data-brand-v3] .decided-facts dt { color:var(--c-text-3); }
+html[data-brand="v2"][data-brand-v3] .decided-facts dd { margin:0; }
+html[data-brand="v2"][data-brand-v3] .decided-version { padding:16px 20px; }
+html[data-brand="v2"][data-brand-v3] .decided-version h3 { margin:0; }
+html[data-brand="v2"][data-brand-v3] .decided-text { white-space:pre-wrap; }
+html[data-brand="v2"][data-brand-v3] .decided-noperm { text-align:center; padding:24px 0; }
+html[data-brand="v2"][data-brand-v3] .decided-noperm svg { width:176px; max-width:100%; }

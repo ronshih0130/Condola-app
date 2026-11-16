@@ -158,3 +158,12 @@ test("B3b exact signatures are inventoried without authenticated RPC permission"
   assert.doesNotMatch(read("supabase/migrations/20261115170100_b3_staff_repair_turns.sql"), /CREATE FUNCTION public\./);
   assert.doesNotMatch(read("supabase/migrations/20261115170200_b3_vendor_repair_turn.sql"), /CREATE FUNCTION public\./);
 });
+
+test("B-093 owner gateways are inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b093_owner_decided(uuid,uuid,text,uuid,jsonb,integer)", "app.b093_owner_decided_ticket(uuid,uuid,text,uuid,uuid)"]) {
+    assert.ok(allow.includes(`# service-only: ${signature}`));
+    assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b093_")));
+  }
+  assert.doesNotMatch(read("supabase/migrations/20261115200000_b093_owner_decided.sql"), /FUNCTION public\./);
+});

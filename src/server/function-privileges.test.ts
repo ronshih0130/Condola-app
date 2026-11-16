@@ -293,3 +293,39 @@ test("B3b new gateways preserve migration ownership and lock-compatible volatile
     assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
   }
 });
+
+test("B-093 adds two owner gateways reusing the PR-015 admission verbatim, service-only and migration-owned", () => {
+  const sql = read("supabase/migrations/20261115200000_b093_owner_decided.sql");
+  const pr015 = read("supabase/migrations/20261115130000_b013_current_owner_authority.sql");
+  const history = pr015.slice(pr015.indexOf("CREATE OR REPLACE FUNCTION app.b013_owner_history"));
+  // The exact PR-015 current-owner predicate and env/live tuple check, copied byte for byte.
+  const predicate = history.slice(history.indexOf("  AND EXISTS (\n   SELECT 1 FROM public.property_owners po"), history.indexOf("\n ORDER BY v.version_no DESC"));
+  const tuple = history.slice(history.indexOf("  SELECT 1 FROM public.organizations o\n"), history.indexOf(" ) THEN RAISE EXCEPTION 'errors.forbidden'"));
+  assert.ok(predicate.length > 300 && tuple.length > 200);
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]), ["b093_owner_decided", "b093_owner_decided_ticket"]);
+  const bodies = sql.split("CREATE FUNCTION").slice(1);
+  for (const body of bodies) {
+    assert.ok(body.includes(predicate.trimStart()), "PR-015 predicate");
+    assert.ok(body.includes(tuple), "env/live tuple");
+    assert.match(body, /SELECT \* INTO a FROM app\.b013_actor\(p_org,p_session\);/);
+    assert.match(body, /IF NOT app\.b013_approvals_enabled\(p_org\) THEN RETURN/);
+    assert.match(body, /v\.designated_principal_id=a\.actor AND d\.decided_by=a\.actor/);
+    assert.match(body, /JOIN app\.b013_estimate_decisions d ON d\.org_id=v\.org_id AND d\.ticket_id=v\.ticket_id AND d\.version_id=v\.id/);
+    assert.match(body, /current_setting\('app\.active_org_id',true\) IS DISTINCT FROM p_org::text/);
+    assert.match(body, /VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+    // Every relation is schema-qualified under the fixed search_path.
+    const code = body.slice(body.indexOf("AS $$"), body.indexOf("END $$;")).replace(/DISTINCT FROM/g, "");
+    for (const ref of code.matchAll(/\b(?:FROM|JOIN)\s+([a-z_][\w.]*)/g)) assert.match(ref[1], /^(?:public\.|app\.|decided$)/, ref[0]);
+  }
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|ALTER|DROP|INSERT|UPDATE|DELETE|GRANT[^;]*TABLE|READ ONLY|CURRENT_DATE|evidence_snapshot|designated_contact_id|captured_threshold/i);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of ["b093_owner_decided(uuid,uuid,text,uuid,jsonb,integer)", "b093_owner_decided_ticket(uuid,uuid,text,uuid,uuid)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`));
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+    assert.equal((compact.match(new RegExp(`GRANT[A-Z]*ONFUNCTIONapp\\.${signature.replace(/[()]/g, "\\$&")}`, "g")) ?? []).length, 1);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  }
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(sql, /SET LOCAL statement_timeout='60s'/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-093 gateway ACL\/config mismatch/);
+});
