@@ -1,11 +1,10 @@
 import React from "react";
 import Link from "next/link";
-import { makeT, type Locale } from "../../../../i18n";
+import type { Locale } from "../../../../i18n";
 import { brandV3Copy, brandV3NavigationCopy } from "../../../../i18n/lanes/brand-v3";
 import { ticketRelayCopy } from "../../../../i18n/lanes/brand-v3-ticket-relay";
-import type { RelayNode, RelaySub } from "../../../../lib/b3-ticket-relay";
+import type { RelayEnd, RelayNode, RelaySub } from "../../../../lib/b3-ticket-relay";
 import type { TicketRelay } from "../../../../server/b3-ticket-relay";
-import { statusKey } from "../../../ui";
 import { RoleAvatar } from "../../role-avatar";
 import { TurnTag } from "../../turn-tag";
 
@@ -14,12 +13,14 @@ function subText(sub: RelaySub, locale: Locale): string {
   if (sub.kind === "name") return sub.text;
   if (sub.kind === "you") return c.you;
   if (sub.kind === "sent_back") return c.sentBack;
+  if (sub.kind === "more_info") return c.moreInfo;
   return brandV3Copy(locale).m;
 }
 
 /** PLT-52-AC1: navy up to the current step; the current label is the navy pill; later steps dimmed.
- * No completion tick anywhere (MGT-150-AC5); no day count (PLT-53-AC5). */
-export function RelayRail({ nodes, label, locale }: { nodes: RelayNode[]; label: string; locale: Locale }) {
+ * TK-RELAY-END: a finished relay ends with a grey status pill. No completion tick anywhere
+ * (MGT-150-AC5); no day count (PLT-53-AC5). */
+export function RelayRail({ nodes, end, label, locale }: { nodes: RelayNode[]; end?: RelayEnd | null; label: string; locale: Locale }) {
   const c = ticketRelayCopy(locale);
   return <ol className="v3-rail" aria-label={label} data-testid="ticket-relay">
     {nodes.map((node, i) => <li key={`${i}:${node.party}:${node.step}`} className={`v3-st ${node.state}`} data-state={node.state} data-party={node.party}>
@@ -27,6 +28,7 @@ export function RelayRail({ nodes, label, locale }: { nodes: RelayNode[]; label:
       <span className="v3-st-l">{node.state === "now" ? <TurnTag>{c.steps[node.step]}</TurnTag> : c.steps[node.step]}</span>
       {node.subs.map((sub, j) => <span className="v3-st-s" key={j}>{subText(sub, locale)}</span>)}
     </li>)}
+    {end && <li className="v3-st end" data-state="end"><span className="v3-end-pill">{c.end[end]}</span></li>}
   </ol>;
 }
 
@@ -34,21 +36,21 @@ export function RelayRail({ nodes, label, locale }: { nodes: RelayNode[]; label:
 export function TicketRelayV3({ relay, place, item, locale }: {
   relay: TicketRelay; place: string; item: string; locale: Locale;
 }) {
-  const c = ticketRelayCopy(locale), t = makeT(locale);
+  const c = ticketRelayCopy(locale);
   const title = c.title.replace("{place}", place).replace("{item}", item);
   let lead: string | null = null, card: React.ReactNode = null;
   if (relay.state === "ready" && relay.view === "maintenance") {
-    // MGT-150-AC2: the ticket's existing status, no timing, no why-line.
-    lead = c.statusLine.replace("{status}", t(statusKey(relay.relay.status)));
-    if (relay.relay.nodes) card = <RelayRail nodes={relay.relay.nodes} label={c.progress} locale={locale} />;
+    // MGT-150-AC2 / TK-RELAY-MNT-STATES: the status in the approved progress words, no timing, no why-line.
+    lead = c.statusLine.replace("{status}", c.mntStatus[relay.relay.word]);
+    card = <RelayRail nodes={relay.relay.nodes} end={relay.relay.end} label={c.progress} locale={locale} />;
   } else if (relay.state === "ready") {
     const r = relay.relay;
-    if (r.lead) lead = c.reEstimateLead.replace("{name}", r.lead.owner);
+    if (r.lead) lead = c.lead[r.lead.kind].replace("{name}", r.lead.name);
     if (r.nodes) {
       const who = r.now ? r.now.you ? c.you : `${brandV3Copy(locale)[r.now.party]}${r.now.name ?? ""}` : "";
       const label = r.now ? c.progressNow.replace("{who}", who).replace("{step}", c.steps[r.now.step]) : c.progress;
       card = <>
-        <RelayRail nodes={r.nodes} label={label} locale={locale} />
+        <RelayRail nodes={r.nodes} end={r.end} label={label} locale={locale} />
         {r.why && <p className="v3-why" data-testid="ticket-relay-why">{c.why[r.why]}</p>}
       </>;
     }

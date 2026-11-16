@@ -17,7 +17,8 @@ export type TicketRelay =
   | { state: "ready"; view: "maintenance"; relay: MaintenanceRelay };
 
 type PublicFacts = { tenant: string | null; vendor: string | null };
-type EstimateRead = PublicFacts & { status: RepairStatus; pendingCost: boolean; owner: string | null };
+type EstimateRead = PublicFacts & { status: RepairStatus; pendingCost: boolean; owner: string | null;
+  currentJobCreatedAt?: string | null; anyJob?: boolean; latestRevoked?: boolean; jobReported?: boolean; jobConfirmed?: boolean };
 type Deps = {
   turns?: (session: Session, options: { ticketId: string }) => Promise<StaffRepairTurns>;
   approvals?: (session: Session, input: { ticketId: string }) => Promise<ManagerApprovalRow[]>;
@@ -41,8 +42,10 @@ async function readPublicFacts(input: Session, ticketId: string): Promise<Public
 
 /**
  * Estimate viewers only (never called for maintenance): ticket status, whether the current job's
- * reported cost is unconfirmed, and the owner's display name: the decider when a decision exists,
- * otherwise the property's first current owner (the same choice submit_estimate designates).
+ * reported cost is unconfirmed, the owner's display name (the decider when a decision exists,
+ * otherwise the property's first current owner, the same choice submit_estimate designates), and
+ * job facts for the batch 4 blocked and end states: the current job's creation time, and whether the
+ * latest job (current or historical) was revoked, reported or confirmed. Never vendor secrets.
  */
 async function readEstimateFacts(input: Session, ticketId: string, decidedBy: string | null): Promise<EstimateRead | null> {
   const session = await guardEffectiveSession(input, "tickets.update");
@@ -51,8 +54,13 @@ async function readEstimateFacts(input: Session, ticketId: string, decidedBy: st
   const native = session.customRole?.nativeRole ?? session.role;
   if (session.kind !== "staff" || !native || !["admin", "manager"].includes(native)) throw new FlowError("errors.forbidden");
   return tx(session.userId, client => withEffectiveReadAuthority(client, session, "tickets.update", () =>
-    maybe<EstimateRead>(client, `SELECT t.status::text AS status, coalesce(j.vendor_name, t.vendor_name) AS vendor,
+    maybe<EstimateRead>(client, `SELECT t.status::text AS status, coalesce(j.vendor_name, lj.vendor_name, t.vendor_name) AS vendor,
          rc.display_name AS tenant,
+         to_jsonb(j.created_at) #>> '{}' AS "currentJobCreatedAt",
+         lj.id IS NOT NULL AS "anyJob",
+         coalesce(NOT lj.active OR lj.revoked_at IS NOT NULL, false) AS "latestRevoked",
+         coalesce(lj.reported_at IS NOT NULL, false) AS "jobReported",
+         coalesce(lj.confirmed_at IS NOT NULL, false) AS "jobConfirmed",
          coalesce(j.id IS NOT NULL AND j.reported_at IS NOT NULL AND j.confirmed_at IS NULL, false) AS "pendingCost",
          CASE WHEN $3::uuid IS NOT NULL THEN
            (SELECT c.display_name FROM property_owners po
@@ -71,6 +79,9 @@ async function readEstimateFacts(input: Session, ticketId: string, decidedBy: st
        FROM maintenance_tickets t
        LEFT JOIN contacts rc ON rc.org_id = t.org_id AND rc.id = t.reported_by_contact_id
        LEFT JOIN repair_vendor_jobs j ON j.org_id = t.org_id AND j.ticket_id = t.id AND j.active AND j.revoked_at IS NULL
+       LEFT JOIN LATERAL (SELECT h.id, h.active, h.revoked_at, h.reported_at, h.confirmed_at, h.vendor_name
+           FROM repair_vendor_jobs h WHERE h.org_id = t.org_id AND h.ticket_id = t.id
+          ORDER BY h.created_at DESC, h.id DESC LIMIT 1) lj ON true
       WHERE t.org_id = $1 AND t.id = $2`, [session.orgId, ticketId, decidedBy])),
   requireOrgScope(session), effectiveReadOptions(session));
 }
@@ -112,8 +123,11 @@ export async function loadTicketRelay(session: Session, ticketId: string, deps: 
       turn: { rule: detail.rule, holder: detail.holder, step: detail.step, sinceExact: detail.sinceExact, viewerCanAct: detail.viewerCanAct },
       status: facts.status,
       current: current ? { requiresOwner: current.requires_owner_decision === true, decision: (current.decision as Decision | null) ?? null,
-        emergency: current.emergency_category !== null && current.emergency_category !== undefined } : null,
+        emergency: current.emergency_category !== null && current.emergency_category !== undefined,
+        eventKind: current.appointment_event_kind ?? null, eventAt: current.appointment_occurred_at ?? null } : null,
       pendingCost: facts.pendingCost === true,
+      jobs: { currentCreatedAt: facts.currentJobCreatedAt ?? null, any: facts.anyJob === true, latestRevoked: facts.latestRevoked === true,
+        reported: facts.jobReported === true, confirmed: facts.jobConfirmed === true },
       names: { tenant: clean(facts.tenant), vendor: clean(facts.vendor), owner: clean(facts.owner) },
     }) };
   } catch (error) {

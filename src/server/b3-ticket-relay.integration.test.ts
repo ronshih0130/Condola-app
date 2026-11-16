@@ -11,6 +11,7 @@ import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
 import { hashVendorToken } from "./vendor-repair-rules";
 import { submitVendorReport } from "./vendor-repair";
+import { respondVendorJob } from "./vendor-job";
 
 // MGT-150-AC1…AC5 (TK-RELAY / TK-RELAY-MNT) through the real readers on a cloned disposable database:
 // the 3b staff snapshot (service_role), the existing scoped manager view, and RLS ticket facts.
@@ -129,7 +130,7 @@ test("MGT-150-AC4 real R5: owner sent the estimate back → 管 重新估價 pil
   const r5 = estimate(await loadTicketRelay(admin, f.ticket));
   assert.deepEqual(shape({ state: "ready", view: "estimate", relay: r5 }),
     ["t:report:done", "m:dispatch:done", "o:approve_estimate:done", "m:re_estimate:now", "v:do_repair:next"]);
-  assert.deepEqual(r5.lead, { kind: "re_estimate", owner: ownerName });
+  assert.deepEqual(r5.lead, { kind: "re_estimate", name: ownerName });
   assert.deepEqual(r5.nodes?.[2].subs, [{ kind: "name", text: ownerName }, { kind: "sent_back" }]);
   assert.equal(r5.nodes?.[4].subs[0]?.kind === "name" && r5.nodes[4].subs[0].text, "陳師傅");
   assert.equal(r5.why, null);
@@ -160,9 +161,83 @@ test("MGT-150-AC3 real resolved-but-waiting and unconfirmable reported cost", as
   await db.query("INSERT INTO app.b026_vendor_estimates(org_id,ticket_id,version_id,vendor_job_id) VALUES($1,$2,$3,$4)", [ORG_ID, g.ticket, g.version, g.job]);
   await submitVendorReport(g.token, { done: true, cost: "10" });
   await newVersion(g, 600000);
-  const cost = estimate(await loadTicketRelay(admin, g.ticket));
-  assert.equal(cost.nodes?.find(n => n.state === "now")?.party, "o");
-  assert.equal(cost.why, "cost_pending");
+  const resolvedCost = estimate(await loadTicketRelay(admin, g.ticket));
+  assert.equal(resolvedCost.nodes?.find(n => n.state === "now")?.party, "o");
+  // TK-WHY-RULE: 已標成已解決 outranks 費用還不能核對.
+  assert.equal(resolvedCost.why, "resolved_owner");
+  // The owner sends it back (R5, still resolved): no resolved slot exists for 重新估價, so the cost line shows.
+  await decision(g, "rejected");
+  const back = estimate(await loadTicketRelay(admin, g.ticket));
+  assert.equal(back.nodes?.find(n => n.state === "now")?.step, "re_estimate");
+  assert.equal(back.why, "cost_pending"); assert.ok(back.hidden.includes("resolved_other"));
+});
+
+test("TK-RELAY-MOREINFO real: owner asked for more information → 補資料 under 屋 and its lead", async () => {
+  const f = await fixture(600000); await decision(f, "more_information");
+  const r5 = estimate(await loadTicketRelay(admin, f.ticket));
+  assert.deepEqual(shape({ state: "ready", view: "estimate", relay: r5 }),
+    ["t:report:done", "m:dispatch:done", "o:approve_estimate:done", "m:re_estimate:now", "v:do_repair:next"]);
+  assert.deepEqual(r5.nodes?.[2].subs, [{ kind: "name", text: ownerName }, { kind: "more_info" }]);
+  assert.deepEqual(r5.lead, { kind: "more_info", name: ownerName });
+});
+
+test("TK-RELAY-BLOCKED real: the vendor's real rejection → 重新派工 lead and 沒有接 line; a revoked link → 連結已失效", async () => {
+  const f = await fixture(100);
+  assert.equal((await respondVendorJob(f.token, { requestId: randomUUID(), versionId: f.version, action: "reject", reason: "這週排不出時間" })).status, "recorded");
+  const r6 = estimate(await loadTicketRelay(admin, f.ticket));
+  assert.deepEqual(shape({ state: "ready", view: "estimate", relay: r6 }), ["t:report:done", "m:dispatch:now", "v:do_repair:next", "m:confirm_cost:next"]);
+  assert.deepEqual(r6.lead, { kind: "declined", name: "陳師傅" });
+  assert.equal(r6.why, "blocked_declined"); assert.ok(r6.hidden.includes("decline_reason"));
+  assert.ok(!JSON.stringify(r6).includes("這週排不出時間"));
+  // Emergency, then the only job is revoked → R8-blocked on 派工: the link line, no lead.
+  const g = await fixture(600000); await emergency(g);
+  await db.query("UPDATE public.repair_vendor_jobs SET active=false,revoked_at=clock_timestamp() WHERE id=$1", [g.job]);
+  const link = estimate(await loadTicketRelay(admin, g.ticket));
+  assert.equal(link.nodes?.find(n => n.state === "now")?.step, "dispatch");
+  assert.equal(link.why, "blocked_link"); assert.equal(link.lead, null);
+});
+
+test("TK-RELAY-END real: R8 處理中; closed, resolved and cancelled end pills without a tick", async () => {
+  await flag("vendor_dispatch", false);
+  const f = await fixture(100);
+  const r8 = estimate(await loadTicketRelay(admin, f.ticket));
+  assert.deepEqual(shape({ state: "ready", view: "estimate", relay: r8 }), ["t:report:done", "m:in_progress:now", "v:do_repair:next", "m:confirm_cost:next"]);
+  assert.deepEqual(r8.nodes?.[1].subs, [{ kind: "you" }]);
+  await flag("vendor_dispatch", true);
+  const g = await fixture(100);
+  await db.query("UPDATE public.maintenance_tickets SET status='cancelled' WHERE id=$1", [g.ticket]);
+  const cancelled = estimate(await loadTicketRelay(admin, g.ticket));
+  assert.equal(cancelled.end, "cancelled");
+  assert.deepEqual(shape({ state: "ready", view: "estimate", relay: cancelled }), ["t:report:done", "m:dispatch:done"]);
+  const h = await fixture(100);
+  await submitVendorReport(h.token, { done: true, cost: "10" }); // reports and resolves
+  await db.query("UPDATE public.maintenance_tickets SET status='closed',closed_at=clock_timestamp() WHERE id=$1", [h.ticket]);
+  const closed = estimate(await loadTicketRelay(admin, h.ticket));
+  assert.equal(closed.end, "closed"); assert.equal(closed.now, null); assert.equal(closed.why, null);
+  assert.ok(closed.nodes?.every(n => n.state === "done"));
+});
+
+test("TK-RELAY-MNT-STATES real: every status, and hidden state never changes any of them", async () => {
+  const f = await fixture(600000);
+  const statuses = ["open", "triaged", "assigned", "in_progress", "on_hold", "resolved", "closed", "cancelled"];
+  const views = async () => {
+    const out: Record<string, TicketRelay> = {};
+    for (const status of statuses) {
+      await db.query("UPDATE public.maintenance_tickets SET status=$2::public.ticket_status WHERE id=$1", [f.ticket, status]);
+      out[status] = await loadTicketRelay(maintenance, f.ticket);
+    }
+    await db.query("UPDATE public.maintenance_tickets SET status='in_progress' WHERE id=$1", [f.ticket]);
+    return out;
+  };
+  const baseline = await views();
+  assert.deepEqual(Object.fromEntries(statuses.map(s => [s, baseline[s].state === "ready" && baseline[s].view === "maintenance" ? baseline[s].relay.word : null])),
+    { open: "awaiting_dispatch", triaged: "awaiting_dispatch", assigned: "dispatched", in_progress: "in_progress", on_hold: "on_hold",
+      resolved: "resolved", closed: "closed", cancelled: "cancelled" });
+  await emergency(f); assert.deepEqual(await views(), baseline);
+  await decision(f, "more_information"); assert.deepEqual(await views(), baseline);
+  await db.query("UPDATE public.repair_vendor_jobs SET active=false,revoked_at=clock_timestamp() WHERE id=$1", [f.job]);
+  assert.deepEqual(await views(), baseline);
+  await flag("repair_approvals", false); await flag("vendor_dispatch", false); assert.deepEqual(await views(), baseline);
 });
 
 test("MGT-150-AC2 hidden owner/estimate/flag state NEVER changes the real maintenance view", async () => {
@@ -201,8 +276,8 @@ test("admission: brand_v3 OFF, accountant, owner, cross-org and unknown tickets 
     FROM public.maintenance_tickets WHERE org_id=$4 ORDER BY id LIMIT 1`, [foreign, ORG2_ID, otherProperty.id, ORG_ID])).rowCount, 1);
   assert.deepEqual(await loadTicketRelay(admin, foreign), { state: "forbidden" });
   assert.deepEqual(await loadTicketRelay(admin, randomUUID()), { state: "forbidden" });
-  // Closed: no relay, no tick (MGT-150-AC5).
+  // Closed: end pill, no current step, no why-line (MGT-150-AC5 / TK-RELAY-END).
   await db.query("UPDATE public.maintenance_tickets SET status='closed',closed_at=clock_timestamp() WHERE id=$1", [f.ticket]);
   const closed = estimate(await loadTicketRelay(admin, f.ticket));
-  assert.equal(closed.nodes, null); assert.equal(closed.why, null);
+  assert.equal(closed.end, "closed"); assert.equal(closed.now, null); assert.equal(closed.why, null);
 });
