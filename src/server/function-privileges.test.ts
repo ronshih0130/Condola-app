@@ -430,3 +430,40 @@ test("B-063 adds one vendor workbench gateway reusing the B-026 history job read
   assert.match(sql, /SET LOCAL lock_timeout='5s'/);
   assert.match(sql, /SET LOCAL statement_timeout='60s'/);
 });
+
+test("B-109 adds one RLS config table with no application grants, the shared_meter flag OFF and three service-only gateways", () => {
+  const sql = read("supabase/migrations/20261116180000_b109_shared_meter.sql");
+  const b093 = read("supabase/migrations/20261115200000_b093_owner_decided.sql");
+  const tuple = b093.slice(b093.indexOf("  SELECT 1 FROM public.organizations o\n"), b093.indexOf(" ) THEN RAISE EXCEPTION 'errors.forbidden'"));
+  assert.ok(tuple.length > 200);
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(m => m[1]), ["b109_shared_meter_save", "b109_shared_meter_view", "b109_shared_meter_split"]);
+  assert.deepEqual([...sql.matchAll(/CREATE TABLE ([\w.]+)/g)].map(m => m[1]), ["app.b109_shared_meter_configs"]);
+  for (const body of sql.split("CREATE FUNCTION").slice(1)) {
+    assert.ok(body.includes(tuple), "env/live tuple");
+    assert.match(body, /current_setting\('app\.active_org_id',true\) IS DISTINCT FROM p_org::text/);
+    assert.match(body, /VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+    assert.match(body, /x\.revoked_at IS NULL AND x\.expires_at>clock_timestamp\(\) FOR SHARE/);
+    assert.match(body, /o\.feature_flags->'shared_meter'='true'::jsonb/);
+    assert.match(body, /member_role NOT IN \('admin','manager'\)/);
+    assert.match(body, /p\.org_id=p_org AND p\.id=p_property AND p\.archived_at IS NULL/);
+    assert.doesNotMatch(body, /CREATE TEMP|INSERT INTO public\.(?!audit_log)|UPDATE public\.|DELETE FROM/);
+  }
+  assert.match(sql, /ALTER TABLE app\.b109_shared_meter_configs ENABLE ROW LEVEL SECURITY;/);
+  assert.match(sql, /REVOKE ALL ON app\.b109_shared_meter_configs FROM PUBLIC, anon, authenticated, service_role;/);
+  assert.match(sql, /VALUES \('shared_meter', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\)\nON CONFLICT \(key\) DO NOTHING;/);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /GRANT[^;]*\bON (?:TABLE )?app\.b109_shared_meter_configs|CREATE OR REPLACE|DROP |CREATE POLICY|rate_minor|price/i);
+  assert.match(sql, /INSERT INTO public\.audit_log/);
+  assert.match(sql, /UNIQUE \(org_id, request_id\)/);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of ["b109_shared_meter_save(uuid,uuid,text,uuid,uuid,uuid,uuid[],text,numeric)", "b109_shared_meter_view(uuid,uuid,text,uuid,uuid)",
+    "b109_shared_meter_split(uuid,uuid,text,uuid,uuid,date,numeric,bigint)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  }
+  assert.equal((compact.match(/GRANT[A-Z]*ONFUNCTION/g) ?? []).length, 3);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-109 gateway ACL\/config mismatch/);
+  assert.match(read("ops/flags.yaml"), /\n  shared_meter:\n    owner: Ron\n[\s\S]*?default: false/);
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(sql, /SET LOCAL statement_timeout='60s'/);
+});

@@ -183,3 +183,11 @@ test("B-063 vendor workbench gateway is inventoried service-only, never authenti
   assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b063_")));
   assert.doesNotMatch(read("supabase/migrations/20261116100000_b063_vendor_workbench.sql"), /FUNCTION public\./);
 });
+
+test("B-109 shared-meter gateways are inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b109_shared_meter_save(uuid,uuid,text,uuid,uuid,uuid,uuid[],text,numeric)", "app.b109_shared_meter_view(uuid,uuid,text,uuid,uuid)",
+    "app.b109_shared_meter_split(uuid,uuid,text,uuid,uuid,date,numeric,bigint)"]) assert.ok(allow.includes(`# service-only: ${signature}`), signature);
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b109_")));
+  assert.doesNotMatch(read("supabase/migrations/20261116180000_b109_shared_meter.sql"), /FUNCTION public\./);
+});

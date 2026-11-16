@@ -1,0 +1,38 @@
+/* B-109 ADV-METER (公用電表): loaded only by /m/properties/[id]/shared-meter under brand_v3. Tokens only; touch
+   targets ≥44px; two columns on desktop, one on a phone. */
+html[data-brand="v2"][data-brand-v3] .v3-meter { display:grid; gap:16px; min-width:0; margin-bottom:20px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter :is(h1,p,fieldset,legend) { margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-head { background:var(--c-tint-soft); border-radius:var(--r-lg); padding:16px 20px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-head p { margin-top:4px; color:var(--c-text-2); font-size:.9em; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-two { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:16px; align-items:start; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-card { background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); box-shadow:var(--shadow-1); padding:20px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-form { display:grid; gap:18px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-field { display:grid; gap:8px; border:0; padding:0; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-field legend, html[data-brand="v2"][data-brand-v3] .v3-meter-label { font-weight:700; padding:0; margin-bottom:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-field small { color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-meter-rooms { display:flex; flex-wrap:wrap; gap:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-room { display:inline-flex; align-items:center; gap:8px; min-height:44px; min-width:44px; padding:0 12px; border:1px solid var(--c-border); border-radius:var(--r-md); cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-room input { width:20px; height:20px; margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-methods { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-method { display:flex; align-items:center; gap:10px; min-height:44px; padding:10px 14px; border:1px solid var(--c-border); border-radius:var(--r-md); cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-method.on { border-color:var(--c-primary); box-shadow:0 0 0 1px var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-meter-method input { width:18px; height:18px; margin:0; }
+html[data-brand="v2"][data-brand-v3] :is(.v3-meter-room,.v3-meter-method):focus-within { outline:2px solid var(--c-focus); outline-offset:2px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-start input { min-height:44px; max-width:16rem; font:inherit; padding:8px 12px; border:1px solid var(--c-border-strong); border-radius:var(--r-md); background:var(--c-surface); color:var(--c-text); }
+html[data-brand="v2"][data-brand-v3] .v3-meter-start input:focus-visible { outline:2px solid var(--c-focus); outline-offset:1px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-price { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center; min-height:44px; padding:8px 12px; border-radius:var(--r-md); background:var(--c-surface-2); }
+html[data-brand="v2"][data-brand-v3] .v3-meter-price span { color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-meter-note { color:var(--c-text-2); font-size:.9em; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-error, html[data-brand="v2"][data-brand-v3] .v3-meter-fail { color:var(--c-text); font-weight:600; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-fail:empty { display:block; position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+html[data-brand="v2"][data-brand-v3] .v3-meter-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-actions .btn { min-height:44px; min-width:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-meter-aside p { color:var(--c-text-2); }
+/* 「公用電表已儲存」: the existing global .toast in v3 colours; the status region stays mounted, hidden when empty. */
+html[data-brand="v2"][data-brand-v3] .toast.v3-meter-toast { top:5.5rem; bottom:auto; max-width:min(90vw,32rem); padding:.7em 1.1em; border-radius:var(--r-md); background:var(--c-primary); color:var(--c-on-primary); font-size:.9em; font-weight:700; box-shadow:var(--shadow-1); text-align:center; }
+html[data-brand="v2"][data-brand-v3] .toast.v3-meter-toast:empty { width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); box-shadow:none; }
+@media (max-width:50em) {
+ html[data-brand="v2"][data-brand-v3] .v3-meter-two, html[data-brand="v2"][data-brand-v3] .v3-meter-methods { grid-template-columns:minmax(0,1fr); }
+ html[data-brand="v2"][data-brand-v3] .v3-meter-head { padding:14px 16px; }
+ html[data-brand="v2"][data-brand-v3] .v3-meter-card { padding:16px; }
+}

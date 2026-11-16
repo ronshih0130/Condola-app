@@ -444,6 +444,8 @@
   "src/server/b3-bank-month.ts#bankMonth": "bank.reconcile",
   "src/server/b3-tenants.ts#brandTenants": "props.view",
   "src/server/b3-tenant-one.ts#brandTenantOne": "props.view",
+  "src/server/b109-shared-meter.ts#sharedMeterView": "props.edit",
+  "src/server/b109-shared-meter.ts#saveSharedMeter": "props.edit",
   "src/server/b3-property.ts#brandProperty": "props.view",
   "src/server/b3-leases.ts#brandLeases": "leases.edit",
   "src/server/b3-repair-turns.ts#staffRepairTurns": "tickets.update",
