@@ -371,6 +371,8 @@ test("MF-3 / MGT-151 adds one RLS table with no application grants and two servi
   assert.match(sql, /SET LOCAL statement_timeout='60s'/);
   assert.match(read("scripts/check-function-privileges.sh"), /MF-3 top-up gateway ACL\/config mismatch/);
   assert.match(read("scripts/check-function-privileges.sh"), /MF-3 top-up table grant to/);
+});
+
 test("B-063 adds one vendor workbench gateway reusing the B-026 history job read verbatim, service-only and migration-owned", () => {
   const sql = read("supabase/migrations/20261116100000_b063_vendor_workbench.sql");
   const b026 = read("supabase/migrations/20261106220000_b026_vendor_accounts.sql");

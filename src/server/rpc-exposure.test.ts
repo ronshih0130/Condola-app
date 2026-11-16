@@ -175,6 +175,8 @@ test("MF-3 top-up gateways are inventoried service-only, never authenticated RPC
     assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("mf3_")));
   }
   assert.doesNotMatch(read("supabase/migrations/20261116140000_mf3_deposit_topup.sql"), /FUNCTION public\./);
+});
+
 test("B-063 vendor workbench gateway is inventoried service-only, never authenticated RPC", () => {
   const allow = read("supabase/rpc-allowlist.txt");
   assert.ok(allow.includes("# service-only: app.b063_vendor_workbench(text,uuid)"));
