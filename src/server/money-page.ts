@@ -10,8 +10,9 @@ export type MoneyParams = { month?: string; tab?: string; error?: string; cursor
 // MGT-141: keep the five tabs and the reader's underlying due-state buckets.
 // Partial on the due day appears in all (there is no due_today tab), never paid.
 // A pending report retains precedence and belongs to yours, even on a partial bill.
-export function moneyBillMatchesTab(row: MoneyMonthBill, today: string, tab: MoneyTab): boolean {
-  const bucket = row.status === "partial" ? row.dueDate > today ? "future" : "due_today" : row.status;
+// PLT-54: the partial bucket uses the row's own property date, the same one the reader classified with.
+export function moneyBillMatchesTab(row: MoneyMonthBill, tab: MoneyTab): boolean {
+  const bucket = row.status === "partial" ? row.dueDate > row.propertyToday ? "future" : "due_today" : row.status;
   return tab === "all" || bucket === (tab === "yours" ? "reported" : tab);
 }
 export function moneyTab(value?: string): MoneyTab {
@@ -36,6 +37,7 @@ async function safeRead<T>(read: () => Promise<T>): Promise<T | { state: "forbid
   }
 }
 // Each list is one reader snapshot. Only org-calendar correction may repeat a read.
+// The default month is month selection, not due/overdue, so it stays on the organization calendar (PLT-54-AC3).
 export async function readMoneyPage(session: Session, params: MoneyParams, deps = {
   bills: moneyMonthBills, reports: moneyMonthReports, now: () => new Date(),
 }) {

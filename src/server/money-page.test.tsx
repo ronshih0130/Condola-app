@@ -57,7 +57,7 @@ const view = compile(source("src/components/v3/m/money/money.tsx"), {
   "../../role-avatar": { RoleAvatar }, "../../completion-check": { CompletionCheck },
 }).MoneyPage as typeof View;
 function bill(status: MoneyMonthBill["status"], leaseId = status): MoneyMonthBill {
-  return { leaseId, status, month: "2026-11", place: `Property ${leaseId}`, tenantName: `Tenant ${leaseId}`, currency: "TWD", dueDate: "2026-11-10", totalMinor: "3200000", confirmedMinor: status === "paid" ? "3200000" : "1000000", remainingMinor: status === "paid" ? "0" : "2200000" };
+  return { leaseId, status, month: "2026-11", place: `Property ${leaseId}`, tenantName: `Tenant ${leaseId}`, currency: "TWD", dueDate: "2026-11-10", propertyToday: "2026-11-14", totalMinor: "3200000", confirmedMinor: status === "paid" ? "3200000" : "1000000", remainingMinor: status === "paid" ? "0" : "2200000" };
 }
 function report(id: string, other = false): MoneyMonthReport {
   return { id, leaseId: "reported", place: "Property reported", tenantName: "Tenant reported", amountMinor: "50000", currency: "TWD", paidOn: "2026-10-01", submittedAt: `2026-11-${id === "r1" ? "10" : "11"}T18:00:00Z`, source: "tenant_portal", ownerPayee: null, bankTransactionId: null, proofFileId: null, billRows: other ? [] : [{ leaseId: "reported", month: "2026-11" }], attachment: other ? "other" : "oldest_unpaid" };
@@ -132,13 +132,13 @@ test("MGT-141: due-state tab membership, remaining line, headline and completion
     for (const full of [false, true]) for (const pending of [false, true]) {
       const confirmed = full ? "3200000" : "1000000";
       const status = moneyMonthStatus("3200000", confirmed, pending, due, today);
-      const row = { ...bill(status), dueDate: due, confirmedMinor: confirmed, remainingMinor: full ? "0" : "2200000" };
+      const row = { ...bill(status), dueDate: due, propertyToday: today, confirmedMinor: confirmed, remainingMinor: full ? "0" : "2200000" };
       const expectedBucket = full ? "paid" : pending ? "reported" : bucket;
       const counts = { all: 1, paid: 0, reported: 0, overdue: 0, due_today: 0, future: 0, [expectedBucket]: 1 };
       const snapshot = { ...bills, today, counts, rows: [row], totals: [{ currency: "TWD", totalMinor: "3200000", confirmedMinor: confirmed, billedRows: 1, paidRows: full ? 1 : 0 }] };
       for (const tab of ["all", "yours", "overdue", "future", "paid"] as const) {
         const visible = tab === "all" || (tab === "yours" ? expectedBucket === "reported" : expectedBucket === tab);
-        assert.equal(model.moneyBillMatchesTab(row, today, tab), visible);
+        assert.equal(model.moneyBillMatchesTab(row, tab), visible);
         const html = render({ tab, bills: snapshot, reports: { ...reports, attached: [], other: [], yourTurn: 0 } });
         assert.equal((html.match(/data-testid="money-bill"/g) ?? []).length, visible ? 1 : 0);
         assert.match(html, new RegExp(`11 月 1 筆應繳，${full ? 1 : 0} 筆已確認繳款。`));
@@ -152,6 +152,18 @@ test("MGT-141: due-state tab membership, remaining line, headline and completion
           }
         }
       }
+    }
+  }
+});
+
+test("PLT-54: a partial row's tab bucket follows its own property date, not the snapshot's organization date", () => {
+  const due = "2026-11-15";
+  for (const [orgToday, propertyToday, bucket] of [["2026-11-15", "2026-11-14", "future"], ["2026-11-14", "2026-11-15", "due_today"]] as const) {
+    const row = { ...bill("partial"), dueDate: due, propertyToday };
+    for (const tab of ["all", "future", "overdue", "paid"] as const) {
+      assert.equal(model.moneyBillMatchesTab(row, tab), tab === "all" || tab === bucket);
+      const html = render({ tab, bills: { ...bills, today: orgToday, rows: [row] } });
+      assert.equal((html.match(/data-testid="money-bill"/g) ?? []).length, tab === "all" || tab === bucket ? 1 : 0);
     }
   }
 });
