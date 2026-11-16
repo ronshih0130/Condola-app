@@ -261,7 +261,7 @@ test("native accountant and maintenance stay denied even when a custom role gran
     await db.query("UPDATE public.organizations SET feature_flags=feature_flags||'{\"custom_roles\":true}'::jsonb WHERE id=$1", [ORG_ID]);
     await db.query(`INSERT INTO public.platform_settings(key,value) VALUES('custom_roles',jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)))
       ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [ORG_ID]);
-    for (const [who, grants] of [["accountant", ["tenants.contact", "props.view", "pay.record"]], ["maintenance", ["tenants.contact", "tickets.update"]]] as const) {
+    for (const [who, grants] of [["accountant", ["tenants.contact", "props.view", "pay.record"]], ["maintenance", ["tenants.contact", "props.view", "tickets.update"]]] as const) {
       const role = randomUUID(); roles.push(role);
       // The role/revision foreign keys are checked at commit, so the three rows go in one transaction.
       await db.query("BEGIN");
