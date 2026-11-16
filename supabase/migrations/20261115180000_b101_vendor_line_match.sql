@@ -33,7 +33,8 @@ CREATE TABLE app.b101_vendor_confirmations (
  org_id uuid NOT NULL, contact_id uuid NOT NULL, user_id uuid NOT NULL,
  identity_id uuid NOT NULL REFERENCES app.b033_line_identities(id),
  link_id uuid NOT NULL REFERENCES public.line_account_links(id),
- candidate_ids uuid[], confirmed_at timestamptz,
+ -- closed_at closes this one flow's review (confirm, or the zero-candidate skip); it never suppresses a later V-LINK.
+ candidate_ids uuid[], closed_at timestamptz,
  FOREIGN KEY(org_id,contact_id,user_id) REFERENCES app.b026_vendor_accounts(org_id,contact_id,user_id) ON DELETE CASCADE
 );
 ALTER TABLE app.b101_vendor_confirmations ENABLE ROW LEVEL SECURITY;
@@ -73,7 +74,7 @@ CREATE FUNCTION app.b101_match(p_flow uuid,p_env_v2 boolean) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE f app.b033_line_flows; v app.b035_vendor_flows; j public.repair_vendor_jobs;
  c public.contacts; i app.b033_line_identities; a app.b026_vendor_accounts;
- actor uuid; lid uuid; first_binding boolean:=false; created boolean:=false; first_sign_in boolean;
+ actor uuid; lid uuid; first_binding boolean:=false; created boolean:=false;
 BEGIN
  SELECT * INTO f FROM app.b033_line_flows WHERE id=p_flow FOR UPDATE;
  IF NOT FOUND OR f.return_path<>'/v/link' OR f.kind<>'login' OR f.persona<>'vendor'
@@ -117,21 +118,20 @@ BEGIN
  IF (a.user_id IS NOT NULL AND a.user_id IS DISTINCT FROM actor)
  OR (c.user_id IS NOT NULL AND c.user_id IS DISTINCT FROM actor)
  OR (actor IS NOT NULL AND NOT app.b101_vendor_only(actor,c.org_id,c.id))
- OR EXISTS(SELECT 1 FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id
-   AND (login_identity_id IS DISTINCT FROM i.id OR persona IS DISTINCT FROM 'vendor' OR status<>'linked' OR unlinked_at IS NOT NULL))
+ -- Only a LINKED link counts; an unlinked (historical) row never blocks the contact's next binding.
+ OR EXISTS(SELECT 1 FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id AND status='linked' AND unlinked_at IS NULL
+   AND (login_identity_id IS DISTINCT FROM i.id OR persona IS DISTINCT FROM 'vendor'))
  OR EXISTS(SELECT 1 FROM public.line_account_links WHERE login_identity_id=i.id AND (org_id<>c.org_id OR contact_id<>c.id))
  OR EXISTS(SELECT 1 FROM app.b033_line_identities WHERE user_id=actor AND id IS DISTINCT FROM i.id)
- -- A surviving LINE link for this contact is valid only with the exact current account. After a staff
- -- rebind (account deleted, old link left) the removed user must not silently re-create the account.
- OR (EXISTS(SELECT 1 FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id)
+ -- A surviving LINKED LINE link for this contact is valid only with the exact current account. After a staff
+ -- rebind (account deleted, old link left linked) the removed user must not silently re-create the account.
+ OR (EXISTS(SELECT 1 FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id AND status='linked' AND unlinked_at IS NULL)
    AND (a.user_id IS NULL OR a.user_id IS DISTINCT FROM i.user_id))
- -- Management already named the account holder: a pending invitation is never pre-empted by LINE.
+ -- Management already named the account holder: a pending invitation is never pre-empted by LINE (fail-closed,
+ -- even for the invitee's own new LINE identity until they claim; the caller shows the approved V-LINK error).
  OR (a.user_id IS NULL AND EXISTS(SELECT 1 FROM app.b026_vendor_account_invites WHERE org_id=c.org_id AND contact_id=c.id
    AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp() AND user_id IS DISTINCT FROM actor))
  THEN RAISE EXCEPTION 'identity_conflict' USING ERRCODE='P0033'; END IF;
- -- V-LINK is shown only on a first sign-in: this account has never confirmed a B101 sign-in.
- first_sign_in:=a.user_id IS NULL OR NOT EXISTS(SELECT 1 FROM app.b101_vendor_confirmations
-  WHERE org_id=c.org_id AND contact_id=c.id AND user_id=a.user_id AND confirmed_at IS NOT NULL);
  IF i.id IS NULL THEN
   IF v.flow_id IS NULL THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
   IF actor IS NULL THEN
@@ -147,7 +147,7 @@ BEGIN
   INSERT INTO app.b026_vendor_accounts(org_id,contact_id,user_id,line_identity_id) VALUES(c.org_id,c.id,actor,i.id);
   created:=true;
  ELSE
-  -- Existing invite provenance is retained; LINE accounts use explicit confirmation thereafter.
+  -- Existing invite provenance is retained: invitation-created accounts keep their B-026 auto-link (see below).
   UPDATE app.b026_vendor_accounts SET line_identity_id=i.id WHERE org_id=c.org_id AND contact_id=c.id;
  END IF;
  SELECT id INTO lid FROM public.line_account_links WHERE login_identity_id=i.id AND org_id=c.org_id AND contact_id=c.id
@@ -168,10 +168,11 @@ BEGIN
  INSERT INTO app.b101_vendor_confirmations(flow_id,org_id,contact_id,user_id,identity_id,link_id)
   VALUES(f.id,c.org_id,c.id,actor,i.id,lid);
  UPDATE app.b033_line_flows SET consumed_at=clock_timestamp() WHERE id=f.id;
- RETURN jsonb_build_object('userId',actor,'identityId',i.id,'firstSignIn',first_sign_in);
+ RETURN jsonb_build_object('userId',actor,'identityId',i.id);
 END $$;
 
--- Every list/removal/confirmation rechecks live authority, exact scope and gates.
+-- Every list/removal/confirmation rechecks live authority, exact scope and gates. Every sign-in lists its open,
+-- not-yet-linked/tombstoned jobs; only 'confirm' links them. 'skip' is the zero-candidate close: no job writes.
 CREATE FUNCTION app.b101_review(p_flow uuid,p_env_v2 boolean,p_action text,p_job uuid DEFAULT NULL) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE f app.b033_line_flows; r app.b101_vendor_confirmations; i app.b033_line_identities;
@@ -182,7 +183,7 @@ BEGIN
  THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
  PERFORM app.b101_lock(f.org_id,p_env_v2);
  SELECT * INTO r FROM app.b101_vendor_confirmations WHERE flow_id=f.id FOR UPDATE;
- IF NOT FOUND OR r.confirmed_at IS NOT NULL THEN RAISE EXCEPTION 'already_consumed' USING ERRCODE='P0033'; END IF;
+ IF NOT FOUND OR r.closed_at IS NOT NULL THEN RAISE EXCEPTION 'already_consumed' USING ERRCODE='P0033'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(f.line_channel_id::text||f.verified_hash,33));
  SELECT * INTO i FROM app.b033_line_identities WHERE id=r.identity_id FOR SHARE;
  PERFORM 1 FROM auth.users WHERE id=r.user_id FOR UPDATE NOWAIT;
@@ -197,7 +198,7 @@ BEGIN
  OR app.b033_selected_channel(r.org_id) IS DISTINCT FROM f.line_channel_id
  OR NOT app.b101_vendor_only(r.user_id,r.org_id,r.contact_id)
  THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
- IF p_action NOT IN ('list','remove','confirm') THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
+ IF p_action NOT IN ('list','remove','confirm','skip') THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
  -- Freeze only the IDs actually displayed; new arrivals wait for a new sign-in.
  IF p_action='list' AND r.candidate_ids IS NULL THEN
   SELECT coalesce(array_agg(x.id ORDER BY x.id),'{}') INTO r.candidate_ids
@@ -209,7 +210,13 @@ BEGIN
   UPDATE app.b101_vendor_confirmations SET candidate_ids=r.candidate_ids WHERE flow_id=f.id;
  END IF;
  IF r.candidate_ids IS NULL OR (p_action='remove' AND (p_job IS NULL OR NOT p_job=ANY(r.candidate_ids)))
+ OR (p_action='skip' AND (p_job IS NOT NULL OR cardinality(r.candidate_ids)<>0))
  THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
+ -- Nothing was shown, so nothing is confirmed: no job link, no line_confirmed event, only this flow's review closes.
+ IF p_action='skip' THEN
+  UPDATE app.b101_vendor_confirmations SET closed_at=clock_timestamp() WHERE flow_id=f.id;
+  RETURN jsonb_build_object('jobs','[]'::jsonb,'userId',r.user_id,'identityId',r.identity_id,'orgId',r.org_id);
+ END IF;
  visible:='{}'; jobs:='[]';
  FOR candidate IN SELECT unnest(r.candidate_ids) ORDER BY 1 LOOP
   SELECT * INTO j FROM public.repair_vendor_jobs WHERE id=candidate AND org_id=r.org_id;
@@ -236,7 +243,7 @@ BEGIN
   END IF;
  END LOOP;
  UPDATE app.b101_vendor_confirmations SET candidate_ids=visible,
-  confirmed_at=CASE WHEN p_action='confirm' THEN clock_timestamp() ELSE NULL END WHERE flow_id=f.id;
+  closed_at=CASE WHEN p_action='confirm' THEN clock_timestamp() ELSE NULL END WHERE flow_id=f.id;
  RETURN jsonb_build_object('jobs',jobs,'userId',r.user_id,'identityId',r.identity_id,'orgId',r.org_id);
 END $$;
 -- While B101 is enabled for the account's org, ordinary B033 login must not bypass B101 confirmation,
@@ -252,7 +259,9 @@ REVOKE ALL ON FUNCTION app.b101_enabled(uuid,boolean),app.b101_lock(uuid,boolean
  app.b101_match(uuid,boolean),app.b101_review(uuid,boolean,text,uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION app.b101_enabled(uuid,boolean),app.b101_match(uuid,boolean),app.b101_review(uuid,boolean,text,uuid) TO service_role;
 
--- Preserve invite-account behavior; LINE matching requires a displayed V-LINK snapshot.
+-- Exactly the B-026 body except one predicate: only accounts CREATED by B-101 (no invitation, LINE provenance)
+-- are excluded; they link jobs only through a displayed V-LINK. Invitation-created accounts keep B-026 behaviour
+-- whether or not a LINE identity was later recorded, with B-101 on or off.
 CREATE OR REPLACE FUNCTION app.b026_account_candidates(p_session_hash text) RETURNS TABLE(token text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE actor uuid;
@@ -263,7 +272,7 @@ BEGIN
  JOIN public.repair_vendor_jobs j ON j.org_id=a.org_id AND j.vendor_contact_id=a.contact_id
  JOIN public.maintenance_tickets t ON t.org_id=j.org_id AND t.id=j.ticket_id AND t.assigned_vendor_contact_id=a.contact_id
  JOIN public.repair_vendor_secrets s ON s.job_id=j.id
- WHERE a.line_identity_id IS NULL AND a.user_id=actor AND (c.user_id IS NULL OR c.user_id=actor) AND app.b026_accounts_enabled(a.org_id)
+ WHERE NOT (a.invite_id IS NULL AND a.line_identity_id IS NOT NULL) AND a.user_id=actor AND (c.user_id IS NULL OR c.user_id=actor) AND app.b026_accounts_enabled(a.org_id)
  AND j.active AND j.revoked_at IS NULL AND j.expires_at>clock_timestamp()
  AND j.scope='case_collaboration' AND j.sharing_approved_at IS NOT NULL
  AND t.status::text NOT IN ('closed','cancelled')
@@ -271,7 +280,7 @@ BEGIN
  ORDER BY a.org_id,t.id,j.id;
 END $$;
 
--- Preserve invite-account behavior; LINE matching requires a displayed V-LINK snapshot.
+-- Same single narrowed predicate as app.b026_account_candidates above; the body is otherwise B-026's.
 CREATE OR REPLACE FUNCTION app.b026_link_vendor_job(p_session_hash text,p_hash text) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE actor uuid; j public.repair_vendor_jobs;
@@ -286,7 +295,7 @@ BEGIN
  SELECT v.* INTO j FROM public.repair_vendor_jobs v
  JOIN public.maintenance_tickets t ON t.org_id=v.org_id AND t.id=v.ticket_id AND t.assigned_vendor_contact_id=v.vendor_contact_id
  JOIN public.contacts c ON c.org_id=v.org_id AND c.id=v.vendor_contact_id AND c.is_vendor AND c.archived_at IS NULL
- JOIN app.b026_vendor_accounts a ON a.org_id=v.org_id AND a.contact_id=v.vendor_contact_id AND a.user_id=actor AND a.line_identity_id IS NULL
+ JOIN app.b026_vendor_accounts a ON a.org_id=v.org_id AND a.contact_id=v.vendor_contact_id AND a.user_id=actor AND NOT (a.invite_id IS NULL AND a.line_identity_id IS NOT NULL)
  JOIN public.repair_vendor_secrets s ON s.job_id=v.id
  WHERE v.token_hash=p_hash AND pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(trim(both from s.token),'UTF8')),'hex')=p_hash
  AND v.active AND v.revoked_at IS NULL AND v.expires_at>clock_timestamp()

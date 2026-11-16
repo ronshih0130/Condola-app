@@ -247,20 +247,21 @@ export async function lineSessionOn(c: Client, f: LineFlow, userId: string, iden
 export async function sessionFromFlowOn(c: Client, f: LineFlow, meta: RequestMeta, auth: AuthInput) {
  if (f.return_path === "/v/link") {
   // B101 only accepts the existing OAuth state/nonce/PKCE path; no bare LIFF ID-token binding.
-  const result = (await c.query<{ result: { userId: string; identityId: string; firstSignIn: boolean } }>(
+  const result = (await c.query<{ result: { userId: string; identityId: string } }>(
    "SELECT app.b101_match($1,$2) result", [f.id, brandV2Enabled()])).rows[0].result;
   await credentialsOn(c, result.userId, auth, false);
   const existing = await sessionOn(c, auth.sessionToken);
   if (existing && existing.user_id !== result.userId) rejectLine(409, "account_mismatch");
-  const review = async (action: "list" | "confirm") => (await c.query<{ result: { jobs: unknown[]; userId: string; identityId: string; orgId: string } }>(
+  const review = async (action: "list" | "skip") => (await c.query<{ result: { jobs: unknown[]; userId: string; identityId: string; orgId: string } }>(
    "SELECT app.b101_review($1,$2,$3,NULL) result", [f.id, brandV2Enabled(), action])).rows[0].result;
-  // screens.md V-LINK: shown only on a first sign-in with open jobs; session issuance waits for its confirmation.
-  if ((await review("list")).jobs.length && result.firstSignIn) return { next: "/v/link" };
-  // Repeat sign-in or nothing to review: the same server confirm step runs here and is the only session issuance.
-  const confirmed = await review("confirm");
-  const token = await lineSessionOn(c, f, confirmed.userId, confirmed.identityId, meta, auth.sessionToken);
+  // VEN-15-AC3/AC4: ANY sign-in (first or repeat) with open, not-yet-linked jobs shows V-LINK; nothing is linked and
+  // no session is issued until the vendor confirms there (POST /v/link).
+  if ((await review("list")).jobs.length) return { next: "/v/link" };
+  // Zero candidates: nothing was shown, so nothing is confirmed. "skip" writes no job link or line_confirmed event.
+  const closed = await review("skip");
+  const token = await lineSessionOn(c, f, closed.userId, closed.identityId, meta, auth.sessionToken);
   // Existing B026 portal exists. B063 workbench is deliberately not implemented here.
-  return { next: await consentNextOn(c, confirmed.userId, { persona: "vendor", return_path: "/vendor-account" }), token, orgId: confirmed.orgId, persona: f.persona };
+  return { next: await consentNextOn(c, closed.userId, { persona: "vendor", return_path: "/vendor-account" }), token, orgId: closed.orgId, persona: f.persona };
  }
  const job = await finishVendorFlowOn(c, f);
  if (job) return job;

@@ -9,7 +9,7 @@ import { resetAndSeed } from "./seed";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { createSession } from "./auth";
 import { approveVendorSharing, dispatchVendor } from "./vendor-repair";
-import { claimVendorAccount, rebindVendorAccount, syncVendorAccount, vendorAccountHistory, vendorAccountLinkEvents } from "./vendor-accounts";
+import { claimVendorAccount, inviteVendorAccount, rebindVendorAccount, syncVendorAccount, vendorAccountHistory, vendorAccountLinkEvents } from "./vendor-accounts";
 import { vendorLineEntryEnabled } from "./line/vendor-entry";
 import type { Session } from "./types";
 import { lineHash } from "./line/login-token";
@@ -109,7 +109,7 @@ async function matched(token?:string,subject=sub) {
  assert.ok(!cookieValue(r,"condola_session"));
  return f;
 }
-// Repeat sign-in, or a first sign-in with nothing to review, skips V-LINK; the confirm step issues the session.
+// Any sign-in with nothing to review skips V-LINK; the session is issued without any job link or confirm event.
 async function signedIn(f:{flow:string},subject=sub) {
  const r=await oauth(f,subject);assert.equal(r.status,303,await r.clone().text());
  assert.ok([origin+"/vendor-account",origin+"/consent?next=%2Fvendor-account"].includes(r.headers.get("location")!),r.headers.get("location")!);
@@ -154,16 +154,25 @@ test("VEN-15-AC3/4: durable removal, no unseen/foreign attachments; existing por
  const jobs=(await vendorAccountHistory(token)).jobs;assert.deepEqual(jobs.map(j=>j.jobId),[same.jobId]);
  await syncVendorAccount(token);assert.deepEqual((await vendorAccountHistory(token)).jobs.map(j=>j.jobId),[same.jobId]);
  await parsed(await act(req("/v/link",{action:"confirm"},f)),409);
- // Repeat sign-in: no V-LINK; the confirm step attaches newly assigned open jobs, never the removed one.
- const repeat=await signedIn(await flow()),seen=(await vendorAccountHistory(repeat)).jobs.map(x=>x.jobId).sort();
- assert.deepEqual(seen,[same.jobId,unseen.jobId].sort());
+ // Round-2 finding 1: a repeat sign-in with a newly assigned job shows V-LINK listing exactly that job (never the removed
+ // or already linked one) and attaches it only after the vendor confirms.
+ const before=await snapshot(),again=await matched(),html=await list(again);
+ assert.ok(html.includes(`data-job="${unseen.jobId}"`));for(const id of [j.jobId,same.jobId])assert.ok(!html.includes(id));
+ assert.ok(html.includes(copy.remove));
+ const pending=await snapshot();for(const key of ["app.b026_vendor_job_accounts","app.b026_vendor_link_events","auth_sessions"])assert.deepEqual(pending[key],before[key],key);
+ assert.ok(!(await vendorAccountLinkEvents(admin,unseen.jobId)).some(e=>e.reason==="line_confirmed"));
+ const confirmed=await act(req("/v/link",{action:"confirm"},again));await parsed(confirmed);
+ const repeat=cookieValue(confirmed,"condola_session")!;assert.ok(repeat);
+ assert.deepEqual((await vendorAccountHistory(repeat)).jobs.map(x=>x.jobId).sort(),[same.jobId,unseen.jobId].sort());
  assert.ok((await vendorAccountLinkEvents(admin,unseen.jobId)).some(e=>e.reason==="line_confirmed"));
  assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_link_events WHERE reason='line_first_binding'")).rows[0].n,1);
 });
 test("VEN-31: no token needed after exact binding; unknown identity without token fails",async()=>{
  await rejected(await flow());
  const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(req("/v/link",{action:"confirm"},f)));
- await signedIn(await flow());
+ // Zero candidates on the repeat sign-in: no V-LINK and no job link/confirm row is written.
+ const before=await snapshot();await signedIn(await flow());const after=await snapshot();
+ for(const key of ["app.b026_vendor_job_accounts","app.b026_vendor_link_events","app.b026_vendor_accounts"])assert.deepEqual(after[key],before[key],key);
 });
 test("VEN-31: first binding refuses a different LINE identity already bound to the contact",async()=>{
  const j=await issue();await matched(j.token);await rejected(await flow(j.token),`U${"c".repeat(32)}`);
@@ -306,13 +315,58 @@ test("review finding 1: every account B-101 creates carries a management-visible
  assert.equal(rows.length,2);for(const row of rows)assert.deepEqual([row.events,row.audits],[1,1],JSON.stringify(row));
  assert.equal(rows.find(row=>row.contact_id===k.contact)?.user_id,user);
 });
-test("review finding 4: a first sign-in with no open candidate jobs skips V-LINK and is issued through the confirm step",async()=>{
+test("round-2 finding 1: a zero-candidate first sign-in writes no job link or confirm event, and V-LINK still appears when a job arrives",async()=>{
  const j=await issue();
  await db.query("INSERT INTO app.b026_vendor_job_accounts(job_id,org_id,contact_id,user_id,manual) VALUES($1,$2,$3,NULL,true)",[j.jobId,ORG_ID,j.contact]);
  await signedIn(await flow(j.token));
- assert.equal((await db.query("SELECT count(*)::int n FROM app.b101_vendor_confirmations WHERE contact_id=$1 AND confirmed_at IS NOT NULL AND candidate_ids='{}'",[j.contact])).rows[0].n,1);
+ assert.equal((await db.query("SELECT count(*)::int n FROM app.b101_vendor_confirmations WHERE contact_id=$1 AND closed_at IS NOT NULL AND candidate_ids='{}'",[j.contact])).rows[0].n,1);
  assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_job_accounts WHERE user_id IS NOT NULL")).rows[0].n,0);
+ assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_link_events WHERE reason='line_confirmed'")).rows[0].n,0);
  assert.ok((await vendorAccountLinkEvents(admin,j.jobId)).some(e=>e.reason==="line_first_binding"));
+ const arrived=await issue(admin,j.contact),later=await matched(),html=await list(later);
+ assert.ok(html.includes(`data-job="${arrived.jobId}"`));assert.ok(!html.includes(`data-job="${j.jobId}"`));
+ assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_job_accounts WHERE job_id=$1",[arrived.jobId])).rows[0].n,0);
+ await parsed(await act(req("/v/link",{action:"confirm"},later)));
+ assert.ok((await vendorAccountLinkEvents(admin,arrived.jobId)).some(e=>e.reason==="line_confirmed"));
+});
+for(const state of ["unlinked","linked"] as const)test(`round-2 finding 2: an old ${state} contact link without a current account ${state==="unlinked"?"does not block":"blocks"} a new LINE binding`,async()=>{
+ const j=await issue();await matched(j.token);
+ if(state==="unlinked")await db.query("UPDATE line_account_links SET status='unlinked',unlinked_at=now(),notification_opt_in=false WHERE contact_id=$1",[j.contact]);
+ await db.query("DELETE FROM app.b026_vendor_accounts WHERE contact_id=$1",[j.contact]);
+ const subject=`U${"e".repeat(32)}`;
+ if(state==="linked"){await rejected(await flow(j.token),subject);return;}
+ const f=await matched(j.token,subject);await list(f);
+ const a=(await db.query("SELECT a.user_id,i.provider_user_hash FROM app.b026_vendor_accounts a JOIN app.b033_line_identities i ON i.id=a.line_identity_id WHERE a.contact_id=$1",[j.contact])).rows;
+ assert.equal(a.length,1);
+ assert.equal((await db.query("SELECT count(*)::int n FROM line_account_links WHERE contact_id=$1 AND status='linked'",[j.contact])).rows[0].n,1);
+});
+test("round-2 finding 3: an invitation account that used LINE once keeps B-026 auto-link with vendor_line_match off and on",async()=>{
+ const j=await issue(),user=randomUUID();
+ await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,$2,now())",[user,`b101-invited-${user}@example.test`]);
+ const invitation=await inviteVendorAccount(admin,j.contact,user);assert.equal(invitation.status,"invited");
+ const credential=await createSession(user,false,meta);
+ assert.equal((await claimVendorAccount(credential,invitation.invitation!)).status,"claimed");
+ // The claim already linked the open job through B-026, so this LINE sign-in has nothing to review:
+ // it skips V-LINK and goes straight to consent, writing no job link or confirm event.
+ const f=await flow(j.token),r=await oauth(f,sub);
+ assert.equal(r.status,303);assert.equal(r.headers.get("location"),origin+"/consent?next=%2Fvendor-account");
+ const a=(await db.query("SELECT user_id,invite_id,line_identity_id FROM app.b026_vendor_accounts WHERE contact_id=$1",[j.contact])).rows[0];
+ assert.equal(a.user_id,user);assert.ok(a.invite_id);assert.ok(a.line_identity_id);
+ for(const on of [false,true]){
+  await flag("vendor_line_match",on);
+  const next=await issue(admin,j.contact);
+  assert.deepEqual(await syncVendorAccount(credential),{linked:1},`vendor_line_match ${on}`);
+  assert.ok((await vendorAccountLinkEvents(admin,next.jobId)).some(e=>e.reason==="login_open_job"));
+ }
+});
+test("round-2 finding 4: a pending staff invitation blocks LINE first binding with only the approved V-LINK error",async()=>{
+ const j=await issue(),user=randomUUID();
+ await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,$2,now())",[user,`b101-pending-${user}@example.test`]);
+ assert.equal((await inviteVendorAccount(admin,j.contact,user)).status,"invited");
+ const f=await flow(j.token);await rejected(f);
+ const page=await (await review(req("/v/link?error=1",undefined,f))).text();
+ assert.ok(page.includes('id="match-review" hidden'));assert.ok(page.includes(`<p role="alert">${copy.error}</p>`));
+ assert.ok(page.includes(copy.retry));assert.ok(page.includes(`href="/v/${encodeURIComponent(j.token)}"`));assert.ok(!page.includes(`data-job=`));
 });
 test("review findings 2/3: vendor_line_match OFF keeps every pre-B-101 path; B-101-bound identities use the ordinary B033 vendor sign-in",async()=>{
  const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(req("/v/link",{action:"confirm"},f)));

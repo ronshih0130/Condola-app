@@ -66,9 +66,13 @@ test("VEN-31 migration: private gateways, explicit provenance, no opt-in or flag
  for (const name of ["b026_account_candidates", "b026_link_vendor_job"]) {
   const old = readFileSync("supabase/migrations/20261106220000_b026_vendor_accounts.sql", "utf8");
   const extract = (s: string) => new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app.${name}\\([\\s\\S]*?END \\$\\$;`).exec(s)![0];
-  const restored = extract(sql).replace("CREATE OR REPLACE", "CREATE").replace("a.line_identity_id IS NULL AND ", "").replace(" AND a.line_identity_id IS NULL", "");
-  assert.equal(restored, extract(old), "B026 invite branch is otherwise byte-identical");
+  const narrowed = "NOT (a.invite_id IS NULL AND a.line_identity_id IS NOT NULL)";
+  assert.equal(extract(sql).split(narrowed).length, 2, `${name}: exactly one narrowed predicate`);
+  const restored = extract(sql).replace("CREATE OR REPLACE", "CREATE").replace(`${narrowed} AND `, "").replace(` AND ${narrowed}`, "");
+  assert.equal(restored, extract(old), "B026 body is otherwise byte-identical");
  }
+ // Round-2 finding 3: an invitation-created account that once used LINE keeps B-026 auto-link (no exclusion on line_identity_id alone).
+ assert.doesNotMatch(sql, /line_identity_id IS NULL/);
 });
 
 test("VEN-31-AC4: failed removal hides the list and exposes the approved recovery state", async () => {
@@ -93,11 +97,29 @@ test("B-101 own flag: app.b101_enabled requires the strict vendor_line_match pla
 });
 test("finding 1: a surviving contact link needs the exact current account, pending invitations win, and every created account is logged", () => {
  const body = fn("b101_match");
- assert.match(body, /OR \(EXISTS\(SELECT 1 FROM public\.line_account_links WHERE org_id=c\.org_id AND contact_id=c\.id\)\n   AND \(a\.user_id IS NULL OR a\.user_id IS DISTINCT FROM i\.user_id\)\)/);
+ assert.match(body, /OR \(EXISTS\(SELECT 1 FROM public\.line_account_links WHERE org_id=c\.org_id AND contact_id=c\.id AND status='linked' AND unlinked_at IS NULL\)\n   AND \(a\.user_id IS NULL OR a\.user_id IS DISTINCT FROM i\.user_id\)\)/);
  assert.match(body, /OR \(a\.user_id IS NULL AND EXISTS\(SELECT 1 FROM app\.b026_vendor_account_invites WHERE org_id=c\.org_id AND contact_id=c\.id\n   AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp\(\) AND user_id IS DISTINCT FROM actor\)\)/);
  assert.match(body, /INSERT INTO app\.b026_vendor_accounts\(org_id,contact_id,user_id,line_identity_id\) VALUES\(c\.org_id,c\.id,actor,i\.id\);\n  created:=true;/);
  assert.match(body, /IF first_binding OR created THEN\n  INSERT INTO app\.b026_vendor_link_events[^;]+'line_first_binding'\);\n  INSERT INTO public\.audit_log/);
  assert.doesNotMatch(migration, /b026_rebind_vendor_account/, "the staff rebind gateway is not replaced");
+});
+const plpgsql = (name: string) => new RegExp(`CREATE FUNCTION app\\.${name}\\([\\s\\S]*?END \\$\\$;`).exec(migration)![0];
+test("round-2 finding 2: only LINKED contact links are conflicts; an unlinked historical row never blocks a new binding", () => {
+ const body = plpgsql("b101_match");
+ assert.match(body, /OR EXISTS\(SELECT 1 FROM public\.line_account_links WHERE org_id=c\.org_id AND contact_id=c\.id AND status='linked' AND unlinked_at IS NULL\n   AND \(login_identity_id IS DISTINCT FROM i\.id OR persona IS DISTINCT FROM 'vendor'\)\)/);
+ for (const clause of body.split("\n").filter(l => l.includes("FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id")))
+  assert.match(clause, /status='linked' AND unlinked_at IS NULL/, clause);
+ assert.doesNotMatch(body, /line_account_links[^;]*?status<>'linked'/);
+});
+test("round-2 finding 1: no first-sign-in gate; only 'confirm' links jobs and 'skip' closes a zero-candidate review without job writes", () => {
+ assert.doesNotMatch(migration, /first_sign_in|firstSignIn|confirmed_at/);
+ assert.doesNotMatch(plpgsql("b101_match"), /FROM app\.b101_vendor_confirmations/);
+ const body = plpgsql("b101_review");
+ assert.match(body, /OR \(p_action='skip' AND \(p_job IS NOT NULL OR cardinality\(r\.candidate_ids\)<>0\)\)/);
+ const skip = /\n IF p_action='skip' THEN\n([\s\S]*?)\n END IF;/.exec(body)![1];
+ assert.equal(skip, "  UPDATE app.b101_vendor_confirmations SET closed_at=clock_timestamp() WHERE flow_id=f.id;\n  RETURN jsonb_build_object('jobs','[]'::jsonb,'userId',r.user_id,'identityId',r.identity_id,'orgId',r.org_id);");
+ assert.ok(body.indexOf("IF p_action='skip' THEN") < body.indexOf("INSERT INTO"), "skip returns before any insert");
+ assert.equal(body.match(/'line_confirmed'/g)!.length, 1); assert.match(body, /ELSIF p_action='confirm' THEN\n   INSERT INTO app\.b026_vendor_job_accounts/);
 });
 test("finding 3: the legacy-login block applies only while B-101 is enabled for the account's org", () => {
  assert.match(fn("b101_identity_managed"), /WHERE line_identity_id=p_identity\n  AND app\.b101_enabled\(org_id,p_env_v2\) IS TRUE\)/);
@@ -106,11 +128,11 @@ test("finding 3: the legacy-login block applies only while B-101 is enabled for 
 });
 
 // sessionFromFlowOn with a scripted client: no PostgreSQL. Unknown statements fail the test.
-function scripted(opts: { firstSignIn?: boolean; jobs?: number; managed?: boolean }) {
+function scripted(opts: { jobs?: number; managed?: boolean }) {
  const calls: { sql: string; params?: unknown[] }[] = [];
  const client = { query: async (sql: string, params?: unknown[]) => {
   calls.push({ sql, params });
-  if (sql.includes("app.b101_match")) return { rows: [{ result: { userId: "user-a", identityId: "identity-a", firstSignIn: opts.firstSignIn } }] };
+  if (sql.includes("app.b101_match")) return { rows: [{ result: { userId: "user-a", identityId: "identity-a" } }] };
   if (sql.includes("app.b101_review")) return { rows: [{ result: { jobs: params![2] === "list" ? Array.from({ length: opts.jobs ?? 0 }, (_, n) => ({ id: `job-${n}`, description: "d" })) : [],
    userId: "user-a", identityId: "identity-a", orgId: "org-a" } }] };
   if (sql.includes("FROM app.b035_vendor_flows")) return { rows: [] };
@@ -128,20 +150,20 @@ function scripted(opts: { firstSignIn?: boolean; jobs?: number; managed?: boolea
 const flowRow = (return_path: string) => ({ id: "flow-a", return_path, org_id: "org-a", persona: "vendor", kind: "login", line_channel_id: "channel", verified_hash: "h" }) as LineFlow;
 const metaRow = { ua: "unit", ip: null };
 const issued = (calls: { sql: string }[]) => calls.filter(c => c.sql.includes("INSERT INTO auth_sessions")).length;
-test("finding 4: V-LINK only on a first sign-in with open jobs; no session before its confirmation", async () => {
- const { client, calls } = scripted({ firstSignIn: true, jobs: 2 });
+for (const jobs of [1, 2]) test(`round-2 finding 1: any sign-in with ${jobs} open job(s) shows V-LINK; the callback never confirms or issues a session`, async () => {
+ const { client, calls } = scripted({ jobs });
  assert.deepEqual(await sessionFromFlowOn(client, flowRow("/v/link"), metaRow, {}), { next: "/v/link" });
- assert.equal(issued(calls), 0); assert.ok(!calls.some(c => c.params?.[2] === "confirm"));
+ assert.equal(issued(calls), 0);
+ assert.deepEqual(calls.filter(c => c.sql.includes("app.b101_review")).map(c => c.params![2]), ["list"]);
 });
-for (const [label, opts] of [["first sign-in without open jobs", { firstSignIn: true, jobs: 0 }], ["repeat sign-in with open jobs", { firstSignIn: false, jobs: 2 }]] as const)
- test(`finding 4: ${label} skips V-LINK and is issued only through the server confirm step`, async () => {
-  const { client, calls } = scripted(opts);
-  const result = await sessionFromFlowOn(client, flowRow("/v/link"), metaRow, {}) as { next: string; token: string; orgId: string; persona: string };
-  assert.equal(result.next, "/consent?next=%2Fvendor-account"); assert.ok(result.token); assert.equal(result.orgId, "org-a"); assert.equal(result.persona, "vendor");
-  const reviews = calls.filter(c => c.sql.includes("app.b101_review")).map(c => c.params![2]);
-  assert.deepEqual(reviews, ["list", "confirm"]); assert.equal(issued(calls), 1);
-  assert.ok(calls.findIndex(c => c.params?.[2] === "confirm") < calls.findIndex(c => c.sql.includes("INSERT INTO auth_sessions")));
- });
+test("round-2 finding 1: zero candidates skip V-LINK; the session is issued after 'skip', never 'confirm'", async () => {
+ const { client, calls } = scripted({ jobs: 0 });
+ const result = await sessionFromFlowOn(client, flowRow("/v/link"), metaRow, {}) as { next: string; token: string; orgId: string; persona: string };
+ assert.equal(result.next, "/consent?next=%2Fvendor-account"); assert.ok(result.token); assert.equal(result.orgId, "org-a"); assert.equal(result.persona, "vendor");
+ const reviews = calls.filter(c => c.sql.includes("app.b101_review")).map(c => c.params![2]);
+ assert.deepEqual(reviews, ["list", "skip"]); assert.equal(issued(calls), 1);
+ assert.ok(calls.findIndex(c => c.params?.[2] === "skip") < calls.findIndex(c => c.sql.includes("INSERT INTO auth_sessions")));
+});
 for (const managed of [true, false]) test(`finding 3: legacy B033 vendor sign-in with B-101 ${managed ? "enabled is blocked" : "disabled issues an ordinary session"}`, async () => {
  const previous = process.env.BRAND_V2; process.env.BRAND_V2 = "true";
  try {
