@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { DecidedLoading } from "@/components/v3/o/decided/decided";
+import { DecidedTicketPage } from "@/components/v3/o/decided/page";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
@@ -30,6 +33,10 @@ export default async function ApprovalHistoryPage({ params }: {
   if (await brandV3EnabledForOrg(session.orgId)) {
     const pending = await ownerPending(session);
     if (pending.some(row => row.ticket_id === ticketId)) redirect(`/o?estimate=${encodeURIComponent(ticketId)}`);
+    // B-093 / OWN-35-AC2 (OQ-055): under brand_v3 a decided ticket opens the RO-DECIDED read-only view.
+    return <Suspense fallback={<DecidedLoading locale={session.locale} detail />}>
+      <DecidedTicketPage session={session} ticketId={ticketId} />
+    </Suspense>;
   }
   const rows = await ownerHistory(session, { ticketId });
   return (
