@@ -375,6 +375,10 @@
     "reason": "Establish identity: auth-cookie session and live admin/manager membership; every staff operation guards separately",
     "sha256": "19dbff2d54251c65e26737ba8adbfaaedb941856d36dc52409b5f554071de136"
   },
+  "src/server/vendor-workbench.ts#vendorWorkbenchJobToken": {
+    "reason": "Vendor account self-service by auth-cookie identity (B-063 row opener): admits only a job both B-026 history and app.b063_vendor_workbench return for this account in the open workbench organization, then reads that one job's stored link pinned by job and org; no member session, no staff role",
+    "sha256": "11fd2192e7f8ca0fe618a6af413e3758475b6593c94d2d1c11034ea688103919"
+  },
   "src/app/api/vendor-documents/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
     "sha256": "27176ed6108ab80121fdb80e84dd2f9089cddcd5429e537e979edd0bc33e7825"

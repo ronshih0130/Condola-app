@@ -329,3 +329,34 @@ test("B-093 adds two owner gateways reusing the PR-015 admission verbatim, servi
   assert.match(sql, /SET LOCAL statement_timeout='60s'/);
   assert.match(read("scripts/check-function-privileges.sh"), /B-093 gateway ACL\/config mismatch/);
 });
+
+test("B-063 adds one vendor workbench gateway reusing the B-026 history job read verbatim, service-only and migration-owned", () => {
+  const sql = read("supabase/migrations/20261116100000_b063_vendor_workbench.sql");
+  const b026 = read("supabase/migrations/20261106220000_b026_vendor_accounts.sql");
+  const history = b026.slice(b026.indexOf("CREATE FUNCTION app.b026_vendor_account_history"), b026.indexOf("CREATE FUNCTION app.b026_correct_vendor_job"));
+  // The exact B-026 job joins and predicate (actor, account, contact, gate, live link), copied byte for byte.
+  const joins = history.slice(history.indexOf(" FROM app.b026_vendor_job_accounts l\n"), history.indexOf("\n WHERE l.user_id=actor"));
+  const where = history.slice(history.indexOf(" WHERE l.user_id=actor"), history.indexOf(";\n RETURN jsonb_build_object('settings'"));
+  assert.ok(joins.length > 300 && where.length > 250);
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]), ["b063_vendor_workbench"]);
+  assert.ok(sql.includes(joins), "B-026 joins");
+  assert.ok(sql.includes(`${where}\n AND l.org_id=p_org;`), "B-026 predicate plus the one organization");
+  assert.match(sql, /actor:=app\.b026_account_actor\(p_session_hash\);/);
+  assert.match(sql, /o\.feature_flags->'vendor_workbench'='true'::jsonb/);
+  assert.match(sql, /THEN RETURN '\[\]'::jsonb; END IF;/);
+  assert.match(sql, /VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+  const body = sql.slice(sql.indexOf("AS $$"), sql.indexOf("END $$;"));
+  for (const ref of body.matchAll(/\b(?:FROM|JOIN)\s+(?:LATERAL\s+\()?([a-z_][\w.]*)/gi)) assert.match(ref[1], /^(?:public\.|app\.|SELECT$)/, ref[0]);
+  // A list gateway never hands out a job token, and it never writes.
+  assert.doesNotMatch(body, /\btoken\b|s\.token/);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|ALTER|DROP|INSERT|UPDATE|DELETE|GRANT[^;]*TABLE|READ ONLY|platform_settings/i);
+  const compact = sql.replace(/\s+/g, "");
+  const signature = "b063_vendor_workbench(text,uuid)";
+  assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`));
+  assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+  assert.equal((compact.match(/GRANT[A-Z]*ONFUNCTIONapp\.b063_vendor_workbench\(text,uuid\)/g) ?? []).length, 1);
+  assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  assert.match(read("scripts/check-function-privileges.sh"), /B-063 gateway ACL\/config mismatch/);
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(sql, /SET LOCAL statement_timeout='60s'/);
+});
