@@ -34,6 +34,7 @@ export const ERRORS: Record<string, string> = {
   "errors.roomLease": "i_room_lease_exists",
   "errors.paymentState": "i_pay_state",
   "errors.proxyOwnerConfirmRequired": "i_forbidden",
+  // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023); #181 proxy key removed by revert.
   "errors.matchState": "i_match_state",
   "errors.currency": "i_currency",
   "errors.amountTooHigh": "i_amount_high",
