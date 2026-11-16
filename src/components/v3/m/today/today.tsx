@@ -124,9 +124,9 @@ function TurnGroup({ holder, count, rows, more, session, roomUnits, now }: {
 }
 /** T-LINE: 「{動作} {n} 筆／件、…。另外 {k} 件在等{各方}。」; only parties with rows are named. */
 export function waitingParties(copy: ReturnType<typeof brandV3TodayCopy>, waiting: Record<WaitingParty, number>): string {
-  // Frames name only 租客／屋主／廠商; staff-held rows the viewer cannot act on still count in {k} but are not named.
-  const parties = (["tenant", "owner", "vendor"] as const).filter(party => waiting[party] > 0)
-    .map(party => copy[({ tenant: "partyTenant", owner: "partyOwner", vendor: "partyVendor" } as const)[party]]);
+  // T-HEAD-VAR: 租客、屋主、廠商、管理方 in that order, only those present; 管理方 = staff-held rows this viewer can't act on.
+  const parties = (["tenant", "owner", "vendor", "manager"] as const).filter(party => waiting[party] > 0)
+    .map(party => copy[({ tenant: "partyTenant", owner: "partyOwner", vendor: "partyVendor", manager: "partyManager" } as const)[party]]);
   return parties.length > 1 ? `${parties.slice(0, -1).join(copy.separator)}${copy.partyLast}${parties.at(-1)}` : parties[0] ?? "";
 }
 export function ConfirmedBills({ data, locale }: { data: TodayMonthly; locale: Locale }) {
@@ -205,15 +205,14 @@ export function TodayPage({ session, turns, monthly, setup, setupFailed = false,
   else headline = greeting + (overview.mineCount ? translate(copy, "headline", { count: overview.mineCount }) : overview.othersCount ? copy.waitingHeadline : copy.clearHeadline);
   let supporting = "";
   if (overview.state === "ready") {
-    // Same kind order as the 輪到你 group (MGT-148-AC3, MGT-149-AC4).
+    // T-HEAD-VAR: same kind order as the 輪到你 group (MGT-148-AC3, MGT-149-AC4), incl. 「處理中 {n} 件」.
     const summaries = { payments: "paymentSummary", confirmCost: "confirmCostSummary", dispatch: "dispatchSummary", reEstimate: "reEstimateSummary",
-      reply: "replySummary", bank: "bankSummary", monthClose: "monthCloseSummary",
+      inProgress: "inProgressSummary", reply: "replySummary", bank: "bankSummary", monthClose: "monthCloseSummary",
       renewal: "renewalSummary", early: "earlySummary", vacant: "vacantSummary" } as const;
     const actions = (Object.keys(summaries) as (keyof typeof summaries)[]).flatMap(kind => overview.counts[kind]
       ? [translate(copy, summaries[kind], { count: overview.summary[kind] })] : []);
     supporting = (actions.length ? actions.join(copy.separator) + copy.summaryEnd : "")
-      // With only staff-held waits there is no drawn party to name, so the sentence is left out (GS-44).
-      + (overview.othersCount && waitingParties(copy, overview.waiting) ? translate(copy, "waitingSummary", { count: overview.othersCount, parties: waitingParties(copy, overview.waiting) }) : "");
+      + (overview.othersCount ? translate(copy, "waitingSummary", { count: overview.othersCount, parties: waitingParties(copy, overview.waiting) }) : "");
   }
   if (session.environment === "sandbox") supporting = copy.sandbox;
   const checkedAreas = overview.state === "ready" ? [overview.checkedPayments && areaMoney, overview.checkedRentals && copy.rentals,
