@@ -11,30 +11,38 @@ import { TW_CITIES, parseTwAddress, validateAddressParts, type AddressParts } fr
  * the typed line. Only the address is drawn here: name, phone, issuer type, tax id and stamp are B-065.
  */
 type Fetch = (input: string, init: RequestInit) => Promise<Response>;
-export type SaveOutcome = "saved" | "conflict" | "invalid" | "failed" | "busy";
+export type SaveOutcome = "saved" | "stale" | "conflict" | "invalid" | "failed" | "busy";
 
-/** Request id fixed per confirm sheet, so a retry is a replay; reload on success or when the version moved. */
+/**
+ * One request id per payload: retrying the same parts replays it; any edited parts (or a conflict) get a new id,
+ * so a changed payload never reuses an id. Saved or stale (the version moved) reload the page; conflict, invalid
+ * and failed keep every input and show the GS-02 failure.
+ */
 export function createAddressSaver(deps: { fetch: Fetch; reload: () => void; newId?: () => string }) {
   const newId = deps.newId ?? (() => globalThis.crypto.randomUUID());
-  let requestId = newId(), busy = false;
+  let requestId = newId(), payload: string | null = null, busy = false;
   return {
     get busy() { return busy; },
     get requestId() { return requestId; },
-    /** A new sheet (another typed line) is a new request. */
-    reset() { requestId = newId(); },
+    reset() { requestId = newId(); payload = null; },
     async save(expectedVersion: number, parts: AddressParts): Promise<SaveOutcome> {
       if (busy) return "busy";
+      const body = JSON.stringify({ expectedVersion, parts });
+      if (payload !== null && payload !== body) requestId = newId();
+      payload = body;
       busy = true;
       try {
         const response = await deps.fetch("/api/vendor-account/address", {
           method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin",
           body: JSON.stringify({ requestId, expectedVersion, parts }),
         });
-        const body = (await response.json().catch(() => null)) as { status?: string } | null;
-        const outcome: SaveOutcome = response.ok && (body?.status === "recorded" || body?.status === "unchanged") ? "saved"
-          : body?.status === "rejected_stale" || body?.status === "rejected_conflict" ? "conflict"
-          : body?.status === "rejected_invalid" ? "invalid" : "failed";
-        if (outcome === "saved" || outcome === "conflict") deps.reload();
+        const result = (await response.json().catch(() => null)) as { status?: string } | null;
+        const outcome: SaveOutcome = response.ok && (result?.status === "recorded" || result?.status === "unchanged") ? "saved"
+          : result?.status === "rejected_stale" ? "stale"
+          : result?.status === "rejected_conflict" ? "conflict"
+          : result?.status === "rejected_invalid" ? "invalid" : "failed";
+        if (outcome === "saved" || outcome === "stale") deps.reload();
+        if (outcome === "conflict") { requestId = newId(); payload = null; }
         return outcome;
       } catch {
         return "failed";
@@ -45,44 +53,71 @@ export function createAddressSaver(deps: { fetch: Fetch; reload: () => void; new
   };
 }
 
+/**
+ * The card's flow without React, so its guards are tested directly: 儲存 on an unchanged line does nothing; a changed
+ * line opens the sheet with the split parts (a new request); 取消 closes it and keeps the typed line; the sheet's
+ * 儲存 validates first (R2-ADDR), ignores a second press while one is in flight, and reports the GS-02 failure.
+ */
+export function createAddressFlow(deps: { saver: ReturnType<typeof createAddressSaver>; version: number; saved: string | null }) {
+  let line = deps.saved ?? "", open = false, parts: AddressParts = { city: "", district: "", street: "", number: "" }, unreadable = false;
+  return {
+    get line() { return line; }, get open() { return open; }, get parts() { return parts; }, get unreadable() { return unreadable; },
+    type(value: string) { line = value; },
+    edit(next: AddressParts) { parts = next; },
+    confirm() {
+      if (line.trim() === (deps.saved ?? "").trim()) return false;
+      const parsed = parseTwAddress(line);
+      parts = parsed.parts; unreadable = !parsed.ok; open = true;
+      deps.saver.reset();
+      return true;
+    },
+    cancel() { open = false; },
+    async save(): Promise<SaveOutcome | "invalid_parts"> {
+      if (validateAddressParts(parts).length) return "invalid_parts";
+      return deps.saver.save(deps.version, parts);
+    },
+  };
+}
+
 export function VendorAddressCard({ locale, version, address }: { locale: Locale; version: number; address: string | null }) {
   const copy = vendorAddressCopy(locale);
   const id = useId();
   const sheet = useRef<HTMLDialogElement>(null);
-  const [line, setLine] = useState(address ?? "");
-  const [parts, setParts] = useState<AddressParts>({ city: "", district: "", street: "", number: "" });
-  const [unreadable, setUnreadable] = useState(false);
+  const [flow] = useState(() => createAddressFlow({ saver: createAddressSaver({ fetch: (input, init) => fetch(input, init), reload: () => window.location.reload() }),
+    version, saved: address }));
+  const [, rerender] = useState(0);
+  const refresh = () => rerender(n => n + 1);
   const [touched, setTouched] = useState(false);
   const [state, setState] = useState<"idle" | "pending" | "failed">("idle");
-  const [saver] = useState(() => createAddressSaver({ fetch: (input, init) => fetch(input, init), reload: () => window.location.reload() }));
+  const parts = flow.parts;
   const errors = touched ? validateAddressParts(parts) : [];
 
   function confirm() {
-    if (line.trim() === (address ?? "").trim()) return; // Unchanged: nothing to confirm or write.
-    const parsed = parseTwAddress(line);
-    setParts(parsed.parts); setUnreadable(!parsed.ok); setTouched(false); setState("idle");
-    saver.reset();
+    if (!flow.confirm()) return; // Unchanged: nothing to confirm or write.
+    setTouched(false); setState("idle"); refresh();
     sheet.current?.showModal();
   }
   async function save() {
     setTouched(true);
-    if (validateAddressParts(parts).length || saver.busy) return;
+    if (state === "pending") return;
     setState("pending");
-    const outcome = await saver.save(version, parts);
-    setState(outcome === "saved" || outcome === "conflict" || outcome === "busy" ? "idle" : "failed");
+    const outcome = await flow.save();
+    setState(outcome === "saved" || outcome === "stale" || outcome === "invalid_parts" || outcome === "busy" ? "idle" : "failed");
   }
-  const field = (key: keyof AddressParts, label: string, error?: string) => <div className="v-addr-field">
-    <label htmlFor={`${id}-${key}`}>{label}</label>
-    {key === "city"
-      ? <select id={`${id}-${key}`} className="v-addr-input" value={parts.city} aria-invalid={Boolean(error)}
-        onChange={event => setParts({ ...parts, city: event.target.value })}>
-        <option value="" />
-        {TW_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
-      </select>
-      : <input id={`${id}-${key}`} className="v-addr-input" value={parts[key]} maxLength={200} aria-invalid={Boolean(error)}
-        onChange={event => setParts({ ...parts, [key]: event.target.value })} />}
-    {error ? <p className="v-addr-error">{error}</p> : null}
-  </div>;
+  const field = (key: keyof AddressParts, label: string, error?: string) => {
+    const errorId = `${id}-${key}-error`;
+    const common = { id: `${id}-${key}`, className: "v-addr-input", "aria-invalid": Boolean(error), "aria-describedby": error ? errorId : undefined };
+    return <div className="v-addr-field">
+      <label htmlFor={`${id}-${key}`}>{label}</label>
+      {key === "city"
+        ? <select {...common} value={parts.city} onChange={event => { flow.edit({ ...parts, city: event.target.value }); refresh(); }}>
+          <option value="" />
+          {TW_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+        </select>
+        : <input {...common} value={parts[key]} maxLength={200} onChange={event => { flow.edit({ ...parts, [key]: event.target.value }); refresh(); }} />}
+      {error ? <p className="v-addr-error" id={errorId}>{error}</p> : null}
+    </div>;
+  };
 
   return <section className="v-addr-card" aria-labelledby={`${id}-card`}>
     {/* eslint-disable-next-line @next/next/no-css-tags -- workbench-only stylesheet */}
@@ -90,15 +125,15 @@ export function VendorAddressCard({ locale, version, address }: { locale: Locale
     <h2 id={`${id}-card`}>{copy.card}</h2>
     <form className="v-addr-form" onSubmit={event => { event.preventDefault(); confirm(); }}>
       <label htmlFor={`${id}-line`}>{copy.field}</label>
-      <input id={`${id}-line`} className="v-addr-input" value={line} maxLength={500} aria-describedby={`${id}-help`}
-        onChange={event => setLine(event.target.value)} />
+      <input id={`${id}-line`} className="v-addr-input" value={flow.line} maxLength={500} aria-describedby={`${id}-help`}
+        onChange={event => { flow.type(event.target.value); refresh(); }} />
       <p className="v-addr-help" id={`${id}-help`}>{copy.help}</p>
       <button type="submit" className="v-addr-primary">{copy.save}</button>
     </form>
     <dialog ref={sheet} className="v-addr-sheet" aria-labelledby={`${id}-title`}>
       <form onSubmit={event => { event.preventDefault(); void save(); }}>
         <h2 id={`${id}-title`}>{copy.title}</h2>
-        <p>{unreadable ? copy.unreadable : copy.lead}</p>
+        <p>{flow.unreadable ? copy.unreadable : copy.lead}</p>
         {errors.length ? <p className="v-addr-error" role="alert">{copy.fix}</p> : null}
         {field("city", copy.city, errors.includes("city") ? copy.needCity : undefined)}
         {field("district", copy.district)}
@@ -107,7 +142,7 @@ export function VendorAddressCard({ locale, version, address }: { locale: Locale
         {state === "failed" ? <div className="v-addr-error" role="alert"><p>{copy.saveError}</p>
           <button type="submit" className="v-addr-secondary">{copy.retry}</button></div> : null}
         <button type="submit" className="v-addr-primary" disabled={state === "pending"} aria-busy={state === "pending"}>{copy.save}</button>
-        <button type="button" className="v-addr-text" onClick={() => sheet.current?.close()}>{copy.cancel}</button>
+        <button type="button" className="v-addr-text" onClick={() => { flow.cancel(); sheet.current?.close(); refresh(); }}>{copy.cancel}</button>
       </form>
     </dialog>
   </section>;

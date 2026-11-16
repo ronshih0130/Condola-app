@@ -44,8 +44,9 @@ export function parseSaveInput(value: unknown): SaveAddressInput | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const v = value as Record<string, unknown>;
   const p = v.parts as Record<string, unknown> | undefined;
+  // expectedVersion is a PostgreSQL integer: 1 … 2147483647.
   if (typeof v.requestId !== "string" || !UUID.test(v.requestId) || !Number.isSafeInteger(v.expectedVersion)
-    || (v.expectedVersion as number) < 1 || !p || typeof p !== "object") return null;
+    || (v.expectedVersion as number) < 1 || (v.expectedVersion as number) > 2147483647 || !p || typeof p !== "object") return null;
   const parts = { city: p.city, district: p.district ?? "", street: p.street ?? "", number: p.number ?? "" };
   if (Object.values(parts).some(x => typeof x !== "string" || x.length > 200)) return null;
   const clean = Object.fromEntries(Object.entries(parts).map(([k, x]) => [k, (x as string).trim()])) as AddressParts;
@@ -59,6 +60,8 @@ export async function saveVendorAddress(credential: string, orgId: string, input
       "SELECT app.b112_save_vendor_address($1,$2::uuid,$3,$4::uuid,$5,$6) AS r",
       [hash(credential), orgId, brandV2Enabled(), input.requestId, input.expectedVersion, joinTwAddress(input.parts)])).rows[0].r);
   } catch (error) {
+    // P0B12: a concurrent save already holds this request id (the gateway undid this one entirely).
+    if (sqlState(error) === "P0B12" || sqlState(error) === "23505") return { status: "rejected_conflict" };
     if (sqlState(error) === "42501" || error instanceof FlowError) throw new FlowError("errors.forbidden");
     throw error;
   }

@@ -52,9 +52,20 @@ BEGIN
   WHERE a.org_id=p_org AND a.user_id=actor;
  IF contact IS NULL THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  IF p_lock THEN
-  SELECT * INTO profile FROM public.vendor_profiles p WHERE p.org_id=p_org AND p.contact_id=contact FOR UPDATE;
-  -- Re-admit after the lock wait.
-  IF NOT app.b112_enabled(p_org,p_env_v2) OR app.b026_account_actor(p_session_hash) IS DISTINCT FROM actor
+  -- Lock the profile together with its whole binding: the caller's account row in this org for this contact and
+  -- the live vendor contact. Under READ COMMITTED a row changed while waiting is re-checked against these joins,
+  -- and FOR SHARE keeps the account and contact from changing until this transaction ends.
+  SELECT p.* INTO profile FROM public.vendor_profiles p
+   JOIN app.b026_vendor_accounts va ON va.org_id=p.org_id AND va.contact_id=p.contact_id AND va.user_id=actor
+   JOIN public.contacts c ON c.org_id=p.org_id AND c.id=p.contact_id AND c.is_vendor AND c.archived_at IS NULL
+   WHERE p.org_id=p_org AND p.contact_id=contact
+   FOR UPDATE OF p FOR SHARE OF va, c;
+  -- Re-admit everything after the lock wait, in this statement's snapshot: session, gate and the full binding.
+  IF profile.id IS NULL OR NOT app.b112_enabled(p_org,p_env_v2) OR app.b026_account_actor(p_session_hash) IS DISTINCT FROM actor
+   OR NOT EXISTS(SELECT 1 FROM app.b026_vendor_accounts va
+     JOIN public.contacts c ON c.org_id=va.org_id AND c.id=va.contact_id AND c.is_vendor AND c.archived_at IS NULL
+     JOIN public.vendor_profiles p ON p.org_id=va.org_id AND p.contact_id=va.contact_id AND p.id=profile.id
+     WHERE va.org_id=p_org AND va.user_id=actor AND va.contact_id=contact)
   THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  ELSE
   SELECT * INTO profile FROM public.vendor_profiles p WHERE p.org_id=p_org AND p.contact_id=contact;
@@ -84,6 +95,9 @@ BEGIN
  SELECT * INTO a FROM app.b112_account_profile(p_session_hash,p_org,p_env_v2,true);
  IF (a.profile).id IS NULL THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  IF p_request IS NULL THEN RETURN '{"status":"rejected_invalid"}'::jsonb; END IF;
+ -- Serialize on the idempotency key: two vendors (different profile locks) sharing a request id cannot both miss
+ -- the ledger; the second sees the first's committed row and gets rejected_conflict.
+ PERFORM pg_advisory_xact_lock(hashtextextended('b112/address/'||p_org::text||'/'||p_request::text,0));
  SELECT * INTO prior FROM app.b112_address_saves s WHERE s.org_id=p_org AND s.request_id=p_request;
  IF FOUND THEN
   IF prior.user_id=a.actor AND prior.vendor_profile_id=(a.profile).id THEN
@@ -91,7 +105,7 @@ BEGIN
   RETURN '{"status":"rejected_conflict"}'::jsonb;
  END IF;
  line:=btrim(p_address);
- IF p_address IS NULL OR length(line) NOT BETWEEN 1 AND 500 OR line ~ '[\x01-\x1f\x7f]'
+ IF p_address IS NULL OR length(line) NOT BETWEEN 1 AND 500 OR line ~ '[\x01-\x1f\x7f-\x9f\u2028\u2029]'
  THEN RETURN '{"status":"rejected_invalid"}'::jsonb; END IF;
  IF p_expected_version IS DISTINCT FROM (a.profile).current_version THEN RETURN '{"status":"rejected_stale"}'::jsonb; END IF;
  IF line IS NOT DISTINCT FROM (a.profile).address THEN
@@ -111,8 +125,14 @@ BEGIN
    || CASE WHEN latest ? 'seal' THEN jsonb_build_object('seal',latest->'seal') ELSE '{}'::jsonb END
  FROM public.vendor_profiles p WHERE p.id=(a.profile).id AND p.org_id=p_org
  RETURNING * INTO next_version;
- INSERT INTO app.b112_address_saves(org_id,request_id,user_id,vendor_profile_id,version,version_id,address)
- VALUES (p_org,p_request,a.actor,(a.profile).id,next_version.version,next_version.id,line);
+ BEGIN
+  INSERT INTO app.b112_address_saves(org_id,request_id,user_id,vendor_profile_id,version,version_id,address)
+  VALUES (p_org,p_request,a.actor,(a.profile).id,next_version.version,next_version.id,line);
+ EXCEPTION WHEN unique_violation THEN
+  -- Defence in depth behind the advisory lock: never surface 23505. The block's subtransaction is rolled back,
+  -- so raise to undo the profile update and version row too, mapped by the caller to rejected_conflict.
+  RAISE EXCEPTION 'b112 request conflict' USING ERRCODE='P0B12';
+ END;
  INSERT INTO public.audit_log(org_id,actor_user_id,actor_role,table_name,row_id,action,event_type,old_row,new_row,changed_cols,request_id)
  VALUES (p_org,a.actor,'vendor','vendor_profiles',(a.profile).id::text,'update','vendor_account_address',
   jsonb_build_object('version',(a.profile).current_version),

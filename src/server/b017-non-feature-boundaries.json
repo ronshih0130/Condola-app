@@ -377,7 +377,7 @@
   },
   "src/app/api/vendor-account/address/route.ts#POST": {
     "reason": "B-112 vendor account bearer: the account session cookie via vendorWorkbenchAccess (consent, open workbench), then the service-only app.b112_save_vendor_address gateway that re-admits the session and the caller's own vendor account; no staff role or member session",
-    "sha256": "dc9fdf21c7cfc605e5d71dfc690480eb3c5c6ff785cf5c88515b42ce68f9c878"
+    "sha256": "3962c2a4a16986cad7bc7520c2b4f1ab1db4f27e8727e9c326bfd19a33b7cfde"
   },
   "src/app/api/vendor-account/route.ts#POST": {
     "reason": "Vendor account self-service by auth-cookie identity; vendor-owned records only, no member session",

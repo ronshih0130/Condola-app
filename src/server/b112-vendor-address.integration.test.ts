@@ -12,6 +12,7 @@ import { disposableDbUrl } from "./test-disposable-db";
 import type { Session } from "./types";
 import { claimVendorAccount, inviteVendorAccount } from "./vendor-accounts";
 import { saveVendorAddress, vendorAddressView, type AddressParts } from "./b112-vendor-address";
+import { hashVendorToken } from "./vendor-repair-rules";
 
 // B-112 on a cloned disposable database: the real B-026 invite/claim, the real app.b112_* gateways and the real route.
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
@@ -167,7 +168,18 @@ test("idempotent: a replay is the first answer; a stale or another vendor's requ
 });
 
 test("denials write nothing: token-only bearer, revoked or expired session, staff, other org, and every gate OFF", async () => {
-  const jobToken = randomBytes(32).toString("base64url");
+  // Real persisted bearer tokens: a vendor job link for A's own contact and a B-025 document link for A's profile.
+  const jobToken = randomBytes(32).toString("base64url"), documentToken = randomBytes(32).toString("base64url");
+  const ticket = (await db.query(`INSERT INTO maintenance_tickets(org_id,ticket_number,property_id,status,title,assigned_vendor_contact_id)
+    SELECT $1,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$1),id,'closed','B-112 bearer',$2
+    FROM properties WHERE org_id=$1 AND archived_at IS NULL ORDER BY id LIMIT 1 RETURNING id::text`, [ORG_ID, contactA])).rows[0].id;
+  const job = (await db.query(`INSERT INTO repair_vendor_jobs(org_id,ticket_id,vendor_name,vendor_phone,contact_window,token_hash,expires_at,created_by,vendor_contact_id,sharing_approved_at)
+    VALUES($1,$2,'B-112 A','+886912345678','x',$3,clock_timestamp()+interval '1 day',$4,$5,clock_timestamp()) RETURNING id::text`,
+  [ORG_ID, ticket, hashVendorToken(jobToken), USERS.admin, contactA])).rows[0].id;
+  await db.query(`INSERT INTO vendor_document_grants(org_id,ticket_id,job_id,vendor_profile_id,token_hash,buyer_selection,expires_at,created_by)
+    VALUES($1,$2,$3,$4,$5,'{"kind":"company","name":"B-112"}'::jsonb,clock_timestamp()+interval '1 day',$6)`,
+  [ORG_ID, ticket, job, profileA, hashVendorToken(documentToken), USERS.admin]);
+  assert.equal((await db.query("SELECT count(*)::int n FROM repair_vendor_jobs WHERE token_hash=$1 AND active", [hashVendorToken(jobToken)])).rows[0].n, 1);
   const revoked = randomUUID(), expired = randomUUID();
   await db.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at,revoked_at) VALUES($1,$2,clock_timestamp()+interval '1 hour',clock_timestamp())", [vendorA, hash(revoked)]);
   await db.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,clock_timestamp()-interval '1 second')", [vendorA, hash(expired)]);
@@ -179,7 +191,8 @@ test("denials write nothing: token-only bearer, revoked or expired session, staf
     await assert.rejects(vendorAddressView(cred, org), forbidden, `${label}: read`);
     assert.deepEqual(await snapshot(), before, `${label}: no writes`);
   };
-  await deny("job token as a credential", jobToken);
+  await deny("a live vendor job token as the session cookie", jobToken);
+  await deny("a live document token as the session cookie", documentToken);
   await deny("revoked session", revoked);
   await deny("expired session", expired);
   await deny("staff session", staffCred);
@@ -222,4 +235,107 @@ test("route: account cookie and an open workbench only; invalid parts are a 400 
   assert.deepEqual(await ok.json(), { status: "recorded", version: version + 1, address: "台北市信義區信義路二段 21 號", replayed: false });
   assert.equal((await post(body, `condola_session=${credA}; condola_org=${ORG_ID}`)).status, 200, "replay");
   assert.equal((await post({ ...body, requestId: randomUUID() }, `condola_session=${credA}; condola_org=${ORG_ID}`)).status, 409, "stale");
+});
+
+/** Waits until `n` backends are blocked on a lock while running the B-112 writer. */
+async function waitForBlocked(n: number) {
+  for (let i = 0; i < 100; i++) {
+    const blocked = (await db.query(`SELECT count(*)::int n FROM pg_stat_activity
+      WHERE wait_event_type='Lock' AND query LIKE '%b112_save_vendor_address%' AND pid<>pg_backend_pid()`)).rows[0].n;
+    if (blocked >= n) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.fail(`expected ${n} blocked save(s)`);
+}
+async function holder() {
+  const client = new Client({ connectionString: process.env.DATABASE_URL }); await client.connect(); await client.query("BEGIN");
+  return client;
+}
+const writes = async (profileId: string) => JSON.stringify({
+  profile: (await db.query("SELECT current_version,address FROM vendor_profiles WHERE id=$1", [profileId])).rows,
+  versions: (await db.query("SELECT count(*)::int n FROM vendor_profile_versions WHERE vendor_profile_id=$1", [profileId])).rows,
+  ledger: (await db.query("SELECT count(*)::int n FROM app.b112_address_saves WHERE vendor_profile_id=$1", [profileId])).rows,
+  audit: (await db.query("SELECT count(*)::int n FROM audit_log WHERE event_type='vendor_account_address' AND row_id=$1", [profileId])).rows,
+});
+
+test("binding changed while a save waits on the profile lock: refused with no write (each element alone)", async () => {
+  const vendorC = randomUUID();
+  await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,'b112c@example.test',now())", [vendorC]);
+  const spare = await vendorContact(ORG_ID, "B-112 spare");
+  const account = (await db.query("SELECT * FROM app.b026_vendor_accounts WHERE org_id=$1 AND contact_id=$2", [ORG_ID, contactA])).rows[0];
+  assert.equal(account.user_id, vendorA);
+  const cases: [string, (c: Client) => Promise<unknown>, () => Promise<unknown>][] = [
+    ["account reassigned to another user", c => c.query("UPDATE app.b026_vendor_accounts SET user_id=$3 WHERE org_id=$1 AND contact_id=$2", [ORG_ID, contactA, vendorC]),
+      () => db.query("UPDATE app.b026_vendor_accounts SET user_id=$3 WHERE org_id=$1 AND contact_id=$2", [ORG_ID, contactA, vendorA])],
+    ["account revoked (row removed)", c => c.query("DELETE FROM app.b026_vendor_accounts WHERE org_id=$1 AND contact_id=$2", [ORG_ID, contactA]),
+      () => db.query("INSERT INTO app.b026_vendor_accounts SELECT * FROM jsonb_populate_record(NULL::app.b026_vendor_accounts,$1::jsonb)", [JSON.stringify(account)])],
+    ["contact archived", c => c.query("UPDATE contacts SET archived_at=now() WHERE id=$1", [contactA]),
+      () => db.query("UPDATE contacts SET archived_at=NULL WHERE id=$1", [contactA])],
+    ["contact no longer a vendor", c => c.query("UPDATE contacts SET is_vendor=false,is_owner=true WHERE id=$1", [contactA]),
+      () => db.query("UPDATE contacts SET is_vendor=true,is_owner=false WHERE id=$1", [contactA])],
+  ];
+  // The profile↔contact link itself cannot move: the existing issuer-identity guard refuses it outright.
+  await assert.rejects(db.query("UPDATE vendor_profiles SET contact_id=$2 WHERE id=$1", [profileA, spare]), /vendor issuing identity is immutable/);
+  for (const [label, mutate, restore] of cases) {
+    const lock = await holder();
+    await lock.query("SELECT 1 FROM vendor_profiles WHERE id=$1 FOR UPDATE", [profileA]);
+    const { current_version: version } = await versionOf(profileA);
+    const before = await writes(profileA);
+    const pending = save(credA, ORG_ID, version, "77 號").then(result => ({ result }), error => ({ error }));
+    try {
+      await waitForBlocked(1);
+      await mutate(lock);
+      await lock.query("COMMIT");
+    } catch (error) {
+      await lock.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally { await lock.end(); }
+    const outcome = await pending as { result?: unknown; error?: unknown };
+    assert.ok(forbidden(outcome.error), `${label}: ${JSON.stringify(outcome.result)}`);
+    await restore();
+    const after = JSON.parse(await writes(profileA)), expected = JSON.parse(before);
+    assert.deepEqual(after, expected, `${label}: no writes`);
+    assert.equal((await save(credA, ORG_ID, version, `${80 + cases.findIndex(c => c[0] === label)} 號`)).status, "recorded", `${label}: restored binding saves again`);
+  }
+});
+
+test("two vendors sharing one request id in parallel: exactly one recorded, one rejected_conflict, no 23505", async () => {
+  const request = randomUUID();
+  const lock = await holder();
+  await lock.query("SELECT pg_advisory_xact_lock(hashtextextended('b112/address/'||$1::text||'/'||$2::text,0))", [ORG_ID, request]);
+  const [a, b] = [await versionOf(profileA), await versionOf(profileB)];
+  const before = { a: await writes(profileA), b: await writes(profileB) };
+  const runs = [save(credA, ORG_ID, a.current_version, "31 號", request), save(credB, ORG_ID, b.current_version, "32 號", request)]
+    .map(p => p.then(result => ({ result }), error => ({ error })));
+  try { await waitForBlocked(2); } finally { await lock.query("COMMIT"); await lock.end(); }
+  const outcomes = await Promise.all(runs) as { result?: { status: string }; error?: unknown }[];
+  assert.ok(outcomes.every(o => !o.error), JSON.stringify(outcomes.map(o => String(o.error))));
+  assert.deepEqual(outcomes.map(o => o.result!.status).sort(), ["recorded", "rejected_conflict"]);
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b112_address_saves WHERE org_id=$1 AND request_id=$2", [ORG_ID, request])).rows[0].n, 1);
+  const loser = outcomes[0].result!.status === "rejected_conflict" ? "a" : "b";
+  assert.equal(await writes(loser === "a" ? profileA : profileB), before[loser], "the loser wrote nothing");
+});
+
+test("route: body capped while streaming, Content-Length over the cap refused unread, expectedVersion bounded", async () => {
+  const cookie = `condola_session=${credA}; condola_org=${ORG_ID}`;
+  const before = await snapshot();
+  const big = JSON.stringify({ requestId: randomUUID(), expectedVersion: 1, parts: parts("1 號"), pad: "x".repeat(5000) });
+  assert.equal((await post(JSON.parse(big), cookie)).status, 413, "over the cap");
+  let pulled = 0;
+  const endless = new ReadableStream<Uint8Array>({ pull(controller) { pulled++; controller.enqueue(new Uint8Array(1024).fill(32)); } });
+  const streamed = await saveRoute(new Request(`${origin}/api/vendor-account/address`, { method: "POST", body: endless, duplex: "half",
+    headers: { origin, "content-type": "application/json", cookie } } as RequestInit));
+  assert.equal(streamed.status, 413); assert.ok(pulled <= 6, `stopped after ${pulled} chunks`);
+  const declared = await saveRoute(new Request(`${origin}/api/vendor-account/address`, { method: "POST", body: "{}",
+    headers: { origin, "content-type": "application/json", "content-length": "999999", cookie } }));
+  assert.equal(declared.status, 413);
+  const { current_version: version } = await versionOf(profileA);
+  for (const expectedVersion of [2147483648, 0, -1, 1.5, "2"]) {
+    assert.equal((await post({ requestId: randomUUID(), expectedVersion, parts: parts("1 號") }, cookie)).status, 400, String(expectedVersion));
+  }
+  for (const bad of ["\u0085", "\u2028", "\u2029", "\u009f"]) {
+    assert.equal((await post({ requestId: randomUUID(), expectedVersion: version, parts: parts(`1${JSON.parse(`"${bad}"`)}號`) }, cookie)).status, 400, bad);
+    assert.deepEqual(await sqlSave(hash(credA), ORG_ID, version, `台北市信義區信義路 1${JSON.parse(`"${bad}"`)}號`), { status: "rejected_invalid" }, `SQL ${bad}`);
+  }
+  assert.deepEqual(await snapshot(), before);
 });
