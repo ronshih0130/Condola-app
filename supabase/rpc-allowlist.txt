@@ -87,3 +87,7 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # B-063 service-only inventory (NOT authenticated RPC allowlist entries).
 # ACL/config asserted by the B-063 probe in scripts/check-function-privileges.sh.
 # service-only: app.b063_vendor_workbench(text,uuid)
+
+# B-076a service-only inventory (NOT an authenticated RPC allowlist entry).
+# ACL/config asserted by the B-076a probe in scripts/check-function-privileges.sh.
+# service-only: app.b076a_phone_history(uuid,uuid,text,uuid,uuid,bigint,integer)
