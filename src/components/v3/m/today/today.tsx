@@ -145,7 +145,16 @@ export function ConfirmedBills({ data, locale }: { data: TodayMonthly; locale: L
     </section>;
   })}</div>;
 }
-function SetupCard({ setup, locale }: { setup: SetupProgress; locale: Locale }) {
+/** T-SETUP (GS-47 = A): while the next visible setup step is 邀請租客 or 租客加入 (2–3 of 4), 今天 shows only the
+ * checklist. Returns the steps still left, or null when normal 今天 applies (flag OFF, 0–1 steps, done, other roles). */
+export function setupOnlyRemaining(setup: SetupProgress | undefined, role: Session["role"]): number | null {
+  if (!setup || (role !== "admin" && role !== "manager")) return null;
+  const list = setup.checklist;
+  if (!setup.checklistOn || !list || list.completedAt || !setup.hasUnits) return null;
+  const next = list.steps.find(step => !step.done);
+  return next && next.index >= 2 ? list.total - list.completed : null;
+}
+function SetupCard({ setup, locale, only = false }: { setup: SetupProgress; locale: Locale; only?: boolean }) {
   const permitted = (key: PermKey) => setup.permissions.includes(key);
   if (!setup.checklistOn || !setup.checklist) {
     if (setup.hasUnits) return null;
@@ -162,7 +171,7 @@ function SetupCard({ setup, locale }: { setup: SetupProgress; locale: Locale }) 
   }
   const noUnits = !setup.hasUnits && !setup.checklist.completedAt;
   const needsEarlyAction = !setup.checklist.completedAt && setup.hasUnits && visibleSetup.step < 2;
-  return <div className="card v3-today-setup"><OnboardingProgress progress={visibleSetup} locale={locale} cta={cta} />
+  return <div className={`card v3-today-setup${only ? " v3-today-setup-only" : ""}`}><OnboardingProgress progress={visibleSetup} locale={locale} cta={cta} />
     {noUnits && <EmptyState id="DASH" locale={locale} cta={cta} />}
     {needsEarlyAction && cta.primary && <EmptyPrimary action={cta.primary} locale={locale} />}
   </div>;
@@ -178,6 +187,16 @@ export function TodayPage({ session, turns, monthly, setup, setupFailed = false,
     || (setup.checklistOn && !!setup.checklist && !setup.checklist.completedAt && setup.checklist.steps.some(step => !step.done)));
   const noTurnsDuringSetup = setupPending && (overview.state === "off" || (overview.state === "ready" && !overview.mineCount && !overview.othersCount));
   const name = session.name.trim();
+  const setupLeft = setupOnlyRemaining(setup, session.role);
+  if (setup && setupLeft !== null) {
+    // Checklist only: no turn groups, waiting groups, number block, interim KPIs or supporting line (GS-47).
+    return <div className="v3-today" data-testid="today-v3" data-setup-only="">
+      <SignupNotice query={query} locale={session.locale} />
+      <header className="v3-lead v3-today-lead"><h1 data-testid="today-headline">
+        {name ? translate(copy, "setupHeadline", { name, k: setupLeft }) : translate(copy, "setupHeadlineNoName", { k: setupLeft })}</h1></header>
+      <SetupCard setup={setup} locale={session.locale} only />
+    </div>;
+  }
   const greeting = name ? translate(copy, "greeting", { name }) : "";
   let headline: string;
   if (overview.state === "unavailable") headline = name ? translate(copy, "greetingOnly", { name }) : copy.failure;
