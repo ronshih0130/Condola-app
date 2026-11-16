@@ -37,11 +37,8 @@ async function flagsOn(orgId: string) {
 }
 
 async function latestEvent(client: Client, orgId: string, ticketId: string, jobId: string, versionId: string) {
-  const row = await maybe<{ event_kind: Exclude<CurrentEvent, "none"> }>(client,
-    "SELECT event_kind::text FROM app.b013_repair_appointments"
-    + " WHERE org_id=$1::uuid AND ticket_id=$2::uuid AND repair_vendor_job_id=$3::uuid"
-    + " AND version_id=$4::uuid"
-    + " ORDER BY occurred_at DESC, id DESC LIMIT 1",
+  const row = await maybe<{ event_kind: Exclude<CurrentEvent, "none"> | null }>(client,
+    "SELECT app.b104_vendor_latest_event($1::uuid,$2::uuid,$3::uuid,$4::uuid) AS event_kind",
     [orgId, ticketId, jobId, versionId],
   );
   return row?.event_kind ?? "none";
@@ -72,15 +69,13 @@ async function mutationScope(token: string, pinnedVersionId: string, completionR
   return svc(null, async (client) => {
     await assertEnhancedVendorMutation(client, job.org_id, job.job_id, hashVendorToken(token), policy.enhanced);
     // A ledger hit must reach the gateway, which checks the full pinned payload.
-    const prior = completionRequestId === undefined ? null : await maybe<{ found: number }>(client,
-      "SELECT 1 AS found FROM app.b013_repair_commands c"
-      + " JOIN repair_vendor_jobs j ON j.org_id=c.org_id AND coalesce(j.created_by,j.id)=c.actor_id"
-      + " WHERE j.org_id=$1::uuid AND j.id=$2::uuid AND c.request_id=$3::uuid",
+    const prior = completionRequestId === undefined ? null : await maybe<{ found: boolean }>(client,
+      "SELECT app.b104_vendor_command_exists($1::uuid,$2::uuid,$3::uuid) AS found",
       [job.org_id, job.job_id, completionRequestId],
     );
     const versionId = await currentRepairVersionId(client, job.org_id, job.ticket_id);
     // Stale new commands also go to SQL, where version locking rejects them.
-    const validateCompletion = completionRequestId !== undefined && !prior && versionId === pinnedVersionId;
+    const validateCompletion = completionRequestId !== undefined && prior?.found !== true && versionId === pinnedVersionId;
     let hasAfterPhoto = false;
     if (validateCompletion) {
       const photos = await maybe<{ n: number }>(client,
