@@ -50,14 +50,18 @@ export function VendorEmpty({ locale }: { locale: Locale }) {
   </section>;
 }
 
-/** V-HOME (VEN-14-AC1…AC3): the open-jobs card and the own-status list card; both empty is V-EMPTY. */
+/**
+ * V-HOME (VEN-14-AC1…AC3): the open-jobs card and the own-status list card; both empty is V-EMPTY. V-HOME-ONE
+ * (round 7 batch 4): one empty card keeps its title and one line (目前沒有未結案件, or the V-RECV empty heading), no
+ * illustration, and the note only with rows.
+ */
 export function VendorHome({ jobs, payments, locale }: { jobs: VendorJobRow[]; payments: VendorPaymentRow[]; locale: Locale }) {
   const copy = vendorWorkbenchCopy(locale), own = ownStatusCopy(locale);
   if (!jobs.length && !payments.length) return <div className="v3-vendor-workbench" data-testid="vendor-home"><VendorEmpty locale={locale} /></div>;
   return <div className="v3-vendor-workbench" data-testid="vendor-home">
     <section className="vendor-card" aria-labelledby="vendor-home-jobs" data-testid="vendor-home-jobs">
       <h2 id="vendor-home-jobs">{copy.openJobs}</h2>
-      {jobs.length ? <JobRows rows={jobs} locale={locale} /> : <p className="vendor-card-empty">{copy.jobsEmpty}</p>}
+      {jobs.length ? <JobRows rows={jobs} locale={locale} /> : <p className="vendor-card-empty">{copy.emptyTitle}</p>}
     </section>
     <section className="vendor-card" aria-labelledby="vendor-home-payments" data-testid="vendor-home-payments">
       <h2 id="vendor-home-payments">{own.vendorListTitle}</h2>

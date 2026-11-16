@@ -111,6 +111,9 @@ html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead h1{ margin:0; f
 html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup-more{ left:0; right:0; bottom:0; padding-bottom:calc(16px + env(safe-area-inset-bottom,0px)); border-bottom-left-radius:0; border-bottom-right-radius:0; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .shell-more-entry{ padding:12px; gap:12px; }
 html[data-brand="v2"][data-brand-v3] .v3-shell .shell-more-entry svg{ flex:none; }
+/* OV-SH-DESK-HEAD (round 7 batch 4): owners and vendors keep the phone heading on desktop, in the sand lead under
+   the title row; the title row names the area. Managers have no sand lead. */
 @media(min-width:64em) {
-  html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead{ display:none; }
+  html[data-brand="v2"][data-brand-v3] .v3-owner-shell .shell-phone-lead{ display:block; padding:16px 20px; margin:0 0 16px; border-radius:var(--r-lg); }
+  html[data-brand="v2"][data-brand-v3] .v3-owner-shell .page-title-desk{ font-size:1rem; font-weight:600; color:var(--c-text-2); }
 }

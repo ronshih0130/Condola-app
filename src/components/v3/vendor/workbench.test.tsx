@@ -62,11 +62,18 @@ test("V-HOME / VEN-14-AC1…AC3: two cards, approved labels and the note, outlin
   for (const word of BANNED) assert.ok(!zh.includes(word), word);
 });
 
-test("V-HOME with one card empty keeps that card with its approved empty sentence; both empty is V-EMPTY", () => {
+test("V-HOME-ONE (round 7 batch 4): one empty card keeps its title + one line, no illustration, note only with rows; both empty is V-EMPTY", () => {
+  const card = (markup: string, id: string) => markup.slice(markup.indexOf(`data-testid="${id}"`), markup.indexOf("</section>", markup.indexOf(`data-testid="${id}"`)));
   const noPay = html(<VendorHome jobs={jobs} payments={[]} locale="zh-TW" />);
-  assert.ok(noPay.includes("還沒有待收款紀錄")); assert.doesNotMatch(noPay, /這是已記錄的應付狀態/);
+  assert.ok(card(noPay, "vendor-home-payments").includes('<h2 id="vendor-home-payments">待收款紀錄</h2><p class="vendor-card-empty">還沒有待收款紀錄</p>'));
+  assert.doesNotMatch(noPay, /這是已記錄的應付狀態|data-v3-illustration|<button/);
+  assert.equal((noPay.match(/data-testid="vendor-job-row"/g) ?? []).length, 2);
   const noJobs = html(<VendorHome jobs={[]} payments={payments} locale="zh-TW" />);
-  assert.ok(noJobs.includes("管理方派工給你後，案件會出現在這裡。")); assert.ok(noJobs.includes("NT$2,400"));
+  assert.ok(card(noJobs, "vendor-home-jobs").includes('<h2 id="vendor-home-jobs">未結案件</h2><p class="vendor-card-empty">目前沒有未結案件</p>'));
+  assert.doesNotMatch(noJobs, /管理方派工給你後|data-v3-illustration/, "the V-JOBS sentence and drawing belong to the full-page empty states");
+  assert.ok(noJobs.includes("NT$2,400")); assert.ok(noJobs.includes("這是已記錄的應付狀態，不是代付款。"));
+  const en = html(<VendorHome jobs={[]} payments={payments} locale="en" />);
+  assert.ok(en.includes('<p class="vendor-card-empty">No open jobs</p>'));
   const empty = html(<VendorHome jobs={[]} payments={[]} locale="zh-TW" />);
   assert.equal(empty, `<div class="v3-vendor-workbench" data-testid="vendor-home">${html(<VendorEmpty locale="zh-TW" />)}</div>`);
 });
@@ -194,15 +201,32 @@ test("OV-SH-NOTI: a signed-in vendor has no notification page, so no bell and no
   assert.doesNotMatch(markup, /data-testid="shell-bell"|通知|notifications/);
 });
 
-test("Shell titles and the current area follow the route (V-HOME 工作台, V-JOBS 工單, V-RECV 待收款紀錄, 我的帳號)", () => {
-  for (const [path, area, title] of [["/vendor-account", "home", "工作台"], ["/vendor-account/jobs", "jobs", "工單"],
-    ["/vendor-account/payments", "payments", "待收款紀錄"], ["/vendor-account/account", "account", "我的帳號"]] as const) {
+test("OV-SH-DESK-HEAD: the title row names the area, the sand lead keeps the phone heading (V-RECV 收款 / 待收款紀錄)", () => {
+  for (const [path, area, desk, lead] of [["/vendor-account", "home", "工作台", "工作台"], ["/vendor-account/jobs", "jobs", "工單", "工單"],
+    ["/vendor-account/payments", "payments", "收款", "待收款紀錄"], ["/vendor-account/account", "account", "我的帳號", "我的帳號"]] as const) {
     const markup = renderShell({ path });
-    assert.ok(markup.includes(`<div class="shell-phone-lead"><h1>${title}</h1></div>`), path);
-    assert.ok(markup.includes(`<span class="page-title-desk">${title}</span>`), path);
+    assert.ok(markup.includes(`<div class="shell-phone-lead"><h1>${lead}</h1></div>`), path);
+    assert.ok(markup.includes(`<span class="page-title-desk">${desk}</span>`), path);
     assert.match(markup, new RegExp(`data-area="${area}" class="on" aria-current="page"`));
     if (area === "account") assert.match(markup, /data-area="more" class="on" aria-current="page"/);
   }
+  const en = renderShell({ path: "/vendor-account/payments", locale: "en" });
+  assert.ok(en.includes('<span class="page-title-desk">Payments</span>')); assert.ok(en.includes('<div class="shell-phone-lead"><h1>Awaiting payment</h1></div>'));
+});
+
+test("OV-SH-DESK-HEAD CSS: owner/vendor show the sand lead on desktop (managers have none); O-HOME's sentence is that lead; 44px kept", () => {
+  const shellCss = source("public/brand/v3/shell.css"), ownerCss = source("public/brand/v3/owner.css");
+  const desktop = shellCss.slice(shellCss.lastIndexOf("@media(min-width:64em) {"));
+  assert.match(desktop, /\.v3-owner-shell \.shell-phone-lead\{ display:block;/);
+  assert.match(desktop, /\.v3-owner-shell \.page-title-desk\{ font-size:1rem;/);
+  assert.doesNotMatch(shellCss, /\.v3-shell \.shell-phone-lead\{ display:none; \}/);
+  assert.match(ownerCss, /\.v3-owner-shell:has\(\.v3-owner-home\) \.shell-phone-lead \{ display:none; \}/);
+  assert.match(ownerCss, /\.v3-owner-shell \.v3-owner-home > h2 \{ background:var\(--c-tint-soft\); color:var\(--c-text\);/);
+  for (const css of [shellCss, ownerCss]) assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b/i);
+  // Managers render no sand lead at all, so the desktop rule cannot reach them.
+  const managerShell = source("src/components/v3/shell/shared-shell.tsx");
+  assert.match(managerShell, /\{party !== "m" \? <div className="shell-phone-lead"><h1>\{lead \?\? title\}<\/h1><\/div> : null\}/);
+  assert.match(source("public/brand/v3/vendor.css"), /\.vendor-action \{[^}]*min-width:44px; min-height:44px/);
 });
 
 test("OV-SH-MORE (ven-more): 我的帳號 only; 登入與歸戶 stays hidden until its page is live", () => {
