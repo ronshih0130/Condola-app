@@ -208,6 +208,9 @@ function pageMocks(v3: boolean, pending = [row]) {
     "@/server/repair-approval": { repairApprovalsEnabled: async () => true, ownerPending: async () => pending.map(r => ({ ticket_id: r.ticketId })), ownerHistory: async () => [] },
     "@/server/repair-rules": { isUuid: (id: string) => /^[0-9a-f-]{36}$/.test(id) },
     "./approval-cards": { ApprovalCards: Stub }, "../approval-cards": { ApprovalHistoryCards: Stub },
+    // B-093 (OWN-35-AC2): under brand_v3 a decided ticket renders the RO-DECIDED read-only view.
+    "@/components/v3/o/decided/decided": { DecidedLoading: Stub },
+    "@/components/v3/o/decided/page": { DecidedTicketPage: ({ ticketId }: { ticketId: string }) => <i data-decided-view={ticketId} /> },
     "next/navigation": { redirect: (url: string) => { throw new Error(`REDIRECT:${url}`); }, notFound: () => { throw new Error("NOT_FOUND"); } },
   };
 }
@@ -248,6 +251,7 @@ test("OQ-055 / O-EST: ON redirects list and pending detail; decided and unknown 
   for (const id of ["44444444-4444-4444-8444-444444444444", "55555555-5555-4555-8555-555555555555"]) {
     const html = renderToStaticMarkup(await detail({ params: Promise.resolve({ ticketId: id }) }));
     assert.doesNotMatch(html, /<form|<button|owner-home-v3/);
+    assert.ok(html.includes(`data-decided-view="${id}"`));
   }
 });
 

@@ -11,6 +11,7 @@ import { OwnerNav } from "@/components/owner-nav";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { ownerPropertyNames } from "@/server/queries";
+import { repairApprovalsEnabled } from "@/server/repair-approval";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +28,11 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
     const firm = await ownerPrivacy(session.orgId);
     const admission = await centerSessionAdmission(session);
     const receiptTitle = await ownerReceiptTitleView(session);
+    // RO-MORE / OV-SH-MORE: 核准紀錄 only while its page is live for the org; a failed read hides it.
+    const decided = await repairApprovalsEnabled(session.orgId).catch(() => false);
     return <OwnerShellV3 locale={session.locale} name={session.name} firm={firm.name}
       canSwitchToTenant={Boolean(session.portals?.owner && session.portals.tenant)}
-      navigation={ownerNavigationV3(session, properties, repairPolicyIds, admission, Boolean(receiptTitle))}>{children}</OwnerShellV3>;
+      navigation={ownerNavigationV3(session, properties, repairPolicyIds, admission, Boolean(receiptTitle), decided)}>{children}</OwnerShellV3>;
   }
   return <OwnerNav properties={properties} repairPolicyIds={repairPolicyIds} {...(v2 ? { v2: true } : {})}>{children}</OwnerNav>;
 }
