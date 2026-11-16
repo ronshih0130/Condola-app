@@ -136,6 +136,41 @@ BEGIN
 END $p015_owner_gateways$;
 SQL
 
+# B-104 service-only helper ACL/config probe (app is deliberately not RPC-exposed).
+psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+DO $b104_helpers$
+DECLARE signature text; fn record; table_name text; role_name text;
+BEGIN
+  FOREACH signature IN ARRAY ARRAY[
+    'app.b104_current_repair_version(uuid,uuid)',
+    'app.b104_vendor_command_exists(uuid,uuid,uuid)',
+    'app.b104_vendor_latest_event(uuid,uuid,uuid,uuid)'
+  ] LOOP
+    SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+    IF NOT fn.prosecdef OR fn.provolatile <> 's'
+      OR fn.proowner <> 'postgres'::regrole
+      OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+      OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+      OR has_function_privilege('anon',fn.oid,'EXECUTE')
+      OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+      OR EXISTS (SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) acl
+        WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') THEN
+      RAISE EXCEPTION 'B-104 helper ACL/config mismatch: %',signature;
+    END IF;
+  END LOOP;
+  FOREACH table_name IN ARRAY ARRAY[
+    'b013_estimate_heads','b013_estimate_versions','b013_estimate_decisions',
+    'b013_repair_emergencies','b013_repair_appointments','b013_repair_commands','b013_repair_event_outbox'
+  ] LOOP
+    FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+      IF has_table_privilege(role_name,('app.'||table_name)::regclass,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+        RAISE EXCEPTION 'B-104 private table privilege leaked: % %',role_name,table_name;
+      END IF;
+    END LOOP;
+  END LOOP;
+END $b104_helpers$;
+SQL
+
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"
 if [[ -f "$default_file" ]]; then
   psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'

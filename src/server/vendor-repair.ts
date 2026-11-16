@@ -189,8 +189,7 @@ export async function orgVendorDispatchEnabled(orgId: string) {
 export async function currentRepairVersionId(client: Client, orgId: string, ticketId: string) {
   assertIdentifiers(orgId, ticketId);
   const row = await maybe<{ version_id: string | null }>(client,
-    "SELECT h.current_version_id::text AS version_id"
-    + " FROM app.b013_estimate_heads h WHERE h.org_id=$1::uuid AND h.ticket_id=$2::uuid",
+    "SELECT app.b104_current_repair_version($1::uuid,$2::uuid)::text AS version_id",
     [orgId, ticketId],
   );
   if (row?.version_id) assertIdentifiers(row.version_id);

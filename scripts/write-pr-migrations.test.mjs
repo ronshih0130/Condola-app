@@ -37,6 +37,10 @@ test("migration manifest includes every changed SQL file and classifies unsafe c
     assert.match(b030, /revokes/);
     assert.match(b030, /grants role-specific gateway EXECUTE/);
     assert.match(b030, /assignment trigger/);
+    const b104 = manifest.split("\n").find(line => line.startsWith("| 20261115160000_b104_vendor_b013_read_helpers.sql |"));
+    assert.ok(b104);
+    assert.match(b104, /\| A \| yes \|/);
+    assert.match(b104, /ACLs apply only to these new functions/);
     const p015 = manifest.split("\n").find(line => line.startsWith("| 20261115130000_b013_current_owner_authority.sql |"));
     assert.ok(p015);
     assert.match(p015, /\| A \| no \|/);

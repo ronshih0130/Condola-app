@@ -197,6 +197,9 @@ test("server brand reader failure falls back to legacy without a new error or fa
 
 test("estimate and document routes retain baseline bytes; this slice creates no new write path", () => {
   for (const file of ["src/app/v/[token]/notifications/page.tsx", "src/app/v/[token]/estimate/page.tsx", "src/app/v/[token]/estimate/estimate-form.tsx", "src/app/v/documents/[token]/page.tsx", "src/components/vendor-documents-panel.tsx", "src/server/vendor-repair.ts", "src/app/v/[token]/vendor-job-controls.tsx"]) {
-    assert.equal(source(file), execFileSync("git", ["show", `3e87c93:${file}`], { encoding: "utf8" }));
+    // B-104 (app #182, PR-024 a) later replaced vendor-repair.ts's direct B-013 read with a service-only helper;
+    // that reviewed change is its baseline. Every other file must still equal the pre-V-TOKEN source.
+    const baseline = file === "src/server/vendor-repair.ts" ? "da4188a" : "3e87c93";
+    assert.equal(source(file), execFileSync("git", ["show", `${baseline}:${file}`], { encoding: "utf8" }));
   }
 });

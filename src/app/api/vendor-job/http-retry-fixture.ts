@@ -44,18 +44,17 @@ export async function exerciseHttpRetry(
       environment: "sandbox", plan_tier: "beta", feature_flags: { vendor_dispatch: vendorEnabled },
     }] };
     if (sql.includes("public.platform_settings")) return { rows: [{ enabled: approvalsEnabled }] };
-    if (sql.includes("app.b013_estimate_heads")) {
+    if (sql.includes("app.b104_current_repair_version(")) {
       restrictedReads++;
       assert.deepEqual(values, [orgId, ticketId]);
       return { rows: [{ version_id: headVersionId }] };
     }
-    if (sql.includes("FROM app.b013_repair_commands c")) {
+    if (sql.includes("app.b104_vendor_command_exists(")) {
       restrictedReads++;
       assert.ok(pending.has(this), "ledger lookup must run inside a transaction");
       assert.deepEqual(values.slice(0, 2), [orgId, jobId]);
-      assert.match(sql, /coalesce\(j\.created_by,j\.id\)=c\.actor_id/);
       const key = JSON.stringify(values);
-      return { rows: committed.has(key) ? [{ found: 1 }] : [] };
+      return { rows: [{ found: committed.has(key) }] };
     }
     if (sql.includes("FROM ticket_attachments a")) {
       restrictedReads++;
