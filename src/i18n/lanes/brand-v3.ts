@@ -97,6 +97,8 @@ const todayCopy = {
     // accountant frame drops the 對帳／月結 numbers; the manager frame wins). 處理中 is drawn nowhere, so it has no entry.
     confirmCostSummary: "核對 {count} 筆費用", dispatchSummary: "派工 {count} 件", reEstimateSummary: "重新估價 {count} 件",
     replySummary: "回覆 {count} 則", bankSummary: "對帳 {count} 筆", monthCloseSummary: "月結 {count} 個月",
+    // T-SETUP (Round 7 batch 3, GS-47; approved 2026-11-16 by standing delegation): new words verbatim from screens.md.
+    setupHeadline: "{name}早，還差 {k} 步就設定好了。", setupHeadlineNoName: "還差 {k} 步就設定好了。",
   },
   en: {
     title: "Today", greeting: "Good morning, {name}. ", greetingOnly: "Good morning, {name}.", headline: "It's your turn on {count} items today.",
@@ -126,6 +128,7 @@ const todayCopy = {
     monthClose: "Close the month", monthCloseTitle: "Month-close", monthCloseLine: "Month {month} not closed yet · {count} owners waiting for statements",
     confirmCostSummary: "Check {count} costs", dispatchSummary: "Dispatch {count} items", reEstimateSummary: "Re-estimate {count} items",
     replySummary: "Reply to {count} messages", bankSummary: "Reconcile {count} lines", monthCloseSummary: "Close {count} month",
+    setupHeadline: "Good morning, {name}. {k} more steps and setup is done.", setupHeadlineNoName: "{k} more steps and setup is done.",
   },
 };
 export function brandV3TodayCopy(locale: Locale) { return todayCopy[locale]; }
