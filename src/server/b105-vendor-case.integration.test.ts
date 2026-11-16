@@ -2,7 +2,7 @@ import "next/dist/server/node-environment-baseline";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -213,9 +213,11 @@ test("each gate on its own denies an otherwise admitted bearer, with no writes; 
     ["platform vendor_job_v3 at its seeded default", () => db.query("UPDATE public.platform_settings SET value='{\"enabled\":false,\"allowed_org_ids\":[]}'::jsonb WHERE key='vendor_job_v3'"), () => setPlatform("vendor_job_v3", [ORG_ID])],
     ["platform vendor_job_v3 row absent", () => db.query("DELETE FROM public.platform_settings WHERE key='vendor_job_v3'"), () => setPlatform("vendor_job_v3", [ORG_ID])],
     ["platform vendor_job_v3 ON but org not allowlisted", () => setPlatform("vendor_job_v3", [ORG2_ID]), () => setPlatform("vendor_job_v3", [ORG_ID])],
+    ["platform vendor_job_v3 disabled, ORG_ID still allowlisted", () => setPlatform("vendor_job_v3", [ORG_ID], false), () => setPlatform("vendor_job_v3", [ORG_ID])],
     ["org vendor_dispatch false", () => orgFlags(ORG_ID, { vendor_dispatch: false }), () => orgFlags(ORG_ID, { vendor_dispatch: true })],
     ["org vendor_link false", () => orgFlags(ORG_ID, { vendor_link: false }), () => orgFlags(ORG_ID, { vendor_link: true })],
     ["platform vendor_link disabled", () => setPlatform("vendor_link", [ORG_ID], false), () => setPlatform("vendor_link", [ORG_ID])],
+    ["platform vendor_link ON but ORG_ID off its allowlist", () => setPlatform("vendor_link", [ORG2_ID]), () => setPlatform("vendor_link", [ORG_ID])],
     ["org brand_v3 false", () => orgFlags(ORG_ID, { brand_v3: false }), () => orgFlags(ORG_ID, { brand_v3: true })],
   ];
   for (const [label, apply, restore] of gates) {
@@ -397,8 +399,8 @@ function upload(f: Fixture) {
 }
 
 test("confirmVendorCasePhoto: valid credentials attach atomically with the set; close, decline and races leave nothing", async () => {
-  let inspected = 0; const removed: string[] = [];
-  const deps = { inspect: async () => { inspected++; return { size: 2048, mime: "image/jpeg", header: JPEG }; }, remove: async (p: string) => { removed.push(p); } };
+  let inspected = 0;
+  const deps = { inspect: async () => { inspected++; return { size: 2048, mime: "image/jpeg", header: JPEG }; } };
   const f = await fixture();
   await accept(f.token);
   // Control: a valid upload is attached with its set in one write.
@@ -446,7 +448,27 @@ test("confirmVendorCasePhoto: valid credentials attach atomically with the set; 
   const pendingBefore = await snapshot(e);
   await assert.rejects(confirmVendorCasePhoto(e.token, "after", upload(e).input, deps), notFound);
   assert.equal(await snapshot(e), pendingBefore);
-  assert.deepEqual(removed, []);
+  // A rejected object is refused with no row and is not deleted by the request (no check-then-delete race).
+  const bad = upload(e);
+  await accept(e.token);
+  const acceptedBefore = await snapshot(e);
+  await assert.rejects(confirmVendorCasePhoto(e.token, "after", bad.input, { inspect: async () => ({ size: 2048, mime: "image/png", header: JPEG }) }),
+    (error: unknown) => error instanceof FlowError && error.key === "errors.photoType");
+  assert.equal(await snapshot(e), acceptedBefore);
+  assert.doesNotMatch(readFileSync("src/server/b105-vendor-case.ts", "utf8"), /removeRepairObject|deps\.remove/);
+});
+
+test("a closed, undecided job: the SQL decision gateway refuses accept and decline and writes no row", async () => {
+  const f = await fixture();
+  await db.query("UPDATE public.maintenance_tickets SET status='closed' WHERE id=$1", [f.ticket]);
+  assert.equal((await ready(f.token)).decision, null, "still readable, never decided");
+  const before = await snapshot(f);
+  await assert.rejects(decideSql(f.token, "accepted"), refused, "SQL accept");
+  await assert.rejects(decideSql(f.token, "accepted", { date: "2026-12-01" }), refused, "SQL accept with a date");
+  await assert.rejects(decideSql(f.token, "declined"), refused, "SQL decline");
+  await assert.rejects(decideSql(f.token, "declined", { reason: "結案了" }), refused, "SQL decline with a reason");
+  assert.deepEqual(await decisionRows(f.job), []);
+  assert.equal(await snapshot(f), before);
 });
 
 test("closed case (GS-51): read only with staff-shared photos visible; a reopen keeps the same link (GS-29)", async () => {

@@ -2,7 +2,7 @@ import { brandV2Enabled } from "./brand-v2";
 import { maybe, svc } from "./db";
 import { FlowError } from "./errors";
 import { acceptPhotoObject, assertPhotoMeta, isTicketPhotoPath, photoFileId } from "./repair-rules";
-import { inspectRepairObject, removeRepairObject, vendorUploadGrantMatches } from "./ticket-photos";
+import { inspectRepairObject, vendorUploadGrantMatches } from "./ticket-photos";
 import { recordStoredFileUsage } from "./usage-events";
 import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
 
@@ -158,10 +158,13 @@ export async function decideVendorCase(token: string, input: DecisionInput): Pro
  * runs app.b105_vendor_attach_photo, which writes the files row and the attachment with its set together, and
  * records stored-file usage. A refusal or failure leaves no file row or attachment behind. Retrying the same
  * upload returns the same attachment.
+ *
+ * A rejected object is never deleted here: a check-then-delete cannot be serialized with a concurrent valid
+ * confirm of the same path (its byte check may already have passed), so deleting could remove bytes a recorded
+ * attachment uses. An unreferenced object stays in the private bucket until a storage orphan sweep removes it.
  */
-const DISCARD = new Set(["errors.photoLimit", "errors.photoType", "errors.photoSize", "errors.photoStorage", "errors.photoHeic"]);
 export type CasePhotoInput = { path: string; fileName: string; mime: string; size: number; uploadToken: string };
-type CasePhotoDeps = { inspect?: typeof inspectRepairObject; remove?: typeof removeRepairObject };
+type CasePhotoDeps = { inspect?: typeof inspectRepairObject };
 
 export async function confirmVendorCasePhoto(token: string, phase: CasePhase, input: CasePhotoInput, deps: CasePhotoDeps = {}) {
   if (!vendorTokenAcceptable(token) || (phase !== "before" && phase !== "after")) throw new FlowError("errors.notFound");
@@ -177,22 +180,10 @@ export async function confirmVendorCasePhoto(token: string, phase: CasePhase, in
   const fileId = photoFileId(input.path);
   if (!fileId || !isTicketPhotoPath(input.path, job.org_id, job.ticket_id)
     || !vendorUploadGrantMatches(hash, job.ticket_id, input.path, input.uploadToken ?? "")) throw new FlowError("errors.forbidden");
-  let accepted: { size: number; mime: string };
-  let fileName: string;
-  try {
-    const meta = assertPhotoMeta({ fileName: input.fileName, mime: input.mime, size: input.size });
-    fileName = meta.fileName;
-    const stored = await (deps.inspect ?? inspectRepairObject)(input.path);
-    accepted = acceptPhotoObject({ size: stored.size, mime: stored.mime, header: stored.header }, meta.mime);
-  } catch (error) {
-    // A rejected object that no file row references is this grant's own orphan: remove it, as the existing confirm does.
-    if (error instanceof FlowError && DISCARD.has(error.key)) {
-      const referenced = await svc(null, client => maybe<{ id: string }>(client,
-        "SELECT id::text FROM public.files WHERE storage_path=$1", [input.path]));
-      if (!referenced) await (deps.remove ?? removeRepairObject)(input.path);
-    }
-    throw error;
-  }
+  const meta = assertPhotoMeta({ fileName: input.fileName, mime: input.mime, size: input.size });
+  const stored = await (deps.inspect ?? inspectRepairObject)(input.path);
+  const accepted = acceptPhotoObject({ size: stored.size, mime: stored.mime, header: stored.header }, meta.mime);
+  const fileName = meta.fileName;
   let result: { status: string; id?: string; replayed?: boolean };
   try {
     result = await svc(null, async client => {
