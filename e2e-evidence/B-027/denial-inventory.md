@@ -124,6 +124,8 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/vendor-job-completion/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-job-response/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/[token]/photos/[id]/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-jobs/case-decision/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-jobs/case-photos/confirm/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/photos/confirm/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/photos/sign/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/version/route.ts:1 | Enumerated only; outside representative selection |

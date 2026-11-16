@@ -34,7 +34,7 @@ const pageSource = source("src/app/v/[token]/page.tsx");
 const legacyNotificationSource = execFileSync("git", ["show", "3e87c93:src/components/notification-center-entry.tsx"], { encoding: "utf8" });
 const baseline = execFileSync("git", ["show", "3e87c93:src/app/v/[token]/page.tsx"], { encoding: "utf8" });
 
-type Scenario = { admission?: "enabled" | "busy" | "disabled" | "denied"; enabled?: boolean; v2?: boolean; locale?: i18n.Locale; job?: VendorJobPage | null; state?: Record<string, unknown> | null; line?: boolean; match?: boolean };
+type Scenario = { admission?: "enabled" | "busy" | "disabled" | "denied"; enabled?: boolean; v2?: boolean; locale?: i18n.Locale; job?: VendorJobPage | null; state?: Record<string, unknown> | null; line?: boolean; match?: boolean; vendorCase?: unknown };
 function page(text: string, scenario: Scenario) {
   const locale = scenario.locale ?? "zh-TW";
   const v2 = scenario.v2 ?? false;
@@ -85,6 +85,10 @@ function page(text: string, scenario: Scenario) {
     } },
     "@/components/ui": { ErrorBanner: ({ error }: { error?: string }) => error ? <p role="alert">{error}</p> : null },
     "@/server/actions": { actionVendorReport: "/existing-vendor-report" },
+    // B-105: the case loader answers null (vendor_job_v3 OFF) unless a scenario supplies a case.
+    "@/server/b105-vendor-case": { loadVendorCase: async (value: string) => { assert.equal(value, token); calls.push("case"); return scenario.vendorCase ?? null; },
+      vendorCaseStage: (value: { decision: string | null }) => value.decision === "accepted" ? "open" : "accept" },
+    "@/components/v3/vendor/vendor-case": { VendorCaseView: (props: { stage: string; heading: string; company: string }) => <section data-testid="vendor-case" data-stage={props.stage}>{props.heading}|{props.company}</section> },
     "./vendor-job-controls": { VendorJobControls: ({ children }: { children: React.ReactNode }) => <section data-testid="appointment-controls">{children}</section> },
     "./vendor-line-entry": { VendorLineEntry: () => <aside data-testid="line-entry" /> },
   };
@@ -215,4 +219,28 @@ test("B101 entry appears in both approved slots only when the combined matching 
  assert.ok(!off.includes('data-testid="line-match-entry"'));
  const legacy = await page(pageSource, { enabled: false, match: true }).html();
  assert.ok(!legacy.includes('data-testid="line-match-entry"'));
+});
+
+// B-105 (vendor_job_v3): an admitted case replaces only the job content; bar, tabs and token limits stay.
+test("B-105 case view replaces the V-TOKEN job content; no legacy report, appointment or upload forms", async () => {
+  const value = { company: "Company A", closed: false, decision: null, agreedCompletionOn: null, scheduledOn: null, ownerWaitVersion: null, estimates: false, photos: [] };
+  const shared = { ...job, title: "", vendorLink: { capability: "write" as const, sharingApproved: true, typeFields: [] } };
+  const current = page(pageSource, { enabled: true, job: shared, state: { locked: false, requestId: "request", versionId: "version" }, vendorCase: { state: "ready", value } });
+  const html = await current.html();
+  assert.deepEqual(current.calls, ["job", "brand:true", "case", "line-match"], "no B-024 state read under the case view");
+  assert.match(html, /data-testid="v-token-v3"/);
+  assert.match(html, /data-testid="vendor-case" data-stage="accept">Property A\|Company A</);
+  for (const marker of ["vendor-submit", "vendor-propose", "vendor-reject", "vendor-complete", "vendor-photo", "existing-error"]) assert.ok(!html.includes(marker), marker);
+  assert.doesNotMatch(html, /v-token-warning|>回報進度</);
+  assert.equal((html.match(/aria-haspopup="dialog"/g) ?? []).length, 3, "V-TOKEN-TABS stay");
+  const unavailable = await page(pageSource, { enabled: true, job: shared, vendorCase: { state: "unavailable" } }).html();
+  assert.match(unavailable, /data-stage="unavailable"/);
+  const legacy = page(pageSource, { enabled: true, vendorCase: { state: "ready", value } });
+  assert.doesNotMatch(await legacy.html(), /vendor-case/);
+  assert.ok(!legacy.calls.includes("case"), "non-enhanced links never ask for the case");
+  for (const sharingApproved of [false]) {
+    const unshared = page(pageSource, { enabled: true, vendorCase: { state: "ready", value }, job: { ...job, vendorLink: { capability: "write", sharingApproved, typeFields: [] } } });
+    assert.doesNotMatch(await unshared.html(), /vendor-case/);
+    assert.ok(!unshared.calls.includes("case"), "unshared links never ask for the case");
+  }
 });

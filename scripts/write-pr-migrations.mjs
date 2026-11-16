@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116160000_b105_vendor_case.sql": {
+    addOnly: true,
+    reason: "B-105 / R9-VEN Round 7 batch 3 (GS-25, GS-26, GS-27, GS-49, GS-51; MGT-104-AC2/AC4): vendor case accept/decline and before/after photo sets on /v/[token]. Adds B-105's own default-OFF gate (platform_settings.vendor_job_v3 seeded {enabled:false, allowed_org_ids:[]} with ON CONFLICT DO NOTHING; no existing value changed), one private table app.b105_vendor_job_decisions (RLS on, all privileges revoked from PUBLIC/anon/authenticated/service_role), and migration-owned SECURITY DEFINER functions with search_path pg_catalog, pg_temp: service-only gateways app.b105_vendor_case (read), app.b105_vendor_decide and app.b105_vendor_photo_phase (writes), plus internal helpers app.b105_enabled and app.b105_vendor_write_job with no EXECUTE for any API role. Admission is the token bearer (app.open_vendor_job) plus the enhanced case-collaboration link rules; the photo writer only sets ticket_attachments.phase on this job's own non-internal upload while the case is open and accepted. No existing function, table grant, policy, column, constraint or data change; flags stay OFF; 0 outbound. Not RPC-exposed.",
+  },
   "supabase/migrations/20261116120000_pr029_default_privileges.sql": {
     addOnly: false,
     reason: "PR-029 (a), Ron 2026-11-16 ~02:20 PT (relayed): ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, PUBLIC, so new tables stop inheriting the Supabase anon default found on staging. Not add-only (it removes default privileges), but a no-op on databases without a postgres role (CI/local) and fails closed if the current user cannot act for postgres. Existing table grants, authenticated/service_role defaults, sequences, functions, policies, data and flags unchanged.",

@@ -14,6 +14,8 @@ import { loadVendorJob } from "@/server/vendor-repair";
 import { resolveVendorJobState } from "@/server/vendor-job";
 import { requestPrefs } from "@/server/session";
 import { vendorLineEntryEnabled } from "@/server/line/vendor-entry";
+import { loadVendorCase, vendorCaseStage } from "@/server/b105-vendor-case";
+import { VendorCaseView } from "@/components/v3/vendor/vendor-case";
 import { VendorJobControls } from "./vendor-job-controls";
 import { VendorLineEntry } from "./vendor-line-entry";
 
@@ -41,9 +43,23 @@ export default async function VendorJobPage({
     );
   }
   const tokenBrand = await vendorTokenBrand(token, !job.vendorLink || job.vendorLink.sharingApproved);
+  // B-105: the RV case replaces the V-TOKEN job content only when vendor_job_v3 admits this shared link.
+  const vendorCase = tokenBrand && job.vendorLink?.sharingApproved ? await loadVendorCase(token) : null;
   // Legacy VendorLinkDetails hides its notification child until sharing is approved.
   const notificationEntry = tokenBrand && (!job.vendorLink || job.vendorLink.sharingApproved)
     ? await resolveVendorNotificationEntry(token) : null;
+  if (tokenBrand && vendorCase) {
+    const heading = [tokenBrand.property, job.title].filter(Boolean).join("・") || t("i_vendor_page_title");
+    const caseView = vendorCase.state === "ready" ? <VendorCaseView locale={prefs.locale} token={token} heading={heading}
+      company={vendorCase.value.company} stage={vendorCaseStage(vendorCase.value)} presetDate={null}
+      scheduledOn={vendorCase.value.scheduledOn} ownerWaitVersion={vendorCase.value.ownerWaitVersion}
+      estimates={vendorCase.value.estimates} /> : <VendorCaseView locale={prefs.locale} token={token} heading={heading}
+      company="" stage="unavailable" presetDate={null} scheduledOn={null} ownerWaitVersion={null} estimates={false} />;
+    const caseMatch = await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;
+    return <VendorTokenShell locale={prefs.locale} context={tokenBrand} notificationHref={notificationEntry?.href ?? null}
+      loginEntry={caseMatch} title={job.title} address={job.address} window={job.window} status=""
+      reported={false} canReport={false} caseView={caseView}>{null}</VendorTokenShell>;
+  }
   const vendorState = job.vendorLink && (!job.vendorLink.sharingApproved || job.vendorLink.capability !== "write")
     ? null : await resolveVendorJobState(token);
   // B-035: only while every strict vendor LINE gate is ON. OFF keeps the original child slot, so even useId output is unchanged.
