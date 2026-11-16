@@ -110,7 +110,7 @@ export function TopupSheet({ submit = recordDepositTopupAction, leaseId, settlem
     const outcome = await sender.current!.send({ leaseId, settlementId }, state.key,
       { amountMinor: amount.minor, receivedOn: state.date, note: state.note.trim() || null });
     if (outcome === "busy") return;
-    dispatch({ type: "done", outcome, nextKey: outcome === "invalid" ? newRequest() : undefined });
+    dispatch({ type: "done", outcome });
     // saved, or landed (conflict: an earlier attempt with this key was recorded): show it, sheet closed.
     if (outcome === "saved" || outcome === "landed") router.refresh();
   }

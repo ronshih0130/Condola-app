@@ -26,7 +26,7 @@ export type TopupSheetAction =
   | { type: "start" }
   /** Input the sheet refuses before sending (above the cap, a future date): nothing was sent. */
   | { type: "refused" }
-  | { type: "done"; outcome: TopupOutcome; nextKey?: string };
+  | { type: "done"; outcome: TopupOutcome };
 
 export const closedSheet: TopupSheetState = { open: false, amount: "", date: "", note: "", saving: false, failed: false, key: null };
 
@@ -45,7 +45,8 @@ export function topupSheetReducer(state: TopupSheetState, action: TopupSheetActi
       return { ...state, saving: false, failed: true };
     case "done":
       if (action.outcome === "saved" || action.outcome === "landed") return closedSheet;
-      if (action.outcome === "invalid") return { ...state, saving: false, failed: true, key: action.nextKey ?? state.key };
+      // Every other outcome keeps the key, including `invalid`: the gateway validates before it looks the key up, so an
+      // earlier attempt with this key may already have landed. Reusing it means the next send records once or answers conflict.
       return { ...state, saving: false, failed: true };
   }
 }
