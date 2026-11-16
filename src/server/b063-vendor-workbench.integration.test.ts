@@ -73,11 +73,15 @@ test("B-063 vendor workbench: own linked jobs only, amounts waiting, denial matr
   const cookieSpy = mock.method(nextHeaders, "cookies", async () => ({ get: (key: string) => jar.has(key) ? { value: jar.get(key)! } : undefined,
     set: () => {}, delete: () => {}, has: (key: string) => jar.has(key), getAll: () => [] }) as never);
   const headerSpy = mock.method(nextHeaders, "headers", async () => new Headers({ "x-pathname": path }) as never);
+  // App pages use the automatic JSX runtime under Next; tsx compiles them with the classic one here.
+  const runtime = globalThis as typeof globalThis & { React?: typeof React }; const previousReact = runtime.React; runtime.React = React;
   try {
     delete process.env.BRAND_V2;
     await sql("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,'workbench1@example.test',now()),($2,'workbench2@example.test',now())", [user, other]);
-    for (const [userId, token] of [[admin.userId, randomUUID()], [user, credential], [other, otherCredential]])
-      await sql("INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [randomUUID(), userId, hash(token)]);
+    // Staff dispatch checks the actor's live auth session, so the staff fixtures use their own session ids.
+    for (const [id, userId, token] of [[admin.sessionId, admin.userId, randomUUID()], [coast.sessionId, coast.userId, randomUUID()],
+      [randomUUID(), user, credential], [randomUUID(), other, otherCredential]])
+      await sql("INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [id, userId, hash(token)]);
     const consent = buildStoredConsent("portal");
     for (const principal of [user, other]) await sql("INSERT INTO consents(user_id,accepted_at,terms_version,privacy_version,source) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [principal, consent.accepted_at, consent.terms_version, consent.privacy_version, consent.source]);
     await sql("UPDATE organizations SET feature_flags=feature_flags||'{\"vendor_dispatch\":true,\"vendor_link\":true}'::jsonb WHERE id=ANY($1::uuid[])", [[ORG_ID, ORG2_ID]]);
@@ -239,6 +243,7 @@ test("B-063 vendor workbench: own linked jobs only, amounts waiting, denial matr
       assert.deepEqual(await waiting(), [], "not confirmed by the company: nothing waiting");
     });
   } finally {
+    runtime.React = previousReact;
     cookieSpy.mock.restore(); headerSpy.mock.restore();
     if (brandEnv === undefined) delete process.env.BRAND_V2; else process.env.BRAND_V2 = brandEnv;
     __setVendorLinkKillSwitchForTests(false);
