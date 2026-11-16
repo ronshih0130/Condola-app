@@ -88,7 +88,7 @@ function readDeps() {
 test("B3A-TODAY / T-ROWS: both groups, uncapped counts, approved turn anatomy and destinations", () => {
   const html = render();
   assert.match(html, /王怡君早，今天輪到你的有 4 件。/);
-  assert.match(html, /確認已繳款 1 筆、詢問續約意願 1 件、提早找租客 1 件、找新租客 1 件。另外 2 件在等租客。/);
+  assert.match(html, /確認 1 筆繳款、詢問 1 份續約、提早找租客 1 件、找新租客 1 件。另外 2 件在等租客。/);
   assert.ok(html.indexOf('id="today-mine-title"') < html.indexOf('id="today-others-title"'));
   assert.match(html, /輪到你・4 件/); assert.match(html, /等別人・2 件/);
   for (const href of ["/m/payments", "/m/rent", "/m/units/parent-unit/invite", "/m/leases/lease-renewal_ask"]) assert.ok(html.includes(`href="${href}"`));

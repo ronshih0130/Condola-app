@@ -70,10 +70,10 @@ const todayCopy = {
     waitingHeadline: "今天沒有輪到你的事。", clearHeadline: "今天都處理好了。", clear: "今天都處理好了",
     failure: "待辦暫時讀不到。", failureDetail: "你的資料都還在，稍後再看一次。", retry: "再試一次",
     sandbox: "這裡的人名、地址和金額都是範例。", mine: "輪到你・{count} 件", others: "等別人・{count} 件",
-    paymentSummary: "確認已繳款 {count} 筆", vacantSummary: "找新租客 {count} 件",
-    renewalSummary: "詢問續約意願 {count} 件", earlySummary: "提早找租客 {count} 件",
+    paymentSummary: "確認 {count} 筆繳款", vacantSummary: "找新租客 {count} 件",
+    renewalSummary: "詢問 {count} 份續約", earlySummary: "提早找租客 {count} 件",
     waitingSummary: "另外 {count} 件在等{parties}。", summaryEnd: "。", separator: "、", separatorDot: "・",
-    partyTenant: "租客", partyOwner: "屋主", partyVendor: "廠商", partyManager: "管理方", partyLast: "和",
+    partyTenant: "租客", partyOwner: "屋主", partyVendor: "廠商", partyLast: "和",
     rentals: "出租與租約", checked: "{areas}都看過了，沒有要處理的事。",
     confirm: "確認已繳款", vacant: "找新租客", renewal: "詢問續約意願", early: "提早找租客",
     yourStep: "輪到你・{step}", reReport: "等租客{name}重新回報", overdueTurn: "等租客{name}繳款",
@@ -93,11 +93,10 @@ const todayCopy = {
     reply: "回覆", replyTitle: "待你回覆", replyLine: "{count} 則・最久 {wait}", waitHours: "{count} 小時", waitDays: "{count} 天",
     bank: "開始對帳", bankTitle: "銀行對帳", bankLine: "{count} 筆銀行明細還沒對上",
     monthClose: "開始月結", monthCloseTitle: "月結", monthCloseLine: "{month} 月還沒月結・{count} 位屋主在等報表",
-    // Supporting-line entries as drawn in the 「今天・全部種類的列都在（經理）」 frame; 處理中 has no drawn entry and
-    // follows the approved T-LINE template 「{動作} {n} 筆／件」.
+    // Supporting-line entries as drawn in the Round 7 batch 2 manager frame 「今天・全部種類的列都在（經理）」 (the
+    // accountant frame drops the 對帳／月結 numbers; the manager frame wins). 處理中 is drawn nowhere, so it has no entry.
     confirmCostSummary: "核對 {count} 筆費用", dispatchSummary: "派工 {count} 件", reEstimateSummary: "重新估價 {count} 件",
-    inProgressSummary: "處理中 {count} 件", replySummary: "回覆 {count} 則", bankSummary: "對帳 {count} 筆", monthCloseSummary: "月結 {count} 個月",
-    messages: "訊息",
+    replySummary: "回覆 {count} 則", bankSummary: "對帳 {count} 筆", monthCloseSummary: "月結 {count} 個月",
   },
   en: {
     title: "Today", greeting: "Good morning, {name}. ", greetingOnly: "Good morning, {name}.", headline: "It's your turn on {count} items today.",
@@ -107,7 +106,7 @@ const todayCopy = {
     paymentSummary: "Confirm {count} payments", vacantSummary: "Find new tenants: {count} items",
     renewalSummary: "Ask about renewal: {count} items", earlySummary: "Find tenants early: {count} items",
     waitingSummary: "Another {count} items are waiting on {parties}.", summaryEnd: ". ", separator: ", ", separatorDot: " · ",
-    partyTenant: "tenants", partyOwner: "owners", partyVendor: "vendors", partyManager: "the management team", partyLast: " and ",
+    partyTenant: "tenants", partyOwner: "owners", partyVendor: "vendors", partyLast: " and ",
     rentals: "Rentals and leases", checked: "{areas} have been checked. Nothing needs action.",
     confirm: "Confirm payment", vacant: "Find a new tenant", renewal: "Ask about renewal", early: "Find a tenant early",
     yourStep: "Your turn · {step}", reReport: "Waiting for the tenant{name} to report again", overdueTurn: "Waiting for the tenant{name} to pay",
@@ -126,8 +125,7 @@ const todayCopy = {
     bank: "Reconcile", bankTitle: "Bank reconciliation", bankLine: "{count} bank lines not matched yet",
     monthClose: "Close the month", monthCloseTitle: "Month-close", monthCloseLine: "Month {month} not closed yet · {count} owners waiting for statements",
     confirmCostSummary: "Check {count} costs", dispatchSummary: "Dispatch {count} items", reEstimateSummary: "Re-estimate {count} items",
-    inProgressSummary: "In progress: {count} items", replySummary: "Reply to {count} messages", bankSummary: "Reconcile {count} lines", monthCloseSummary: "Close {count} month",
-    messages: "Messages",
+    replySummary: "Reply to {count} messages", bankSummary: "Reconcile {count} lines", monthCloseSummary: "Close {count} month",
   },
 };
 export function brandV3TodayCopy(locale: Locale) { return todayCopy[locale]; }

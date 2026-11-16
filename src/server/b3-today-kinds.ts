@@ -19,7 +19,7 @@ export const TODAY_KIND_FLAGS = { reply: "today_dash_msg_reply" } as const;
 export type TodayBank = { state: "off" } | { state: "ready"; count: number; oldestMonth: string | null; since: string | null };
 export type TodayMonthClose = { state: "off" } | { state: "ready"; row: null | { period: string; month: number; owners: number; since: string } };
 export type TodayReply = { state: "off" } | { state: "ready"; threads: number; oldest: string | null };
-type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx };
+type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx; now?: () => Date };
 
 type NativeRole = "admin" | "manager" | "accountant";
 const v3On = (session: Session, deps: Deps) => (deps.v3 ?? brandV3ReadForOrg)(session.orgId);
@@ -65,7 +65,7 @@ export async function todayBankTurn(session: Session, deps: Deps = {}): Promise<
  * still without a non-void statement for that month, the same population as the statement roster's pending rows.
  */
 export const TODAY_MONTH_CLOSE_SQL_FOR_TEST = `WITH cal AS (
-  SELECT (clock_timestamp() AT TIME ZONE o.timezone)::date AS today FROM organizations o WHERE o.id = $1
+  SELECT (coalesce($2::timestamptz, clock_timestamp()) AT TIME ZONE o.timezone)::date AS today FROM organizations o WHERE o.id = $1
 ), prev AS (SELECT today, (date_trunc('month', today) - interval '1 month')::date AS period FROM cal)
 SELECT to_char(prev.period, 'YYYY-MM') AS period, extract(day FROM prev.today)::int > 5 AS due,
   EXISTS (SELECT 1 FROM month_closes m WHERE m.org_id = $1 AND m.period_month = prev.period) AS closed,
@@ -83,7 +83,7 @@ export async function todayMonthCloseTurn(session: Session, deps: Deps = {}): Pr
   assertPerm(viewer, "stmt.view");
   return readKind(viewer, ["month.close", "stmt.view"], ["admin", "accountant"], deps, async (client, admitted) => {
     const row = (await client.query<{ period: string; due: boolean; closed: boolean; owners: number; since: string }>(
-      TODAY_MONTH_CLOSE_SQL_FOR_TEST, [admitted.orgId])).rows[0];
+      TODAY_MONTH_CLOSE_SQL_FOR_TEST, [admitted.orgId, deps.now ? deps.now().toISOString() : null])).rows[0];
     if (!row || !/^\d{4}-\d{2}$/.test(row.period)) throw new Error("Missing month-close calendar");
     // The approved line is 「{月} 月還沒月結・{k} 位屋主在等報表」; k = 0 has no frame (GS-44), so that case has no row.
     return { state: "ready" as const, row: row.due && !row.closed && row.owners > 0

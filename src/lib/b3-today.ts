@@ -18,7 +18,7 @@ export type TodayRow =
   | { type: "bank"; row: { count: number; oldestMonth: string | null; since: string | null } }
   | { type: "monthClose"; row: NonNullable<Extract<TodayMonthClose, { state: "ready" }>["row"]> }
   | { type: "reply"; row: { threads: number; oldest: string | null } };
-export type TodayMoreKind = "payments" | "vacant" | "renewal" | "early" | "overdue" | "repairs" | "reply" | "bank" | "monthClose";
+export type TodayMoreKind = "payments" | "vacant" | "renewal" | "early" | "overdue" | "repairs";
 export type TodayMore = { href: string; count: number; kind: TodayMoreKind };
 export function repairTodayKey(ticketId: string) { return `repair:${ticketId}`; }
 export function rowKey(item: TodayRow): string {
@@ -111,14 +111,11 @@ export function todayOverview({ payments, rentals, overdue, repairs, bank, month
   const others: TodayRow[] = [...(p?.others ?? []).map(row => ({ type: "payment" as const, row })), ...(o?.others ?? []).map(row => ({ type: "overdue" as const, row })),
     ...(fix?.others ?? []).map(row => ({ type: "repair" as const, row }))];
   const shownMine = oldestFirst(mine), shownOthers = oldestFirst(others);
-  const hidden = (shown: TodayRow[], type: TodayRow["type"]) => !shown.some(item => item.type === type);
-  // T-MORE: multi-row kinds keep their list link; a one-row kind gets one only when its row fell past the first 50.
+  // T-MORE: the existing kinds and 維修 (GS-41) keep their list link. 待你回覆／對帳／月結 have no drawn 看全部 label, so
+  // they get none (GS-44); past the first 50 such a row still counts in N and is named in the supporting line.
   const mineMore: TodayMore[] = [
     { kind: "payments", href: "/m/payments", count: counts.payments },
     { kind: "repairs", href: "/m/tickets", count: fix?.yourTurn ?? 0 },
-    { kind: "reply", href: "/m/messages", count: counts.reply && hidden(shownMine, "reply") ? 1 : 0 },
-    { kind: "bank", href: bankHref(b?.oldestMonth ?? null), count: counts.bank && hidden(shownMine, "bank") ? 1 : 0 },
-    { kind: "monthClose", href: "/m/close", count: counts.monthClose && hidden(shownMine, "monthClose") ? 1 : 0 },
     { kind: "renewal", href: "/m/leases", count: counts.renewal },
     { kind: "early", href: "/m/units", count: counts.early }, { kind: "vacant", href: "/m/units", count: counts.vacant },
   ];
@@ -130,7 +127,7 @@ export function todayOverview({ payments, rentals, overdue, repairs, bank, month
   return { state: "ready" as const, counts, summary, mineCount, othersCount, waiting, mine: shownMine, others: shownOthers,
     mineMore: mineCount > 50 ? mineMore.filter(item => item.count > 0) : [],
     othersMore: othersCount > 50 ? othersMore.filter(item => item.count > 0) : [],
-    checkedPayments: !!p || !!o || !!b || !!c, checkedRentals: !!r, checkedRepairs: !!fix, checkedMessages: !!m };
+    checkedPayments: !!p || !!o || !!b || !!c, checkedRentals: !!r, checkedRepairs: !!fix };
 }
 /** R1-BANK opens on the current month; send the row to the oldest month that still has lines to review. */
 export function bankHref(oldestMonth: string | null): string {

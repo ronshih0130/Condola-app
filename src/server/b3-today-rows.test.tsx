@@ -114,7 +114,7 @@ test("T-ROWS-2 / T-REPAIR full frame: kind order, one avatar and sentence per ro
   assert.equal((html.match(/class="party party-o"/g) ?? []).length, 1); assert.equal((html.match(/class="party party-v"/g) ?? []).length, 1);
   assert.doesNotMatch(html, /<button|class="btn pri"|rail|逾期 \d+ 天<\/span><\/a><\/li><li data-turn-kind="repair/);
   // T-LINE: every action in kind order, and only the parties that have rows.
-  assert.match(html, /確認已繳款 1 筆、核對 1 筆費用、派工 1 件、重新估價 1 件、處理中 1 件、回覆 3 則、對帳 1 筆、月結 1 個月、詢問續約意願 1 件、提早找租客 1 件、找新租客 1 件。另外 5 件在等租客、屋主、廠商和管理方。/);
+  assert.match(html, /確認 1 筆繳款、核對 1 筆費用、派工 1 件、重新估價 1 件、回覆 3 則、對帳 1 筆、月結 1 個月、詢問 1 份續約、提早找租客 1 件、找新租客 1 件。另外 5 件在等租客、屋主和廠商。/);
   // Main line property, second line the repair item; the overdue badge never appears without an agreed date (no source).
   assert.match(html, /<strong>信義路 2 樓<\/strong><span>浴室天花板滴水・廠商沒有接<\/span>/);
   assert.equal((html.match(/逾期 \d+ 天/g) ?? []).length, 1, "only the rent row's badge");
@@ -123,7 +123,10 @@ test("T-ROWS-2 / T-REPAIR full frame: kind order, one avatar and sentence per ro
 test("MGT-149-AC2/AC5: viewer who cannot act reads 等管理方{step}, never 輪到你, and is not counted", () => {
   const blocked = repair("manager", "confirm_cost", { viewerCanAct: false, rule: "R8-blocked" });
   const html = render({ ...empty, repairs: repairs([], [blocked, repair("vendor", "report_cost", { viewerCanAct: false })]) });
-  assert.match(html, /王怡君早，今天沒有輪到你的事。/); assert.match(html, /另外 2 件在等廠商和管理方。/);
+  assert.match(html, /王怡君早，今天沒有輪到你的事。/); assert.match(html, /另外 2 件在等廠商。/); assert.doesNotMatch(html, /在等[^<]*管理方。/);
+  // Only staff-held waits: no drawn party to name, so no waiting sentence (the group still shows).
+  const staffOnly = render({ ...empty, repairs: repairs([], [blocked]) });
+  assert.doesNotMatch(staffOnly, /另外 \d+ 件在等/); assert.match(staffOnly, /等別人・1 件/);
   assert.match(html, /等管理方核對費用/); assert.match(html, /等廠商回報費用/); assert.doesNotMatch(html, /輪到你・|第 \d+ 天|data-testid="today-mine"/);
   assert.throws(() => render({ ...empty, repairs: repairs([repair("manager", "done")]) }), /Unapproved repair step/);
 });
@@ -266,19 +269,20 @@ test("T-FAIL: any new source failing hides the whole turn section and the count;
 test("MGT-148-AC5: a kind whose flag is OFF has no row and no count; only kinds with rows are named", () => {
   const html = render({ ...empty, bank: off, monthClose: { state: "ready", row: null }, reply: { state: "ready", threads: 0, oldest: null } });
   assert.match(html, /今天都處理好了/); assert.doesNotMatch(html, /銀行對帳|月結|待你回覆|0 則|0 筆/);
-  assert.match(html, /收款、出租與租約、訊息都看過了/);
+  assert.match(html, /收款、出租與租約都看過了/); assert.doesNotMatch(html, /訊息都看過了/);
+  assert.match(render({ ...empty, repairs: repairs([]) }), /收款、出租與租約、維修都看過了/);
   const offOnly = model.todayOverview({ payments: off, rentals: off, overdue: off, roomUnits: {}, repairs: off, bank: off, monthClose: off, reply: off });
   assert.equal(offOnly.state, "off");
 });
 
-test("T-MORE: more than 50 rows keeps the group's own order and links each kind; a one-row kind past 50 stays reachable", () => {
+test("T-MORE: more than 50 rows keeps the group's own order; 維修 links its list (GS-41); undrawn one-row kinds get no link", () => {
   const many = Array.from({ length: 62 }, (_, i) => repair("manager", "dispatch", { since: new Date(Date.UTC(2026, 0, 1 + i)).toISOString() }));
   const turns: TodayTurns = { ...empty, repairs: { ...(repairs(many.slice(0, 50)) as Extract<TodayRepairs, { state: "ready" }>), yourTurn: 62,
     counts: [{ holder: "manager", step: "dispatch", canAct: true, count: 62 }] }, bank: kinds.bank };
   const html = render(turns);
   assert.match(html, /今天輪到你的有 63 件/); assert.equal((html.match(/<li data-turn-kind=/g) ?? []).length, 50);
-  assert.match(html, /href="\/m\/tickets"><span>維修・<\/span>看全部 62 件/);
-  assert.match(html, /href="\/m\/bank\?month=2026-10"><span>銀行對帳・<\/span>看全部 1 件/);
+  // 待你回覆／對帳／月結 have no drawn 看全部 label: no link (GS-44), though the bank row still counts in N.
+  assert.doesNotMatch(html, /銀行對帳・|看全部 1 件/); assert.match(html, /href="\/m\/tickets">看全部 62 件/);
   const few = render({ ...empty, repairs: repairs([repair("manager", "dispatch")]), bank: kinds.bank });
   assert.doesNotMatch(few, /看全部/);
   const waiting = Array.from({ length: 51 }, () => repair("vendor", "do_repair", { viewerCanAct: false }));

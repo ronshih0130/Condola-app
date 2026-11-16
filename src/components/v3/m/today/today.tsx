@@ -113,7 +113,7 @@ function TurnGroup({ holder, count, rows, more, session, roomUnits, now }: {
   // Area names exist only as navigation strings (copy guard, PLT-49): reuse them.
   const nav = brandV3NavigationCopy(session.locale);
   const names: Record<TodayMore["kind"], string> = { payments: copy.confirm, vacant: copy.vacant, renewal: copy.renewal, early: copy.early, overdue: nav.money,
-    repairs: nav.maintenance, reply: copy.replyTitle, bank: copy.bankTitle, monthClose: copy.monthCloseTitle };
+    repairs: nav.maintenance };
   return <section className="v3-today-group" data-testid={`today-${holder}`} aria-labelledby={`today-${holder}-title`}>
     <h2 id={`today-${holder}-title`}>{translate(copy, holder, { count })}</h2>
     <ul>{rows.map(item => <TurnRow key={rowKey(item)} item={item} session={session} roomUnits={roomUnits} now={now} />)}</ul>
@@ -124,8 +124,9 @@ function TurnGroup({ holder, count, rows, more, session, roomUnits, now }: {
 }
 /** T-LINE: 「{動作} {n} 筆／件、…。另外 {k} 件在等{各方}。」; only parties with rows are named. */
 export function waitingParties(copy: ReturnType<typeof brandV3TodayCopy>, waiting: Record<WaitingParty, number>): string {
-  const parties = (["tenant", "owner", "vendor", "manager"] as const).filter(party => waiting[party] > 0)
-    .map(party => copy[({ tenant: "partyTenant", owner: "partyOwner", vendor: "partyVendor", manager: "partyManager" } as const)[party]]);
+  // Frames name only 租客／屋主／廠商; staff-held rows the viewer cannot act on still count in {k} but are not named.
+  const parties = (["tenant", "owner", "vendor"] as const).filter(party => waiting[party] > 0)
+    .map(party => copy[({ tenant: "partyTenant", owner: "partyOwner", vendor: "partyVendor" } as const)[party]]);
   return parties.length > 1 ? `${parties.slice(0, -1).join(copy.separator)}${copy.partyLast}${parties.at(-1)}` : parties[0] ?? "";
 }
 export function ConfirmedBills({ data, locale }: { data: TodayMonthly; locale: Locale }) {
@@ -187,16 +188,17 @@ export function TodayPage({ session, turns, monthly, setup, setupFailed = false,
   if (overview.state === "ready") {
     // Same kind order as the 輪到你 group (MGT-148-AC3, MGT-149-AC4).
     const summaries = { payments: "paymentSummary", confirmCost: "confirmCostSummary", dispatch: "dispatchSummary", reEstimate: "reEstimateSummary",
-      inProgress: "inProgressSummary", reply: "replySummary", bank: "bankSummary", monthClose: "monthCloseSummary",
+      reply: "replySummary", bank: "bankSummary", monthClose: "monthCloseSummary",
       renewal: "renewalSummary", early: "earlySummary", vacant: "vacantSummary" } as const;
     const actions = (Object.keys(summaries) as (keyof typeof summaries)[]).flatMap(kind => overview.counts[kind]
       ? [translate(copy, summaries[kind], { count: overview.summary[kind] })] : []);
     supporting = (actions.length ? actions.join(copy.separator) + copy.summaryEnd : "")
-      + (overview.othersCount ? translate(copy, "waitingSummary", { count: overview.othersCount, parties: waitingParties(copy, overview.waiting) }) : "");
+      // With only staff-held waits there is no drawn party to name, so the sentence is left out (GS-44).
+      + (overview.othersCount && waitingParties(copy, overview.waiting) ? translate(copy, "waitingSummary", { count: overview.othersCount, parties: waitingParties(copy, overview.waiting) }) : "");
   }
   if (session.environment === "sandbox") supporting = copy.sandbox;
   const checkedAreas = overview.state === "ready" ? [overview.checkedPayments && areaMoney, overview.checkedRentals && copy.rentals,
-    overview.checkedRepairs && brandV3NavigationCopy(session.locale).maintenance, overview.checkedMessages && copy.messages].filter(Boolean).join(copy.separator) : "";
+    overview.checkedRepairs && brandV3NavigationCopy(session.locale).maintenance].filter(Boolean).join(copy.separator) : "";
   return <div className="v3-today" data-testid="today-v3">
     <SignupNotice query={query} locale={session.locale} />
     <header className="v3-lead v3-today-lead"><h1 data-testid="today-headline">{headline}</h1>{supporting && <p data-testid="today-supporting">{supporting}</p>}</header>

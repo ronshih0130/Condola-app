@@ -87,25 +87,34 @@ test("待對帳: lines to review across months on unarchived accounts; bank_matc
   assert.deepEqual(await todayBankTurn(other.staff.admin, ON), { state: "ready", count: 0, oldestMonth: null, since: null });
 });
 
-test("月結: after the 5th last month not closed, counting owners still without a statement; closing clears it", async () => {
+// The org-local date is pinned, so every case runs on every calendar day (Asia/Taipei is UTC+8).
+const AFTER_5TH = { ...ON, now: () => new Date("2026-11-16T04:00:00Z") };      // 11/16 local → October is due
+const ON_5TH = { ...ON, now: () => new Date("2026-11-05T15:59:00Z") };         // 11/05 23:59 local → not yet
+const LOCAL_6TH = { ...ON, now: () => new Date("2026-11-05T16:00:00Z") };      // 11/06 00:00 local, still 11/05 in UTC
+async function owner(o: Org, statement: string | null, period = "2026-10") {
+  const c = (await query<{ id: string }>(`INSERT INTO contacts (org_id, is_owner, display_name) VALUES ($1, true, 'Synthetic owner') RETURNING id::text`, [o.orgId])).rows[0].id;
+  await query(`INSERT INTO property_owners (org_id, property_id, owner_contact_id) VALUES ($1, $2, $3)`, [o.orgId, o.property, c]);
+  if (statement) await query(`INSERT INTO owner_statements (org_id, owner_contact_id, currency, period_start, period_end, status)
+    VALUES ($1, $2, 'TWD', $3::date, ($3::date + interval '1 month - 1 day')::date, $4::statement_status)`, [o.orgId, c, `${period}-01`, statement]);
+}
+test("月結: after the 5th (org-local) last month not closed, counting owners still without a statement; closing clears it", async () => {
+  // Another org's owners and closes never leak into this org's row (cross-org isolation).
+  const other = await makeOrg(); await owner(other, null); await owner(other, null); await owner(other, null); await owner(other, null);
   const o = await makeOrg();
-  const cal = (await query<{ period: string; day: number }>(`SELECT to_char((date_trunc('month', (clock_timestamp() AT TIME ZONE 'Asia/Taipei')::date) - interval '1 month'), 'YYYY-MM') AS period,
-    extract(day FROM (clock_timestamp() AT TIME ZONE 'Asia/Taipei')::date)::int AS day`)).rows[0];
-  const owner = async (statement: string | null) => {
-    const c = (await query<{ id: string }>(`INSERT INTO contacts (org_id, is_owner, display_name) VALUES ($1, true, 'Synthetic owner') RETURNING id::text`, [o.orgId])).rows[0].id;
-    await query(`INSERT INTO property_owners (org_id, property_id, owner_contact_id) VALUES ($1, $2, $3)`, [o.orgId, o.property, c]);
-    if (statement) await query(`INSERT INTO owner_statements (org_id, owner_contact_id, currency, period_start, period_end, status)
-      VALUES ($1, $2, 'TWD', $3::date, ($3::date + interval '1 month - 1 day')::date, $4::statement_status)`, [o.orgId, c, `${cal.period}-01`, statement]);
-  };
-  await owner(null); await owner(null); await owner("issued"); await owner("void");
-  const ready = await todayMonthCloseTurn(o.staff.accountant, ON);
-  if (cal.day > 5) assert.deepEqual(ready, { state: "ready", row: { period: cal.period, month: Number(cal.period.slice(5)), owners: 3, since: ready.state === "ready" ? ready.row?.since : "" } });
-  else assert.deepEqual(ready, { state: "ready", row: null });
-  await query(`INSERT INTO month_closes (org_id, period_month, closed_by) VALUES ($1, $2::date, $3)`, [o.orgId, `${cal.period}-01`, o.staff.admin.userId]);
-  assert.deepEqual(await todayMonthCloseTurn(o.staff.admin, ON), { state: "ready", row: null });
-  for (const role of ["manager", "maintenance"] as const) await assert.rejects(todayMonthCloseTurn(o.staff[role], ON), denied);
+  await owner(o, null); await owner(o, null); await owner(o, "issued"); await owner(o, "void");
+  const row = { period: "2026-10", month: 10, owners: 3, since: "2026-11-01" };
+  assert.deepEqual(await todayMonthCloseTurn(o.staff.accountant, AFTER_5TH), { state: "ready", row });
+  assert.deepEqual(await todayMonthCloseTurn(o.staff.admin, LOCAL_6TH), { state: "ready", row });
+  assert.deepEqual(await todayMonthCloseTurn(o.staff.admin, ON_5TH), { state: "ready", row: null });
+  assert.deepEqual(await todayMonthCloseTurn(other.staff.admin, AFTER_5TH), { state: "ready", row: { ...row, owners: 4 } });
+  await query(`INSERT INTO month_closes (org_id, period_month, closed_by) VALUES ($1, '2026-10-01'::date, $2)`, [other.orgId, other.staff.admin.userId]);
+  assert.deepEqual(await todayMonthCloseTurn(o.staff.admin, AFTER_5TH), { state: "ready", row }, "another org's close does not clear this org");
+  assert.deepEqual(await todayMonthCloseTurn(other.staff.admin, AFTER_5TH), { state: "ready", row: null });
+  await query(`INSERT INTO month_closes (org_id, period_month, closed_by) VALUES ($1, '2026-10-01'::date, $2)`, [o.orgId, o.staff.admin.userId]);
+  assert.deepEqual(await todayMonthCloseTurn(o.staff.admin, AFTER_5TH), { state: "ready", row: null });
+  for (const role of ["manager", "maintenance"] as const) await assert.rejects(todayMonthCloseTurn(o.staff[role], AFTER_5TH), denied);
   // No owner waiting: the approved line needs {k} > 0, so that case has no row (GS-44).
-  assert.deepEqual(await todayMonthCloseTurn((await makeOrg()).staff.admin, ON), { state: "ready", row: null });
+  assert.deepEqual(await todayMonthCloseTurn((await makeOrg()).staff.admin, AFTER_5TH), { state: "ready", row: null });
   assert.deepEqual(await todayMonthCloseTurn(o.staff.admin, { v3: async () => false }), { state: "off" });
 });
 
@@ -140,9 +149,13 @@ test("待你回覆: threads whose last real message is the tenant's; reading doe
   await thread(o, ["stranger"]);                    // not a party of this lease
   await thread(o, ["guarantor"]);                   // a guarantor is not the tenant
   await query(`UPDATE thread_participants SET last_read_at = now() WHERE org_id = $1`, [o.orgId]);
+  const other = await makeOrg({ [TODAY_KIND_FLAGS.reply]: true });
+  await thread(other, ["tenant"]); await thread(other, ["staff", "tenant"]);
   const result = await todayReplyTurn(o.staff.manager, ON);
   assert.equal(result.state, "ready");
   if (result.state === "ready") { assert.equal(result.threads, 3); assert.equal(result.oldest, "2026-11-14T01:00:00.000000Z"); }
+  const theirs = await todayReplyTurn(other.staff.admin, ON);
+  assert.equal(theirs.state === "ready" ? theirs.threads : -1, 2, "each org counts only its own threads");
   for (const role of ["accountant", "maintenance"] as const) await assert.rejects(todayReplyTurn(o.staff[role], ON), denied);
   assert.deepEqual(await todayReplyTurn((await makeOrg()).staff.admin, ON), { state: "off" });
   const noThreadPath = await makeOrg({ [TODAY_KIND_FLAGS.reply]: true, tenant_thread_create: false });
@@ -184,6 +197,16 @@ test("T-REPAIR: 輪到你 is step-first across every page of one snapshot; rows 
   assert.deepEqual(today.mine.slice(3).map(m => m.ticketId), inProgress.slice(0, 47));
   assert.ok(today.mine.every(m => m.place.startsWith("景興路套房") && m.dayNumber === null && !m.sinceExact));
   assert.ok(![...today.mine, ...today.others].some(m => m.ticketId === closed), "B1: closed repairs have no row");
+  // Cross-org: another org's tickets never appear, and a foreign ticket id cannot be presented through this org.
+  const foreign = await makeOrg();
+  const foreignTicket = await ticket(foreign, "open", "2026-11-01T00:00:00Z", "別家的工單");
+  const again = await todayRepairRows(o.staff.admin, { turns: session => staffRepairTodayTurns(session, ON) });
+  assert.ok(again.state === "ready" && ![...again.mine, ...again.others].some(m => m.ticketId === foreignTicket));
+  const theirs = await todayRepairRows(foreign.staff.admin, { turns: session => staffRepairTodayTurns(session, ON) });
+  assert.ok(theirs.state === "ready" && theirs.yourTurn === 1 && theirs.mine[0].ticketId === foreignTicket && theirs.mine[0].title === "別家的工單");
+  const forged = { ...today.mine[0], ticketId: foreignTicket };
+  await assert.rejects(todayRepairRows(o.staff.admin, { turns: async () => ({ state: "ready", counts: [], yourTurn: 1, mine: [forged], others: [],
+    next: { mine: null, others: null }, detail: null }) }), (e: unknown) => !denied(e), "a failure (unavailable), never presented data");
   // The accountant has no tickets.update; maintenance gets no rows (MGT-149-AC7).
   await assert.rejects(todayRepairRows(o.staff.accountant, { turns: session => staffRepairTodayTurns(session, ON) }), denied);
   assert.deepEqual(await todayRepairRows(o.staff.maintenance, { turns: session => staffRepairTodayTurns(session, ON) }), { state: "off" });
