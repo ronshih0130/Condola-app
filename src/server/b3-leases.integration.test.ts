@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
-import { brandLease, brandLeases, type LeasesInput } from "./b3-leases";
-import { leaseDetail, searchLeases } from "./queries";
+import { brandLeases, type LeasesInput } from "./b3-leases";
+import { searchLeases } from "./queries";
 import { FlowError } from "./errors";
 import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
@@ -73,7 +73,9 @@ test("R3-LIST: legacy population and order, uncapped counts, 50-row pages, searc
   const legacy = await searchLeases(f.staff.manager, { limit: 100 });
   const a = await read(f.staff.manager);
   assert.equal(a.total, legacy.total); assert.equal(a.total, 56); assert.equal(a.rows.length, 50); assert.equal(a.hasNext, true);
+  assert.equal(a.filteredCount, 56); assert.equal(a.lastPage, 2);
   const b = await read(f.staff.manager, { page: "2" });
+  const beyond = await read(f.staff.manager, { page: "3" }); assert.deepEqual(beyond.rows, []); assert.equal(beyond.lastPage, 2); assert.equal(beyond.hasNext, false);
   assert.deepEqual([...a.rows, ...b.rows].map(r => r.id), legacy.rows.map(r => r.id));
   const by = new Map([...a.rows, ...b.rows].map(r => [r.id, r]));
   assert.equal(by.get(soon)?.endingSoon, true); assert.equal(by.get(today)?.endingSoon, true);
@@ -83,38 +85,23 @@ test("R3-LIST: legacy population and order, uncapped counts, 50-row pages, searc
   const literal = await read(f.staff.admin, { q: "%_" }); assert.equal(literal.filteredCount, 0); assert.equal(literal.total, 56);
   for (const r of a.rows) assert.deepEqual(Object.keys(r).sort(), ["endDate", "endingSoon", "id", "place", "status", "tenant"]);
 });
-test("P-ACC: list 403, lease page read only; P-MNT: both 403", async () => {
+test("P-ACC and P-MNT: list 403; a forged session role does not lift the membership", async () => {
   const f = await fixture("B071 roles");
-  const id = await lease(f, 1, "active", "2030-01-01", "2031-01-01");
+  await lease(f, 1, "active", "2030-01-01", "2031-01-01");
   await assert.rejects(brandLeases(f.staff.accountant, {}, ON), denied);
   await assert.rejects(brandLeases(f.staff.maintenance, {}, ON), denied);
-  await assert.rejects(brandLease(f.staff.maintenance, id, ON), denied);
-  const acc = await brandLease(f.staff.accountant, id, ON);
-  assert.equal(acc.state, "ready"); if (acc.state !== "ready") assert.fail();
-  assert.deepEqual(Object.keys(acc).sort(), ["currency", "depositMinor", "dueDay", "endDate", "id", "place", "rentMinor", "startDate", "state", "status", "tenant"]);
-  // A forged session role does not lift the accountant's membership.
   await assert.rejects(brandLeases({ ...f.staff.accountant, role: "manager" }, {}, ON), denied);
+  await assert.rejects(brandLeases({ ...f.staff.maintenance, role: "admin" }, {}, ON), denied);
 });
-test("lease page matches the existing leaseDetail fields", async () => {
-  const f = await fixture("B071 parity");
-  const id = await lease(f, 2, "active", "2030-02-01", null);
-  const v3 = await brandLease(f.staff.manager, id, ON);
-  const legacy = await leaseDetail(f.staff.manager, id);
-  assert.equal(v3.state, "ready"); if (v3.state !== "ready" || !legacy) assert.fail();
-  assert.deepEqual([v3.tenant, v3.place, v3.status, v3.startDate, v3.endDate, v3.currency.trim(), v3.rentMinor, v3.depositMinor, v3.dueDay],
-    [legacy.lease.tenant, legacy.lease.place, legacy.lease.status, legacy.lease.start_date, legacy.lease.end_date, legacy.lease.currency.trim(),
-      legacy.lease.rent, legacy.lease.deposit, legacy.lease.due_day]);
-  assert.deepEqual(await brandLease(f.staff.manager, randomUUID(), ON), { state: "not_found" });
-});
-test("cross-org: another company's staff never see or open this company's leases", async () => {
+test("cross-org: another company's staff never see this company's leases", async () => {
   const a = await fixture("B071 org A"), b = await fixture("B071 org B");
   const id = await lease(a, 1, "active", "2030-01-01", "2031-01-01");
   await lease(b, 2, "active", "2030-01-01", "2031-01-01");
-  for (const role of ["admin", "manager", "accountant"] as const)
-    assert.deepEqual(await brandLease(b.staff[role], id, ON), { state: "not_found" }, role);
-  const listB = await read(b.staff.admin); assert.equal(listB.total, 1); assert.ok(!listB.rows.some(r => r.id === id));
+  for (const role of ["admin", "manager"] as const) {
+    const listB = await read(b.staff[role]); assert.equal(listB.total, 1, role); assert.ok(!listB.rows.some(r => r.id === id), role);
+    const searched = await read(b.staff[role], { q: "Person 001" }); assert.equal(searched.filteredCount, 0, role); assert.deepEqual(searched.rows, [], role);
+  }
   // A session pointed at org A without org A membership is refused before any data.
   const forged = { ...b.staff.admin, orgId: a.org, liveOrgId: a.org };
   await assert.rejects(brandLeases(forged, {}, ON), denied);
-  await assert.rejects(brandLease(forged, id, ON), denied);
 });

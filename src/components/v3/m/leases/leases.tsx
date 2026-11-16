@@ -46,20 +46,22 @@ export function LeasesView({ data, locale, params, canCreate = false }: {
   const q = data.state === "ready" ? data.q : String(params.q ?? "").trim().slice(0, 80);
   if (data.state !== "ready") return <section className="v3-leases" data-testid="v3-lease-list">{title}
     <div className="v3-leases-card"><div className="v3-leases-toolbar"><Search q={q} locale={locale} /></div>
-      {/* MGT-112-AC8: in place, the typed search is kept. */}
+      {/* MGT-112-AC8: in place, the typed search is kept. O-STATES (GS-02): the page's one action is the solid primary. */}
       <div className="v3-leases-empty" role="alert"><p>{c.failed}</p>
-        <Link className="btn" href={leasesHref({ q, page: params.page })}>{c.retry}</Link></div></div></section>;
-  const { rows, page } = data;
+        <Link className="btn pri" href={leasesHref({ q, page: params.page })}>{c.retry}</Link></div></div></section>;
+  const { rows, page, lastPage } = data;
   return <section className="v3-leases" data-testid="v3-lease-list">{title}
     <div className="v3-leases-card">
       {data.total > 0 && <div className="v3-leases-toolbar"><Search q={q} locale={locale} /></div>}
-      {!rows.length ? data.total === 0 && !q ? <div className="v3-leases-empty">
+      {!rows.length ? data.filteredCount === 0 && !q ? <div className="v3-leases-empty">
         <EmptyIllustration name="doc" /><h2>{c.empty}</h2><p>{c.emptyHint}</p>
         {canCreate && <Link className="btn pri" href="/m/leases/new">{c.create}</Link>}
-      </div> : q ? <div className="v3-leases-empty" role="status">
+      </div> : data.filteredCount === 0 ? <div className="v3-leases-empty" role="status">
         <EmptyIllustration name="search" /><h2>{c.noResult}</h2><p>{c.noResultHint}</p>
         <Link className="btn" href={leasesHref()}>{c.clearSearch}</Link>
-      </div> : <div className="v3-leases-empty"><Link className="btn" href={leasesHref({ q })}>{t("i_search_prev")}</Link></div> :
+      </div> : <div className="v3-leases-empty">
+        {/* Past the last page: 上一頁 opens the actual last page of this search. */}
+        <Link className="btn" href={leasesHref({ q, page: String(lastPage) })}>{t("i_search_prev")}</Link></div> :
       <table className="v3-leases-table"><thead><tr>
         <th scope="col">{t("i_nav_leases")}</th><th scope="col">{t("i_status")}</th><th scope="col"><span className="sr-only">{c.view}</span></th>
       </tr></thead>
@@ -72,7 +74,7 @@ export function LeasesView({ data, locale, params, canCreate = false }: {
         </tr>)}</tbody>
       </table>}
     </div>
-    {(page > 1 || data.hasNext) && <nav className="v3-leases-pager" aria-label={t("i_nav_leases")}>
+    {rows.length > 0 && (page > 1 || data.hasNext) && <nav className="v3-leases-pager" aria-label={t("im_page", { p: page, n: lastPage })}>
       {page > 1 && <Link className="btn" href={leasesHref({ q, page: String(page - 1) })}>{t("i_search_prev")}</Link>}
       {data.hasNext && <Link className="btn" href={leasesHref({ q, page: String(page + 1) })}>{t("i_search_next")}</Link>}
     </nav>}

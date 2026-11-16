@@ -6,10 +6,9 @@ import { FlowError, logServerError } from "./errors";
 import { contactMatch, ilikePattern, LEASE_PLACE, parseListQuery, textSearch } from "./list-search";
 import { requireOrgScope } from "./org-guard";
 import { assertPerm } from "./perms";
-import { isUuid } from "./repair-rules";
 import type { Session } from "./types";
 
-// B-071 (Brand 3.0 round 3: 租約), read-only parts. Projections of existing lease data only:
+// B-071 (Brand 3.0 round 3: 租約), R3-LIST only (read only). Projections of existing lease data only:
 // no new SQL objects, no writes, no stored statuses. Same population as the legacy
 // /m/leases list (searchLeases: leases with their primary tenant party).
 
@@ -20,13 +19,10 @@ export type LeaseListRow = {
   endingSoon: boolean;
 };
 export type LeasesResult = { state: "off" | "unavailable" } | {
-  state: "ready"; q: string; page: number; total: number; filteredCount: number; hasNext: boolean; rows: LeaseListRow[];
+  state: "ready"; q: string; page: number; total: number;
+  /** Leases matching the search; lastPage is its last 50-row page (1 when none). */
+  filteredCount: number; lastPage: number; hasNext: boolean; rows: LeaseListRow[];
 };
-export type LeaseReady = {
-  state: "ready"; id: string; tenant: string; place: string; status: string;
-  startDate: string; endDate: string | null; currency: string; rentMinor: string; depositMinor: string; dueDay: number;
-};
-export type LeaseResult = { state: "off" | "unavailable" | "not_found" } | LeaseReady;
 type Deps = { v3?: (orgId: string) => Promise<boolean>; transaction?: typeof tx; now?: () => Date };
 
 export const LEASES_PAGE_SIZE = 50;
@@ -64,14 +60,6 @@ export function leasesListSql(contact: boolean) {
  AND ($2::text IS NULL OR ${leasesSearchTerms(contact)})
  ORDER BY l.created_at DESC, l.id LIMIT $4 OFFSET $5`;
 }
-/** $1 org, $2 lease. The legacy leaseDetail population (primary tenant party required). */
-export const LEASE_ONE_SQL = `SELECT l.id::text, l.status::text, c.display_name AS tenant,
- p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
- l.start_date::text AS "startDate", l.end_date::text AS "endDate", l.currency::text AS currency,
- l.rent_amount_minor::text AS "rentMinor", l.deposit_amount_minor::text AS "depositMinor", l.due_day AS "dueDay"
- ${POPULATION} AND l.id=$2::uuid
- ORDER BY lp.id LIMIT 1`;
-
 /** R3-LIST: P-ADM, P-MGR only (P-ACC and P-MNT 403). Lease writes are admin/manager (leases.edit). */
 export async function brandLeases(session: Session, input: LeasesInput = {}, deps: Deps = {}): Promise<LeasesResult> {
   try {
@@ -99,7 +87,7 @@ export async function brandLeases(session: Session, input: LeasesInput = {}, dep
           const rows = found.slice(0, LEASES_PAGE_SIZE).map(({ id, tenant, place, status, endDate, endingSoon }) =>
             ({ id, tenant, place, status, endDate, endingSoon: endingSoon === true }));
           return { state: "ready" as const, q, page, total: summary.total, filteredCount: summary.filteredCount,
-            hasNext: found.length > LEASES_PAGE_SIZE, rows };
+            lastPage: Math.max(1, Math.ceil(summary.filteredCount / LEASES_PAGE_SIZE)), hasNext: found.length > LEASES_PAGE_SIZE, rows };
         }));
     }, requireOrgScope(admitted), { isolation: "repeatable read", readOnly: true });
   } catch (error) {
@@ -109,29 +97,3 @@ export async function brandLeases(session: Session, input: LeasesInput = {}, dep
   }
 }
 
-/** Lease page (概要／押金 read only): P-ADM, P-MGR, P-ACC (R3-FEES/R3-DEP); P-MNT 403. */
-export async function brandLease(session: Session, id: string, deps: Deps = {}): Promise<LeaseResult> {
-  try {
-    if (!(await (deps.v3 ?? brandV3ReadForOrg)(session.orgId))) return { state: "off" };
-    const admitted = await guardEffectiveSession(session, "props.view");
-    assertPerm(admitted, "props.view");
-    if (admitted.needsSandbox) throw new FlowError("errors.forbidden");
-    if (!isUuid(id)) return { state: "not_found" };
-    return await (deps.transaction ?? tx)(admitted.userId, async client => {
-      await client.query("SET LOCAL statement_timeout = '2s'");
-      return withEffectiveReadAuthority(client, admitted, "props.view", async () => {
-        const context = (await client.query<{ role: string }>(TENANTS_ADMISSION_SQL,
-          [admitted.orgId, admitted.sessionId, admitted.userId, admitted.environment, admitted.liveOrgId])).rows[0];
-        if (!context) throw new FlowError("errors.forbidden");
-        const lease = (await client.query<Omit<LeaseReady, "state">>(LEASE_ONE_SQL, [admitted.orgId, id])).rows[0];
-        if (!lease) return { state: "not_found" as const };
-        const { tenant, place, status, startDate, endDate, currency, rentMinor, depositMinor, dueDay } = lease;
-        return { state: "ready" as const, id: lease.id, tenant, place, status, startDate, endDate, currency, rentMinor, depositMinor, dueDay: Number(dueDay) };
-      });
-    }, requireOrgScope(admitted), { isolation: "repeatable read", readOnly: true });
-  } catch (error) {
-    if (error instanceof FlowError && error.key === "errors.forbidden") throw error;
-    logServerError("b3_lease", error);
-    return { state: "unavailable" };
-  }
-}
