@@ -130,8 +130,8 @@ export function brandV3OwnerReportCopy(locale: Locale) {
 export function brandV3OwnerHomeCopy(locale: Locale) {
   return locale === "en" ? {
     lead: "{name}, {count} items need your attention.", leadNoName: "{count} items need your attention.",
-    leadEmpty: "{name}, nothing needs you right now.", // P52 pending Ron (PENDING-RON PR-023)
-    leadEmptyNoName: "Nothing needs you right now.", // P52 pending Ron (PENDING-RON PR-023)
+    leadEmpty: "{name}, nothing needs you right now.", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
+    leadEmptyNoName: "Nothing needs you right now.", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
     tasks: "Needs your attention", estimate: "Estimate", pending: "Awaiting approval", approve: "Approve estimate",
     empty: "Nothing needs your attention", emptyDetail: "Nothing needs your attention right now. Rest easy.", overview: "See overview",
     failure: "This is temporarily unavailable. Please try again.", title: "Approve this estimate",
@@ -143,8 +143,8 @@ export function brandV3OwnerHomeCopy(locale: Locale) {
     handoff: "The manager and vendor now see the same version. The vendor can start as agreed.",
   } : {
     lead: "{name}，有 {count} 件事要你處理。", leadNoName: "有 {count} 件事要你處理。",
-    leadEmpty: "{name}，目前沒有要你處理的事。", // P52 pending Ron (PENDING-RON PR-023)
-    leadEmptyNoName: "目前沒有要你處理的事。", // P52 pending Ron (PENDING-RON PR-023)
+    leadEmpty: "{name}，目前沒有要你處理的事。", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
+    leadEmptyNoName: "目前沒有要你處理的事。", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
     tasks: "要你處理", estimate: "估價", pending: "待核准", approve: "核准估價",
     empty: "目前沒有要你處理的事", emptyDetail: "目前沒有要你處理的事，放心。", overview: "看總覽",
     failure: "這裡暫時讀不到，請再試一次。", title: "核准這筆估價",
