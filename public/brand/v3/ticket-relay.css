@@ -24,6 +24,10 @@ html[data-brand="v2"][data-brand-v3] .v3-st-l { display:inline-flex; align-items
 html[data-brand="v2"][data-brand-v3] .v3-st .turn-tag { padding:.05em .48em; font-weight:700; }
 html[data-brand="v2"][data-brand-v3] .v3-st-s { font-weight:400; color:var(--c-text-2); overflow-wrap:anywhere; max-width:100%; }
 html[data-brand="v2"][data-brand-v3] .v3-st.next .v3-st-s { color:var(--c-text-3); }
+/* TK-RELAY-END: grey end pill after the last step; no connector line into it, never a tick. */
+html[data-brand="v2"][data-brand-v3] .v3-st.end { flex:0 0 auto; justify-content:flex-start; padding-top:.35em; padding-inline-start:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-st.end::before { display:none; }
+html[data-brand="v2"][data-brand-v3] .v3-end-pill { display:inline-flex; align-items:center; white-space:nowrap; border-radius:var(--r-btn); background:var(--c-surface-2); color:var(--c-text-2); padding:.15em .7em; font-weight:600; }
 html[data-brand="v2"][data-brand-v3] .v3-why { margin-top:12px; padding:10px 14px; border-radius:var(--r-md); background:var(--c-surface-2); font-size:.9em; line-height:1.55; }
 @media (max-width:50em) {
  html[data-brand="v2"][data-brand-v3] .v3-ticket-head { padding:14px 16px; }

@@ -6,10 +6,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { depositTopupView, parseTopupView, recordDepositTopup, type TopupView } from "./mf3-deposit-topup";
 import { TopupError, TopupReadView, TopupStaffView } from "../components/v3/topup/topup";
-import { TopupSheetForm } from "../components/v3/topup/topup-sheet";
+import { TopupDupToast, TopupSheetForm } from "../components/v3/topup/topup-sheet";
 import { brandV3TopupCopy } from "../i18n/lanes/brand-v3-topup";
 import { bigintMinor, checkTopupAmount, dateIn, latestLocalToday, parseTopupAmount, TOPUP_MAX_MINOR, topupDateAllowed, topupDay, topupMinorWithinCap, topupMoney, topupOver, validTopupDate } from "../lib/deposit-topup";
-import { closedSheet, createTopupSender, topupSheetReducer, type TopupSheetState } from "../components/v3/topup/topup-controller";
+import { closedSheet, createTopupSender, topupSheetReducer, topupSignature, type TopupSheetState } from "../components/v3/topup/topup-controller";
 import type { TopupInput, TopupResult } from "./mf3-deposit-topup";
 import type { Session } from "./types";
 Object.assign(globalThis, { React });
@@ -226,7 +226,7 @@ const stub = (results: (TopupResult | Error)[]) => {
 };
 const contentOf = (st: TopupSheetState) => ({ amountMinor: String(Number(st.amount) * 100), receivedOn: st.date, note: st.note || null });
 async function attempt(st: TopupSheetState, sender: ReturnType<typeof createTopupSender>) {
-  st = topupSheetReducer(st, { type: "start" });
+  st = topupSheetReducer(st, { type: "start", signature: topupSignature(contentOf(st)) });
   const outcome = await sender.send(T, st.key!, contentOf(st));
   assert.notEqual(outcome, "busy");
   return { outcome, state: topupSheetReducer(st, { type: "done", outcome: outcome as Exclude<typeof outcome, "busy"> }) };
@@ -263,7 +263,7 @@ test("sheet: lost reply, then an edit and resend — same key, the server answer
   r = await attempt(st, sender);
   assert.equal(api.calls[1].requestId, api.calls[0].requestId);
   assert.equal(r.outcome, "landed", "conflict means the earlier save landed: the TopupSheet refreshes");
-  assert.deepEqual(r.state, closedSheet, "the sheet closes");
+  assert.deepEqual(r.state, { ...closedSheet, dupNotice: true }, "the sheet closes; the edit was not saved, so the toast shows");
   assert.equal(api.stored.size, 1, "recorded once");
   // A resend without an edit instead replays the stored row.
   const api2 = server({ loseReply: [1] }), s2 = createTopupSender(api2.submit);
@@ -359,4 +359,65 @@ test("sheet wiring and copy: every failure reads 「沒有存成功，請再試�
   for (const kept of ['value="99999999999999"', 'value="2026-11-05"', 'value="轉帳"']) assert.ok(failed.includes(kept), kept);
   assert.match(render(<TopupSheetForm {...props} amount="1" date="2026-11-05" note="" saving={false} failed={false} today="2026-11-05" />), /max="2026-11-05"/);
   assert.match(read("public/brand/v3/topup.css"), /:is\(\.v3-topup-warn,\.v3-topup-fail\):empty \{ position:absolute;/);
+});
+
+test("MO-TOPUP-DUP: an edited entry that was already recorded closes, refreshes and shows the toast; unedited shows none", async () => {
+  // Edited: lost reply on NT$2,500, then the date changes and the resend answers conflict.
+  const next = keys(), api = server({ loseReply: [1] });
+  const sender = createTopupSender(api.submit);
+  let st = topupSheetReducer(topupSheetReducer(closedSheet, { type: "open", today: "2026-11-05", key: next() }), { type: "edit", field: "amount", value: "2500" });
+  st = (await attempt(st, sender)).state;
+  st = topupSheetReducer(st, { type: "edit", field: "date", value: "2026-11-04" });
+  const edited = await attempt(st, sender);
+  assert.equal(edited.outcome, "landed");
+  assert.deepEqual(edited.state, { ...closedSheet, dupNotice: true });
+  // Opening the sheet again dismisses the toast (no timer).
+  const reopened = topupSheetReducer(edited.state, { type: "open", today: "2026-11-05", key: next() });
+  assert.equal(reopened.dupNotice, false);
+  assert.notEqual(reopened.key, api.calls[0].requestId, "a new entry after the landed one");
+  // Unedited: every send with this key carried the same values; a conflict then shows nothing.
+  const sameTwice = { ...closedSheet, open: true, amount: "2500", date: "2026-11-05", key: "k1", saving: true,
+    sent: [topupSignature({ amountMinor: "250000", receivedOn: "2026-11-05", note: null }), topupSignature({ amountMinor: "250000", receivedOn: "2026-11-05", note: "  " })] };
+  assert.deepEqual(topupSheetReducer(sameTwice, { type: "done", outcome: "landed" }), closedSheet, "unedited: no toast");
+  const firstSend = { ...sameTwice, sent: [sameTwice.sent[0]] };
+  assert.deepEqual(topupSheetReducer(firstSend, { type: "done", outcome: "landed" }), closedSheet, "a conflict on the first send: nothing was edited");
+  // A note that differs only by spaces is the same value (the gateway trims it).
+  assert.equal(topupSignature({ amountMinor: "1", receivedOn: "2026-11-05", note: " 轉帳 " }), topupSignature({ amountMinor: "1", receivedOn: "2026-11-05", note: "轉帳" }));
+});
+
+test("MO-TOPUP-DUP 取消: an entry never sent is cleared with its key; a sent, unconfirmed entry keeps its values and key", async () => {
+  const next = keys();
+  let st = topupSheetReducer(closedSheet, { type: "open", today: "2026-11-05", key: next() });
+  st = topupSheetReducer(st, { type: "edit", field: "amount", value: "2500" });
+  const neverSent = topupSheetReducer(st, { type: "close" });
+  assert.deepEqual(neverSent, closedSheet, "never sent: cleared");
+  const fresh = topupSheetReducer(neverSent, { type: "open", today: "2026-11-06", key: next() });
+  assert.deepEqual([fresh.amount, fresh.date], ["", "2026-11-06"]);
+  assert.notEqual(fresh.key, st.key, "a new key for the new entry");
+  // Refused before sending (over the cap, a future date) is also never sent.
+  const refused = topupSheetReducer(topupSheetReducer(st, { type: "refused" }), { type: "close" });
+  assert.deepEqual(refused, closedSheet);
+  // Sent, then failed: 取消 keeps the values and the key, and reopening brings them back.
+  const api = stub([{ ok: false, reason: "failed" }]);
+  const failed = (await attempt(st, createTopupSender(api.submit))).state;
+  const kept = topupSheetReducer(failed, { type: "close" });
+  assert.deepEqual([kept.open, kept.amount, kept.date, kept.key, kept.failed], [false, "2500", "2026-11-05", st.key, true]);
+  const back = topupSheetReducer(kept, { type: "open", today: "2026-11-06", key: next() });
+  assert.deepEqual([back.open, back.amount, back.date, back.key], [true, "2500", "2026-11-05", st.key]);
+  assert.equal(topupSheetReducer({ ...failed, saving: true }, { type: "close" }).open, true, "no close while saving");
+});
+
+test("MO-TOPUP-DUP toast: the existing .toast, a mounted status region, approved copy, v3 colours", () => {
+  const off = render(<TopupDupToast show={false} locale="zh-TW" />), on = render(<TopupDupToast show={true} locale="zh-TW" />);
+  assert.equal(off, '<div class="toast v3-topup-toast" role="status" data-testid="topup-dup"></div>');
+  assert.equal(on, '<div class="toast v3-topup-toast" role="status" data-testid="topup-dup">這筆已經記錄過了，剛剛的修改沒有存。</div>');
+  assert.equal(brandV3TopupCopy("en").dup, "This was already recorded. Your latest changes were not saved.");
+  const src = read("src/components/v3/topup/topup-sheet.tsx");
+  assert.match(src, /<TopupDupToast show=\{state\.dupNotice\} locale=\{view\.locale\} \/>/);
+  assert.match(src, /dispatch\(\{ type: "start", signature: topupSignature\(content\) \}\);/);
+  assert.doesNotMatch(src, /setTimeout/, "no auto-hide timer");
+  const css = read("public/brand/v3/topup.css");
+  assert.match(css, /\.toast\.v3-topup-toast \{ top:5\.5rem; bottom:auto;[^}]*background:var\(--c-primary\); color:var\(--c-on-primary\);/);
+  assert.match(css, /\.toast\.v3-topup-toast:empty \{[^}]*clip-path:inset\(50%\)/);
+  assert.match(read("src/app/globals.css"), /^\.toast\{position:fixed;/m, "reuses the existing global .toast");
 });

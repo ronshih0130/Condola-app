@@ -23,9 +23,11 @@ export type VendorTokenShellProps = {
   status: string; reported: boolean; canReport: boolean; children: ReactNode;
   notificationHref: string | null;
   loginEntry?: ReactNode;
+  /** B-105 (vendor_job_v3): RV case content replaces the V-TOKEN job content; bar, tabs and sheet stay. */
+  caseView?: ReactNode;
 };
 
-export function VendorTokenShell({ locale, context, title, address, window, status, reported, canReport, notificationHref, loginEntry, children }: VendorTokenShellProps) {
+export function VendorTokenShell({ locale, context, title, address, window, status, reported, canReport, notificationHref, loginEntry, caseView, children }: VendorTokenShellProps) {
   const copy = vendorTokenCopy(locale);
   const dialog = useRef<HTMLDialogElement>(null);
   const sheetTitle = useId();
@@ -48,6 +50,7 @@ export function VendorTokenShell({ locale, context, title, address, window, stat
       {notificationHref ? <a className="v-token-bell" href={notificationHref} aria-label={copy.notifications}><ShellIcon name="bell" /></a> : null}
     </header>
     <main className="v-token-main">
+      {caseView ?? <>
       <div className="v-token-lead"><h1>{copy.title}</h1></div>
       <p className="v-token-warning" role="status">{copy.off}</p>
       <section className="v-token-card" aria-labelledby={`${reportId}-title`}>
@@ -62,6 +65,7 @@ export function VendorTokenShell({ locale, context, title, address, window, stat
         {loginEntry}
       </section>
       <div className="v-token-existing" id={reportId} tabIndex={-1}>{children}</div>
+      </>}
     </main>
     <nav className="v-token-tabs" aria-label={copy.navigation}>
       {tabs.map(tab => tab.icon === "bell" && notificationHref ? <a key={tab.icon} href={notificationHref}>

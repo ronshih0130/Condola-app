@@ -73,7 +73,7 @@ const todayCopy = {
     paymentSummary: "確認 {count} 筆繳款", vacantSummary: "找新租客 {count} 件",
     renewalSummary: "詢問 {count} 份續約", earlySummary: "提早找租客 {count} 件",
     waitingSummary: "另外 {count} 件在等{parties}。", summaryEnd: "。", separator: "、", separatorDot: "・",
-    partyTenant: "租客", partyOwner: "屋主", partyVendor: "廠商", partyLast: "和",
+    partyTenant: "租客", partyOwner: "屋主", partyVendor: "廠商", partyManager: "管理方", partyLast: "和",
     rentals: "出租與租約", checked: "{areas}都看過了，沒有要處理的事。",
     confirm: "確認已繳款", vacant: "找新租客", renewal: "詢問續約意願", early: "提早找租客",
     yourStep: "輪到你・{step}", reReport: "等租客{name}重新回報", overdueTurn: "等租客{name}繳款",
@@ -94,8 +94,10 @@ const todayCopy = {
     bank: "開始對帳", bankTitle: "銀行對帳", bankLine: "{count} 筆銀行明細還沒對上",
     monthClose: "開始月結", monthCloseTitle: "月結", monthCloseLine: "{month} 月還沒月結・{count} 位屋主在等報表",
     // Supporting-line entries as drawn in the Round 7 batch 2 manager frame 「今天・全部種類的列都在（經理）」 (the
-    // accountant frame drops the 對帳／月結 numbers; the manager frame wins). 處理中 is drawn nowhere, so it has no entry.
+    // accountant frame drops the 對帳／月結 numbers; the manager frame wins). T-HEAD-VAR (Round 7 batch 4, approved
+    // 2026-11-16 by standing delegation) adds 「處理中 {n} 件」 and 管理方 as the last waiting party, verbatim.
     confirmCostSummary: "核對 {count} 筆費用", dispatchSummary: "派工 {count} 件", reEstimateSummary: "重新估價 {count} 件",
+    inProgressSummary: "處理中 {count} 件",
     replySummary: "回覆 {count} 則", bankSummary: "對帳 {count} 筆", monthCloseSummary: "月結 {count} 個月",
     // T-SETUP (Round 7 batch 3, GS-47; approved 2026-11-16 by standing delegation): new words verbatim from screens.md.
     setupHeadline: "{name}早，還差 {k} 步就設定好了。", setupHeadlineNoName: "還差 {k} 步就設定好了。",
@@ -108,7 +110,7 @@ const todayCopy = {
     paymentSummary: "Confirm {count} payments", vacantSummary: "Find new tenants: {count} items",
     renewalSummary: "Ask about renewal: {count} items", earlySummary: "Find tenants early: {count} items",
     waitingSummary: "Another {count} items are waiting on {parties}.", summaryEnd: ". ", separator: ", ", separatorDot: " · ",
-    partyTenant: "tenants", partyOwner: "owners", partyVendor: "vendors", partyLast: " and ",
+    partyTenant: "tenants", partyOwner: "owners", partyVendor: "vendors", partyManager: "the management team", partyLast: " and ",
     rentals: "Rentals and leases", checked: "{areas} have been checked. Nothing needs action.",
     confirm: "Confirm payment", vacant: "Find a new tenant", renewal: "Ask about renewal", early: "Find a tenant early",
     yourStep: "Your turn · {step}", reReport: "Waiting for the tenant{name} to report again", overdueTurn: "Waiting for the tenant{name} to pay",
@@ -127,6 +129,7 @@ const todayCopy = {
     bank: "Reconcile", bankTitle: "Bank reconciliation", bankLine: "{count} bank lines not matched yet",
     monthClose: "Close the month", monthCloseTitle: "Month-close", monthCloseLine: "Month {month} not closed yet · {count} owners waiting for statements",
     confirmCostSummary: "Check {count} costs", dispatchSummary: "Dispatch {count} items", reEstimateSummary: "Re-estimate {count} items",
+    inProgressSummary: "In progress: {count} items",
     replySummary: "Reply to {count} messages", bankSummary: "Reconcile {count} lines", monthCloseSummary: "Close {count} month",
     setupHeadline: "Good morning, {name}. Steps left before setup is done: {k}.", setupHeadlineNoName: "Steps left before setup is done: {k}.",
   },
