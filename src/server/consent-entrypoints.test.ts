@@ -59,6 +59,7 @@ const openPages: Record<string, Record<string, string>> = {
 const openRoutes: Record<string, Record<string, string>> = {
   "api/line/vendor-job/route.ts": { GET: "B-035 browser-bound single-job claim and strict LINE gates; no account session", POST: "B-035 same-origin CSRF and original locked vendor job capability; no account session" },
   "(line)/v/liff/job/route.ts": { GET: "B-035 browser-bound single-job claim; no human account authority" },
+  "(line)/v/link/route.ts": { GET: "B-101 V-LINK review: browser-bound verified LINE flow, gates checked, no account session before confirmation", POST: "B-101 V-LINK remove/confirm: same-origin CSRF + browser-bound flow; session minted only on confirm, then existing consent routing (/consent?next=…)" },
   "api/line/portal/route.ts": { POST: "B-036 preference selection only; existing session, server role/company, portal flags and CSRF; current consent checked before returning portal next" },
   "api/line/reauth/route.ts": { POST: "B-033 explicit password/MFA step-up only; session-bound evidence, portal gates, browser proof and same-origin CSRF; never writes legal consent" },
   "api/line/flows/route.ts": { POST: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },

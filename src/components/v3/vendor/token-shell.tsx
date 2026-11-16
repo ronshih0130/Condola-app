@@ -22,9 +22,10 @@ export type VendorTokenShellProps = {
   locale: Locale; context: VendorTokenBrand; title: string; address: string; window: string;
   status: string; reported: boolean; canReport: boolean; children: ReactNode;
   notificationHref: string | null;
+  loginEntry?: ReactNode;
 };
 
-export function VendorTokenShell({ locale, context, title, address, window, status, reported, canReport, notificationHref, children }: VendorTokenShellProps) {
+export function VendorTokenShell({ locale, context, title, address, window, status, reported, canReport, notificationHref, loginEntry, children }: VendorTokenShellProps) {
   const copy = vendorTokenCopy(locale);
   const dialog = useRef<HTMLDialogElement>(null);
   const sheetTitle = useId();
@@ -58,6 +59,7 @@ export function VendorTokenShell({ locale, context, title, address, window, stat
         </dl>
         <p>{copy.hint}</p>
         {canReport ? <a className="v-token-primary" href={`#${reportId}`}>{copy.report}</a> : null}
+        {loginEntry}
       </section>
       <div className="v-token-existing" id={reportId} tabIndex={-1}>{children}</div>
     </main>
@@ -71,6 +73,7 @@ export function VendorTokenShell({ locale, context, title, address, window, stat
     <dialog ref={dialog} className="v-token-sheet" aria-labelledby={sheetTitle} aria-describedby={sheetBody}>
       <h2 id={sheetTitle}>{copy.sheetTitle}</h2><p id={sheetBody}>{copy.sheetBody}</p>
       <button className="v-token-primary" type="button" onClick={close} autoFocus>{copy.back}</button>
+      {loginEntry}
     </dialog>
   </div>;
 }

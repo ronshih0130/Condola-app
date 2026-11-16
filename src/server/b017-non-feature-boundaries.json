@@ -284,8 +284,8 @@
     "sha256": "7a80824228f92e5cd7dd26c266b6ca00c4e76a73d3ee27aae9791f9ab5212cfd"
   },
   "src/app/v/[token]/page.tsx#VendorJobPage": {
-    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission",
-    "sha256": "beaf06d481757f628d8eadac1e46d9bdb158c3bb3cb1096b6a6d2ca316fcc8a8"
+    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93.",
+    "sha256": "614ae70bb78aa9ac0a4b629e7c958accec3060222c5302982073426620a59609"
   },
   "src/server/notification-center.ts#centerVendorAdmission": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",
@@ -542,5 +542,15 @@
   "src/server/vendor-job.ts#resolveVendorJobStateOn": {
     "reason": "Internal vendor action-state read: invoked only after complete token capability/sharing admission by loadVendorRepairTurnsOn; token-derived scope, same client, B-104 helpers only.",
     "sha256": "28268a97928d7c1690ccdc81e53f97e4e4cc98d4472e762f08b1a6db46a22fca"
+  },
+  "src/app/(line)/v/link/route.ts#GET": {
+    "classification": "identity-establishment",
+    "reason": "B101 V-LINK: browser/CSRF-cookie proof plus consumed verified OAuth flow; exact org/contact open-job snapshot only, no staff authority or token-only history.",
+    "sha256": "e51bc061e46f5f4194ad5446bc329353f4d7d980ba199b239e1a949ddb02cbd2"
+  },
+  "src/app/(line)/v/link/route.ts#POST": {
+    "classification": "identity-establishment",
+    "reason": "B101 V-LINK: same-origin CSRF plus browser-bound verified flow; durable per-row removal or frozen-list confirmation, rechecks gates/identity/persona; account session only after confirmation. No staff authority.",
+    "sha256": "053dbbffdd723c99f7302997963ef6486496545e946d654cac8f2226a0f09093"
   }
 }

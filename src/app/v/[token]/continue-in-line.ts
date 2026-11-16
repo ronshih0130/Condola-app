@@ -9,7 +9,7 @@ export type ContinueInLineDeps = {
 
 const LIFF_URL = /^\/v\/liff\?flow=[\w-]{43}$/;
 
-export async function continueInLine(jobToken: string, deps: ContinueInLineDeps): Promise<boolean> {
+export async function continueInLine(jobToken: string, deps: ContinueInLineDeps, vendorMatch = false): Promise<boolean> {
   const post = async (path: string, value: Record<string, string>) => {
     const response = await deps.fetch(path, {
       method: "POST",
@@ -25,7 +25,7 @@ export async function continueInLine(jobToken: string, deps: ContinueInLineDeps)
   try {
     const proof = await post("/v/liff", { jobToken });
     if (typeof proof.csrf !== "string") return false;
-    const flow = await post("/api/line/flows", { purpose: "login", persona: "vendor", jobToken, csrf: proof.csrf });
+    const flow = await post("/api/line/flows", { purpose: "login", persona: "vendor", jobToken, csrf: proof.csrf, ...(vendorMatch ? { vendorMatch: "true" } : {}) });
     if (typeof flow.liffUrl !== "string" || !LIFF_URL.test(flow.liffUrl)) return false;
     deps.navigate(flow.liffUrl);
     return true;

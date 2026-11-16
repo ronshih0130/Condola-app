@@ -1,3 +1,4 @@
+import { VendorLineMatchEntry } from "@/components/v3/vendor/line-match-entry";
 import type { ReactNode } from "react";
 import { VendorTokenShell } from "@/components/v3/vendor/token-shell";
 import { vendorTokenBrand } from "@/server/vendor-token-brand";
@@ -46,6 +47,7 @@ export default async function VendorJobPage({
   const vendorState = job.vendorLink && (!job.vendorLink.sharingApproved || job.vendorLink.capability !== "write")
     ? null : await resolveVendorJobState(token);
   // B-035: only while every strict vendor LINE gate is ON. OFF keeps the original child slot, so even useId output is unchanged.
+  const matchEntry = tokenBrand && await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;
   const showLine = !tokenBrand && await vendorLineEntryEnabled(token);
   const lineEntry = showLine
     ? <VendorLineEntry token={token} copy={{ label: t("i_vendor_line_continue"), hint: t("i_vendor_line_hint"), failed: t("i_vendor_line_failed") }} />
@@ -171,6 +173,7 @@ export default async function VendorJobPage({
     }[tokenBrand.status];
     return <VendorTokenShell locale={prefs.locale} context={tokenBrand}
       notificationHref={notificationEntry?.href ?? null}
+      loginEntry={matchEntry}
       title={job!.title} address={job!.address} window={job!.window}
       status={reported ? t("i_vendor_reported_awaiting_company")
         : !shared ? vendorLinkCopy(prefs.locale).waiting : !writable ? t("i_vlink_read_only")

@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261115180000_b101_vendor_line_match.sql": {
+    addOnly: false,
+    reason: "B-101 / VEN-31 (Ron 2026-11-15 14:37 PT): vendor LINE sign-in matched to the token job's vendor contact. Adds app.b101_* private gateways and app.b101_vendor_confirmations (RLS on, no application grants), a nullable b035 flow contact pin with a retarget-guard trigger, and LINE provenance on app.b026_vendor_accounts (invite_id may be NULL only with LINE provenance) plus three new link-event reasons. Not add-only: it relaxes an existing NOT NULL and widens existing CHECK constraints. Flags stay OFF; no table grants widened; no data or outbound change.",
+  },
   "supabase/migrations/20261115170000_b3_owner_pending_terminal.sql": {
     addOnly: false,
     reason: "B-070 3b M1 / B1: replace only PR-015 owner pending body with closed/cancelled exclusion. Existing behavior changes, not add-only. Signature, owner, ACL, history and writers preserved.",

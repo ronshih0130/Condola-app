@@ -31,3 +31,9 @@ body:has(.v-token-v3) > .top, body:has(.v-token-v3) > .env-banner { display: non
 .v-token-v3 .v-token-sheet::backdrop { background: var(--c-primary); opacity: .45; }
 
 .v-token-v3 .v-token-bell { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 44px; min-height: 44px; border: 0; border-radius: var(--r-btn); color: var(--c-on-primary); background: transparent; cursor: pointer; }
+
+/* VEN-31 outline actions use the approved shell tokens; no OFF markup changes. */
+.v-token-v3 .v-token-secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; margin-block: 8px; padding: 10px 24px; border: 1px solid var(--c-primary); border-radius: var(--r-btn); background: var(--c-surface); color: var(--c-primary); font: inherit; cursor: pointer; }
+.v-token-v3 #match-jobs { padding: 0; list-style: none; }
+.v-token-v3 #match-jobs li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-block: 12px; border-bottom: 1px solid var(--c-border); }
+.v-token-v3 button:disabled { cursor: wait; }
