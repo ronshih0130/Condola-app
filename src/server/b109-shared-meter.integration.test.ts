@@ -3,7 +3,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { svc } from "./db";
-import { saveSharedMeter, sharedMeterView } from "./b109-shared-meter";
+import { saveSharedMeter, sharedMeterSplit, sharedMeterView } from "./b109-shared-meter";
+import { readFileSync } from "node:fs";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { resetAndSeed } from "./seed";
 import { cloneTestDatabase } from "./test-database-clone";
@@ -20,21 +21,23 @@ const VIEW = "app.b109_shared_meter_view(uuid,uuid,text,uuid,uuid)";
 const SPLIT = "app.b109_shared_meter_split(uuid,uuid,text,uuid,uuid,date,numeric,bigint)";
 const sid: Record<string, string> = {};
 const v3 = async () => true;
-let property: string, other: string, archivedProperty: string, roomA: string, roomB: string, roomC: string, whole: string, foreignRoom: string;
-let next: string, nextEnd: string, thisMonth: string;
+let property: string, other: string, archivedProperty: string, roomA: string, roomB: string, roomC: string, whole: string, foreignRoom: string, floor: string;
+let next: string, nextEnd: string, thisMonth: string, prevMonth: string, days: number, billing: Record<string, string>;
 type Result = Record<string, unknown> & { status: string };
-type Split = { status: string; revision?: number; method?: string; rows?: { id: string; weight: string; kwh: string; amountMinor: string | null }[]; missing?: string[] } | null;
+type Split = { status: string; revision?: number; method?: string; kwh?: string; rows?: { id: string; weight: string; kwh: string; amountMinor: string | null }[]; spaces?: string[] } | null;
 const code = (c: string) => (e: unknown) => ((e as { code?: string }).code ?? (e as { cause?: { code?: string } }).cause?.code) === c;
 
 async function flag(platform: boolean, org = platform) {
   await db.query(`UPDATE public.platform_settings SET value=jsonb_build_object('enabled',$1::boolean,'allowed_org_ids',jsonb_build_array($2::text,$3::text)) WHERE key='shared_meter'`, [platform, ORG_ID, ORG2_ID]);
   await db.query(`UPDATE public.organizations SET feature_flags=feature_flags||jsonb_build_object('shared_meter',$2::boolean) WHERE id = ANY($1::uuid[])`, [[ORG_ID, ORG2_ID], org]);
 }
-type Opts = { org?: string; live?: string; env?: string; pin?: string | null };
+/** pin: app.active_org_id (null: unset); pinEnv: app.env (null: unset), independently of the call's own tuple. */
+type Opts = { org?: string; live?: string; env?: string; pin?: string | null; pinEnv?: string | null };
 async function call<T>(fn: string, who: string, args: unknown[], opts: Opts = {}): Promise<T> {
   const org = opts.org ?? ORG_ID, env = opts.env ?? "live";
   return svc(null, async client => {
-    if (opts.pin !== null) await client.query("SELECT set_config('app.active_org_id',$1,true),set_config('app.env',$2,true)", [opts.pin ?? org, env]);
+    if (opts.pin !== null) await client.query("SELECT set_config('app.active_org_id',$1,true)", [opts.pin ?? org]);
+    if (opts.pinEnv !== null) await client.query("SELECT set_config('app.env',$1,true)", [opts.pinEnv ?? env]);
     const params = args.map((_, i) => `$${i + 5}`).join(",");
     return (await client.query(`SELECT ${fn.split("(")[0]}($1,$2,$3,$4,${params}) r`, [org, opts.live ?? org, env, sid[who], ...args])).rows[0].r;
   });
@@ -49,6 +52,32 @@ const snapshot = async () => (await db.query(`SELECT
   (SELECT md5(coalesce(string_agg(row_to_json(a)::text,'|' ORDER BY a.id),'')) FROM public.audit_log a WHERE a.table_name='b109_shared_meter_configs') audit,
   (SELECT count(*)::int FROM app.b109_shared_meter_configs) n`)).rows[0] as { configs: string; audit: string; n: number };
 async function unchanged(label: string, fn: () => Promise<unknown>) { const before = await snapshot(); await fn(); assert.deepEqual(await snapshot(), before, label); }
+/** Every billing row (issued bills, their lines, utility bills, allocation runs and lines), all orgs. */
+const billingSnapshot = async () => (await db.query(`SELECT
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.invoices x) invoices,
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.invoice_lines x) invoice_lines,
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.utility_bills x) utility_bills,
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.utility_allocation_runs x) runs,
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.utility_allocation_lines x) run_lines`)).rows[0] as Record<string, string>;
+const lease = async (target: { room?: string; unit?: string }, start: string, end: string | null) =>
+  (await db.query(`INSERT INTO public.leases(org_id,property_id,unit_id,target_room_id,target_unit_id,status,start_date,end_date,currency,rent_amount_minor)
+    VALUES($1,$2,coalesce($5::uuid,(SELECT unit_id FROM public.rooms WHERE id=$3::uuid)),$3::uuid,$4::uuid,'active',$6::date,$7::date,'TWD',100000) RETURNING id`,
+    [ORG_ID, property, target.room ?? null, target.unit ?? null, target.unit ?? null, start, end])).rows[0].id as string;
+const meter = async (space: { room?: string; unit?: string }) =>
+  (await db.query(`INSERT INTO public.meters(org_id,property_id,unit_id,room_id,utility,usage_unit,payer,split_method,rate_source,rate_minor_per_unit)
+    VALUES($1,$2,coalesce($4::uuid,(SELECT unit_id FROM public.rooms WHERE id=$3::uuid)),$3::uuid,'electricity','kWh','tenant','none','fixed_rate',500) RETURNING id`,
+    [ORG_ID, property, space.room ?? null, space.unit ?? null])).rows[0].id as string;
+const reading = (meterId: string, on: string, value: number, estimate = false) =>
+  db.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value,is_estimate) VALUES($1,$2,$3,$4,$5)", [ORG_ID, meterId, on, value, estimate]);
+const shift = async (d: string, n: number, unit: "day" | "month") => (await db.query(`SELECT ($1::date + ($2 || ' ${unit}')::interval)::date::text d`, [d, n])).rows[0].d as string;
+/** The gateway's rule, recomputed: floor each share, the remainder to the first space. */
+function expectShares(total: number, weights: number[]) {
+  const sum = weights.reduce((a, b) => a + b, 0), w = sum === 0 ? weights.map(() => 1) : weights, tw = sum === 0 ? weights.length : sum;
+  const shares = w.map(x => Math.floor(total * x / tw));
+  shares[0] += total - shares.reduce((a, b) => a + b, 0);
+  return shares;
+}
+const kwhOf = (milli: number) => (milli / 1000).toFixed(3);
 const session = (who: keyof typeof USERS, role: Session["role"], org = ORG_ID): Session => ({ kind: "staff", role, orgId: org, liveOrgId: org,
   userId: USERS[who], sessionId: sid[who], name: "Synthetic", email: "", environment: "live", locale: "zh-TW", calendar: "gregorian", leaseId: null });
 
@@ -82,7 +111,7 @@ test.before(async () => {
   sid.revoked = randomUUID();
   await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at,revoked_at) VALUES($1,$2,$3,clock_timestamp()+interval '2 hours',clock_timestamp())", [sid.revoked, USERS.admin, randomUUID()]);
   property = await propertyWith(ORG_ID, "民生東路三段 25 號");
-  const floor = await unit(ORG_ID, property, "3F", "by_room");
+  floor = await unit(ORG_ID, property, "3F", "by_room");
   roomA = await room(ORG_ID, floor, "A"); roomB = await room(ORG_ID, floor, "B"); roomC = await room(ORG_ID, floor, "C");
   whole = await unit(ORG_ID, property, "5F", "whole_unit");
   other = await propertyWith(ORG_ID, "Other");
@@ -91,8 +120,35 @@ test.before(async () => {
   await db.query("UPDATE public.properties SET archived_at=clock_timestamp() WHERE id=$1", [archivedProperty]);
   const m = (await db.query(`SELECT (date_trunc('month',(clock_timestamp() AT TIME ZONE timezone)) + interval '1 month')::date::text n,
     (date_trunc('month',(clock_timestamp() AT TIME ZONE timezone)) + interval '2 month' - interval '1 day')::date::text e,
-    date_trunc('month',(clock_timestamp() AT TIME ZONE timezone))::date::text t FROM public.properties WHERE id=$1`, [property])).rows[0];
-  next = m.n; nextEnd = m.e; thisMonth = m.t;
+    date_trunc('month',(clock_timestamp() AT TIME ZONE timezone))::date::text t,
+    (date_trunc('month',(clock_timestamp() AT TIME ZONE timezone)) - interval '1 month')::date::text p FROM public.properties WHERE id=$1`, [property])).rows[0];
+  next = m.n; nextEnd = m.e; thisMonth = m.t; prevMonth = m.p; days = Number(nextEnd.slice(8));
+  // Occupancy crossing month boundaries: A from the 20th of this month to the 10th of next; B from the 21st of next
+  // month into the month after; C vacant; the whole unit 5F from the start of this month, open-ended.
+  await lease({ room: roomA }, await shift(thisMonth, 19, "day"), await shift(next, 9, "day"));
+  await lease({ room: roomB }, await shift(next, 20, "day"), await shift(next, 1, "month"));
+  const wholeLease = await lease({ unit: whole }, thisMonth, null);
+  // An issued bill for this property, with its utility bill, posted allocation run and line.
+  const wholeMeter = await meter({ unit: whole });
+  const bill = (await db.query(`INSERT INTO public.utility_bills(org_id,meter_id,provider,period_start,period_end,currency,total_amount_minor,total_usage)
+    VALUES($1,$2,'Taipower',$3,$4,'TWD',55000,100) RETURNING id`, [ORG_ID, wholeMeter, prevMonth, thisMonth])).rows[0].id;
+  const run = (await db.query(`INSERT INTO public.utility_allocation_runs(org_id,meter_id,utility_bill_id,period_start,period_end,split_method,rate_source,currency,
+      total_usage,rate_minor_per_unit,total_amount_minor,status,approved_by,approved_at)
+    VALUES($1,$2,$3,$4,$5,'none','fixed_rate','TWD',100,550,55000,'posted',$6,now()) RETURNING id`, [ORG_ID, wholeMeter, bill, prevMonth, thisMonth, USERS.admin])).rows[0].id;
+  const line = (await db.query(`INSERT INTO public.utility_allocation_lines(org_id,run_id,lease_id,share_ratio,allocated_usage,amount_minor)
+    VALUES($1,$2,$3,1,100,55000) RETURNING id`, [ORG_ID, run, wholeLease])).rows[0].id;
+  const invoice = (await db.query(`INSERT INTO public.invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,period_start,period_end,source)
+    VALUES($1,$2,$3,$4,'TWD',$5,$6,$5,'utility') RETURNING id`, [ORG_ID, property, wholeLease, `B109-${randomUUID().slice(0, 8)}`, thisMonth, prevMonth])).rows[0].id;
+  await db.query(`INSERT INTO public.invoice_lines(org_id,invoice_id,line_no,charge_type,description,quantity,unit_amount_minor,amount_minor,allocation_line_id)
+    VALUES($1,$2,1,'utility','電費',100,550,55000,$3)`, [ORG_ID, invoice, line]);
+  await db.query("UPDATE public.invoices SET status='open' WHERE id=$1", [invoice]);
+  assert.equal((await db.query("SELECT total_minor::text t,status::text s FROM public.invoices WHERE id=$1", [invoice])).rows[0].s, "open");
+  // Baseline before the first gateway call; compared after every test.
+  billing = await billingSnapshot();
+});
+
+test.afterEach(async () => {
+  assert.deepEqual(await billingSnapshot(), billing, "no billing row (issued bill, line, utility bill, run, run line) changes");
 });
 
 test.after(async () => {
@@ -121,7 +177,18 @@ test("effective privileges: gateways EXECUTE for service_role only; the table ha
   assert.deepEqual((await db.query("SELECT value FROM public.platform_settings WHERE key='shared_meter'")).rows[0].value, { enabled: false, allowed_org_ids: [] }, "seeded OFF");
 });
 
-test("flag OFF (platform, org, or both) and brand_v3 OFF: no access, nothing written", async () => {
+test("seeding never overwrites: re-running the migration's seed keeps existing platform and org values", async () => {
+  const seed = readFileSync("supabase/migrations/20261116180000_b109_shared_meter.sql", "utf8").match(/INSERT INTO public\.platform_settings[\s\S]*?ON CONFLICT \(key\) DO NOTHING;/)![0];
+  await flag(true);
+  const before = (await db.query("SELECT value FROM public.platform_settings WHERE key='shared_meter'")).rows[0].value;
+  const orgs = (await db.query("SELECT id::text,feature_flags->'shared_meter' f FROM public.organizations WHERE id = ANY($1::uuid[]) ORDER BY id", [[ORG_ID, ORG2_ID]])).rows;
+  await db.query(seed);
+  assert.deepEqual((await db.query("SELECT value FROM public.platform_settings WHERE key='shared_meter'")).rows[0].value, before);
+  assert.deepEqual(before, { enabled: true, allowed_org_ids: [ORG_ID, ORG2_ID] });
+  assert.deepEqual((await db.query("SELECT id::text,feature_flags->'shared_meter' f FROM public.organizations WHERE id = ANY($1::uuid[]) ORDER BY id", [[ORG_ID, ORG2_ID]])).rows, orgs);
+});
+
+test("flag OFF (platform, org, or both) and brand_v3 OFF alone: no access, nothing written", async () => {
   for (const [platform, org] of [[false, false], [false, true], [true, false]] as const) {
     await flag(platform, org);
     await unchanged(`platform ${platform} org ${org}`, async () => {
@@ -130,11 +197,17 @@ test("flag OFF (platform, org, or both) and brand_v3 OFF: no access, nothing wri
       assert.equal(await split("admin", next, 100), null);
       assert.deepEqual(await sharedMeterView(session("admin", "admin"), property, { v3 }), { state: "off" });
       assert.deepEqual(await saveSharedMeter(session("admin", "admin"), { propertyId: property, requestId: randomUUID(), spaceIds: [roomA], method: "even", startReading: "10" }, { v3 }), { ok: false, reason: "off" });
+      assert.deepEqual(await sharedMeterSplit(session("admin", "admin"), { propertyId: property, period: next, kwh: "10" }, { v3 }), { state: "off" });
     });
   }
+  // Only brand_v3 off: an otherwise valid save, read and split never reach the gateways.
   await flag(true);
+  const never = (async () => { throw new Error("no transaction expected"); }) as never;
   await unchanged("brand_v3 off", async () => {
-    assert.deepEqual(await sharedMeterView(session("admin", "admin"), property, { v3: async () => false }), { state: "off" });
+    assert.deepEqual(await sharedMeterView(session("admin", "admin"), property, { v3: async () => false, transaction: never }), { state: "off" });
+    assert.deepEqual(await saveSharedMeter(session("admin", "admin"), { propertyId: property, requestId: randomUUID(), spaceIds: [roomA, roomB], method: "even", startReading: "10" },
+      { v3: async () => false, transaction: never }), { ok: false, reason: "off" });
+    assert.deepEqual(await sharedMeterSplit(session("admin", "admin"), { propertyId: property, period: next, kwh: "10" }, { v3: async () => false, transaction: never }), { state: "off" });
   });
   assert.equal((await snapshot()).n, 0);
 });
@@ -145,7 +218,7 @@ test("MGT-90-AC4: save takes effect from the next period, audited; the view pref
   assert.ok(v0);
   assert.equal(v0.config, null);
   assert.equal(v0.nextEffectiveFrom, next);
-  assert.deepEqual((v0.spaces as { id: string; label: string | null; unitLabel: string }[]).map(s => [s.unitLabel, s.label]), [["3F", "A"], ["3F", "B"], ["3F", "C"], ["5F", null]]);
+  assert.deepEqual((v0.spaces as { label: string | null; unitLabel: string }[]).map(s => [s.unitLabel, s.label]), [["3F", "A"], ["3F", "B"], ["3F", "C"], ["5F", null]]);
   const request = randomUUID();
   const r = await save("manager", [roomC, roomA, roomB], "even", "1284", request);
   assert.deepEqual(r, { status: "saved", configId: r.configId, revision: 1, effectiveFrom: next, spaceCount: 3, method: "even", replayed: false });
@@ -156,92 +229,121 @@ test("MGT-90-AC4: save takes effect from the next period, audited; the view pref
   const audit = (await db.query("SELECT actor_user_id,actor_role,action::text,reason,request_id,new_row FROM public.audit_log WHERE table_name='b109_shared_meter_configs' AND row_id=$1", [r.configId])).rows;
   assert.equal(audit.length, 1);
   assert.deepEqual([audit[0].actor_user_id, audit[0].actor_role, audit[0].action, audit[0].reason, audit[0].request_id], [USERS.manager, "manager", "insert", "shared_meter_saved", request]);
-  assert.deepEqual(audit[0].new_row.effective_from, next);
-  // Next-period effect: the current month has no config; the next month uses revision 1.
+  assert.equal(audit[0].new_row.effective_from, next);
   assert.deepEqual(await split("admin", thisMonth, 100), { status: "none", period: thisMonth });
   assert.equal((await split("admin", next, 100))!.status, "ready");
-  const v1 = await view("admin");
-  assert.deepEqual(v1!.config, { revision: 1, spaceIds: [roomA, roomB, roomC], method: "even", startReading: "1284.000", effectiveFrom: next });
-  // TS reader and writer, native manager.
+  assert.deepEqual((await view("admin"))!.config, { revision: 1, spaceIds: [roomA, roomB, roomC], method: "even", startReading: "1284.000", effectiveFrom: next });
   const ts = await sharedMeterView(session("manager", "manager"), property, { v3 });
   if (ts.state !== "ready") assert.fail(ts.state);
   assert.equal(ts.config?.revision, 1);
 });
 
-test("idempotent save: the same request replays; another payload under the key conflicts; a new save is a new revision", async () => {
+test("append-only revisions and idempotency: replay by id set survives renames, archiving and later saves", async () => {
   await flag(true);
-  const request = randomUUID();
-  const one = await save("admin", [roomA, roomB, roomC], "days_occupied", "1300.5", request);
+  const roomD = await room(ORG_ID, floor, "D");
+  const first = randomUUID();
+  const one = await save("admin", [roomD, roomA], "days_occupied", "1300.5", first);
   assert.equal(one.status, "saved");
+  const row1 = (await db.query("SELECT * FROM app.b109_shared_meter_configs WHERE id=$1", [one.configId])).rows[0];
   await unchanged("replay and conflict", async () => {
-    const again = await save("admin", [roomA, roomB, roomC], "days_occupied", "1300.5", request);
-    assert.deepEqual(again, { ...one, replayed: true });
-    assert.deepEqual(await save("admin", [roomA, roomB], "days_occupied", "1300.5", request), { status: "conflict" });
-    assert.deepEqual(await save("admin", [roomA, roomB, roomC], "even", "1300.5", request), { status: "conflict" });
-    assert.deepEqual(await save("manager", [roomA, roomB, roomC], "days_occupied", "1300.5", request), { status: "conflict" });
+    assert.deepEqual(await save("admin", [roomA, roomD], "days_occupied", "1300.500", first), { ...one, replayed: true }, "same id set, any order");
+    assert.deepEqual(await save("admin", [roomA], "days_occupied", "1300.5", first), { status: "conflict" });
+    assert.deepEqual(await save("admin", [roomA, roomD, roomB], "days_occupied", "1300.5", first), { status: "conflict" });
+    assert.deepEqual(await save("admin", [roomA, roomD], "even", "1300.5", first), { status: "conflict" });
+    assert.deepEqual(await save("admin", [roomA, roomD], "days_occupied", "1300.6", first), { status: "conflict" });
+    assert.deepEqual(await save("manager", [roomA, roomD], "days_occupied", "1300.5", first), { status: "conflict" });
   });
-  assert.equal(one.revision, 2);
-  assert.equal(one.effectiveFrom, next);
-  const ts = await saveSharedMeter(session("admin", "admin"), { propertyId: property, requestId: randomUUID(), spaceIds: [roomA, roomB, roomC], method: "even", startReading: "1,284" }, { v3 });
-  assert.deepEqual(ts, { ok: true, revision: 3, effectiveFrom: next, spaceCount: 3, method: "even", replayed: false });
+  const two = await save("admin", [roomA, roomB, roomC], "even", "1", randomUUID());
+  const three = await saveSharedMeter(session("admin", "admin"), { propertyId: property, requestId: randomUUID(), spaceIds: [roomA, roomB, roomC], method: "even", startReading: "1,284" }, { v3 });
+  assert.equal(two.revision, (one.revision as number) + 1);
+  assert.deepEqual(three, { ok: true, revision: (one.revision as number) + 2, effectiveFrom: next, spaceCount: 3, method: "even", replayed: false });
+  // Renaming and then archiving a space never turns the old identical retry into a conflict or an invalid.
+  await db.query("UPDATE public.rooms SET label='Z' WHERE id=$1", [roomD]);
+  assert.deepEqual(await save("admin", [roomD, roomA], "days_occupied", "1300.5", first), { ...one, replayed: true });
+  await db.query("UPDATE public.rooms SET archived_at=clock_timestamp() WHERE id=$1", [roomD]);
+  assert.deepEqual(await save("admin", [roomD, roomA], "days_occupied", "1300.5", first), { ...one, replayed: true });
+  // Earlier revisions are never touched; a new save with the archived room is invalid.
+  assert.deepEqual((await db.query("SELECT * FROM app.b109_shared_meter_configs WHERE id=$1", [one.configId])).rows[0], row1);
+  assert.deepEqual((await db.query("SELECT revision FROM app.b109_shared_meter_configs WHERE property_id=$1 ORDER BY revision", [property])).rows.map(r => r.revision),
+    Array.from({ length: (one.revision as number) + 2 }, (_, i) => i + 1));
+  assert.deepEqual(await save("admin", [roomD, roomA], "days_occupied", "1300.5"), { status: "invalid" });
 });
 
-test("split 平均分: shares floored, the remainder to the first room (kWh to 0.001 and minor units)", async () => {
+test("split 平均分: every space gets its own floored share; the remainder goes to the first (kWh to 0.001 and minor units)", async () => {
   await flag(true);
-  await save("admin", [roomA, roomB, roomC], "even", 0);
-  const s = await split("admin", next, 100, 1000);
+  await save("admin", [roomA, roomB, roomC, whole], "even", 0);
+  const s = await split("admin", next, "100.003", 1001);
   assert.equal(s!.status, "ready");
-  assert.equal(s!.method, "even");
   assert.deepEqual(s!.rows!.map(r => [r.id, r.weight, r.kwh, r.amountMinor]), [
-    [roomA, "1", "33.334", "334"], [roomB, "1", "33.333", "333"], [roomC, "1", "33.333", "333"]]);
-  const noAmount = await split("admin", next, "0.002");
-  assert.deepEqual(noAmount!.rows!.map(r => [r.kwh, r.amountMinor]), [["0.002", null], ["0.000", null], ["0.000", null]]);
+    [roomA, "1", "25.003", "251"], [roomB, "1", "25.000", "250"], [roomC, "1", "25.000", "250"], [whole, "1", "25.000", "250"]]);
+  const ts = await sharedMeterSplit(session("manager", "manager"), { propertyId: property, period: next, kwh: "100.003", amountMinor: "1001" }, { v3 });
+  if (ts.state !== "ready") assert.fail(ts.state);
+  assert.deepEqual(ts.rows.map(r => r.kwh), ["25.003", "25.000", "25.000", "25.000"]);
 });
 
-test("split 依住的天數分: inclusive lease days in the period; vacant rooms weigh 0; all vacant splits evenly", async () => {
+test("split 依住的天數分: leases crossing month boundaries, a whole unit, vacant rooms; per-space kWh and amounts", async () => {
   await flag(true);
   await save("admin", [roomA, roomB, roomC, whole], "days_occupied", 0);
-  const days = Number(nextEnd.slice(8));
-  const half = `${next.slice(0, 8)}16`;
-  for (const [target, start] of [[roomA, next], [roomB, half]] as const)
-    await db.query(`INSERT INTO public.leases(org_id,property_id,unit_id,target_room_id,status,start_date,end_date,currency,rent_amount_minor)
-      SELECT $1,$2,r.unit_id,r.id,'active',$4::date,$5::date,'TWD',100000 FROM public.rooms r WHERE r.id=$3`, [ORG_ID, property, target, start, nextEnd]);
-  const s = await split("admin", next, 90, 9001);
-  const weights = s!.rows!.map(r => Number(r.weight));
-  assert.deepEqual(weights, [days, days - 15, 0, 0]);
-  const total = weights.reduce((a, b) => a + b, 0);
-  const expected = weights.map(w => Math.floor(9001 * w / total));
-  expected[0] += 9001 - expected.reduce((a, b) => a + b, 0);
-  assert.deepEqual(s!.rows!.map(r => Number(r.amountMinor)), expected);
-  assert.equal(s!.rows!.reduce((sum, r) => sum + Number(r.amountMinor), 0), 9001);
-  assert.equal(s!.rows!.reduce((sum, r) => sum + Math.round(Number(r.kwh) * 1000), 0), 90000);
-  // A later period with nobody living there: all weights 0, split evenly, remainder to the first.
-  const far = (await db.query("SELECT ($1::date + interval '3 month')::date::text d", [next])).rows[0].d;
-  const empty = await split("admin", far, 10, 10);
-  assert.deepEqual(empty!.rows!.map(r => [r.weight, r.amountMinor]), [["1", "4"], ["1", "2"], ["1", "2"], ["1", "2"]]);
+  const s = await split("admin", next, "123.457", 98765);
+  const weights = [10, days - 20, 0, days];
+  assert.deepEqual(s!.rows!.map(r => [r.id, Number(r.weight)]), [[roomA, 10], [roomB, days - 20], [roomC, 0], [whole, days]]);
+  assert.deepEqual(s!.rows!.map(r => r.kwh), expectShares(123457, weights).map(kwhOf));
+  assert.deepEqual(s!.rows!.map(r => Number(r.amountMinor)), expectShares(98765, weights));
+  // The month after: A has ended; B's lease ends on its 1st (1 day); 5F is open-ended (the whole month).
+  const after = await shift(next, 1, "month");
+  const afterDays = Number((await db.query("SELECT (($1::date + interval '1 month') - interval '1 day')::date::text d", [after])).rows[0].d.slice(8));
+  const s2 = await split("admin", after, 10, 10);
+  assert.deepEqual(s2!.rows!.map(r => Number(r.weight)), [0, 1, 0, afterDays]);
+  assert.deepEqual(s2!.rows!.map(r => r.kwh), expectShares(10000, [0, 1, 0, afterDays]).map(kwhOf));
+  // Nobody living there: all weights 0 split evenly, the remainder to the first space.
+  const far = await shift(next, -3, "month");
+  await save("admin", [roomC], "days_occupied", 0);
+  assert.equal((await split("admin", far, 10, 10))!.status, "none", "before the config's effective month");
+  const vacant = await split("admin", next, "0.010", 10);
+  assert.deepEqual(vacant!.rows!.map(r => [r.weight, r.kwh, r.amountMinor]), [["1", "0.010", "10"]]);
 });
 
-test("split 依分表度數: each room meter's usage in the period; a missing reading stops the split (never guessed)", async () => {
+test("split 依分表度數: one meter per space, latest readings, missing baseline, estimates, ambiguity, 3-decimal rounding", async () => {
   await flag(true);
-  await save("admin", [roomA, roomB, roomC], "sub_meter", 0);
-  const meters: Record<string, string> = {};
-  for (const r of [roomA, roomB, roomC])
-    meters[r] = (await db.query(`INSERT INTO public.meters(org_id,property_id,unit_id,room_id,utility,usage_unit,payer,split_method,rate_source,rate_minor_per_unit)
-      SELECT $1,$2,r.unit_id,r.id,'electricity','kWh','tenant','none','fixed_rate',500 FROM public.rooms r WHERE r.id=$3 RETURNING id`, [ORG_ID, property, r])).rows[0].id;
-  const before = (await db.query("SELECT ($1::date - 1)::text d", [next])).rows[0].d;
-  const reading = (meter: string, on: string, value: number) =>
-    db.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value) VALUES($1,$2,$3,$4)", [ORG_ID, meter, on, value]);
-  await reading(meters[roomA], before, 100); await reading(meters[roomA], nextEnd, 160);
-  await reading(meters[roomB], before, 50); await reading(meters[roomB], nextEnd, 80);
-  await reading(meters[roomC], before, 10);
-  const missing = await split("admin", next, 50, 500);
-  assert.deepEqual(missing, { status: "missing_readings", period: next, revision: missing!.revision, missing: [roomC] });
-  await reading(meters[roomC], nextEnd, 20);
-  const s = await split("admin", next, 50, 500);
-  assert.deepEqual(s!.rows!.map(r => [r.weight, r.kwh, r.amountMinor]), [["60.000", "30.000", "300"], ["30.000", "15.000", "150"], ["10.000", "5.000", "50"]]);
-  // Uneven: 7 kWh / 7 minor units over 60:30:10 floors to 4.2→4.200/4, 2.1→2.100/2, 0.7→0.700/0; the remainder 1 goes to A.
-  const odd = await split("admin", next, 7, 7);
-  assert.deepEqual(odd!.rows!.map(r => [r.kwh, r.amountMinor]), [["4.200", "5"], ["2.100", "2"], ["0.700", "0"]]);
+  await save("admin", [roomA, roomB, roomC, whole], "sub_meter", 0);
+  const mA = await meter({ room: roomA }), mB = await meter({ room: roomB }), mC = await meter({ room: roomC });
+  const wholeMeter = (await db.query("SELECT id FROM public.meters WHERE unit_id=$1 AND room_id IS NULL", [whole])).rows[0].id;
+  const before = (n: number) => shift(next, -n, "day"), inside = (n: number) => shift(next, n - 1, "day");
+  // A: several readings before and within the month, and one after it; latest-before 100, latest-within 160.
+  await reading(mA, await before(40), 20); await reading(mA, await before(1), 100); await reading(mA, await before(5), 90);
+  await reading(mA, await inside(10), 130); await reading(mA, nextEnd, 160); await reading(mA, await shift(nextEnd, 3, "day"), 999);
+  // B: no reading before the month (missing baseline).
+  await reading(mB, await inside(1), 50); await reading(mB, nextEnd, 80);
+  // C: baseline, then an estimated end reading.
+  await reading(mC, await before(2), 10); await reading(mC, nextEnd, 20, true);
+  // 5F: its main meter (the issued bill's meter) with a baseline and an end reading.
+  await reading(wholeMeter, await before(3), 500); await reading(wholeMeter, nextEnd, 507);
+  assert.deepEqual(await split("admin", next, 10, 100), { status: "missing_readings", period: next, revision: ((await view("admin"))!.config as { revision: number }).revision, spaces: [roomB] });
+  await reading(mB, await before(10), 50);
+  const estimated = await split("admin", next, 10);
+  assert.equal(estimated!.status, "estimated_readings");
+  assert.deepEqual(estimated!.spaces, [roomC]);
+  // A measured reading later in the month becomes the latest endpoint (same day: latest created wins).
+  await reading(mC, nextEnd, 20);
+  // Two active meters on one space: ambiguous, even with complete readings; precedence over everything else.
+  const extra = await meter({ room: roomC });
+  await reading(extra, await before(2), 0); await reading(extra, nextEnd, 5000);
+  const ambiguous = await split("admin", next, 10);
+  assert.deepEqual([ambiguous!.status, ambiguous!.spaces], ["ambiguous_meters", [roomC]]);
+  await db.query("UPDATE public.meters SET archived_at=clock_timestamp() WHERE id=$1", [extra]);
+  // Ready: A 60, B 30, C 10, 5F 7 → 10 kWh needs rounding at 3 decimals; every share is floored, the remainder to A.
+  const s = await split("admin", next, 10, 1000);
+  const weights = [60, 30, 10, 7];
+  assert.deepEqual(s!.rows!.map(r => Number(r.weight)), weights);
+  assert.deepEqual(s!.rows!.map(r => r.kwh), expectShares(10000, weights).map(kwhOf));
+  assert.deepEqual(s!.rows!.map(r => r.kwh), ["5.609", "2.803", "0.934", "0.654"]);
+  assert.deepEqual(s!.rows!.map(r => Number(r.amountMinor)), expectShares(1000, weights));
+  const ts = await sharedMeterSplit(session("admin", "admin"), { propertyId: property, period: next, kwh: "10" }, { v3 });
+  if (ts.state !== "ready") assert.fail(ts.state);
+  // A space without any meter is missing, not zero.
+  await save("admin", [roomA, roomB, roomC, whole], "sub_meter", 0);
+  await db.query("UPDATE public.meters SET archived_at=clock_timestamp() WHERE id=$1", [mB]);
+  assert.deepEqual((await sharedMeterSplit(session("admin", "admin"), { propertyId: property, period: next, kwh: "10" }, { v3 })), { state: "not_ready", reason: "missing_readings", spaceIds: [roomB] });
 });
 
 test("invalid input saves nothing", async () => {
@@ -251,46 +353,40 @@ test("invalid input saves nothing", async () => {
       [[], "even", "1"], [[roomA, roomA], "even", "1"], [[roomA, foreignRoom], "even", "1"], [[roomA], "none", "1"],
       [[roomA], "even", "-1"], [[roomA], "even", "1.2345"], [[roomA], "even", "100000000000"],
     ] as const) assert.deepEqual(await save("admin", [...spaces], method, reading), { status: "invalid" }, JSON.stringify([spaces, method, reading]));
-    await assert.rejects(split("admin", `${next.slice(0, 8)}02`, 1), code("22023"));
+    await assert.rejects(split("admin", await shift(next, 1, "day"), 1), code("22023"));
     await assert.rejects(split("admin", next, -1), code("22023"));
     for (const bad of [{ spaceIds: [] }, { startReading: "" }, { startReading: "abc" }, { method: "x" }, { spaceIds: ["x"] }])
       assert.deepEqual(await saveSharedMeter(session("admin", "admin"), { propertyId: property, requestId: randomUUID(), spaceIds: [roomA], method: "even", startReading: "1", ...bad }, { v3 }),
         { ok: false, reason: "invalid" }, JSON.stringify(bad));
+    for (const bad of [{ period: await shift(next, 1, "day") }, { kwh: "-1" }, { kwh: "1.2345" }, { amountMinor: "1.5" }])
+      assert.deepEqual(await sharedMeterSplit(session("admin", "admin"), { propertyId: property, period: next, kwh: "1", ...bad }, { v3 }), { state: "unavailable" }, JSON.stringify(bad));
   });
 });
 
-test("denials: cross-org, P-ACC, P-MNT, revoked session, archived or other-org property, tuple mismatches; nothing written", async () => {
+test("denials on all three gateways: roles, revoked session, cross-org, archived/missing property, tuple and app.env; nothing written", async () => {
   await flag(true);
+  const calls: [string, (who: string, target: string, opts?: Opts) => Promise<unknown>][] = [
+    ["view", (who, target, opts) => view(who, target, opts)],
+    ["save", (who, target, opts) => save(who, [roomA], "even", 1, randomUUID(), target, opts)],
+    ["split", (who, target, opts) => split(who, next, 1, null, target, opts)],
+  ];
   await unchanged("denials", async () => {
-    for (const who of ["accountant", "maintenance", "revoked", "tenant", "owner"]) {
-      await assert.rejects(view(who), code("42501"), `${who} view`);
-      await assert.rejects(save(who, [roomA], "even", 1), code("42501"), `${who} save`);
-      await assert.rejects(split(who, next, 1), code("42501"), `${who} split`);
-    }
-    await assert.rejects(view("coastAdmin"), code("42501"), "another company's admin");
-    await assert.rejects(save("coastAdmin", [roomA], "even", 1, randomUUID(), property, { org: ORG2_ID }), code("42501"), "this org's property via another org");
-    await assert.rejects(view("admin", archivedProperty), code("42501"), "archived property");
-    await assert.rejects(save("admin", [roomA], "even", 1, randomUUID(), archivedProperty), code("42501"));
-    await assert.rejects(view("admin", randomUUID()), code("42501"), "missing property");
-    for (const [label, opts] of [["env", { env: "sandbox" }], ["live", { live: ORG2_ID }], ["pin", { pin: ORG2_ID }], ["no pin", { pin: null }]] as const) {
-      await assert.rejects(view("admin", property, opts), code("42501"), label);
-      await assert.rejects(save("admin", [roomA], "even", 1, randomUUID(), property, opts), code("42501"), label);
+    for (const [name, run] of calls) {
+      for (const who of ["accountant", "maintenance", "revoked", "tenant", "owner"]) await assert.rejects(run(who, property), code("42501"), `${who} ${name}`);
+      await assert.rejects(run("coastAdmin", property), code("42501"), `another company's admin ${name}`);
+      await assert.rejects(run("coastAdmin", property, { org: ORG2_ID }), code("42501"), `this org's property via another org ${name}`);
+      await assert.rejects(run("admin", archivedProperty), code("42501"), `archived property ${name}`);
+      await assert.rejects(run("admin", randomUUID()), code("42501"), `missing property ${name}`);
+      for (const [label, opts] of [["env", { env: "sandbox" }], ["live", { live: ORG2_ID }], ["org pin", { pin: ORG2_ID }], ["no org pin", { pin: null }],
+        ["app.env mismatch", { pinEnv: "sandbox" }], ["app.env missing", { pinEnv: null }]] as [string, Opts][])
+        await assert.rejects(run("admin", property, opts), code("42501"), `${label} ${name}`);
     }
     for (const [who, role] of [["accountant", "accountant"], ["maintenance", "maintenance"]] as const) {
       assert.deepEqual(await sharedMeterView(session(who, role), property, { v3 }), { state: "forbidden" });
       assert.deepEqual(await saveSharedMeter(session(who, role), { propertyId: property, requestId: randomUUID(), spaceIds: [roomA], method: "even", startReading: "1" }, { v3 }), { ok: false, reason: "forbidden" });
+      assert.deepEqual(await sharedMeterSplit(session(who, role), { propertyId: property, period: next, kwh: "1" }, { v3 }), { state: "forbidden" });
     }
     assert.deepEqual(await sharedMeterView({ ...session("admin", "admin"), sessionId: sid.revoked }, property, { v3 }), { state: "forbidden" });
+    assert.deepEqual(await sharedMeterSplit(session("coastAdmin", "admin", ORG2_ID), { propertyId: property, period: next, kwh: "1" }, { v3 }), { state: "forbidden" });
   });
-});
-
-test("issued bills never change: saving writes no invoice, utility run or line", async () => {
-  await flag(true);
-  const counts = async () => (await db.query(`SELECT (SELECT count(*) FROM public.invoices)::int i,(SELECT count(*) FROM public.invoice_lines)::int l,
-    (SELECT count(*) FROM public.utility_allocation_runs)::int r,(SELECT count(*) FROM public.utility_allocation_lines)::int al,
-    (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.invoices x) h`)).rows[0];
-  const before = await counts();
-  await save("admin", [roomA, roomB], "even", 5);
-  await split("admin", next, 10, 100);
-  assert.deepEqual(await counts(), before);
 });

@@ -70,7 +70,23 @@ BEGIN
   RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  PERFORM 1 FROM public.properties p WHERE p.org_id=p_org AND p.id=p_property AND p.archived_at IS NULL FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
- -- The property's spaces in display order: rooms of by-room units, and whole units.
+ IF p_request IS NULL THEN RETURN jsonb_build_object('status','invalid'); END IF;
+ -- Idempotency first (one key per org), before any check on mutable data: renaming or archiving a space
+ -- later never turns an identical retry into a conflict or an invalid. The space ids compare as a set.
+ PERFORM pg_advisory_xact_lock(hashtextextended('b109/shared-meter/request/'||p_org::text||'/'||p_request::text,0));
+ SELECT * INTO prior FROM app.b109_shared_meter_configs c WHERE c.org_id=p_org AND c.request_id=p_request;
+ IF FOUND THEN
+  IF prior.property_id IS DISTINCT FROM p_property OR prior.created_by IS DISTINCT FROM actor
+    OR prior.split_method IS DISTINCT FROM p_method OR prior.start_reading IS DISTINCT FROM p_start_reading
+    OR p_spaces IS NULL OR cardinality(p_spaces)<>cardinality(prior.space_ids)
+    OR (SELECT array_agg(x ORDER BY x) FROM unnest(prior.space_ids) x)
+       IS DISTINCT FROM (SELECT array_agg(DISTINCT x ORDER BY x) FROM unnest(p_spaces) x) THEN
+   RETURN jsonb_build_object('status','conflict');
+  END IF;
+  RETURN jsonb_build_object('status','saved','configId',prior.id,'revision',prior.revision,
+   'effectiveFrom',prior.effective_from::text,'spaceCount',cardinality(prior.space_ids),'method',prior.split_method,'replayed',true);
+ END IF;
+ -- The property's current spaces in display order: rooms of by-room units, and whole units.
  SELECT array_agg(x.id ORDER BY x.unit_label,x.room_label NULLS FIRST,x.id) INTO spaces
  FROM (SELECT r.id,u.label unit_label,r.label room_label FROM public.rooms r
         JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id
@@ -80,24 +96,12 @@ BEGIN
        SELECT u.id,u.label,NULL FROM public.units u
        WHERE u.org_id=p_org AND u.property_id=p_property AND u.rental_mode::text='whole_unit' AND u.archived_at IS NULL) x
  WHERE x.id = ANY(coalesce(p_spaces,'{}'::uuid[]));
- IF p_request IS NULL OR p_spaces IS NULL OR cardinality(p_spaces)=0 OR cardinality(p_spaces)>500
+ IF p_spaces IS NULL OR cardinality(p_spaces)=0 OR cardinality(p_spaces)>500
    OR (SELECT count(DISTINCT s) FROM unnest(p_spaces) s)<>cardinality(p_spaces)
    OR coalesce(cardinality(spaces),0)<>cardinality(p_spaces)
    OR p_method IS NULL OR p_method NOT IN ('even','days_occupied','sub_meter')
    OR p_start_reading IS NULL OR p_start_reading<0 OR p_start_reading>=100000000000 OR scale(p_start_reading)>3 THEN
   RETURN jsonb_build_object('status','invalid');
- END IF;
- -- Idempotency: one key per org. The same payload replays; another payload conflicts.
- PERFORM pg_advisory_xact_lock(hashtextextended('b109/shared-meter/request/'||p_org::text||'/'||p_request::text,0));
- SELECT * INTO prior FROM app.b109_shared_meter_configs c WHERE c.org_id=p_org AND c.request_id=p_request;
- IF FOUND THEN
-  IF prior.property_id IS DISTINCT FROM p_property OR prior.space_ids IS DISTINCT FROM spaces
-    OR prior.split_method IS DISTINCT FROM p_method OR prior.start_reading IS DISTINCT FROM p_start_reading
-    OR prior.created_by IS DISTINCT FROM actor THEN
-   RETURN jsonb_build_object('status','conflict');
-  END IF;
-  RETURN jsonb_build_object('status','saved','configId',prior.id,'revision',prior.revision,
-   'effectiveFrom',prior.effective_from::text,'spaceCount',cardinality(prior.space_ids),'method',prior.split_method,'replayed',true);
  END IF;
  -- MGT-90-AC4: from the next period (the first day of next month on the property's own calendar, as bills
  -- are dated per property, PLT-54); issued bills never change.
@@ -176,12 +180,13 @@ GRANT EXECUTE ON FUNCTION app.b109_shared_meter_view(uuid,uuid,text,uuid,uuid) T
 -- period (latest revision with effective_from <= p_period), the selected spaces still present, their weights
 -- (even: 1; days_occupied: inclusive lease days in the period; sub_meter: the space's own electricity meter
 -- usage in the period = its latest reading inside the period minus its latest reading before it) and the shares of p_kwh (to 0.001 kWh) and of p_amount_minor (optional, minor units).
--- All weights zero splits evenly. Remainders go to the first space. Status: ready | none | missing_readings.
+-- All weights zero splits evenly. Remainders go to the first space.
+-- Status: ready | none | ambiguous_meters | missing_readings | estimated_readings.
 CREATE FUNCTION app.b109_shared_meter_split(p_org uuid,p_live uuid,p_env text,p_session uuid,p_property uuid,
  p_period date,p_kwh numeric,p_amount_minor bigint DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE actor uuid; member_role text; cfg record; period_end date; total_milli bigint; total_weight numeric;
- rows jsonb; spaces jsonb;
+ rows jsonb; spaces jsonb; problem text;
 BEGIN
  IF current_setting('app.active_org_id',true) IS DISTINCT FROM p_org::text
    OR current_setting('app.env',true) IS DISTINCT FROM p_env
@@ -216,48 +221,62 @@ BEGIN
  IF NOT FOUND THEN RETURN jsonb_build_object('status','none','period',p_period::text); END IF;
  period_end:=(p_period + interval '1 month' - interval '1 day')::date;
  total_milli:=round(p_kwh*1000)::bigint;
- -- Weights per selected space still present, in display order (ord 1 = the first space).
+ -- Per selected space still present, in display order (ord 1 = the first space): its weight, or why it has none.
+ -- 依分表度數 resolves exactly ONE property-scoped active electricity meter per space (a room's own meter, or a
+ -- whole unit's main meter) and reads both endpoints from that meter only: its latest reading inside the
+ -- period and its latest reading before it. No meter, two or more meters, a missing endpoint, an estimated
+ -- endpoint or a negative difference makes the split not ready (never guessed).
  SELECT coalesce(jsonb_agg(jsonb_build_object('ord',w.ord,'id',w.id,'kind',w.kind,'unitLabel',w.unit_label,
-   'label',w.room_label,'weight',w.weight) ORDER BY w.ord),'[]'::jsonb) INTO spaces
- FROM (SELECT row_number() OVER (ORDER BY x.unit_label,x.room_label NULLS FIRST,x.id) ord,x.id,x.kind,x.unit_label,x.room_label,
-  CASE cfg.split_method
-   WHEN 'even' THEN 1::numeric
-   WHEN 'days_occupied' THEN coalesce((SELECT sum(greatest(0,
-      least(coalesce(l.end_date,period_end),period_end) - greatest(l.start_date,p_period) + 1))
-     FROM public.leases l
-     WHERE l.org_id=p_org AND l.status::text IN ('active','ended','terminated')
-      AND ((x.kind='room' AND l.target_room_id=x.id) OR (x.kind='whole_unit' AND l.target_unit_id=x.id))
-      AND l.start_date<=period_end AND coalesce(l.end_date,period_end)>=p_period),0)::numeric
-   ELSE (SELECT e.value-s.value FROM
-      (SELECT mr.value FROM public.meters mt JOIN public.meter_readings mr ON mr.org_id=mt.org_id AND mr.meter_id=mt.id
-        WHERE mt.org_id=p_org AND mt.utility::text='electricity' AND mt.archived_at IS NULL
-         AND ((x.kind='room' AND mt.room_id=x.id) OR (x.kind='whole_unit' AND mt.unit_id=x.id AND mt.room_id IS NULL))
-         AND mr.read_on BETWEEN p_period AND period_end
-         AND NOT EXISTS (SELECT 1 FROM public.meter_readings sup WHERE sup.org_id=mr.org_id AND sup.supersedes_id=mr.id)
-        ORDER BY mr.read_on DESC,mr.created_at DESC LIMIT 1) e,
-      (SELECT mr.value FROM public.meters mt JOIN public.meter_readings mr ON mr.org_id=mt.org_id AND mr.meter_id=mt.id
-        WHERE mt.org_id=p_org AND mt.utility::text='electricity' AND mt.archived_at IS NULL
-         AND ((x.kind='room' AND mt.room_id=x.id) OR (x.kind='whole_unit' AND mt.unit_id=x.id AND mt.room_id IS NULL))
-         AND mr.read_on<p_period
-         AND NOT EXISTS (SELECT 1 FROM public.meter_readings sup WHERE sup.org_id=mr.org_id AND sup.supersedes_id=mr.id)
-        ORDER BY mr.read_on DESC,mr.created_at DESC LIMIT 1) s)
-  END AS weight
- FROM (SELECT r.id,'room' kind,u.label unit_label,r.label room_label FROM public.rooms r
-        JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id
-       WHERE u.org_id=p_org AND u.property_id=p_property AND u.rental_mode::text='by_room'
-        AND u.archived_at IS NULL AND r.archived_at IS NULL
-       UNION ALL
-       SELECT u.id,'whole_unit',u.label,NULL FROM public.units u
-       WHERE u.org_id=p_org AND u.property_id=p_property AND u.rental_mode::text='whole_unit' AND u.archived_at IS NULL) x
- WHERE x.id = ANY(cfg.space_ids)) w;
+   'label',w.room_label,'weight',w.weight,'problem',w.problem) ORDER BY w.ord),'[]'::jsonb) INTO spaces
+ FROM (SELECT v.ord,v.id,v.kind,v.unit_label,v.room_label,
+   CASE WHEN cfg.split_method='even' THEN 1::numeric
+    WHEN cfg.split_method='days_occupied' THEN v.days
+    WHEN v.meters=1 AND e.value IS NOT NULL AND s.value IS NOT NULL AND NOT e.is_estimate AND NOT s.is_estimate
+     AND e.value>=s.value THEN e.value-s.value END AS weight,
+   CASE WHEN cfg.split_method<>'sub_meter' THEN NULL
+    WHEN v.meters>1 THEN 'ambiguous_meter'
+    WHEN v.meters=0 OR e.value IS NULL OR s.value IS NULL OR e.value<s.value THEN 'missing_reading'
+    WHEN e.is_estimate OR s.is_estimate THEN 'estimated_reading' END AS problem
+  FROM (SELECT row_number() OVER (ORDER BY x.unit_label,x.room_label NULLS FIRST,x.id) ord,x.id,x.kind,x.unit_label,x.room_label,
+    coalesce((SELECT sum(greatest(0,
+       least(coalesce(l.end_date,period_end),period_end) - greatest(l.start_date,p_period) + 1))
+      FROM public.leases l
+      WHERE l.org_id=p_org AND l.property_id=p_property AND l.status::text IN ('active','ended','terminated')
+       AND ((x.kind='room' AND l.target_room_id=x.id) OR (x.kind='whole_unit' AND l.target_unit_id=x.id))
+       AND l.start_date<=period_end AND coalesce(l.end_date,period_end)>=p_period),0)::numeric AS days,
+    (SELECT count(*) FROM public.meters mt
+      WHERE mt.org_id=p_org AND mt.property_id=p_property AND mt.utility::text='electricity' AND mt.archived_at IS NULL
+       AND ((x.kind='room' AND mt.room_id=x.id) OR (x.kind='whole_unit' AND mt.unit_id=x.id AND mt.room_id IS NULL))) AS meters,
+    (SELECT mt.id FROM public.meters mt
+      WHERE mt.org_id=p_org AND mt.property_id=p_property AND mt.utility::text='electricity' AND mt.archived_at IS NULL
+       AND ((x.kind='room' AND mt.room_id=x.id) OR (x.kind='whole_unit' AND mt.unit_id=x.id AND mt.room_id IS NULL))
+      ORDER BY mt.id LIMIT 1) AS meter_id
+   FROM (SELECT r.id,'room' kind,u.label unit_label,r.label room_label FROM public.rooms r
+          JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id
+         WHERE u.org_id=p_org AND u.property_id=p_property AND u.rental_mode::text='by_room'
+          AND u.archived_at IS NULL AND r.archived_at IS NULL
+         UNION ALL
+         SELECT u.id,'whole_unit',u.label,NULL FROM public.units u
+         WHERE u.org_id=p_org AND u.property_id=p_property AND u.rental_mode::text='whole_unit' AND u.archived_at IS NULL) x
+   WHERE x.id = ANY(cfg.space_ids)) v
+  LEFT JOIN LATERAL (SELECT mr.value,mr.is_estimate FROM public.meter_readings mr
+    WHERE mr.org_id=p_org AND mr.meter_id=v.meter_id AND v.meters=1 AND mr.read_on BETWEEN p_period AND period_end
+     AND NOT EXISTS (SELECT 1 FROM public.meter_readings sup WHERE sup.org_id=mr.org_id AND sup.supersedes_id=mr.id)
+    ORDER BY mr.read_on DESC,mr.created_at DESC,mr.id DESC LIMIT 1) e ON true
+  LEFT JOIN LATERAL (SELECT mr.value,mr.is_estimate FROM public.meter_readings mr
+    WHERE mr.org_id=p_org AND mr.meter_id=v.meter_id AND v.meters=1 AND mr.read_on<p_period
+     AND NOT EXISTS (SELECT 1 FROM public.meter_readings sup WHERE sup.org_id=mr.org_id AND sup.supersedes_id=mr.id)
+    ORDER BY mr.read_on DESC,mr.created_at DESC,mr.id DESC LIMIT 1) s ON true) w;
  IF jsonb_array_length(spaces)=0 THEN RETURN jsonb_build_object('status','none','period',p_period::text); END IF;
- -- 依分表度數 needs each space's own meter readings at both ends of the period (never guessed).
- IF EXISTS (SELECT 1 FROM jsonb_array_elements(spaces) e
-   WHERE jsonb_typeof(e->'weight')<>'number' OR (e->>'weight')::numeric<0) THEN
-  RETURN jsonb_build_object('status','missing_readings','period',p_period::text,'revision',cfg.revision,
-   'missing',(SELECT jsonb_agg(e->'id' ORDER BY (e->>'ord')::integer) FROM jsonb_array_elements(spaces) e
-     WHERE jsonb_typeof(e->'weight')<>'number' OR (e->>'weight')::numeric<0));
- END IF;
+ -- Not ready: one status, by precedence ambiguous > missing > estimated, listing every affected space.
+ FOR problem IN SELECT unnest(ARRAY['ambiguous_meter','missing_reading','estimated_reading']) LOOP
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(spaces) e WHERE e->>'problem'=problem) THEN
+   RETURN jsonb_build_object('status',CASE problem WHEN 'ambiguous_meter' THEN 'ambiguous_meters'
+     WHEN 'missing_reading' THEN 'missing_readings' ELSE 'estimated_readings' END,
+    'period',p_period::text,'revision',cfg.revision,
+    'spaces',(SELECT jsonb_agg(e->'id' ORDER BY (e->>'ord')::integer) FROM jsonb_array_elements(spaces) e WHERE e->>'problem'=problem));
+  END IF;
+ END LOOP;
  SELECT sum((e->>'weight')::numeric) INTO total_weight FROM jsonb_array_elements(spaces) e;
  WITH base AS (
   SELECT (e->>'ord')::integer ord,e,

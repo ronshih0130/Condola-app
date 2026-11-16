@@ -4,7 +4,7 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
-import { parseSharedMeterView, saveSharedMeter, sharedMeterView, type MeterSpace } from "./b109-shared-meter";
+import { parseSharedMeterSplit, parseSharedMeterView, saveSharedMeter, sharedMeterSplit, sharedMeterView, type MeterSpace } from "./b109-shared-meter";
 import { MeterFormView, SharedMeterForm } from "../components/v3/m/shared-meter/form";
 import { SharedMeterBody, spaceLabel } from "../components/v3/m/shared-meter/page";
 import { noteMonth, sharedMeterCopy } from "../i18n/lanes/brand-v3-shared-meter";
@@ -136,4 +136,30 @@ test("wiring: route under brand_v3 with consent; action checks consent; B-017 ma
     assert.match(css, rule);
   for (const src of [read("src/server/b109-shared-meter.ts"), read("supabase/migrations/20261116180000_b109_shared_meter.sql")])
     assert.doesNotMatch(src, /fetch\(|notification|line-push|sms|invoices|utility_allocation_runs \(/i);
+});
+
+test("split preview caller: page admission mirrored; input mirrors the gateway; strict DTO that must add up", async () => {
+  const input = { propertyId: P, period: "2026-12-01", kwh: "10", amountMinor: "1000" };
+  assert.deepEqual(await sharedMeterSplit(staff, input, { v3: async () => false, transaction: never }), { state: "off" });
+  for (const actor of [{ ...staff, role: "accountant" as const }, { ...staff, role: "maintenance" as const }, { ...staff, kind: "tenant" as const, role: null }])
+    assert.deepEqual(await sharedMeterSplit(actor, input, { v3: async () => true, transaction: never }), { state: "forbidden" });
+  for (const bad of [{ period: "2026-12-02" }, { kwh: "1.2345" }, { kwh: "-1" }, { amountMinor: "1.5" }, { amountMinor: "1000000000000001" }, { propertyId: "x" }])
+    assert.deepEqual(await sharedMeterSplit(staff, { ...input, ...bad }, { v3: async () => true, transaction: never }), { state: "unavailable" }, JSON.stringify(bad));
+  const rows = [{ id: id(1), kind: "room", unitLabel: "3F", label: "A", weight: "60", kwh: "5.609", amountMinor: "561" },
+    { id: id(2), kind: "room", unitLabel: "3F", label: "B", weight: "30", kwh: "2.803", amountMinor: "280" },
+    { id: id(3), kind: "room", unitLabel: "3F", label: "C", weight: "10", kwh: "0.934", amountMinor: "93" },
+    { id: id(4), kind: "whole_unit", unitLabel: "5F", label: null, weight: "7", kwh: "0.654", amountMinor: "66" }];
+  const ready = { status: "ready", period: "2026-12-01", revision: 3, method: "sub_meter", effectiveFrom: "2026-12-01", startReading: "0.000", kwh: "10.000", amountMinor: "1000", rows };
+  const seen: { sql: string; args?: unknown[] }[] = [];
+  const result = await sharedMeterSplit(staff, input, { v3: async () => true, transaction: client(ready, seen) });
+  assert.equal(result.state, "ready");
+  assert.equal(seen[3].sql, "SELECT app.b109_shared_meter_split($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::date,$7::numeric,$8::bigint) AS result");
+  assert.deepEqual(seen[3].args, [ORG, ORG, "live", staff.sessionId, P, "2026-12-01", "10", "1000"]);
+  for (const status of ["ambiguous_meters", "missing_readings", "estimated_readings"] as const)
+    assert.deepEqual(parseSharedMeterSplit({ status, period: "2026-12-01", revision: 3, spaces: [id(3)] }), { state: "not_ready", reason: status, spaceIds: [id(3)] });
+  assert.deepEqual(parseSharedMeterSplit({ status: "none", period: "2026-12-01" }), { state: "none" });
+  for (const bad of [{ ...ready, rows: [{ ...rows[0], kwh: "5.610" }, ...rows.slice(1)] }, { ...ready, rows: [{ ...rows[0], amountMinor: "560" }, ...rows.slice(1)] },
+    { ...ready, rows: [] }, { ...ready, method: "none" }, { status: "missing_readings", spaces: [] }, { status: "weird" }])
+    assert.deepEqual(await sharedMeterSplit(staff, input, { v3: async () => true, transaction: client(bad, []) }), { state: "unavailable" }, JSON.stringify(bad).slice(0, 60));
+  assert.equal((JSON.parse(read("src/server/b017-entry-permissions.json")) as Record<string, unknown>)["src/server/b109-shared-meter.ts#sharedMeterSplit"], "props.edit");
 });

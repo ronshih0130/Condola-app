@@ -121,3 +121,67 @@ export async function saveSharedMeter(input: Session, form: SharedMeterInput, de
     return { ok: false, reason: "failed" };
   }
 }
+
+export type SplitRow = { id: string; kind: "room" | "whole_unit"; unitLabel: string; label: string | null; weight: string; kwh: string; amountMinor: string | null };
+export type SharedMeterSplit =
+  | { state: "off" | "forbidden" | "unavailable" | "none" }
+  | { state: "not_ready"; reason: "ambiguous_meters" | "missing_readings" | "estimated_readings"; spaceIds: string[] }
+  | { state: "ready"; period: string; revision: number; method: SplitMethod; kwh: string; amountMinor: string | null; rows: SplitRow[] };
+export type SplitInput = { propertyId: string; period: string; kwh: string; amountMinor?: string | null };
+const KWH = /^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$/;
+const MINOR = /^(?:0|[1-9][0-9]{0,15})$/;
+
+export function parseSharedMeterSplit(value: unknown): Exclude<SharedMeterSplit, { state: "off" | "forbidden" | "unavailable" }> | null {
+  if (value === null || value === undefined) return null;
+  const v = value as Record<string, unknown>;
+  if (v.status === "none") return { state: "none" };
+  if (v.status === "ambiguous_meters" || v.status === "missing_readings" || v.status === "estimated_readings") {
+    if (!Array.isArray(v.spaces) || !v.spaces.length || !v.spaces.every(uuid)) throw new Error("Invalid split status");
+    return { state: "not_ready", reason: v.status, spaceIds: v.spaces as string[] };
+  }
+  if (v.status !== "ready" || !day(v.period) || !Number.isInteger(v.revision) || !SPLIT_METHODS.includes(v.method as SplitMethod)
+    || !str(v.kwh) || !KWH.test(v.kwh) || !(v.amountMinor === null || (str(v.amountMinor) && MINOR.test(v.amountMinor)))
+    || !Array.isArray(v.rows) || !v.rows.length) throw new Error("Invalid split");
+  let milli = 0, amount = 0;
+  for (const r of v.rows as Record<string, unknown>[]) {
+    if (!r || !uuid(r.id) || !["room", "whole_unit"].includes(r.kind as string) || !str(r.unitLabel) || !(r.label === null || str(r.label))
+      || !str(r.weight) || !str(r.kwh) || !KWH.test(r.kwh) || (v.amountMinor === null ? r.amountMinor !== null : !(str(r.amountMinor) && MINOR.test(r.amountMinor))))
+      throw new Error("Invalid split row");
+    milli += Math.round(Number(r.kwh) * 1000);
+    if (str(r.amountMinor)) amount += Number(r.amountMinor);
+  }
+  // The shares add up exactly to the totals (remainder to the first space).
+  if (milli !== Math.round(Number(v.kwh) * 1000) || (str(v.amountMinor) && amount !== Number(v.amountMinor))) throw new Error("Split does not add up");
+  return { state: "ready", period: v.period as string, revision: v.revision as number, method: v.method as SplitMethod,
+    kwh: v.kwh as string, amountMinor: v.amountMinor as string | null, rows: v.rows as SplitRow[] };
+}
+
+/**
+ * The next-period split preview (MGT-90-AC4/AC5) for a later billing caller: the same admission as the page,
+ * and the gateway repeats its own. Input mirrors the gateway: a month's first day, kWh with ≤3 decimals,
+ * an optional amount in minor units. No UI shows it yet (not in the approved frame).
+ */
+export async function sharedMeterSplit(input: Session, split: SplitInput, deps: Deps = {}): Promise<SharedMeterSplit> {
+  try {
+    const session = await admit(input, deps);
+    if ("state" in session) return session;
+    const amount = split?.amountMinor ?? null;
+    if (!split || !uuid(split.propertyId) || !day(split.period) || !str(split.kwh) || !KWH.test(split.kwh)
+      || !(amount === null || (str(amount) && MINOR.test(amount) && BigInt(amount) <= BigInt("1000000000000000")))) return { state: "unavailable" };
+    const result = await (deps.transaction ?? svc)(session.userId, async client => {
+      await client.query("SET LOCAL statement_timeout = '2s'");
+      await client.query("SET LOCAL lock_timeout = '1s'");
+      await client.query("SELECT set_config('app.active_org_id',$1,true),set_config('app.env',$2,true)", [session.orgId, session.environment]);
+      const row = (await client.query<{ result: unknown }>(
+        "SELECT app.b109_shared_meter_split($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::date,$7::numeric,$8::bigint) AS result",
+        [session.orgId, session.liveOrgId, session.environment, session.sessionId, split.propertyId, split.period, split.kwh, amount])).rows[0];
+      if (!row) throw new Error("Missing shared meter split");
+      return parseSharedMeterSplit(row.result);
+    }, { isolation: "repeatable read" });
+    return result ?? { state: "off" };
+  } catch (error) {
+    if (denied(error)) return { state: "forbidden" };
+    logServerError("b109_shared_meter_split", error);
+    return { state: "unavailable" };
+  }
+}
