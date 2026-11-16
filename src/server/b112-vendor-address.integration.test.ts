@@ -237,15 +237,16 @@ test("route: account cookie and an open workbench only; invalid parts are a 400 
   assert.equal((await post({ ...body, requestId: randomUUID() }, `condola_session=${credA}; condola_org=${ORG_ID}`)).status, 409, "stale");
 });
 
-/** Waits until `n` backends are blocked on a lock while running the B-112 writer. */
-async function waitForBlocked(n: number) {
+/** Waits until `n` backends in THIS test database are blocked by the holder's own PID while running the B-112 writer. */
+async function waitForBlocked(lock: Client, n: number) {
+  const holderPid = (await lock.query("SELECT pg_backend_pid() AS pid")).rows[0].pid as number;
   for (let i = 0; i < 100; i++) {
     const blocked = (await db.query(`SELECT count(*)::int n FROM pg_stat_activity
-      WHERE wait_event_type='Lock' AND query LIKE '%b112_save_vendor_address%' AND pid<>pg_backend_pid()`)).rows[0].n;
+      WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)) AND query LIKE '%b112_save_vendor_address%'`, [holderPid])).rows[0].n;
     if (blocked >= n) return;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
-  assert.fail(`expected ${n} blocked save(s)`);
+  assert.fail(`expected ${n} save(s) blocked by ${holderPid}`);
 }
 async function holder() {
   const client = new Client({ connectionString: process.env.DATABASE_URL }); await client.connect(); await client.query("BEGIN");
@@ -283,7 +284,7 @@ test("binding changed while a save waits on the profile lock: refused with no wr
     const before = await writes(profileA);
     const pending = save(credA, ORG_ID, version, "77 號").then(result => ({ result }), error => ({ error }));
     try {
-      await waitForBlocked(1);
+      await waitForBlocked(lock, 1);
       await mutate(lock);
       await lock.query("COMMIT");
     } catch (error) {
@@ -307,7 +308,7 @@ test("two vendors sharing one request id in parallel: exactly one recorded, one 
   const before = { a: await writes(profileA), b: await writes(profileB) };
   const runs = [save(credA, ORG_ID, a.current_version, "31 號", request), save(credB, ORG_ID, b.current_version, "32 號", request)]
     .map(p => p.then(result => ({ result }), error => ({ error })));
-  try { await waitForBlocked(2); } finally { await lock.query("COMMIT"); await lock.end(); }
+  try { await waitForBlocked(lock, 2); } finally { await lock.query("COMMIT"); await lock.end(); }
   const outcomes = await Promise.all(runs) as { result?: { status: string }; error?: unknown }[];
   assert.ok(outcomes.every(o => !o.error), JSON.stringify(outcomes.map(o => String(o.error))));
   assert.deepEqual(outcomes.map(o => o.result!.status).sort(), ["recorded", "rejected_conflict"]);
@@ -326,9 +327,11 @@ test("route: body capped while streaming, Content-Length over the cap refused un
   const streamed = await saveRoute(new Request(`${origin}/api/vendor-account/address`, { method: "POST", body: endless, duplex: "half",
     headers: { origin, "content-type": "application/json", cookie } } as RequestInit));
   assert.equal(streamed.status, 413); assert.ok(pulled <= 6, `stopped after ${pulled} chunks`);
-  const declared = await saveRoute(new Request(`${origin}/api/vendor-account/address`, { method: "POST", body: "{}",
-    headers: { origin, "content-type": "application/json", "content-length": "999999", cookie } }));
+  const oversized = new Request(`${origin}/api/vendor-account/address`, { method: "POST", body: "{}",
+    headers: { origin, "content-type": "application/json", "content-length": "999999", cookie } });
+  const declared = await saveRoute(oversized);
   assert.equal(declared.status, 413);
+  assert.equal(oversized.bodyUsed, false, "a declared oversize is refused without reading the body");
   const { current_version: version } = await versionOf(profileA);
   for (const expectedVersion of [2147483648, 0, -1, 1.5, "2"]) {
     assert.equal((await post({ requestId: randomUUID(), expectedVersion, parts: parts("1 號") }, cookie)).status, 400, String(expectedVersion));
@@ -338,4 +341,38 @@ test("route: body capped while streaming, Content-Length over the cap refused un
     assert.deepEqual(await sqlSave(hash(credA), ORG_ID, version, `台北市信義區信義路 1${JSON.parse(`"${bad}"`)}號`), { status: "rejected_invalid" }, `SQL ${bad}`);
   }
   assert.deepEqual(await snapshot(), before);
+});
+
+test("a save waiting on the idempotency lock is refused if the session or any gate changes during the wait", async () => {
+  const revocable = randomUUID();
+  const sessionId = (await db.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour') RETURNING id", [vendorA, hash(revocable)])).rows[0].id;
+  const cases: [string, () => Promise<unknown>, () => Promise<unknown>, string][] = [
+    ["session revoked", () => db.query("UPDATE auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sessionId]), async () => {}, revocable],
+    ["vendor_workbench off", () => flags({ vendor_workbench: false }), () => flags({ vendor_workbench: true }), credA],
+    ["brand_v3 off", () => flags({ brand_v3: false }), () => flags({ brand_v3: true }), credA],
+    ["B-026 org flag off", () => flags({ vendor_account: false }), () => flags({ vendor_account: true }), credA],
+    ["B-026 platform off", () => accountGate(false), () => accountGate(true), credA],
+  ];
+  for (const [label, change, restore, cred] of cases) {
+    const request = randomUUID();
+    const lock = await holder();
+    await lock.query("SELECT pg_advisory_xact_lock(hashtextextended('b112/address/'||$1::text||'/'||$2::text,0))", [ORG_ID, request]);
+    const { current_version: version } = await versionOf(profileA);
+    const before = await writes(profileA);
+    const pending = save(cred, ORG_ID, version, `${60 + cases.findIndex(c => c[0] === label)} 號`, request).then(result => ({ result }), error => ({ error }));
+    try {
+      await waitForBlocked(lock, 1);
+      await change();
+    } finally {
+      // The holder leaves no ledger row: the waiting save must still be refused on its own admission.
+      await lock.query("ROLLBACK"); await lock.end();
+    }
+    const outcome = await pending as { result?: unknown; error?: unknown };
+    try {
+      assert.ok(forbidden(outcome.error), `${label}: ${JSON.stringify(outcome.result)}`);
+      assert.equal(await writes(profileA), before, `${label}: no writes`);
+      assert.equal((await db.query("SELECT count(*)::int n FROM app.b112_address_saves WHERE request_id=$1", [request])).rows[0].n, 0, label);
+    } finally { await restore(); }
+  }
+  assert.equal((await vendorAddressView(credA, ORG_ID))?.profileId, profileA, "every gate restored");
 });

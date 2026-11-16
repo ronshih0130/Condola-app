@@ -92,12 +92,15 @@ CREATE FUNCTION app.b112_save_vendor_address(p_session_hash text,p_org uuid,p_en
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE a record; prior app.b112_address_saves; latest jsonb; next_version public.vendor_profile_versions; line text;
 BEGIN
+ -- Lock order: the idempotency key first, then the profile and its binding, then the full admission check. Any wait
+ -- (here or on the profile) therefore happens BEFORE session, gate and binding are checked, so a session revoked or
+ -- a gate turned off during a wait always refuses. Two vendors sharing a request id cannot both miss the ledger.
+ IF p_request IS NOT NULL AND p_org IS NOT NULL THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended('b112/address/'||p_org::text||'/'||p_request::text,0));
+ END IF;
  SELECT * INTO a FROM app.b112_account_profile(p_session_hash,p_org,p_env_v2,true);
  IF (a.profile).id IS NULL THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  IF p_request IS NULL THEN RETURN '{"status":"rejected_invalid"}'::jsonb; END IF;
- -- Serialize on the idempotency key: two vendors (different profile locks) sharing a request id cannot both miss
- -- the ledger; the second sees the first's committed row and gets rejected_conflict.
- PERFORM pg_advisory_xact_lock(hashtextextended('b112/address/'||p_org::text||'/'||p_request::text,0));
  SELECT * INTO prior FROM app.b112_address_saves s WHERE s.org_id=p_org AND s.request_id=p_request;
  IF FOUND THEN
   IF prior.user_id=a.actor AND prior.vendor_profile_id=(a.profile).id THEN
