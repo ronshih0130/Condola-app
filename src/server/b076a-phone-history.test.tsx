@@ -7,6 +7,11 @@ import { MASKED, parseAfter, parsePhoneHistory, phoneHistory, type PhoneHistoryR
 import { PhoneHistoryView, phoneHistoryActor, phoneHistoryHref } from "../components/v3/m/tenants/phone-history";
 import { phoneHistoryCopy } from "../i18n/lanes/brand-v3-phone-history";
 import type { Session } from "./types";
+import type { Client } from "pg";
+import type { tx } from "./db";
+import { brandTenantOne, TENANT_ONE_CONTACT_SQL as CONTACT, TENANT_ONE_LEASES_SQL as LEASES } from "./b3-tenant-one";
+import { TENANTS_ADMISSION_SQL as ADMIT } from "./b3-tenants";
+import { TenantOneView } from "../components/v3/m/tenants/tenant-one";
 Object.assign(globalThis, { React });
 
 // B-076a / mgr-history-direct (MGT-76-AC3/AC12). Synthetic data only; the batch 4 frame's sample rows.
@@ -42,8 +47,13 @@ test("view: the frame's table, newest first, masked numbers, 尚未填寫 for no
     "2026/09/18 11:03已直接更換管理員 陳志明 直接修改尚未填寫 → 0933‑•••‑456", "返回租客詳情"]) assert.ok(body.includes(s), s);
   assert.match(html, new RegExp(`href="/m/tenants/${C}"`));
   assert.doesNotMatch(html, /<button|<form|下一頁/);
-  const empty = text(renderToStaticMarkup(<PhoneHistoryView data={{ state: "ready", tenant: "林小美", place: null, rows: [], next: null }} id={C} locale="zh-TW" />));
-  assert.ok(empty.includes("還沒有改號紀錄。") && empty.includes("號碼已遮罩。") && !empty.includes(" · "));
+  // The subtitle is the frame's only: hidden with no rows (empty-state frame) or no lease/place; never invented.
+  for (const data of [{ ...page, rows: [] }, { ...page, place: null }, { ...page, place: null, rows: [] }]) {
+    const html2 = renderToStaticMarkup(<PhoneHistoryView data={{ state: "ready", ...data }} id={C} locale="zh-TW" />);
+    assert.ok(!text(html2).includes("號碼已遮罩"), JSON.stringify(data.place));
+    assert.doesNotMatch(html2, /<header[^>]*><h1>[^<]*<\/h1><p>/);
+    assert.equal(text(html2).includes("還沒有改號紀錄。"), data.rows.length === 0);
+  }
   const more = renderToStaticMarkup(<PhoneHistoryView data={{ state: "ready", ...page, next: "7" }} id={C} locale="zh-TW" />);
   assert.match(more, new RegExp(`href="/m/tenants/${C}/phone-history\\?after=7"[^>]*>下一頁<`));
   assert.ok(text(renderToStaticMarkup(<PhoneHistoryView data={{ state: "forbidden" }} id={C} locale="zh-TW" />)).includes("請管理者完成設定。"));
@@ -68,18 +78,25 @@ test("reader: OFF never opens a transaction; P-ACC/P-MNT/portals/bad ids are 403
   assert.deepEqual(seen[3].args, [ORG, ORG, "live", staff.sessionId, C, "42", 20]);
   assert.deepEqual(await phoneHistory(staff, C, {}, { v3: async () => true, transaction: client(null, []) }), { state: "off" });
   // A full or unexpected number shape never renders: the whole page is unavailable instead.
-  for (const bad of [{ ...rows[0], newMasked: "0912345678" }, { ...rows[0], oldMasked: "+886933123456" }, { ...rows[0], status: "verified" },
+  for (const bad of [{ ...rows[0], newMasked: "0912345678" }, { ...rows[0], oldMasked: "+886933123456" }, { ...rows[0], oldMasked: "•••‑•••‑12" }, { ...rows[0], status: "verified" },
     { ...rows[0], actorRole: "accountant" }, { ...rows[0], phone: "x" }, { ...rows[0], at: "11/16" }])
     assert.deepEqual(await phoneHistory(staff, C, {}, { v3: async () => true, transaction: client({ ...page, rows: [bad] }, []) }), { state: "unavailable" }, JSON.stringify(bad));
+  assert.deepEqual(await phoneHistory(staff, C, {}, { v3: async () => true, transaction: client({ ...page, next: "9223372036854775808" }, []) }), { state: "unavailable" });
+  // An out-of-range ?after= falls back to the first page (no cursor sent).
+  const first: { sql: string; args?: unknown[] }[] = [];
+  await phoneHistory(staff, C, { after: "9223372036854775808" }, { v3: async () => true, transaction: client(page, first) });
+  assert.equal(first[3].args?.[5], null);
   const deny = (async () => { throw Object.assign(new Error("denied"), { cause: { code: "42501" } }); }) as never;
   assert.deepEqual(await phoneHistory(staff, C, {}, { v3: async () => true, transaction: deny }), { state: "forbidden" });
 });
 
 test("helpers: masks, cursor and parser", () => {
-  for (const ok of ["0933‑•••‑456", "•••‑•••‑123"]) assert.match(ok, MASKED);
-  for (const bad of ["0933-123-456", "0933‑123‑456", "+886933123456", "•••‑•••‑1234"]) assert.doesNotMatch(bad, MASKED);
+  for (const ok of ["0933‑•••‑456", "•••‑•••‑123", "•••‑•••‑•••"]) assert.match(ok, MASKED);
+  for (const bad of ["0933-123-456", "0933‑123‑456", "+886933123456", "•••‑•••‑1234", "•••‑•••‑12", "•••‑•••‑", "0933‑•••‑45", "123", "•••‑•••‑1•••"])
+    assert.doesNotMatch(bad, MASKED);
   assert.equal(parseAfter("42"), "42");
-  for (const bad of ["0", "-1", "4a", ["42"], undefined]) assert.equal(parseAfter(bad), undefined);
+  assert.equal(parseAfter("9223372036854775807"), "9223372036854775807");
+  for (const bad of ["0", "-1", "4a", ["42"], undefined, "9223372036854775808", "99999999999999999999"]) assert.equal(parseAfter(bad), undefined, String(bad));
   assert.equal(parsePhoneHistory(null), null);
   assert.throws(() => parsePhoneHistory({ ...page, next: "x" }));
 });
@@ -89,10 +106,37 @@ test("wiring: route under brand_v3 with consent; link only when the reader admit
   assert.match(route, /await requireCurrentConsent\(undefined, "page"\);/);
   assert.match(route, /if \(!\(await brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\);/);
   assert.match(route, /if \(data\.state === "off"\) notFound\(\);/);
-  assert.match(read("src/components/v3/m/tenants/tenant-one.tsx"), /\{data\.phoneHistory && <Link className="v3-tenant-one-history" href=\{phoneHistoryHref\(id\)\}/);
-  assert.equal((JSON.parse(read("src/server/b017-entry-permissions.json")) as Record<string, unknown>)["src/server/b076a-phone-history.ts#phoneHistory"], "tenants.contact");
+  assert.equal((JSON.parse(read("src/server/b017-entry-permissions.json")) as Record<string, unknown>)["src/server/b076a-phone-history.ts#phoneHistory"], "props.view");
+  assert.match(read("src/server/b076a-phone-history.ts"), /guardEffectiveSession\(input, "props\.view"\);\n    assertPerm\(session, "props\.view"\);\n    assertPerm\(session, "tenants\.contact"\);/);
+  assert.match(read("public/brand/v3/tenants.css"), /\.v3-phone-history-table td\[data-label\]::before \{ content:attr\(data-label\);/);
   const server = read("src/server/b076a-phone-history.ts");
   assert.match(server, /OPEN: only B-015 staff edits are listed/);
   assert.doesNotMatch(server, /fetch\(|sms|twilio|notification/i);
   assert.match(read("public/brand/v3/tenants.css"), /\.v3-tenant-one-history \{ display:inline-flex; align-items:center; min-height:44px; min-width:44px;/);
+});
+
+// 「查看改號紀錄」 on the rendered tenant page, fed by the real tenant-page reader (brandTenantOne) over a
+// scripted read: admin/manager with tenant_directory_edit on show it; flag off or accountant do not.
+function tenantRead(role: string, directory: boolean): typeof tx {
+  return (async (_user: string, fn: (c: Client) => Promise<unknown>) => fn({ query: async (sql: string) => {
+    if (sql === ADMIT) return { rows: [{ role, directory, mobileRequired: false }] };
+    if (sql === CONTACT) return { rows: [{ id: C, name: "林小美", phone: role === "accountant" ? null : "+886933123456", email: null, lineLinked: false }] };
+    if (sql === LEASES) return { rows: [] };
+    return { rows: [] };
+  } } as unknown as Client)) as unknown as typeof tx;
+}
+test("tenant page renders 「查看改號紀錄」 only for admin/manager with the flag on; not with it off, not for an accountant", async () => {
+  const saved = process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
+  process.env.CUSTOM_ROLES_ORG_ALLOWLIST = "";
+  try {
+    for (const [role, directory, shown] of [["admin", true, true], ["manager", true, true], ["admin", false, false], ["manager", false, false], ["accountant", true, false]] as const) {
+      const data = await brandTenantOne({ ...staff, role: role as Session["role"] }, C, { v3: async () => true, transaction: tenantRead(role, directory) });
+      if (data.state !== "ready") assert.fail(`${role}: ${data.state}`);
+      const html = renderToStaticMarkup(<TenantOneView data={data} locale="zh-TW" id={C} />);
+      assert.equal(html.includes("查看改號紀錄"), shown, `${role} directory=${directory}`);
+      assert.equal(html.includes(`href="${phoneHistoryHref(C)}"`), shown);
+    }
+  } finally {
+    if (saved === undefined) delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST; else process.env.CUSTOM_ROLES_ORG_ALLOWLIST = saved;
+  }
 });

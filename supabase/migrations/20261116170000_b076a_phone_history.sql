@@ -43,8 +43,9 @@ BEGIN
  END IF;
  IF p_contact IS NULL OR (p_after IS NOT NULL AND p_after<1) THEN
   RAISE EXCEPTION 'Invalid phone history request' USING ERRCODE='22023'; END IF;
- -- Another org's contact, a missing one and a non-tenant contact are indistinguishable.
- SELECT c.display_name INTO tenant FROM public.contacts c WHERE c.org_id=p_org AND c.id=p_contact AND c.is_tenant;
+ -- Another org's contact, a missing, archived or non-tenant contact are indistinguishable (the tenant page's population).
+ SELECT c.display_name INTO tenant FROM public.contacts c
+ WHERE c.org_id=p_org AND c.id=p_contact AND c.is_tenant AND c.archived_at IS NULL;
  IF NOT FOUND THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  SELECT o.timezone INTO tz FROM public.organizations o WHERE o.id=p_org;
  SELECT pr.name||' '||u.label||coalesce(' '||r.label,'') INTO place
@@ -70,15 +71,20 @@ BEGIN
   ORDER BY a.id DESC
   LIMIT page_limit+1
  ), masked AS (
-  -- Taiwan mobiles (+8869xxxxxxxx) read 09xx‑•••‑xxx as the frame draws them; any other number shows
-  -- only its last three digits. NULL (no number) stays NULL.
+  -- Taiwan mobiles (+8869xxxxxxxx) read 09xx‑•••‑xxx as the frame draws them. Any other value shows its
+  -- last three digits only when it has at least 8 digits (the tail is a strict minority); a shorter or
+  -- digit-less value (legacy data, separators included) is fully masked. NULL or blank stays NULL.
   SELECT h.*,
-   CASE WHEN nullif(btrim(h.old_phone),'') IS NULL THEN NULL
+   CASE WHEN h.old_phone IS NULL OR btrim(h.old_phone)='' THEN NULL
     WHEN h.old_phone ~ '^\+8869[0-9]{8}$' THEN '09'||substr(h.old_phone,6,2)||'‑•••‑'||right(h.old_phone,3)
-    ELSE '•••‑•••‑'||right(regexp_replace(h.old_phone,'[^0-9]','','g'),3) END AS old_masked,
-   CASE WHEN nullif(btrim(h.new_phone),'') IS NULL THEN NULL
+    WHEN length(regexp_replace(h.old_phone,'[^0-9]','','g'))>=8
+     THEN '•••‑•••‑'||right(regexp_replace(h.old_phone,'[^0-9]','','g'),3)
+    ELSE '•••‑•••‑•••' END AS old_masked,
+   CASE WHEN h.new_phone IS NULL OR btrim(h.new_phone)='' THEN NULL
     WHEN h.new_phone ~ '^\+8869[0-9]{8}$' THEN '09'||substr(h.new_phone,6,2)||'‑•••‑'||right(h.new_phone,3)
-    ELSE '•••‑•••‑'||right(regexp_replace(h.new_phone,'[^0-9]','','g'),3) END AS new_masked
+    WHEN length(regexp_replace(h.new_phone,'[^0-9]','','g'))>=8
+     THEN '•••‑•••‑'||right(regexp_replace(h.new_phone,'[^0-9]','','g'),3)
+    ELSE '•••‑•••‑•••' END AS new_masked
   FROM h
  )
  SELECT jsonb_build_object('tenant',tenant,'place',place,

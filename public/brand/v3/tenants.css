@@ -70,5 +70,6 @@ html[data-brand="v2"][data-brand-v3] .v3-phone-history-actions .btn { min-height
 @media (max-width:50em) {
  html[data-brand="v2"][data-brand-v3] .v3-phone-history-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
  html[data-brand="v2"][data-brand-v3] .v3-phone-history-table tr { display:grid; gap:4px; padding:12px 16px; border-bottom:1px solid var(--c-divider); }
- html[data-brand="v2"][data-brand-v3] .v3-phone-history-table td { display:block; padding:0; border:0; }
+ html[data-brand="v2"][data-brand-v3] .v3-phone-history-table td { display:block; padding:2px 0; border:0; }
+ html[data-brand="v2"][data-brand-v3] .v3-phone-history-table td[data-label]::before { content:attr(data-label); color:var(--c-text-2); display:inline-block; min-width:4em; }
 }

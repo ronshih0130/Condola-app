@@ -25,9 +25,14 @@ type Deps = { v3?: typeof brandV3ReadForOrg; transaction?: typeof svc };
 
 const PAGE = 20;
 const str = (value: unknown): value is string => typeof value === "string";
-const id = (value: unknown): value is string => str(value) && /^[1-9][0-9]{0,18}$/.test(value);
-/** A masked number: only 09xx‑•••‑xxx or •••‑•••‑xxx shapes are accepted, so a full number can never render. */
-export const MASKED = /^(?:09[0-9]{2}|•••)‑•••‑[0-9]{0,3}$/;
+const BIGINT_MAX = BigInt("9223372036854775807");
+/** A positive signed-bigint audit row id; anything out of range is not an id. */
+const id = (value: unknown): value is string => str(value) && /^[1-9][0-9]{0,18}$/.test(value) && BigInt(value) <= BIGINT_MAX;
+/**
+ * A masked number, exactly the gateway's three shapes: 09xx‑•••‑xxx (Taiwan mobile), •••‑•••‑xxx (other numbers
+ * with at least 8 digits) or •••‑•••‑••• (anything shorter). A full number can never render.
+ */
+export const MASKED = /^(?:09[0-9]{2}‑•••‑[0-9]{3}|•••‑•••‑(?:[0-9]{3}|•••))$/;
 const masked = (value: unknown) => value === null || (str(value) && MASKED.test(value));
 
 function sqlDenied(error: unknown): boolean {
@@ -35,7 +40,7 @@ function sqlDenied(error: unknown): boolean {
   return e?.code === "42501" || e?.cause?.code === "42501";
 }
 
-/** `?after=` is an audit row id (digits only); anything else falls back to the first page. */
+/** `?after=` is an audit row id (a positive signed bigint); anything else, out of range included, falls back to the first page. */
 export function parseAfter(raw: unknown): string | undefined {
   return id(raw) ? raw : undefined;
 }
@@ -54,11 +59,13 @@ export function parsePhoneHistory(value: unknown): Omit<Extract<PhoneHistory, { 
   return v as Omit<Extract<PhoneHistory, { state: "ready" }>, "state">;
 }
 
-/** MGT-76-AC3/AC12: newest first, keyset paged; P-ACC, P-MNT, other orgs and non-tenant contacts are 403. */
+/** MGT-76-AC3/AC12: newest first, keyset paged; P-ACC, P-MNT, other orgs, archived and non-tenant contacts are 403. */
 export async function phoneHistory(input: Session, contactId: string, options: { after?: string } = {}, deps: Deps = {}): Promise<PhoneHistory> {
   try {
     if (!(await (deps.v3 ?? brandV3ReadForOrg)(input.orgId))) return { state: "off" };
-    const session = await guardEffectiveSession(input, "tenants.contact");
+    // The tenant page's own gate (props.view), plus contact access for the numbers (tenants.contact).
+    const session = await guardEffectiveSession(input, "props.view");
+    assertPerm(session, "props.view");
     assertPerm(session, "tenants.contact");
     const native = session.customRole?.nativeRole ?? session.role;
     if (session.kind !== "staff" || !native || !["admin", "manager"].includes(native) || session.needsSandbox

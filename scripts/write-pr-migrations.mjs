@@ -16,7 +16,7 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 const added = {
   "supabase/migrations/20261116170000_b076a_phone_history.sql": {
     addOnly: true,
-    reason: "B-076a (narrow first slice of B-076) / mgr-history-direct (Round 7 batch 4, MGT-76-AC3/AC12): one new migration-owned VOLATILE service-only SECURITY DEFINER read gateway app.b076a_phone_history (search_path=pg_catalog,pg_temp; EXECUTE to service_role only). Admission: env/live tuple, live auth session, active native admin/manager of the live org, tenant_directory_edit org+platform flag, tenant contact of this org. Reads only audit_log contacts updates with the B-015 reason joined to app.b015_edit_commands and profiles; numbers masked in SQL. No table, grant, policy, flag or data change.",
+    reason: "B-076a (narrow first slice of B-076) / mgr-history-direct (Round 7 batch 4, MGT-76-AC3/AC12): one new migration-owned VOLATILE service-only SECURITY DEFINER read gateway app.b076a_phone_history (search_path=pg_catalog,pg_temp; EXECUTE to service_role only). Admission: env/live tuple, live auth session, active native admin/manager of the live org, tenant_directory_edit org+platform flag, non-archived tenant contact of this org. Reads only audit_log contacts updates with the B-015 reason joined to app.b015_edit_commands and profiles; numbers masked in SQL (Taiwan mobile 09xx‑•••‑xxx; otherwise a 3-digit tail only from 8+ digits, else fully masked). No table, grant, policy, flag or data change.",
   },
   "supabase/migrations/20261116160000_b105_vendor_case.sql": {
     addOnly: true,

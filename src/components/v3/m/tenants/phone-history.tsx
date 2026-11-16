@@ -11,6 +11,7 @@ export const phoneHistoryHref = (id: string, after?: string | null) =>
   `/m/tenants/${encodeURIComponent(id)}/phone-history${after ? `?after=${encodeURIComponent(after)}` : ""}`;
 const fill = (text: string, values: Record<string, string>) => text.replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "");
 
+/** GS-44 frame question (flagged): with no profile name the actor reads 「{角色} 直接修改」, keeping the role for the audit trail. */
 export function phoneHistoryActor(row: Pick<PhoneHistoryRow, "actorRole" | "actorName">, locale: Locale) {
   const role = makeT(locale)(row.actorRole === "admin" ? "i_role_admin" : "i_role_manager");
   return fill(phoneHistoryCopy(locale).by, { role, name: row.actorName ? displaySampleName(row.actorName) : "" }).replace(/\s{2,}/g, " ");
@@ -27,7 +28,8 @@ export function PhoneHistoryView({ data, id, locale }: { data: PhoneHistory; id:
   const numbers = (row: PhoneHistoryRow) => `${row.oldMasked ?? c.none} → ${row.newMasked ?? c.none}`;
   return <section className="v3-tenants v3-phone-history" data-testid="phone-history">
     <header className="v3-phone-history-head"><h1>{fill(c.titleWith, { name })}</h1>
-      <p>{data.place ? fill(c.sub, { name, place: displaySampleName(data.place) }) : c.subNoPlace}</p></header>
+      {/* The frame's subtitle only; hidden without a lease/place or with no rows (the empty-state frame has none). */}
+      {data.place && data.rows.length ? <p>{fill(c.sub, { name, place: displaySampleName(data.place) })}</p> : null}</header>
     <div className="v3-tenants-card">
       {data.rows.length ? <table className="v3-phone-history-table">
         <thead><tr><th scope="col">{c.time}</th><th scope="col">{c.status}</th><th scope="col">{c.actor}</th><th scope="col">{c.numbers}</th></tr></thead>
@@ -40,6 +42,7 @@ export function PhoneHistoryView({ data, id, locale }: { data: PhoneHistory; id:
       </table> : <p className="v3-phone-history-empty" data-testid="phone-history-empty">{c.empty}</p>}
     </div>
     <div className="v3-phone-history-actions">
+      {/* GS-44 frame question (flagged): paging is the shipped 下一頁 (i_search_next); the frame draws no paging. */}
       {data.next ? <Link className="btn" href={phoneHistoryHref(id, data.next)} data-testid="phone-history-next">{t("i_search_next")}</Link> : null}
       {back}
     </div>
