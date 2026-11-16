@@ -125,8 +125,9 @@ export async function saveSharedMeter(input: Session, form: SharedMeterInput, de
 export type SplitRow = { id: string; kind: "room" | "whole_unit"; unitLabel: string; label: string | null; weight: string; kwh: string; amountMinor: string | null };
 export type SharedMeterSplit =
   | { state: "off" | "forbidden" | "unavailable" | "none" }
-  | { state: "not_ready"; reason: "ambiguous_meters" | "missing_readings" | "estimated_readings"; spaceIds: string[] }
+  | { state: "not_ready"; reason: "ambiguous_meters" | "missing_readings" | "estimated_readings"; problems: SplitProblem[] }
   | { state: "ready"; period: string; revision: number; method: SplitMethod; kwh: string; amountMinor: string | null; rows: SplitRow[] };
+export type SplitProblem = { spaceId: string; problem: "ambiguous_meter" | "missing_reading" | "estimated_reading" };
 export type SplitInput = { propertyId: string; period: string; kwh: string; amountMinor?: string | null };
 const KWH = /^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$/;
 const MINOR = /^(?:0|[1-9][0-9]{0,15})$/;
@@ -136,8 +137,13 @@ export function parseSharedMeterSplit(value: unknown): Exclude<SharedMeterSplit,
   const v = value as Record<string, unknown>;
   if (v.status === "none") return { state: "none" };
   if (v.status === "ambiguous_meters" || v.status === "missing_readings" || v.status === "estimated_readings") {
-    if (!Array.isArray(v.spaces) || !v.spaces.length || !v.spaces.every(uuid)) throw new Error("Invalid split status");
-    return { state: "not_ready", reason: v.status, spaceIds: v.spaces as string[] };
+    const kinds = ["ambiguous_meter", "missing_reading", "estimated_reading"];
+    if (!Array.isArray(v.spaces) || !v.spaces.length || !(v.spaces as Record<string, unknown>[]).every(x => x && uuid(x.id) && kinds.includes(x.problem as string))
+      // The status is the highest-precedence kind present.
+      || kinds.find(k => (v.spaces as Record<string, unknown>[]).some(x => x.problem === k)) !== { ambiguous_meters: "ambiguous_meter", missing_readings: "missing_reading", estimated_readings: "estimated_reading" }[v.status])
+      throw new Error("Invalid split status");
+    return { state: "not_ready", reason: v.status,
+      problems: (v.spaces as { id: string; problem: SplitProblem["problem"] }[]).map(x => ({ spaceId: x.id, problem: x.problem })) };
   }
   if (v.status !== "ready" || !day(v.period) || !Number.isInteger(v.revision) || !SPLIT_METHODS.includes(v.method as SplitMethod)
     || !str(v.kwh) || !KWH.test(v.kwh) || !(v.amountMinor === null || (str(v.amountMinor) && MINOR.test(v.amountMinor)))

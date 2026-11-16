@@ -155,8 +155,14 @@ test("split preview caller: page admission mirrored; input mirrors the gateway; 
   assert.equal(result.state, "ready");
   assert.equal(seen[3].sql, "SELECT app.b109_shared_meter_split($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::date,$7::numeric,$8::bigint) AS result");
   assert.deepEqual(seen[3].args, [ORG, ORG, "live", staff.sessionId, P, "2026-12-01", "10", "1000"]);
-  for (const status of ["ambiguous_meters", "missing_readings", "estimated_readings"] as const)
-    assert.deepEqual(parseSharedMeterSplit({ status, period: "2026-12-01", revision: 3, spaces: [id(3)] }), { state: "not_ready", reason: status, spaceIds: [id(3)] });
+  for (const [status, problem] of [["ambiguous_meters", "ambiguous_meter"], ["missing_readings", "missing_reading"], ["estimated_readings", "estimated_reading"]] as const)
+    assert.deepEqual(parseSharedMeterSplit({ status, period: "2026-12-01", revision: 3, spaces: [{ id: id(3), problem }] }), { state: "not_ready", reason: status, problems: [{ spaceId: id(3), problem }] });
+  // Every problem space with its own kind; the status must be the highest-precedence kind present.
+  const mixed = [{ id: id(1), problem: "estimated_reading" }, { id: id(2), problem: "ambiguous_meter" }, { id: id(3), problem: "missing_reading" }];
+  assert.deepEqual(parseSharedMeterSplit({ status: "ambiguous_meters", spaces: mixed }), { state: "not_ready", reason: "ambiguous_meters",
+    problems: mixed.map(x => ({ spaceId: x.id, problem: x.problem })) });
+  for (const bad of [{ status: "missing_readings", spaces: mixed }, { status: "estimated_readings", spaces: mixed }, { status: "missing_readings", spaces: [id(1)] },
+    { status: "missing_readings", spaces: [{ id: id(1), problem: "weird" }] }]) assert.throws(() => parseSharedMeterSplit(bad), JSON.stringify(bad).slice(0, 60));
   assert.deepEqual(parseSharedMeterSplit({ status: "none", period: "2026-12-01" }), { state: "none" });
   for (const bad of [{ ...ready, rows: [{ ...rows[0], kwh: "5.610" }, ...rows.slice(1)] }, { ...ready, rows: [{ ...rows[0], amountMinor: "560" }, ...rows.slice(1)] },
     { ...ready, rows: [] }, { ...ready, method: "none" }, { status: "missing_readings", spaces: [] }, { status: "weird" }])

@@ -268,13 +268,15 @@ BEGIN
      AND NOT EXISTS (SELECT 1 FROM public.meter_readings sup WHERE sup.org_id=mr.org_id AND sup.supersedes_id=mr.id)
     ORDER BY mr.read_on DESC,mr.created_at DESC,mr.id DESC LIMIT 1) s ON true) w;
  IF jsonb_array_length(spaces)=0 THEN RETURN jsonb_build_object('status','none','period',p_period::text); END IF;
- -- Not ready: one status, by precedence ambiguous > missing > estimated, listing every affected space.
+ -- Not ready: one status by precedence (ambiguous > missing > estimated), and EVERY space with any problem,
+ -- each with its own kind, in display order.
  FOR problem IN SELECT unnest(ARRAY['ambiguous_meter','missing_reading','estimated_reading']) LOOP
   IF EXISTS (SELECT 1 FROM jsonb_array_elements(spaces) e WHERE e->>'problem'=problem) THEN
    RETURN jsonb_build_object('status',CASE problem WHEN 'ambiguous_meter' THEN 'ambiguous_meters'
      WHEN 'missing_reading' THEN 'missing_readings' ELSE 'estimated_readings' END,
     'period',p_period::text,'revision',cfg.revision,
-    'spaces',(SELECT jsonb_agg(e->'id' ORDER BY (e->>'ord')::integer) FROM jsonb_array_elements(spaces) e WHERE e->>'problem'=problem));
+    'spaces',(SELECT jsonb_agg(jsonb_build_object('id',e->'id','problem',e->'problem') ORDER BY (e->>'ord')::integer)
+      FROM jsonb_array_elements(spaces) e WHERE e->>'problem' IS NOT NULL));
   END IF;
  END LOOP;
  SELECT sum((e->>'weight')::numeric) INTO total_weight FROM jsonb_array_elements(spaces) e;
@@ -284,8 +286,10 @@ BEGIN
    CASE WHEN total_weight=0 THEN jsonb_array_length(spaces)::numeric ELSE total_weight END tw
   FROM jsonb_array_elements(spaces) e
  ), shares AS (
-  SELECT b.*,floor(total_milli*b.w/b.tw)::bigint milli,
-   CASE WHEN p_amount_minor IS NULL THEN NULL ELSE floor(p_amount_minor*b.w/b.tw)::bigint END amount
+  -- div() is exact integer division (all values are non-negative): numeric "/" rounds to a finite scale first and
+  -- can round a share up, moving a unit of the remainder away from the first space.
+  SELECT b.*,div(total_milli*b.w,b.tw)::bigint milli,
+   CASE WHEN p_amount_minor IS NULL THEN NULL ELSE div(p_amount_minor*b.w,b.tw)::bigint END amount
   FROM base b
  ), fixed AS (
   SELECT s.ord,s.e,s.w,
