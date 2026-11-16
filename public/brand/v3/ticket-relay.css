@@ -1,0 +1,33 @@
+/* MGT-150 TK-RELAY / TK-RELAY-MNT: loaded only in the brand_v3 branch of /m/tickets/[id]. Tokens only.
+   Rail follows the approved 接力條 frame: navy line up to the current step, the current label is the
+   navy pill (.turn-tag from theme.css), later steps dimmed. No completion tick. */
+html[data-brand="v2"][data-brand-v3] .v3-ticket { display:grid; gap:16px; min-width:0; margin-bottom:20px; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket :is(h1,p,ol) { margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket-crumb { display:flex; flex-wrap:wrap; align-items:center; gap:4px; color:var(--c-text-2); font-weight:600; font-size:.9em; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket-crumb a { display:inline-flex; align-items:center; min-height:44px; min-width:44px; color:var(--c-brand-ink); text-decoration:none; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket-crumb a:focus-visible { outline:2px solid var(--c-focus); outline-offset:2px; border-radius:4px; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket-crumb > span:last-child { overflow-wrap:anywhere; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket-head { background:var(--c-tint-soft); border-radius:var(--r-lg); padding:16px 20px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket-head h1 { overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket-head p { margin-top:4px; color:var(--c-text-2); font-size:.9em; }
+html[data-brand="v2"][data-brand-v3] .v3-ticket-card { background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); box-shadow:var(--shadow-1); padding:20px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-rail { display:flex; list-style:none; padding:0; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-st { flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:4px; position:relative; text-align:center; font-size:.85em; line-height:1.35; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-st .party { width:2.4em; height:2.4em; position:relative; z-index:1; margin-bottom:4px; }
+html[data-brand="v2"][data-brand-v3] .v3-st + .v3-st::before { content:""; position:absolute; top:1.2em; right:50%; width:100%; height:2px; margin-top:-1px; background:var(--c-border); }
+html[data-brand="v2"][data-brand-v3] .v3-st.done + .v3-st::before { background:var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-st.done { color:var(--c-text); }
+html[data-brand="v2"][data-brand-v3] .v3-st.now { color:var(--c-text); font-weight:700; }
+html[data-brand="v2"][data-brand-v3] .v3-st.next { color:var(--c-text-3); }
+html[data-brand="v2"][data-brand-v3] .v3-st.next .party { opacity:.8; }
+html[data-brand="v2"][data-brand-v3] .v3-st-l { display:inline-flex; align-items:center; white-space:nowrap; max-width:100%; }
+html[data-brand="v2"][data-brand-v3] .v3-st .turn-tag { padding:.05em .48em; font-weight:700; }
+html[data-brand="v2"][data-brand-v3] .v3-st-s { font-weight:400; color:var(--c-text-2); overflow-wrap:anywhere; max-width:100%; }
+html[data-brand="v2"][data-brand-v3] .v3-st.next .v3-st-s { color:var(--c-text-3); }
+html[data-brand="v2"][data-brand-v3] .v3-why { margin-top:12px; padding:10px 14px; border-radius:var(--r-md); background:var(--c-surface-2); font-size:.9em; line-height:1.55; }
+@media (max-width:50em) {
+ html[data-brand="v2"][data-brand-v3] .v3-ticket-head { padding:14px 16px; }
+ html[data-brand="v2"][data-brand-v3] .v3-ticket-card { padding:16px 12px; }
+ html[data-brand="v2"][data-brand-v3] .v3-st { font-size:.75em; }
+ html[data-brand="v2"][data-brand-v3] .v3-st .turn-tag { padding:.05em .3em; }
+}
