@@ -6,12 +6,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TicketDocumentsV3 } from "../components/v3/m/tickets/ticket-documents";
 import { VendorDocsV3, money, pendingControl, sendOnce, type1IssueBody, type VendorDocsV3Props } from "../components/v3/vendor/vendor-docs-v3";
 import { vendorDocsCopy } from "../i18n/lanes/brand-v3-vendor-docs";
-import { orderTicketDocuments, vendorDocsV3FlagOn, vendorDocsV3Stage, type TicketDocument } from "./gs32-vendor-docs";
+import { buyerIsCompanyWithTaxId, orderTicketDocuments, vendorDocsV3FlagOn, vendorDocsV3Stage, type TicketDocument } from "./gs32-vendor-docs";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const token = "t".repeat(43);
 const brand = { name: "阿榮", company: "安居物業", property: "信義路 2 樓", status: "closed", ticketTitle: "浴室天花板滴水", currency: "TWD",
-  buyerKind: "company" as const, buyerName: "安居物業" };
+  buyerIsCompany: true, buyerName: "安居物業" };
 const view = (props: Partial<VendorDocsV3Props>) => renderToStaticMarkup(<VendorDocsV3 locale="zh-TW" token={token} brand={brand}
   stage={{ stage: "type1_preview" }} totalMinor="2800" remainingMinor="2800" mode="view" uploaded={false} {...props} />);
 const solids = (html: string) => (html.match(/class="v-token-primary/g) ?? []).length;
@@ -23,7 +23,7 @@ test("P52 new words and approved vendor-frontend words are verbatim", () => {
   const expected: Record<string, string> = {
     previewTitle: "預覽簽收單", previewHeading: "簽收單／完工明細預覽", notTax: "本文件非稅務憑證", markStatement: "完工明細（非稅務憑證）",
     previewNote: "這是預覽，還沒開立，因此還沒有編號。", noNumber: "（預覽不占號）", signLine: "開立人：{name}（簽收單不蓋章）",
-    withholding: "若付款方是管理公司：扣繳與列單是公司在系統外的義務，系統不代為處理，也不開扣繳憑單。我們不收、不印身分證。",
+    withholding: "若付款方是公司：扣繳與列單是公司在系統外的義務，系統不代為處理，也不開扣繳憑單。我們不收、不印身分證。", paperFile: "檔案 {name}",
     issue: "確認已全額收款並開立", close: "關閉", receiptTitle: "普通收據", evidence: "已關聯的證據", markReceipt: "收據", billedTo: "開給",
     paperCard: "紙本收據", paperEntry: "上傳紙本收據", paperSibling: "紙本收據會和電子收據 {number} 放在一起，不會取代它，也不會多算一筆費用。",
     paperZone: "點這裡上傳收據照片或 PDF", upload: "上傳", cancel: "取消", paperDone: "已上傳紙本收據", markVoid: "已作廢",
@@ -52,7 +52,8 @@ test("rec-type1-preview: banner, heading + mark, no number, issuer only, one sol
     "開立人", "阿榮", "買受人", "安居物業", "NT$2,800", "（預覽不占號）", "開立人：阿榮（簽收單不蓋章）", "扣繳與列單是公司在系統外的義務", ">確認已全額收款並開立<", ">關閉<"]) assert.ok(html.includes(text), text);
   assert.equal(solids(html), 1);
   assert.doesNotMatch(html, /蓋章範本|統一編號|身分證字號/);
-  assert.doesNotMatch(view({ brand: { ...brand, buyerKind: "owner", buyerName: "林雅婷" } }), /扣繳/);
+  assert.doesNotMatch(view({ brand: { ...brand, buyerIsCompany: false, buyerName: "林雅婷" } }), /扣繳/);
+  assert.doesNotMatch(view({}), /管理公司/, "GS-57 replaced 「管理公司」 with 「公司」");
 });
 
 test("the type 1 issue body is fixed once: same idempotency key and payment mark on every retry; no mark when already paid", async () => {
@@ -137,9 +138,33 @@ test("UI review fixes: Taipei document date, voided amount announced, no file na
   const source = read("src/components/v3/vendor/vendor-docs-v3.tsx");
   assert.match(source, /type1IssueBody\(props\.token, props\.remainingMinor, \(\) => globalThis\.crypto\.randomUUID\(\), taipeiToday\(\)\)/);
   assert.doesNotMatch(source, /toISOString\(\)\.slice\(0, 10\)/);
-  assert.doesNotMatch(source, /file\.name/, "GS-44: the chosen file name is not drawn");
-  assert.match(source, /FRAME QUESTION/);
+  assert.doesNotMatch(source, /FRAME QUESTION/, "GS-57 answered the frame question");
   const stage = { stage: "receipt_evidence" as const, receipt: { id: "r1", docNo: "RCP-2026-019" }, scans: [] };
   assert.match(view({ stage, mode: "paper" }), /<label class="v-docs-zone"[^>]*>點這裡上傳收據照片或 PDF<\/label>/);
   assert.match(read("public/brand/v3/vendor-docs.css"), /\.v3-docs \.v3-sr \{[^}]*clip-path: inset\(50%\)/);
+});
+
+test("GS-57 (VEN-21-AC8): the note shows only for a company 買受人 with a valid 統編, on a preview selection and an issued snapshot", () => {
+  // Preview: the grant's buyer selection. Issued: vendor_documents.buyer (the validated snapshot).
+  const company = { kind: "company", name: "安居物業", address: "台北市", tax_id: "04595257" };
+  for (const buyer of [company, { kind: "company", name: "安居物業", address: "台北市", tax_id: "04595257" }]) assert.equal(buyerIsCompanyWithTaxId(buyer), true);
+  for (const buyer of [{ ...company, tax_id: "" }, { ...company, tax_id: null }, { ...company, tax_id: "12345678" }, { ...company, tax_id: undefined },
+    { kind: "owner", receipt_title: "林雅婷" }, { kind: "owner", contactId: "x" }, null, undefined, "company"]) {
+    assert.equal(buyerIsCompanyWithTaxId(buyer), false, JSON.stringify(buyer));
+  }
+  const note = "若付款方是公司：扣繳與列單是公司在系統外的義務，系統不代為處理，也不開扣繳憑單。我們不收、不印身分證。";
+  assert.ok(view({ brand: { ...brand, buyerIsCompany: buyerIsCompanyWithTaxId(company) } }).includes(note), "company with 統編");
+  assert.ok(!view({ brand: { ...brand, buyerIsCompany: buyerIsCompanyWithTaxId({ ...company, tax_id: "" }) } }).includes(note), "company without 統編");
+  assert.ok(!view({ brand: { ...brand, buyerIsCompany: buyerIsCompanyWithTaxId({ kind: "owner", receipt_title: "林雅婷" }) } }).includes(note), "individual");
+});
+
+test("GS-58 (VEN-23-AC8): the chosen file name shows under the zone during and after upload; 上傳 disabled while it runs", () => {
+  const source = read("src/components/v3/vendor/vendor-docs-v3.tsx");
+  assert.match(source, /\{file \? <p className="v-docs-small" data-testid="paper-file-name">\{copy\.paperFile\.replace\("\{name\}", file\.name\)\}<\/p> : null\}/);
+  assert.ok(source.indexOf('htmlFor={`${id}-file`}>{copy.paperZone}</label>') < source.indexOf('data-testid="paper-file-name"'), "under the zone");
+  // The name is tied to the chosen file only (kept through pending and failed), never to the upload state.
+  assert.doesNotMatch(source, /state === "idle" && file|file && state/);
+  assert.deepEqual(pendingControl("pending", true), { disabled: true, "aria-busy": true });
+  const stage = { stage: "receipt_evidence" as const, receipt: { id: "r1", docNo: "RCP-2026-019" }, scans: [] };
+  assert.doesNotMatch(view({ stage, mode: "paper" }), /paper-file-name/, "nothing before a file is chosen");
 });

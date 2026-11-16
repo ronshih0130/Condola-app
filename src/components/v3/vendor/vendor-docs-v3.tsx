@@ -104,10 +104,8 @@ function Type1Preview(props: VendorDocsV3Props) {
         <div><dt>{copy.number}</dt><dd>{copy.noNumber}</dd></div>
       </dl>
       <p className="v-docs-small">{copy.signLine.replace("{name}", props.brand.name)}</p>
-      {/* FRAME QUESTION (for the Design Session): the frame shows this approved line unconditionally, while the
-          sentence itself is about a company payer (issuer-types.md: 「類型 1 且開給管理公司」). Shown for a company
-          buyer only until the frame says otherwise. */}
-      {props.brand.buyerKind === "company" ? <p className="v-docs-small">{copy.withholding}</p> : null}
+      {/* VEN-21-AC8 (GS-57): only for a company 買受人 with a 統編; never for an individual. */}
+      {props.brand.buyerIsCompany ? <p className="v-docs-small">{copy.withholding}</p> : null}
       {state === "failed" ? <div className="v-docs-error" role="alert"><p>{copy.saveError}</p>
         <button type="button" className="v-token-secondary" onClick={() => void issue()}>{copy.retry}</button></div> : null}
       <button type="button" className="v-token-primary v-docs-block" {...pendingControl(state)} onClick={() => void issue()}>{copy.issue}</button>
@@ -153,8 +151,9 @@ function PaperUpload(props: VendorDocsV3Props & { docNo: string; documentId: str
       <p>{copy.paperSibling.replace("{number}", props.docNo)}</p>
       <input id={`${id}-file`} className="v-docs-file" type="file" accept="image/jpeg,image/png,application/pdf" disabled={state === "pending"}
         data-testid="paper-file" onChange={event => { setFile(event.target.files?.[0] ?? null); setRequest(null); setState("idle"); }} />
-      {/* GS-44: the frame draws only the zone text; a chosen file shows as 「上傳」 turning solid, not its name. */}
-      <label className="v-docs-zone" htmlFor={`${id}-file`} data-chosen={file ? "true" : undefined}>{copy.paperZone}</label>
+      <label className="v-docs-zone" htmlFor={`${id}-file`}>{copy.paperZone}</label>
+      {/* VEN-23-AC8 (GS-58): the chosen file's name, during and after the upload. */}
+      {file ? <p className="v-docs-small" data-testid="paper-file-name">{copy.paperFile.replace("{name}", file.name)}</p> : null}
       {state === "failed" ? <div className="v-docs-error" role="alert"><p>{copy.saveError}</p>
         <button type="button" className="v-token-secondary" onClick={() => void upload()}>{copy.retry}</button></div> : null}
       <button type="button" className="v-token-primary v-docs-block" {...pendingControl(state, file !== null)} onClick={() => void upload()}>{copy.upload}</button>

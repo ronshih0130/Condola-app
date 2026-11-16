@@ -14,7 +14,7 @@ import { ENV_COOKIE, ORG_COOKIE } from "./org-scope";
 import { buildStoredConsent } from "./consent";
 import { getSession, sessionTokenHash } from "./session";
 import { actionCreateVendorDocumentInvite } from "./vendor-document-invite-actions";
-import { loadTicketDocuments, vendorDocsV3Brand } from "./gs32-vendor-docs";
+import { buyerIsCompanyWithTaxId, loadTicketDocuments, vendorDocsV3Brand } from "./gs32-vendor-docs";
 import { POST } from "../app/api/vendor-documents/route";
 import VendorPage from "../app/v/documents/[token]/page";
 import { VendorDocumentsPanel } from "../components/vendor-documents-panel";
@@ -71,7 +71,7 @@ async function login(userId: string, orgId = ORG_ID) {
     [userId, consent.accepted_at, consent.terms_version, consent.privacy_version, consent.source]);
   return getSession();
 }
-async function fixture(kind: "business" | "individual", orgId = ORG_ID) {
+async function fixture(kind: "business" | "individual", orgId = ORG_ID, companyBuyer?: { name: string; address: string; tax_id: string }) {
   const property = (await db.query("SELECT id FROM properties WHERE org_id=$1 AND archived_at IS NULL AND address_display IS NOT NULL LIMIT 1", [orgId])).rows[0].id;
   const owner = (await db.query("INSERT INTO contacts(org_id,is_owner,display_name,receipt_title) VALUES($1,true,'Owner fixture','林雅婷') RETURNING id", [orgId])).rows[0].id;
   await db.query("INSERT INTO property_owners(org_id,property_id,owner_contact_id,is_primary) VALUES($1,$2,$3,false)", [orgId, property, owner]);
@@ -90,7 +90,8 @@ async function fixture(kind: "business" | "individual", orgId = ORG_ID) {
     VALUES($1,$2,'GS-32 Vendor','+12025550125','Fixture',$3,now()+interval '1 day',$4,$5)`,
   [orgId, ticket, randomUUID().replaceAll("-", "").padEnd(64, "0"), orgId === ORG_ID ? USERS.admin : USERS.coastAdmin, contact]);
   await login(orgId === ORG_ID ? USERS.admin : USERS.coastAdmin, orgId);
-  const invite = await actionCreateVendorDocumentInvite({ ticketId: ticket, profileId: profile, buyer: { kind: "owner", contactId: owner } });
+  const invite = await actionCreateVendorDocumentInvite({ ticketId: ticket, profileId: profile,
+    buyer: companyBuyer ? { kind: "company", ...companyBuyer } : { kind: "owner", contactId: owner } });
   assert.ok(invite.ok);
   return { ticket, profile, token: invite.url.split("/").at(-1)! };
 }
@@ -233,4 +234,25 @@ test("DOC-VOID m-docs reader: tickets.update roles only, live first and voided l
   assert.equal((await loadTicketDocuments(await login(USERS.manager), f.ticket)).state, "ready");
   for (const user of [USERS.accountant, USERS.maintenance]) assert.deepEqual(await loadTicketDocuments(await login(user), f.ticket), { state: "off" }, user);
   await assert.rejects(loadTicketDocuments(await login(USERS.coastAdmin, ORG2_ID), f.ticket), "another org's ticket is not found");
+});
+
+test("GS-57: the withholding note follows the 買受人 on the preview and on the issued 簽收單", async () => {
+  const company = await fixture("individual", ORG_ID, { name: "安居物業股份有限公司", address: "台北市信義區信義路二段 1 號", tax_id: "04595257" });
+  const owner = await fixture("individual");
+  assert.equal((await vendorDocsV3Brand(company.token))?.buyerIsCompany, true, "company with 統編: note on the preview");
+  assert.equal((await vendorDocsV3Brand(owner.token))?.buyerIsCompany, false, "owner (individual): no note");
+  assert.equal(caseView(await page(company.token)).brand.buyerName, "安居物業股份有限公司");
+  // A company selection whose 統編 is not valid is treated as having none.
+  const noTax = await fixture("individual");
+  await db.query("UPDATE vendor_document_grants SET buyer_selection=$2::jsonb WHERE token_hash=encode(sha256(convert_to($1,'UTF8')),'hex')",
+    [noTax.token, JSON.stringify({ kind: "company", name: "無統編公司", address: "台北市", tax_id: "" })]);
+  assert.equal((await vendorDocsV3Brand(noTax.token))?.buyerIsCompany, false, "company without 統編: no note");
+  // Issued: the stored buyer snapshot gives the same answer.
+  for (const [f, expected] of [[company, true], [owner, false]] as const) {
+    const issued = await call(f.token, type1IssueBody(f.token, "2800", () => randomUUID(), "2026-11-16"));
+    assert.equal(issued.status, 200, await issued.clone().text());
+    const { document } = await issued.json();
+    const stored = (await db.query("SELECT buyer FROM vendor_documents WHERE id=$1", [document.id])).rows[0].buyer;
+    assert.equal(buyerIsCompanyWithTaxId(stored), expected, JSON.stringify(stored));
+  }
 });

@@ -7,6 +7,7 @@ import { can } from "./perms";
 import { guardEffectiveSession, withEffectiveReadAuthority } from "./b017-custom-role-governance";
 import { admitVendorDocumentsOrgOn, vendorDocumentsEnabled } from "./vendor-document-admission";
 import { resolveVendorDocumentToken, vendorDocumentGrantOn } from "./vendor-receipt";
+import { validTaxId } from "./vendor-receipt-rules";
 import type { Session } from "./types";
 
 /**
@@ -27,7 +28,20 @@ export async function vendorDocsV3FlagOn(client: Pick<Client, "query">, orgId: s
 }
 
 export type VendorDocsBrand = { name: string; company: string; property: string; status: string; ticketTitle: string; currency: string;
-  buyerKind: "owner" | "company" | null; buyerName: string | null };
+  /** VEN-21-AC8 (GS-57): the 買受人 is a company with a 統編; only then is the withholding note shown. */
+  buyerIsCompany: boolean; buyerName: string | null };
+
+/**
+ * VEN-21-AC8 (GS-57 = A2), shared by the 簽收單 preview and the issued 簽收單: the withholding note shows only when
+ * the 買受人 is a company with a valid 統編 (a management company or a company owner). An owner buyer is stored as a
+ * receipt title only, with no 統編, so it is an individual here; so is a company selection without a valid 統編.
+ * Accepts a grant buyer selection or an issued document's buyer snapshot.
+ */
+export function buyerIsCompanyWithTaxId(buyer: unknown): boolean {
+  if (!buyer || typeof buyer !== "object") return false;
+  const b = buyer as { kind?: unknown; tax_id?: unknown };
+  return b.kind === "company" && typeof b.tax_id === "string" && validTaxId(b.tax_id);
+}
 
 /** Bearer presentation for the document-grant page: null when OFF or not admitted (the B-025 page stays). */
 export async function vendorDocsV3Brand(token: string): Promise<VendorDocsBrand | null> {
@@ -58,7 +72,7 @@ export async function vendorDocsV3Brand(token: string): Promise<VendorDocsBrand 
             ORDER BY po.effective_from DESC LIMIT 1`, [access.orgId, access.ticket.property_id, selection.contactId]))?.title ?? null;
       }
       return { orgId: access.orgId, brand: { name: row.name, company: row.company, property: row.property, status: row.status, ticketTitle: row.title,
-        currency: row.currency, buyerKind: selection?.kind ?? null, buyerName } };
+        currency: row.currency, buyerIsCompany: buyerIsCompanyWithTaxId(selection), buyerName } };
     });
     if (!found || !(await brandV3EnabledForOrg(found.orgId))) return null;
     return found.brand;
