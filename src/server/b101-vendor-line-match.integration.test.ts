@@ -69,6 +69,7 @@ async function issue(staff = admin, vendorId?: string) {
 test.before(async () => { clone = await cloneTestDatabase(); db = new Client({connectionString:process.env.DATABASE_URL}); await db.connect();
  globalThis.fetch = async () => { throw new Error("B101 HTTP forbidden"); }; });
 test.beforeEach(async () => {
+ rendered.clear();
  process.env.DEMO_MODE="true"; process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString("hex"); await resetAndSeed(); process.env.DEMO_MODE="false";
  process.env.LINE_PLATFORM_ENABLED="true"; process.env.BRAND_V2="false"; browser=randomProof();csrf=randomProof();
  for (const org of [ORG_ID,ORG2_ID]) {
@@ -115,9 +116,17 @@ async function signedIn(f:{flow:string},subject=sub) {
  assert.ok([origin+"/vendor-account",origin+"/consent?next=%2Fvendor-account"].includes(r.headers.get("location")!),r.headers.get("location")!);
  const token=cookieValue(r,"condola_session");assert.ok(token);return token!;
 }
+// Review r1 finding 2: what each V-LINK page rendered (flow id + frozen-snapshot digest), keyed by flow cookie handle.
+const rendered=new Map<string,{flow:string;snapshot:string}>();
+const bootstrap=(html:string)=>JSON.parse(/id="match-bootstrap">([^<]+)</.exec(html)![1]) as {flow:string;snapshot:string};
 async function list(f:{flow:string}) {
  const r=await review(req("/v/link",undefined,f));assert.equal(r.status,200);const text=await r.text();
- assert.ok(!text.includes('id="match-review" hidden'),text);return text;
+ assert.ok(!text.includes('id="match-review" hidden'),text);
+ const shown=bootstrap(text);rendered.set(f.flow,{flow:shown.flow,snapshot:shown.snapshot});return text;
+}
+// A V-LINK POST from the page last rendered for flow `f` (or from `page`, an older tab's render).
+function vlink(f:{flow:string},input:Record<string,string>,opts:Parameters<typeof req>[2]={},page=rendered.get(f.flow)) {
+ return req("/v/link",{...page,...input},{...f,...opts});
 }
 async function rejected(f:{flow:string},subject=sub,opts:Parameters<typeof oauth>[2]={}) {
  const before=await snapshot(),r=await oauth(f,subject,opts);
@@ -143,17 +152,20 @@ test("VEN-31-AC2/3: first sign-in binds, audits, lists only exact org/contact op
 test("VEN-15-AC3/4: durable removal, no unseen/foreign attachments; existing portal sync respects tombstones and confirmation",async()=>{
  const j=await issue(),same=await issue(admin,j.contact),other=await issue(),f=await matched(j.token);await list(f);
  const unseen=await issue(admin,j.contact);
- await parsed(await act(req("/v/link",{action:"remove",jobId:other.jobId},f)),404);
- await parsed(await act(req("/v/link",{action:"remove",jobId:unseen.jobId},f)),404);
- const removed=await parsed(await act(req("/v/link",{action:"remove",jobId:j.jobId},f)));
+ await parsed(await act(vlink(f,{action:"remove",jobId:other.jobId})),404);
+ await parsed(await act(vlink(f,{action:"remove",jobId:unseen.jobId})),404);
+ const removed=await parsed(await act(vlink(f,{action:"remove",jobId:j.jobId})));
+ // The removal response carries the new digest; the same tab's confirm must present it (the old one is now stale).
+ assert.match(removed.snapshot,/^[0-9a-f]{64}$/);const shown=rendered.get(f.flow)!;assert.notEqual(removed.snapshot,shown.snapshot);
+ await parsed(await act(vlink(f,{action:"confirm"})),404);shown.snapshot=removed.snapshot;
  assert.ok(!removed.jobs.some((x:{id:string})=>x.id===j.jobId));
  assert.deepEqual((await db.query("SELECT user_id,manual FROM app.b026_vendor_job_accounts WHERE job_id=$1",[j.jobId])).rows[0],{user_id:null,manual:true});
  assert.ok((await vendorAccountLinkEvents(admin,j.jobId)).some(e=>e.reason==="vendor_not_mine"));
- const done=await act(req("/v/link",{action:"confirm"},f)),data=await parsed(done);
+ const done=await act(vlink(f,{action:"confirm"})),data=await parsed(done);
  assert.equal(data.next,"/consent?next=%2Fvendor-account");const token=cookieValue(done,"condola_session");assert.ok(token);
  const jobs=(await vendorAccountHistory(token)).jobs;assert.deepEqual(jobs.map(j=>j.jobId),[same.jobId]);
  await syncVendorAccount(token);assert.deepEqual((await vendorAccountHistory(token)).jobs.map(j=>j.jobId),[same.jobId]);
- await parsed(await act(req("/v/link",{action:"confirm"},f)),409);
+ await parsed(await act(vlink(f,{action:"confirm"})),409);
  // Round-2 finding 1: a repeat sign-in with a newly assigned job shows V-LINK listing exactly that job (never the removed
  // or already linked one) and attaches it only after the vendor confirms.
  const before=await snapshot(),again=await matched(),html=await list(again);
@@ -161,7 +173,7 @@ test("VEN-15-AC3/4: durable removal, no unseen/foreign attachments; existing por
  assert.ok(html.includes(copy.remove));
  const pending=await snapshot();for(const key of ["app.b026_vendor_job_accounts","app.b026_vendor_link_events","auth_sessions"])assert.deepEqual(pending[key],before[key],key);
  assert.ok(!(await vendorAccountLinkEvents(admin,unseen.jobId)).some(e=>e.reason==="line_confirmed"));
- const confirmed=await act(req("/v/link",{action:"confirm"},again));await parsed(confirmed);
+ const confirmed=await act(vlink(again,{action:"confirm"}));await parsed(confirmed);
  const repeat=cookieValue(confirmed,"condola_session")!;assert.ok(repeat);
  assert.deepEqual((await vendorAccountHistory(repeat)).jobs.map(x=>x.jobId).sort(),[same.jobId,unseen.jobId].sort());
  assert.ok((await vendorAccountLinkEvents(admin,unseen.jobId)).some(e=>e.reason==="line_confirmed"));
@@ -169,7 +181,7 @@ test("VEN-15-AC3/4: durable removal, no unseen/foreign attachments; existing por
 });
 test("VEN-31: no token needed after exact binding; unknown identity without token fails",async()=>{
  await rejected(await flow());
- const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(req("/v/link",{action:"confirm"},f)));
+ const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(vlink(f,{action:"confirm"})));
  // Zero candidates on the repeat sign-in: no V-LINK and no job link/confirm row is written.
  const before=await snapshot();await signedIn(await flow());const after=await snapshot();
  for(const key of ["app.b026_vendor_job_accounts","app.b026_vendor_link_events","app.b026_vendor_accounts"])assert.deepEqual(after[key],before[key],key);
@@ -214,7 +226,7 @@ for(const key of ["vendor_line_match","brand_v3","vendor_account","line_vendor_p
   attempts=(await db.query("SELECT attempts,verified_hash FROM app.b033_line_flows WHERE flow_hash=$1",[lineHash(f.flow)])).rows;
  }});
  assert.notEqual(callback.headers.get("location"),origin+"/v/link");assert.ok(!cookieValue(callback,"condola_session"));
- assert.notEqual((await act(req("/v/link",{action:"confirm"},ready))).status,200);
+ assert.notEqual((await act(vlink(ready,{action:"confirm"}))).status,200);
  assert.notEqual((await flows(req("/api/line/flows",{purpose:"login",persona:"vendor",jobToken:j.token,vendorMatch:"true"}))).status,201);
  assert.deepEqual(await snapshot(),before);
  assert.deepEqual((await db.query("SELECT attempts,verified_hash FROM app.b033_line_flows WHERE flow_hash=$1",[lineHash(f.flow)])).rows,attempts);
@@ -228,9 +240,9 @@ test("VEN-31 browser proof, OAuth/confirmation replay, CSRF and different browse
  const fresh=await flow(j.token),staffSession=await createSession(USERS.admin,false,meta);await rejected(fresh,sub,{session:staffSession});
  const ready=await matched(j.token);await list(ready);
  const beforeActions=await snapshot();
- await parsed(await act(req("/v/link",{action:"confirm"},{...ready,browser:randomProof()})),404);
- await parsed(await act(req("/v/link",{action:"confirm"},{...ready,origin:"https://foreign.test"})),403);
- await parsed(await act(req("/v/link",{action:"confirm"},{...ready,session:staffSession})),409);
+ await parsed(await act(vlink(ready,{action:"confirm"},{browser:randomProof()})),404);
+ await parsed(await act(vlink(ready,{action:"confirm"},{origin:"https://foreign.test"})),403);
+ await parsed(await act(vlink(ready,{action:"confirm"},{session:staffSession})),409);
  await parsed(await exchange(req("/api/line/session",{flow:ready.flow,idToken:jwt()})),409);
  assert.deepEqual(await snapshot(),beforeActions);
 });
@@ -246,19 +258,19 @@ for(const change of ["identity-revoked","link-unlinked","contact-archived","user
  if(change==="link-unlinked")await db.query("UPDATE line_account_links SET status='unlinked',unlinked_at=now(),notification_opt_in=false WHERE login_identity_id=$1",[a.line_identity_id]);
  if(change==="contact-archived")await db.query("UPDATE contacts SET archived_at=now() WHERE id=$1",[j.contact]);
  if(change==="user-became-staff")await db.query("INSERT INTO org_members(org_id,user_id,role,status) VALUES($1,$2,'admin','active')",[ORG_ID,a.user_id]);
- const before=await snapshot();await parsed(await act(req("/v/link",{action:"confirm"},f)),404);assert.deepEqual(await snapshot(),before);
+ const before=await snapshot();await parsed(await act(vlink(f,{action:"confirm"})),404);assert.deepEqual(await snapshot(),before);
 });
 test("VEN-31 confirmation drops reassigned/closed candidates and never resurrects a management tombstone",async()=>{
  const j=await issue(),same=await issue(admin,j.contact),closed=await issue(admin,j.contact),other=await issue(),f=await matched(j.token);await list(f);
  await db.query("UPDATE maintenance_tickets SET assigned_vendor_contact_id=$2 WHERE id=$1",[same.ticketId,other.contact]);
  await db.query("UPDATE maintenance_tickets SET status='closed' WHERE id=$1",[closed.ticketId]);
  await db.query("INSERT INTO app.b026_vendor_job_accounts(job_id,org_id,contact_id,user_id,manual) VALUES($1,$2,$3,NULL,true)",[j.jobId,ORG_ID,j.contact]);
- await parsed(await act(req("/v/link",{action:"confirm"},f)));
+ await parsed(await act(vlink(f,{action:"confirm"})));
  assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_job_accounts WHERE user_id IS NOT NULL")).rows[0].n,0);
 });
 test("VEN-31 concurrent confirmations create one session and one durable set of links",async()=>{
  const j=await issue(),f=await matched(j.token);await list(f);
- const results=await Promise.all([act(req("/v/link",{action:"confirm"},f)),act(req("/v/link",{action:"confirm"},f))]);
+ const results=await Promise.all([act(vlink(f,{action:"confirm"})),act(vlink(f,{action:"confirm"}))]);
  assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
  assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_link_events WHERE job_id=$1 AND reason='line_confirmed'",[j.jobId])).rows[0].n,1);
 });
@@ -266,7 +278,7 @@ test("VEN-31 PRINCIPLES 75: private relation/columns, function ACLs and fixed se
  for(const role of ["anon","authenticated","service_role"]){
   const direct=(await db.query("SELECT has_table_privilege($1,'app.b101_vendor_confirmations','SELECT,INSERT,UPDATE,DELETE') permitted",[role])).rows[0];assert.equal(direct.permitted,false);
  }
- for(const signature of ["app.b101_match(uuid,boolean)","app.b101_review(uuid,boolean,text,uuid)","app.b101_enabled(uuid,boolean)","app.b101_identity_managed(uuid,boolean)"]){
+ for(const signature of ["app.b101_match(uuid,boolean)","app.b101_review(uuid,boolean,text,uuid,text)","app.b101_enabled(uuid,boolean)","app.b101_identity_managed(uuid,boolean)"]){
   const row=(await db.query("SELECT prosecdef,proconfig,has_function_privilege('anon',oid,'EXECUTE') anon,has_function_privilege('authenticated',oid,'EXECUTE') authenticated,has_function_privilege('service_role',oid,'EXECUTE') service FROM pg_proc WHERE oid=$1::regprocedure",[signature])).rows[0];
   assert.equal(row.prosecdef,true);assert.deepEqual(row.proconfig,["search_path=pg_catalog, app"]);assert.equal(row.anon,false);assert.equal(row.authenticated,false);assert.equal(row.service,true);
  }
@@ -286,7 +298,7 @@ test("VEN-31 concurrent first sign-ins bind only one identity to the contact",as
 });
 
 test("review r3: a user removed by a staff rebind cannot return by unlinking and relinking after the new invite lapses",async()=>{
- const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(req("/v/link",{action:"confirm"},f)));
+ const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(vlink(f,{action:"confirm"})));
  const invitee=randomUUID();
  await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,$2,now())",[invitee,`b101-lapsed-${invitee}@example.test`]);
  assert.equal((await rebindVendorAccount(admin,j.contact,invitee)).status,"invited");
@@ -300,7 +312,7 @@ test("review r3: a user removed by a staff rebind cannot return by unlinking and
  assert.equal(await audits(),before);
 });
 test("review finding 1: after a staff rebind the removed LINE user cannot silently re-create the account; the invitee still claims",async()=>{
- const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(req("/v/link",{action:"confirm"},f)));
+ const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(vlink(f,{action:"confirm"})));
  const invitee=randomUUID();
  await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,$2,now())",[invitee,`b101-invitee-${invitee}@example.test`]);
  const rebound=await rebindVendorAccount(admin,j.contact,invitee);assert.equal(rebound.status,"invited");
@@ -340,7 +352,7 @@ test("round-2 finding 1: a zero-candidate first sign-in writes no job link or co
  const arrived=await issue(admin,j.contact),later=await matched(),html=await list(later);
  assert.ok(html.includes(`data-job="${arrived.jobId}"`));assert.ok(!html.includes(`data-job="${j.jobId}"`));
  assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_job_accounts WHERE job_id=$1",[arrived.jobId])).rows[0].n,0);
- await parsed(await act(req("/v/link",{action:"confirm"},later)));
+ await parsed(await act(vlink(later,{action:"confirm"})));
  assert.ok((await vendorAccountLinkEvents(admin,arrived.jobId)).some(e=>e.reason==="line_confirmed"));
 });
 for(const state of ["unlinked","linked"] as const)test(`round-2 finding 2: an old ${state} contact link without a current account ${state==="unlinked"?"does not block":"blocks"} a new LINE binding`,async()=>{
@@ -382,8 +394,49 @@ test("round-2 finding 4: a pending staff invitation blocks LINE first binding wi
  assert.ok(page.includes('id="match-review" hidden'));assert.ok(page.includes(`<p role="alert">${copy.error}</p>`));
  assert.ok(page.includes(copy.retry));assert.ok(page.includes(`href="/v/${encodeURIComponent(j.token)}"`));assert.ok(!page.includes(`data-job=`));
 });
+test("review r1 finding 1: the invitee's own LINE cannot pre-empt a live invitation even with a matching contacts.user_id; after the email claim LINE binds",async()=>{
+ const j=await issue(),user=randomUUID();
+ await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,$2,now())",[user,`b101-own-invite-${user}@example.test`]);
+ const invitation=await inviteVendorAccount(admin,j.contact,user);assert.equal(invitation.status,"invited");
+ await db.query("UPDATE contacts SET user_id=$2 WHERE id=$1",[j.contact,user]);
+ // Denied with no rows written (rejected() compares every account/identity/link/session/confirmation table).
+ const f=await flow(j.token);await rejected(f);
+ const page=await (await review(req("/v/link?error=1",undefined,f))).text();
+ assert.ok(page.includes('id="match-review" hidden'));assert.ok(page.includes(`<p role="alert">${copy.error}</p>`));assert.ok(!page.includes("data-job="));
+ assert.equal((await db.query("SELECT count(*)::int n FROM app.b033_line_identities WHERE user_id=$1",[user])).rows[0].n,0);
+ assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_accounts WHERE contact_id=$1",[j.contact])).rows[0].n,0);
+ // The invitee claims by email first; a later LINE sign-in then binds to that claimed account.
+ const credential=await createSession(user,false,meta);
+ assert.equal((await claimVendorAccount(credential,invitation.invitation!)).status,"claimed");
+ await signedIn(await flow(j.token));
+ const a=(await db.query("SELECT a.user_id,a.invite_id,i.user_id identity_user FROM app.b026_vendor_accounts a JOIN app.b033_line_identities i ON i.id=a.line_identity_id WHERE a.contact_id=$1",[j.contact])).rows;
+ assert.equal(a.length,1);assert.equal(a[0].user_id,user);assert.equal(a[0].identity_user,user);assert.ok(a[0].invite_id);
+});
+test("review r1 finding 2: a second-tab retry replaces the flow cookie; the original tab cannot approve the newer unseen list",async()=>{
+ const j=await issue(),f=await matched(j.token);await list(f);
+ const original=rendered.get(f.flow)!;
+ // Second tab (same browser, same CSRF): 「再試一次」 replaces the flow cookie, then a new job is assigned before its OAuth.
+ const retry=await parsed(await act(vlink(f,{action:"retry"}))),second={flow:/^\/v\/liff\?flow=([\w-]{43})$/.exec(retry.next)![1]};
+ const newer=await issue(admin,j.contact);
+ const r=await oauth(second);assert.equal(r.headers.get("location"),origin+"/v/link");
+ const html=await list(second);assert.ok(html.includes(`data-job="${newer.jobId}"`));assert.ok(html.includes(`data-job="${j.jobId}"`));
+ assert.notEqual(rendered.get(second.flow)!.flow,original.flow);
+ const before=await snapshot();
+ // The original tab submits what IT rendered while the browser's cookie now names the second flow.
+ for(const input of [{action:"confirm"},{action:"remove",jobId:j.jobId},{action:"retry"}] as Record<string,string>[]){
+  const res=await act(vlink(second,input,{},original));assert.equal(res.status,404,JSON.stringify(input));assert.ok(!cookieValue(res,"condola_session"));
+ }
+ // Even a forged current flow id with the original tab's list digest is refused.
+ const forged=await act(vlink(second,{action:"confirm"},{},{flow:rendered.get(second.flow)!.flow,snapshot:original.snapshot}));
+ assert.equal(forged.status,404);assert.ok(!cookieValue(forged,"condola_session"));
+ assert.deepEqual(await snapshot(),before,"no session, job link, event or confirmation write from the stale tab");
+ assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_job_accounts WHERE job_id=ANY($1)",[[j.jobId,newer.jobId]])).rows[0].n,0);
+ // The tab that rendered the newer list still confirms it.
+ const done=await act(vlink(second,{action:"confirm"}));await parsed(done);assert.ok(cookieValue(done,"condola_session"));
+ assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_link_events WHERE reason='line_confirmed' AND job_id=ANY($1)",[[j.jobId,newer.jobId]])).rows[0].n,2);
+});
 test("review findings 2/3: vendor_line_match OFF keeps every pre-B-101 path; B-101-bound identities use the ordinary B033 vendor sign-in",async()=>{
- const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(req("/v/link",{action:"confirm"},f)));
+ const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(vlink(f,{action:"confirm"})));
  assert.ok((await (await vendorLiff(req(`/v/liff?org=${ORG_ID}`))).text()).includes('"vendorMatch":true'));
  assert.equal(await vendorLineEntryEnabled(j.token,true),true);
  // ON: the generic LIFF ID-token exchange cannot bypass V-LINK for a B-101 identity.
@@ -394,7 +447,7 @@ test("review findings 2/3: vendor_line_match OFF keeps every pre-B-101 path; B-1
  assert.equal(await vendorLineEntryEnabled(j.token,true),false);assert.equal(await vendorLineEntryEnabled(j.token),true);
  assert.notEqual((await flows(req("/api/line/flows",{purpose:"login",persona:"vendor",jobToken:j.token,vendorMatch:"true"}))).status,201);
  const before=await snapshot();
- assert.notEqual((await act(req("/v/link",{action:"confirm"},f))).status,200);assert.deepEqual(await snapshot(),before);
+ assert.notEqual((await act(vlink(f,{action:"confirm"}))).status,200);assert.deepEqual(await snapshot(),before);
  const legacy=await parsed(await flows(req("/api/line/flows",{purpose:"login",persona:"vendor",orgId:ORG_ID})),201);
  const signed=await exchange(req("/api/line/session",{flow:legacy.flow,idToken:jwt()})),body=await parsed(signed);
  assert.ok(["/vendor-account","/consent?next=%2Fvendor-account"].includes(body.next),JSON.stringify(body));assert.ok(cookieValue(signed,"condola_session"));
@@ -405,9 +458,9 @@ test("review finding 5: the 5-minute window covers OAuth, V-LINK and confirm; af
  const page=await (await review(req("/v/link",undefined,f))).text();
  assert.ok(page.includes('id="match-review" hidden'));assert.ok(page.includes(copy.error));assert.ok(page.includes(`id="match-retry" class="v-token-secondary">${copy.retry}<`));
  const before=await snapshot();
- await parsed(await act(req("/v/link",{action:"confirm"},f)),404);assert.deepEqual(await snapshot(),before);
- const retry=await parsed(await act(req("/v/link",{action:"retry"},f))),again={flow:/^\/v\/liff\?flow=([\w-]{43})$/.exec(retry.next)![1]};
+ await parsed(await act(vlink(f,{action:"confirm"})),404);assert.deepEqual(await snapshot(),before);
+ const retry=await parsed(await act(vlink(f,{action:"retry"}))),again={flow:/^\/v\/liff\?flow=([\w-]{43})$/.exec(retry.next)![1]};
  const r=await oauth(again);assert.equal(r.headers.get("location"),origin+"/v/link");
- await list(again);const done=await act(req("/v/link",{action:"confirm"},again));await parsed(done);assert.ok(cookieValue(done,"condola_session"));
+ await list(again);const done=await act(vlink(again,{action:"confirm"}));await parsed(done);assert.ok(cookieValue(done,"condola_session"));
  assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_link_events WHERE reason='line_first_binding' AND contact_id=$1",[j.contact])).rows[0].n,1);
 });

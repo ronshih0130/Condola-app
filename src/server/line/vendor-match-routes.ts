@@ -10,20 +10,21 @@ import { vendorMatchContextOn, vendorMatchReviewOn } from "./vendor-match";
 
 const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const meta = (r: Request) => ({ ua: r.headers.get("user-agent"), ip: null });
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, digest = /^[0-9a-f]{64}$/;
 
 export const vendorMatchGET = (request: Request) => lineResponse(async () => {
  envGate();
  const proof = browserProof(request), handle = cookie(request, LINE_FLOW_COOKIE) ?? "";
  const recovery = await lineTransaction(c => vendorMatchContextOn(c, handle, proof, true));
- let jobs: { id: string; description: string }[] = [], failed = new URL(request.url).searchParams.has("error");
+ let jobs: { id: string; description: string }[] = [], snapshot = "", failed = new URL(request.url).searchParams.has("error");
  if (!failed) {
-  try { jobs = await lineTransaction(async c => {
+  try { ({ jobs, snapshot = "" } = await lineTransaction(async c => {
    const { f } = await vendorMatchContextOn(c, handle, proof);
-   return (await vendorMatchReviewOn(c, f, "list")).jobs;
-  }); } catch { failed = true; }
+   return vendorMatchReviewOn(c, f, "list");
+  })); } catch { failed = true; }
  }
- const data = JSON.stringify({ csrf: proof.csrf }).replace(/</g, "\\u003c");
+ // Every V-LINK action posts back the exact flow and frozen-list digest this page rendered (never the mutable cookie alone).
+ const data = JSON.stringify({ csrf: proof.csrf, flow: recovery.f.id, snapshot }).replace(/</g, "\\u003c");
  // screens.md V-LINK: the removal note appears only after a removal, together with its toast.
  const rows = jobs.map(j => `<li data-job="${escape(j.id)}"><span>${escape(j.description)}</span><button type="button" data-remove="${escape(j.id)}" class="v-token-secondary">${copy.remove}</button></li>`).join("");
  const html = `<!doctype html><html lang="zh-TW" data-brand="v2" data-brand-v3><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><link rel="stylesheet" href="/brand/v2/theme.css"><link rel="stylesheet" href="/brand/v3/theme.css"><link rel="stylesheet" href="/brand/v3/vendor-token.css"><title>${copy.title}</title></head><body><div class="v-token-v3"><main class="v-token-main"><section class="v-token-card"><h1>${copy.title}</h1><div id="match-review"${failed ? " hidden" : ""}><p>${copy.body}</p><ul id="match-jobs">${rows}</ul><button type="button" id="match-confirm" class="v-token-primary">${copy.continue}</button><p id="match-toast" role="status" data-template="${copy.removed}"></p><p id="match-note" hidden>${copy.note}</p></div><div id="match-error"${failed ? "" : " hidden"}><p role="alert">${copy.error}</p><button type="button" id="match-retry" class="v-token-secondary">${copy.retry}</button><a href="${escape(recovery.back)}" referrerpolicy="no-referrer">${copy.back}</a></div><script type="application/json" id="match-bootstrap">${data}</script><script src="/vendor-line-match.js" defer></script></section></main></div></body></html>`;
@@ -33,21 +34,24 @@ export const vendorMatchGET = (request: Request) => lineResponse(async () => {
 
 export const vendorMatchPOST = (request: Request) => lineResponse(async () => {
  envGate(); const b = await body(request), proof = browserProof(request); csrfCheck(request, proof, b.csrf);
- if (!['remove', 'confirm', 'retry'].includes(b.action) || Object.keys(b).some(k => !['action', 'jobId', 'csrf'].includes(k))
-  || (b.action === 'remove' ? !uuid.test(b.jobId ?? '') : b.jobId !== undefined)) rejectLine(400, "invalid_request");
+ if (!['remove', 'confirm', 'retry'].includes(b.action) || Object.keys(b).some(k => !['action', 'jobId', 'csrf', 'flow', 'snapshot'].includes(k))
+  || (b.action === 'remove' ? !uuid.test(b.jobId ?? '') : b.jobId !== undefined) || !uuid.test(b.flow ?? '')
+  || (b.action === 'retry' ? ![undefined, ''].includes(b.snapshot) && !digest.test(b.snapshot) : !digest.test(b.snapshot ?? ''))) rejectLine(400, "invalid_request");
  const handle = cookie(request, LINE_FLOW_COOKIE) ?? "";
+ // A second tab replaces the flow cookie: an action from a page rendered for another flow is refused before any write.
+ const rendered = (f: { id: string }) => { if (f.id !== b.flow) rejectLine(404, "not_found"); };
  if (b.action === "retry") {
-  const { f, jobToken } = await lineTransaction(c => vendorMatchContextOn(c, handle, proof, true));
+  const { f, jobToken } = await lineTransaction(async c => { const r = await vendorMatchContextOn(c, handle, proof, true); rendered(r.f); return r; });
   const flow = await createLineFlow({ purpose: "login", persona: "vendor", orgId: f.org_id, jobToken, vendorMatch: "true" }, proof);
   const res = NextResponse.json({ next: `/v/liff?flow=${flow.flow}` }, { headers: privateHeaders });
   lineCookie(res, LINE_FLOW_COOKIE, flow.flow); return res;
  }
  const result = await lineTransaction(async c => {
-  const { f } = await vendorMatchContextOn(c, handle, proof);
-  const review = await vendorMatchReviewOn(c, f, b.action as "remove" | "confirm", b.jobId);
+  const { f } = await vendorMatchContextOn(c, handle, proof); rendered(f);
+  const review = await vendorMatchReviewOn(c, f, b.action as "remove" | "confirm", b.jobId, b.snapshot);
   const sessionToken = cookie(request, SESSION_COOKIE), existing = await sessionOn(c, sessionToken);
   if (existing && existing.user_id !== review.userId) rejectLine(409, "account_mismatch");
-  if (b.action === "remove") return { jobs: review.jobs };
+  if (b.action === "remove") return { jobs: review.jobs, snapshot: review.snapshot };
   await credentialsOn(c, review.userId, { sessionToken }, false);
   const token = await lineSessionOn(c, f, review.userId, review.identityId, meta(request), sessionToken);
   // Existing B026 portal exists. B063 workbench is deliberately not implemented here.

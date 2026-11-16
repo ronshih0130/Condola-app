@@ -17,8 +17,9 @@ export async function vendorMatchContextOn(c: Client, handle: string, proof: Bro
   JOIN repair_vendor_secrets s ON s.job_id=j.id WHERE v.flow_id=$1`, [f.id, f.org_id])).rows[0];
  return { f, jobToken: job?.token, back: job ? `/v/${encodeURIComponent(job.token)}` : "/v/liff" };
 }
-export type VendorMatchReview = { jobs: { id: string; description: string }[]; userId: string; identityId: string; orgId: string };
-export async function vendorMatchReviewOn(c: Client, f: LineFlow, action: "list" | "remove" | "confirm", jobId?: string) {
- return (await c.query<{ result: VendorMatchReview }>("SELECT app.b101_review($1,$2,$3,$4) result",
-  [f.id, brandV2Enabled(), action, jobId ?? null])).rows[0].result;
+export type VendorMatchReview = { jobs: { id: string; description: string }[]; userId: string; identityId: string; orgId: string; snapshot?: string };
+/** remove/confirm must carry the snapshot digest the rendered V-LINK received; app.b101_review rejects any other. */
+export async function vendorMatchReviewOn(c: Client, f: LineFlow, action: "list" | "remove" | "confirm", jobId?: string, snapshot?: string) {
+ return (await c.query<{ result: VendorMatchReview }>("SELECT app.b101_review($1,$2,$3,$4,$5) result",
+  [f.id, brandV2Enabled(), action, jobId ?? null, snapshot ?? null])).rows[0].result;
 }

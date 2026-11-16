@@ -9,10 +9,14 @@
   const buttons = [...document.querySelectorAll("button")]; buttons.forEach(b => { b.disabled = true; });
   try {
    const response = await fetch("/v/link", { method: "POST", credentials: "same-origin", cache: "no-store", referrerPolicy: "no-referrer",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, csrf: config.csrf, ...(jobId ? { jobId } : {}) }) });
+    headers: { "Content-Type": "application/json" },
+    // Bind the action to the exact flow and candidate snapshot this page rendered; the server refuses any other.
+    body: JSON.stringify({ action, csrf: config.csrf, flow: config.flow, snapshot: config.snapshot, ...(jobId ? { jobId } : {}) }) });
    if (!response.ok) throw new Error("unavailable");
    const result = await response.json();
    if (action === "remove") {
+    if (typeof result.snapshot !== "string" || !/^[0-9a-f]{64}$/.test(result.snapshot)) throw new Error("unavailable");
+    config.snapshot = result.snapshot;
     const row = document.querySelector(`[data-job="${jobId}"]`), toast = document.getElementById("match-toast");
     toast.textContent = toast.dataset.template.replace("{工單}", row.querySelector("span").textContent);
     document.getElementById("match-note").hidden = false;

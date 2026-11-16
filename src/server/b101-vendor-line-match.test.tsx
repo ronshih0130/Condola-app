@@ -39,21 +39,39 @@ for (const present of [true, false]) test(`VEN-31-AC2: OAuth state/nonce/PKCE pa
  assert.deepEqual(next, ["/api/line/login/start?flow=opaque"]);
  assert.deepEqual(posts, present ? [] : [{ purpose: "login", persona: "vendor", orgId: "org", vendorMatch: "true", csrf: "proof" }]);
 });
+const renderedFlow = "33333333-3333-4333-8333-333333333333", shownSnapshot = "a".repeat(64), afterRemoval = "b".repeat(64);
 test("VEN-15-AC4: browser removal is server-confirmed, busy-safe, text-only and announces the approved toast", async () => {
  const row = { dataset: { job: "job-a" }, querySelector: () => ({ textContent: "<img onerror=bad>" }), remove: () => { removed = true; } };
  let removed = false, release!: () => void, calls = 0;
  const toast = { dataset: { template: copy.removed }, textContent: "" }, note = { hidden: true };
  const button = { dataset: { remove: "job-a" }, disabled: false, onclick: undefined as undefined | (() => Promise<void>) };
- const nodes: Record<string, unknown> = { "match-bootstrap": { textContent: '{"csrf":"proof"}' }, "match-review": { hidden: false }, "match-error": { hidden: true }, "match-toast": toast, "match-note": note, "match-confirm": {}, "match-retry": {} };
+ const confirm = { onclick: undefined as undefined | (() => Promise<void>) }, bodies: Record<string, string>[] = [], next: string[] = [];
+ const nodes: Record<string, unknown> = { "match-bootstrap": { textContent: JSON.stringify({ csrf: "proof", flow: renderedFlow, snapshot: shownSnapshot }) }, "match-review": { hidden: false }, "match-error": { hidden: true }, "match-toast": toast, "match-note": note, "match-confirm": confirm, "match-retry": {} };
  runInNewContext(readFileSync("public/vendor-line-match.js", "utf8"), {
   document: { getElementById: (id: string) => nodes[id], querySelector: () => row,
    querySelectorAll: (selector: string) => selector === "[data-job]" ? [row] : [button] },
-  fetch: async (path: string, init: RequestInit) => { calls++; assert.equal(path, "/v/link"); assert.deepEqual(JSON.parse(String(init.body)), { action: "remove", csrf: "proof", jobId: "job-a" });
-   await new Promise<void>(r => { release = r; }); return { ok: true, json: async () => ({ jobs: [] }) }; },
+  location: { assign: (v: string) => next.push(v) },
+  fetch: async (path: string, init: RequestInit) => { calls++; assert.equal(path, "/v/link"); const input = JSON.parse(String(init.body)); bodies.push(input);
+   if (input.action === "confirm") return { ok: true, json: async () => ({ next: "/vendor-account" }) };
+   await new Promise<void>(r => { release = r; }); return { ok: true, json: async () => ({ jobs: [], snapshot: afterRemoval }) }; },
  });
  const first = button.onclick!(); await button.onclick!(); assert.equal(calls, 1); assert.equal(removed, false); assert.equal(note.hidden, true);
  release(); await first; assert.equal(removed, true); assert.equal(toast.textContent, copy.removed.replace("{工單}", "<img onerror=bad>"));
  assert.equal(note.hidden, false, "screens.md V-LINK: the removal note appears only after a removal");
+ // Review r1 finding 2: every action carries the rendered flow and snapshot; remove-then-confirm uses the digest the removal returned.
+ await confirm.onclick!(); assert.deepEqual(next, ["/vendor-account"]);
+ assert.deepEqual(bodies, [{ action: "remove", csrf: "proof", flow: renderedFlow, snapshot: shownSnapshot, jobId: "job-a" },
+  { action: "confirm", csrf: "proof", flow: renderedFlow, snapshot: afterRemoval }]);
+});
+test("review r1 finding 2: a removal response without a valid snapshot digest fails closed to the approved error state", async () => {
+ const button = { dataset: { remove: "job-a" }, disabled: false, onclick: undefined as undefined | (() => Promise<void>) };
+ const review = { hidden: false }, error = { hidden: true }, row = { dataset: { job: "job-a" }, querySelector: () => ({ textContent: "d" }), remove: () => {} };
+ const nodes: Record<string, unknown> = { "match-bootstrap": { textContent: JSON.stringify({ csrf: "proof", flow: renderedFlow, snapshot: shownSnapshot }) }, "match-review": review, "match-error": error, "match-toast": { dataset: { template: copy.removed } }, "match-note": { hidden: true }, "match-confirm": {}, "match-retry": {} };
+ runInNewContext(readFileSync("public/vendor-line-match.js", "utf8"), {
+  document: { getElementById: (id: string) => nodes[id], querySelector: () => row, querySelectorAll: (s: string) => s === "[data-job]" ? [row] : [button] },
+  fetch: async () => ({ ok: true, json: async () => ({ jobs: [] }) }),
+ });
+ await button.onclick!(); assert.equal(review.hidden, true); assert.equal(error.hidden, false);
 });
 test("VEN-31 migration: private gateways, explicit provenance, no opt-in or flag writes; legacy invite sync preserved", () => {
  const sql = readFileSync("supabase/migrations/20261115180000_b101_vendor_line_match.sql", "utf8");
@@ -98,7 +116,9 @@ test("B-101 own flag: app.b101_enabled requires the strict vendor_line_match pla
 test("finding 1: a surviving contact link needs the exact current account, pending invitations win, and every created account is logged", () => {
  const body = fn("b101_match");
  assert.match(body, /OR \(EXISTS\(SELECT 1 FROM public\.line_account_links WHERE org_id=c\.org_id AND contact_id=c\.id AND status='linked' AND unlinked_at IS NULL\)\n   AND \(a\.user_id IS NULL OR a\.user_id IS DISTINCT FROM i\.user_id\)\)/);
- assert.match(body, /OR \(a\.user_id IS NULL AND EXISTS\(SELECT 1 FROM app\.b026_vendor_account_invites WHERE org_id=c\.org_id AND contact_id=c\.id\n   AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp\(\) AND user_id IS DISTINCT FROM actor\)\)/);
+ // Review r1 finding 1: ANY live invitation blocks LINE first binding; no invitee (user_id) exemption.
+ assert.match(body, /OR \(a\.user_id IS NULL AND EXISTS\(SELECT 1 FROM app\.b026_vendor_account_invites WHERE org_id=c\.org_id AND contact_id=c\.id\n   AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp\(\)\)\)\n THEN RAISE EXCEPTION 'identity_conflict'/);
+ assert.doesNotMatch(body, /b026_vendor_account_invites[^;]*user_id IS DISTINCT FROM actor/);
  assert.match(body, /INSERT INTO app\.b026_vendor_accounts\(org_id,contact_id,user_id,line_identity_id\) VALUES\(c\.org_id,c\.id,actor,i\.id\);\n  created:=true;/);
  assert.match(body, /IF first_binding OR created THEN\n  INSERT INTO app\.b026_vendor_link_events[^;]+'line_first_binding'\);\n  INSERT INTO public\.audit_log/);
  assert.doesNotMatch(migration, /b026_rebind_vendor_account/, "the staff rebind gateway is not replaced");
@@ -123,6 +143,17 @@ test("round-2 finding 1: no first-sign-in gate; only 'confirm' links jobs and 's
  assert.equal(skip, "  UPDATE app.b101_vendor_confirmations SET closed_at=clock_timestamp() WHERE flow_id=f.id;\n  RETURN jsonb_build_object('jobs','[]'::jsonb,'userId',r.user_id,'identityId',r.identity_id,'orgId',r.org_id);");
  assert.ok(body.indexOf("IF p_action='skip' THEN") < body.indexOf("INSERT INTO"), "skip returns before any insert");
  assert.equal(body.match(/'line_confirmed'/g)!.length, 1); assert.match(body, /ELSIF p_action='confirm' THEN\n   INSERT INTO app\.b026_vendor_job_accounts/);
+});
+test("review r1 finding 2: remove/confirm must present this flow's frozen-snapshot digest before any write; list/remove return it", () => {
+ const body = plpgsql("b101_review");
+ const digestOf = (list: string) => `pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(f.id::text||':'||array_to_string(${list},','),'UTF8')),'hex')`;
+ const check = ` IF p_action IN ('remove','confirm') AND (r.candidate_ids IS NULL OR p_snapshot IS NULL OR p_snapshot IS DISTINCT FROM\n  ${digestOf("r.candidate_ids")})\n THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;`;
+ assert.equal(body.split(check).length, 2);
+ assert.ok(body.indexOf(check) < body.indexOf("INSERT INTO") && body.indexOf(check) < body.indexOf("IF p_action='skip' THEN"), "checked before any job write");
+ assert.ok(body.indexOf(check) > body.indexOf("r.closed_at IS NOT NULL THEN RAISE EXCEPTION 'already_consumed'"), "a closed review stays 409");
+ assert.ok(body.includes(`'orgId',r.org_id,\n  'snapshot',${digestOf("visible")});\nEND $$;`));
+ assert.match(migration, /GRANT EXECUTE ON FUNCTION [^;]*app\.b101_review\(uuid,boolean,text,uuid,text\) TO service_role;/);
+ assert.doesNotMatch(migration, /b101_review\(uuid,boolean,text,uuid\)/);
 });
 test("finding 3: the legacy-login block applies only while B-101 is enabled for the account's org", () => {
  assert.match(fn("b101_identity_managed"), /WHERE line_identity_id=p_identity\n  AND app\.b101_enabled\(org_id,p_env_v2\) IS TRUE\)/);

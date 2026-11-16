@@ -131,10 +131,11 @@ BEGIN
  -- so a user removed by a staff rebind cannot return by unlinking and relinking once the new invite lapses.
  OR (EXISTS(SELECT 1 FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id AND login_identity_id=i.id)
    AND (a.user_id IS NULL OR a.user_id IS DISTINCT FROM i.user_id))
- -- Management already named the account holder: a pending invitation is never pre-empted by LINE (fail-closed,
- -- even for the invitee's own new LINE identity until they claim; the caller shows the approved V-LINK error).
+ -- Management already named the account holder: ANY live (unclaimed, unrevoked, unexpired) invitation blocks LINE
+ -- first binding, with no invitee exemption. The invitee claims by email first; a later LINE sign-in then binds to the
+ -- claimed account through the rules above. The caller shows only the approved V-LINK error.
  OR (a.user_id IS NULL AND EXISTS(SELECT 1 FROM app.b026_vendor_account_invites WHERE org_id=c.org_id AND contact_id=c.id
-   AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp() AND user_id IS DISTINCT FROM actor))
+   AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp()))
  THEN RAISE EXCEPTION 'identity_conflict' USING ERRCODE='P0033'; END IF;
  IF i.id IS NULL THEN
   IF v.flow_id IS NULL THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
@@ -177,7 +178,9 @@ END $$;
 
 -- Every list/removal/confirmation rechecks live authority, exact scope and gates. Every sign-in lists its open,
 -- not-yet-linked/tombstoned jobs; only 'confirm' links them. 'skip' is the zero-candidate close: no job writes.
-CREATE FUNCTION app.b101_review(p_flow uuid,p_env_v2 boolean,p_action text,p_job uuid DEFAULT NULL) RETURNS jsonb
+-- 'list'/'remove' return a snapshot digest of this flow id plus the frozen candidate_ids; 'remove'/'confirm' must
+-- present exactly that digest, so a page can approve only the flow and list it rendered (never a second tab's).
+CREATE FUNCTION app.b101_review(p_flow uuid,p_env_v2 boolean,p_action text,p_job uuid DEFAULT NULL,p_snapshot text DEFAULT NULL) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE f app.b033_line_flows; r app.b101_vendor_confirmations; i app.b033_line_identities;
  j public.repair_vendor_jobs; candidate uuid; visible uuid[]; jobs jsonb;
@@ -213,6 +216,9 @@ BEGIN
    AND NOT EXISTS(SELECT 1 FROM app.b026_vendor_job_accounts a WHERE a.job_id=x.id);
   UPDATE app.b101_vendor_confirmations SET candidate_ids=r.candidate_ids WHERE flow_id=f.id;
  END IF;
+ IF p_action IN ('remove','confirm') AND (r.candidate_ids IS NULL OR p_snapshot IS NULL OR p_snapshot IS DISTINCT FROM
+  pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(f.id::text||':'||array_to_string(r.candidate_ids,','),'UTF8')),'hex'))
+ THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
  IF r.candidate_ids IS NULL OR (p_action='remove' AND (p_job IS NULL OR NOT p_job=ANY(r.candidate_ids)))
  OR (p_action='skip' AND (p_job IS NOT NULL OR cardinality(r.candidate_ids)<>0))
  THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
@@ -248,7 +254,8 @@ BEGIN
  END LOOP;
  UPDATE app.b101_vendor_confirmations SET candidate_ids=visible,
   closed_at=CASE WHEN p_action='confirm' THEN clock_timestamp() ELSE NULL END WHERE flow_id=f.id;
- RETURN jsonb_build_object('jobs',jobs,'userId',r.user_id,'identityId',r.identity_id,'orgId',r.org_id);
+ RETURN jsonb_build_object('jobs',jobs,'userId',r.user_id,'identityId',r.identity_id,'orgId',r.org_id,
+  'snapshot',pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(f.id::text||':'||array_to_string(visible,','),'UTF8')),'hex'));
 END $$;
 -- While B101 is enabled for the account's org, ordinary B033 login must not bypass B101 confirmation,
 -- persona guards or its gates. With B101 OFF these identities use the existing B033 vendor sign-in.
@@ -260,8 +267,8 @@ $$;
 REVOKE ALL ON FUNCTION app.b101_identity_managed(uuid,boolean) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION app.b101_identity_managed(uuid,boolean) TO service_role;
 REVOKE ALL ON FUNCTION app.b101_enabled(uuid,boolean),app.b101_lock(uuid,boolean),app.b101_vendor_only(uuid,uuid,uuid),
- app.b101_match(uuid,boolean),app.b101_review(uuid,boolean,text,uuid) FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION app.b101_enabled(uuid,boolean),app.b101_match(uuid,boolean),app.b101_review(uuid,boolean,text,uuid) TO service_role;
+ app.b101_match(uuid,boolean),app.b101_review(uuid,boolean,text,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION app.b101_enabled(uuid,boolean),app.b101_match(uuid,boolean),app.b101_review(uuid,boolean,text,uuid,text) TO service_role;
 
 -- Exactly the B-026 body except one predicate: only accounts CREATED by B-101 (no invitation, LINE provenance)
 -- are excluded; they link jobs only through a displayed V-LINK. Invitation-created accounts keep B-026 behaviour
