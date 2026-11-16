@@ -1,0 +1,45 @@
+/* B-071 R3-LIST and the lease page: loaded only in the brand_v3 branch. Tokens only. */
+html[data-brand="v2"][data-brand-v3] .v3-leases { display:grid; gap:20px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-leases :is(h1,h2,p,dl,dd) { margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-leases .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; min-width:44px; padding:10px 16px; border:1px solid var(--c-border); border-radius:var(--r-btn); background:transparent; color:var(--c-brand-ink); text-decoration:none; font:inherit; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-leases .btn.pri { background:var(--c-primary); border-color:var(--c-primary); color:var(--c-on-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-leases :is(a,button,input):focus-visible { outline:2px solid var(--c-focus); outline-offset:3px; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-lead { background:var(--c-tint-soft); padding:24px; border-radius:var(--r-lg); }
+html[data-brand="v2"][data-brand-v3] .v3-leases-lead h1 { font-size:clamp(24px,2.4vw,32px); line-height:1.5; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-card { background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-toolbar { padding:20px 24px; }
+html[data-brand="v2"][data-brand-v3] :is(.v3-leases-search,.v3-leases-pager,.v3-lease-tabs,.v3-lease-legacy) { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+html[data-brand="v2"][data-brand-v3] .v3-leases input[type="search"] { min-height:44px; min-width:0; width:100%; max-width:320px; padding:10px 14px; border:1px solid var(--c-border); border-radius:var(--r-btn); color:var(--c-text); background:var(--c-surface); font:inherit; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-table { border-collapse:collapse; width:100%; text-align:start; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-table :is(th,td) { padding:16px 24px; border-top:1px solid var(--c-divider); overflow-wrap:anywhere; vertical-align:middle; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-table th { color:var(--c-text-2); font-weight:500; text-align:start; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-table tr { position:relative; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-table tbody tr:hover { background:var(--c-tint-soft); }
+html[data-brand="v2"][data-brand-v3] .v3-leases-row-link { display:grid; gap:4px; min-height:44px; align-content:center; color:var(--c-text); text-decoration:none; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-row-link span { color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-leases-row-link::after { content:""; position:absolute; inset:0; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-action { position:relative; z-index:1; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-badges { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-badge { display:inline-block; border-radius:var(--r-btn); background:var(--c-surface-2); color:var(--c-text-2); padding:3px 8px; font-size:14px; }
+html[data-brand="v2"][data-brand-v3] .v3-leases .num { font-variant-numeric:tabular-nums; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-empty { display:grid; justify-items:center; text-align:center; gap:16px; padding:32px 24px; }
+html[data-brand="v2"][data-brand-v3] .v3-leases-skeleton { min-height:100px; border-radius:var(--r-lg); background:var(--c-surface-2); }
+html[data-brand="v2"][data-brand-v3] .v3-lease-skeleton-tabs { min-height:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-leases .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+html[data-brand="v2"][data-brand-v3] .v3-lease-tabs a { display:inline-flex; align-items:center; min-height:44px; padding:8px 16px; border:1px solid var(--c-border); border-radius:var(--r-btn); color:var(--c-text-2); text-decoration:none; }
+html[data-brand="v2"][data-brand-v3] .v3-lease-tabs a[aria-current="page"] { background:var(--c-primary-soft); color:var(--c-primary); border-color:var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-lease-card { padding:24px; display:grid; gap:16px; }
+html[data-brand="v2"][data-brand-v3] .v3-lease-card h2 { font-size:20px; }
+html[data-brand="v2"][data-brand-v3] .v3-lease-card dl > div { display:grid; grid-template-columns:140px minmax(0,1fr); gap:16px; padding:16px 0; border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .v3-lease-card dt { color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-lease-noperm { justify-items:center; text-align:center; padding:32px 16px; }
+html[data-brand="v2"][data-brand-v3] .v3-lease-noperm .v3-illustration { width:176px; max-width:100%; height:auto; }
+@media (max-width:50em) {
+ html[data-brand="v2"][data-brand-v3] .v3-lease-card { padding:16px; }
+ html[data-brand="v2"][data-brand-v3] .v3-lease-card dl > div { grid-template-columns:96px minmax(0,1fr); }
+ html[data-brand="v2"][data-brand-v3] .v3-leases-toolbar { padding:16px; }
+ html[data-brand="v2"][data-brand-v3] .v3-leases-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+ html[data-brand="v2"][data-brand-v3] .v3-leases-table :is(tbody,tr,td) { display:block; }
+ html[data-brand="v2"][data-brand-v3] .v3-leases-table tbody tr { padding:16px; border-top:1px solid var(--c-divider); }
+ html[data-brand="v2"][data-brand-v3] .v3-leases-table td { border:0; padding:6px 0; }
+}

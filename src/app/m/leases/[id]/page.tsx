@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { LeaseV3Page } from "@/components/v3/m/leases/page";
+import { LeaseLoading, leaseV3View } from "@/components/v3/m/leases/lease";
 import { archiveCopy } from "@/i18n/record-archive";
 import { HandoverEntry } from "@/components/handover-entry";
 import { RenewalComparisonEntry } from "@/components/renewal-comparison-entry";
@@ -52,6 +56,10 @@ export default async function LeasePage({
   const query = await searchParams;
   const tab = query.tab || "summary";
   const session = await getSession();
+  if (leaseV3View(query) && await brandV3EnabledForOrg(session.orgId)) {
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/leases.css" /><Suspense key={`${id}:${query.tab ?? ""}`} fallback={<LeaseLoading locale={session.locale} />}><LeaseV3Page session={session} id={id} tab={query.tab} /></Suspense></>;
+  }
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
   const detail = await leaseDetail(session, id);
