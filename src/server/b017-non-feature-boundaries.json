@@ -135,6 +135,10 @@
     "reason": "B-105 vendor bearer page: the same token gateways as /v/[token] (loadVendorJob, vendorTokenBrand) plus the service-only app.b105_vendor_case read; 404 unless vendor_job_v3 admits this token; no staff role or session",
     "sha256": "1a5e0002149fc635ccd10106d5e55297ae600f3fdd10ba9f38667a858ce1df87"
   },
+  "src/app/api/vendor-jobs/case-share/route.ts#POST": {
+    "reason": "B-110 vendor bearer authority: the B-105 case token through the service-only app.b110_vendor_share gateway (closed case with a document, vendor_docs_v3 gate); no member session",
+    "sha256": "7fd3fed858cca665c7e6254db60823aa8f1f37690ee9e11ebb06a020222d1362"
+  },
   "src/app/api/vendor-job-response/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
     "sha256": "536cc461639162d3be15323bb9f6fd751e0ba74c775500c32be478ff3f4dabdb"

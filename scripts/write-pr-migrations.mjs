@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116210000_b110_case_share.sql": {
+    addOnly: true,
+    reason: "B-110 CASE-SHARE (GS-32 ven-copy-link + share-expired; VEN-25, MGT-124-AC1..AC3, MGT-124-AC6 = GS-54, OWN-32): one read-only share link per case. Adds one private table app.case_shares (RLS on, all privileges revoked from PUBLIC/anon/authenticated/service_role; one live link per case by a partial unique index) and migration-owned SECURITY DEFINER functions with search_path pg_catalog, pg_temp: service-only gateways app.b110_vendor_share (B-105 case bearer, closed case with an issued or voided document), app.b110_staff_share and app.b110_staff_revoke (admin/manager via app.b026_account_staff), app.b110_share_view and app.b110_share_file (public read by the share link), plus internal helpers app.b110_enabled, app.b110_expires_at and app.b110_share_for with no EXECUTE for any API role. Expiry = greatest(last copy, last document issued/voided) + 90 days. Gate: vendor_docs_v3 + effective brand_v3 + vendor_link + vendor_dispatch + vendor_documents (no flag seeded here). Audit rows on create/copy/revoke. No existing function, table grant, policy, column, constraint, flag or data change; 0 outbound. Not RPC-exposed.",
+  },
   "supabase/migrations/20261116170000_b076a_phone_history.sql": {
     addOnly: true,
     reason: "B-076a (narrow first slice of B-076) / mgr-history-direct (Round 7 batch 4, MGT-76-AC3/AC12): one new migration-owned VOLATILE service-only SECURITY DEFINER read gateway app.b076a_phone_history (search_path=pg_catalog,pg_temp; EXECUTE to service_role only). Admission: env/live tuple, live auth session, active native admin/manager of the live org, tenant_directory_edit org+platform flag, non-archived tenant contact of this org. Reads only audit_log contacts updates with the B-015 reason joined to app.b015_edit_commands and profiles; numbers masked in SQL (Taiwan mobile 09xx‑•••‑xxx; otherwise a 3-digit tail only from 8+ digits, else fully masked). No table, grant, policy, flag or data change.",

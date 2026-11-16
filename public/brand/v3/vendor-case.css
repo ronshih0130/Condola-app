@@ -26,3 +26,6 @@
 .v-token-v3 .v-case-file { position: absolute; width: 1px; height: 1px; min-height: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .v-token-v3 .v-case-file:focus-visible + label { outline: 2px solid var(--c-focus); outline-offset: 3px; }
 .v-token-v3 .v-case-upload label[aria-disabled="true"] { opacity: .6; cursor: wait; }
+.v-token-v3 .v-case-share-entry { display: flex; align-items: center; width: 100%; min-height: 44px; padding-block: 8px; border: 0; background: transparent; color: var(--c-text); font: inherit; text-align: start; cursor: pointer; }
+.v-token-v3 .v-case-share { display: grid; gap: 12px; }
+.v-token-v3 .v-case-toast { margin: 0; padding: 12px 16px; border-radius: var(--r-md); background: var(--c-tint-soft); }
