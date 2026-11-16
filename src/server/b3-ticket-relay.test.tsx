@@ -214,7 +214,9 @@ test("F1: a viewer who cannot act is never told 「你」, on the current step o
   assert.deepEqual(can.nodes?.map(n => n.party === "m" ? `${n.step}:${n.state}:${n.subs.map(x => x.kind).join(",")}` : n.party),
     ["t", "dispatch:done:manager", "v", "confirm_cost:now:you"]);
   assert.ok(can.hidden.includes("dispatcher_name"));
-  assert.match(html({ state: "ready", view: "estimate", relay: can }), /aria-label="報修進度，現在輪到你核對費用"/);
+  const canPage = html({ state: "ready", view: "estimate", relay: can });
+  assert.match(canPage, /aria-label="報修進度，現在輪到你核對費用"/);
+  assert.match(canPage, />管理方</, "the done 派工 step shows 管理方 on the page");
 });
 
 test("F2: turn R6/R7/R8 with an approval head that implies R3/R5 (cross-read race) draws no relay", () => {

@@ -128,7 +128,7 @@ const todayCopy = {
     monthClose: "Close the month", monthCloseTitle: "Month-close", monthCloseLine: "Month {month} not closed yet · {count} owners waiting for statements",
     confirmCostSummary: "Check {count} costs", dispatchSummary: "Dispatch {count} items", reEstimateSummary: "Re-estimate {count} items",
     replySummary: "Reply to {count} messages", bankSummary: "Reconcile {count} lines", monthCloseSummary: "Close {count} month",
-    setupHeadline: "Good morning, {name}. {k} more steps and setup is done.", setupHeadlineNoName: "{k} more steps and setup is done.",
+    setupHeadline: "Good morning, {name}. Steps left before setup is done: {k}.", setupHeadlineNoName: "Steps left before setup is done: {k}.",
   },
 };
 export function brandV3TodayCopy(locale: Locale) { return todayCopy[locale]; }
