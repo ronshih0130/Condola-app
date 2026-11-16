@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116120000_pr029_default_privileges.sql": {
+    addOnly: false,
+    reason: "PR-029 (a), Ron 2026-11-16 ~02:20 PT (relayed): ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, PUBLIC, so new tables stop inheriting the Supabase anon default found on staging. Not add-only (it removes default privileges), but a no-op on databases without a postgres role (CI/local) and fails closed if the current user cannot act for postgres. Existing table grants, authenticated/service_role defaults, sequences, functions, policies, data and flags unchanged.",
+  },
   "supabase/migrations/20261115200000_b093_owner_decided.sql": {
     addOnly: true,
     reason: "B-093 / OWN-35 (RO-DECIDED): two new migration-owned VOLATILE service-only SECURITY DEFINER read gateways, app.b093_owner_decided (keyset page of the owner's own decided estimates) and app.b093_owner_decided_ticket (one ticket's decided versions and status). Admission copies app.b013_owner_history: env/live tuple, app.b013_actor, app.b013_approvals_enabled and the PR-015 org-local current property-owner predicate, plus decided_by = actor. ACLs apply only to these new functions (EXECUTE to service_role only); no existing function, table grant, policy, column, data or flag changes; no writes. Fixed pg_catalog, pg_temp search_path. Not RPC-exposed.",
