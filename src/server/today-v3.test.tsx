@@ -74,14 +74,15 @@ function render(input: Partial<Parameters<typeof TodayPage>[0]> = {}) {
 function readers() {
   const unexpected = () => { throw new Error("Unexpected infrastructure call"); };
   return compile(source("src/server/today-v3.ts"), {
-    "./b3-repair-turns": { staffRepairTurns: async () => off },
+    "./b3-today-repairs": { todayRepairRows: async () => off },
+    "./b3-today-kinds": { todayBankTurn: async () => off, todayMonthCloseTurn: async () => off, todayReplyTurn: async () => off },
     "./b3-payment-turns": { staffPaymentTurns: unexpected }, "./b3-rental-turns": { staffRentalTurns: unexpected },
     "./b3-overdue-turns": { staffOverdueTurns: unexpected }, "./b017-custom-role-governance": {}, "./db": { tx: unexpected },
     "./errors": { FlowError, logServerError: () => undefined }, "./org-guard": {}, "./perms": perms, "./queries": { rentRoll: unexpected },
   }) as typeof import("./today-v3");
 }
 function readDeps() {
-  return { repairs: async () => off, enabled: async () => true, payments: async () => payments, rentals: async () => rentals, overdue: async () => overdue, roomUnits: async () => turns.roomUnits };
+  return { repairs: async () => off, bank: async () => off, monthClose: async () => off, reply: async () => off, enabled: async () => true, payments: async () => payments, rentals: async () => rentals, overdue: async () => overdue, roomUnits: async () => turns.roomUnits };
 }
 
 test("B3A-TODAY / T-ROWS: both groups, uncapped counts, approved turn anatomy and destinations", () => {
@@ -148,7 +149,7 @@ test("accountant payment-only and maintenance has no payment/rental reads", asyn
   assert.doesNotMatch(html, /找新租客|詢問續約|live-onboarding/);
   const nothing = async () => { assert.fail("maintenance must not read turns"); };
   const maintenance = await api.readTodayTurns({ ...session, role: "maintenance" }, { ...readDeps(), payments: nothing, rentals: nothing, overdue: nothing });
-  assert.deepEqual(maintenance, { payments: off, rentals: off, overdue: off, repairs: off, roomUnits: {} });
+  assert.deepEqual(maintenance, { payments: off, rentals: off, overdue: off, repairs: off, bank: off, monthClose: off, reply: off, roomUnits: {} });
 });
 
 test("T-NUM-ZERO and multi-currency: positive bills, zero confirmed; default first and independent totals", () => {
@@ -174,7 +175,7 @@ test("T-MORE: first 50 oldest rows, uncapped headline and source links for every
   if (overview.state === "ready") {
     assert.equal(overview.mine.length, 50); assert.equal(overview.mineCount, 65);
     assert.deepEqual(new Set(overview.mineMore.map(item => item.href)), new Set(["/m/payments", "/m/leases", "/m/units"]));
-    const times = overview.mine.map(item => item.type === "payment" ? item.row.since : item.type === "rental" ? item.row.date! : item.row.oldestDueDate);
+    const times = overview.mine.map(item => item.type === "payment" ? item.row.since : item.type === "rental" ? item.row.date! : item.type === "overdue" ? item.row.oldestDueDate : "");
     assert.deepEqual(times, [...times].sort());
   }
   const manyOthers = render({ turns: { ...emptyTurns, overdue: { ...overdue, count: 78 } } });
@@ -280,7 +281,7 @@ test("Today composition gates P1/P2 without changing the shared payment reader",
   const api = readers();
   const never = async () => { assert.fail("disabled Today must not load turn readers"); };
   const result = await api.readTodayTurns(session, { ...readDeps(), enabled: async () => false, payments: never, rentals: never, overdue: never });
-  assert.deepEqual(result, { payments: off, rentals: off, overdue: off, repairs: off, roomUnits: {} });
+  assert.deepEqual(result, { payments: off, rentals: off, overdue: off, repairs: off, bank: off, monthClose: off, reply: off, roomUnits: {} });
   const html = render({ turns: result });
   assert.doesNotMatch(html, /今天都處理好了|today-clear|0 件/); assert.match(html, /confirmed-bills/);
   assert.match(render({ turns: result, session: { ...session, name: "" } }), /<h1[^>]*>今天<\/h1>/);
@@ -293,7 +294,7 @@ test("effective pay.record denial removes payment and overdue rows while stmt.vi
     nativeRole: "accountant", assigned: true, keys: ["dash.view", "stmt.view"], photos: false, audit: false } };
   const never = async () => { assert.fail("no effective payment grant"); };
   const result = await readers().readTodayTurns(limited, { ...readDeps(), payments: never, rentals: never, overdue: never });
-  assert.deepEqual(result, { payments: off, rentals: off, overdue: off, repairs: off, roomUnits: {} });
+  assert.deepEqual(result, { payments: off, rentals: off, overdue: off, repairs: off, bank: off, monthClose: off, reply: off, roomUnits: {} });
   assert.equal(perms.can(limited, "stmt.view"), true);
 });
 
