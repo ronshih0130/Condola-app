@@ -59,7 +59,7 @@ export function OwnerHomeV3({ name, locale, state, estimate, summary, overviewHr
   // FE-OWNEMPTY: at zero the lead is its own sentence, never a second 「首頁」 under the shell title.
   const title = state.status === "error" || rows.some(row => row.emergency) ? brandV3OwnerShellCopy(locale).home
     : rows.length === 0 ? (named ? copy.leadEmpty : copy.leadEmptyNoName).replace("{name}", name.trim())
-    : (named ? copy.lead : copy.leadNoName).replace("{name}", name).replace("{count}", String(rows.length));
+    : (named ? copy.lead : copy.leadNoName).replace("{name}", name.trim()).replace("{count}", String(rows.length));
   return <section className="v3-owner-home" data-testid="owner-home-v3">
     <h2 ref={heading} tabIndex={-1}>{title}</h2>
     {state.status === "ready" && summary ? <div className="owner-summary" data-testid="owner-summary">{summary}</div> : null}
