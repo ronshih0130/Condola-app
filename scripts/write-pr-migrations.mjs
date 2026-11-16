@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116120000_pr029_default_privileges.sql": {
+    addOnly: false,
+    reason: "PR-029 (a), Ron 2026-11-16 ~02:20 PT (relayed): ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, PUBLIC, so new tables stop inheriting the Supabase anon default found on staging. Not add-only (it removes default privileges), but a no-op on databases without a postgres role (CI/local) and fails closed if the current user cannot act for postgres. Existing table grants, authenticated/service_role defaults, sequences, functions, policies, data and flags unchanged.",
+  },
   "supabase/migrations/20261116100000_b063_vendor_workbench.sql": {
     addOnly: true,
     reason: "B-063 / VEN-14 (V-HOME, V-JOBS, V-RECV): one new migration-owned VOLATILE service-only SECURITY DEFINER read gateway, app.b063_vendor_workbench(text,uuid): the signed-in vendor's own confirmed, non-tombstoned linked jobs in one organization (place name, recorded amount still waiting, whether the job page can open). Admission copies app.b026_vendor_account_history's job read verbatim (app.b026_account_actor session actor, account/contact predicates, app.b026_accounts_enabled) plus the one organization and its own default-OFF organizations.feature_flags.vendor_workbench (strict boolean true; no platform seed). Waiting = the vendor's own reported job cost once the company confirmed it (repair_vendor_jobs.confirmed_at) minus the vendor's own B-025 received marks, zero once an issued receipt exists; an unconfirmed report is not shown. Never returns a token. ACLs apply only to this new function (EXECUTE to service_role only); no existing function, table grant, policy, column, data or flag changes; no writes. Fixed pg_catalog, pg_temp search_path. Not RPC-exposed.",
