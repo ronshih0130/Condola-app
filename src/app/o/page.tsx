@@ -59,6 +59,7 @@ export default async function OwnerHomePage({ searchParams }: { searchParams: Pr
   const estimate = (await searchParams)?.estimate;
   return <>
     <OwnerHomeV3 name={session.name} locale={session.locale} state={state} estimate={typeof estimate === "string" ? estimate : undefined} />
-    {state.status === "ready" ? <div className="v3-owner-legacy card pad">{legacy}</div> : null}
+    {/* FE-OWNEMPTY: no interim tenant card (an empty white box) when there are no tenant rows. */}
+    {state.status === "ready" && rows.length ? <div className="v3-owner-legacy card pad">{legacy}</div> : null}
   </>;
 }
