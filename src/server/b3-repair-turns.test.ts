@@ -26,11 +26,16 @@ test("M2/M3 SQL first-match order, helpers, B-026 and no business writes", () =>
     const partition = sql.slice(sql.indexOf(", rules AS MATERIALIZED"), sql.indexOf(", mapped AS MATERIALIZED"));
     assert.deepEqual([...partition.matchAll(/THEN '(R[^']+)'|ELSE '(R8)'/g)].map(m => m[1] ?? m[2]),
       ["R1", "R2", "R3", "R5", "R6", "R7a", "R7b", "R8-blocked", "R4", "R8"]);
-    assert.match(sql, /app\.b104_current_repair_version/); assert.match(sql, /app\.b104_vendor_latest_event/);
     assert.match(sql, /NOT retained OR allowed closure_guard/);
     assert.doesNotMatch(sql, /repair_vendor_secrets|b104_vendor_command_exists|INSERT\s+INTO|UPDATE\s+(?:public\.|app\.)|DELETE\s+FROM/i);
     assert.match(sql, /LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp/);
   }
+  const facts = m2.slice(m2.indexOf("WITH facts AS MATERIALIZED"), m2.indexOf(" ), predicates AS MATERIALIZED"));
+  assert.doesNotMatch(facts, /app\.[a-z_0-9]+\s*\(/i, "M2 facts must not invoke per-ticket helpers");
+  assert.match(facts, /head\.org_id=t\.org_id AND head\.ticket_id=t\.id/);
+  assert.match(facts, /v\.id=head\.current_version_id/);
+  assert.match(facts, /NOT v\.requires_owner_decision OR d\.decision='approved' OR e\.id IS NOT NULL/);
+  assert.match(m3, /app\.b104_current_repair_version/); assert.match(m3, /app\.b104_vendor_latest_event/);
   assert.match(m2, /a\.repair_vendor_job_id=j\.id AND a\.version_id=v\.id/);
   assert.match(m2, /ORDER BY a\.occurred_at DESC,a\.id DESC/);
   assert.doesNotMatch(m3, /app\.b013_repair_appointments/);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Client } from "pg";
 import { svc, svcOn } from "./db";
@@ -219,6 +220,32 @@ const staff: Session = { userId: USERS.admin, sessionId: session, kind: "staff",
 const ownerSession = randomUUID();
 const owner: Session = { ...staff, userId: USERS.owner, sessionId: ownerSession, kind: "owner", role: null };
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+// Exercise the actual migration's facts, not a second copy of the new SQL.
+// The privileged clone connection is used only by this oracle; RPC admission
+// and the performance test still run as the real service_role with no grants.
+const m2Source = readFileSync("supabase/migrations/20261115170100_b3_staff_repair_turns.sql", "utf8");
+const m2Facts = m2Source.slice(m2Source.indexOf("WITH facts AS MATERIALIZED ("), m2Source.indexOf(" ), predicates AS MATERIALIZED ("))
+  .replace(/\bselected_org\b/g, "$1::uuid").replace(/\bselected_ticket\b/g, "$2::uuid")
+  .replace(/\bapprovals\b/g, "$3::boolean").replace(/\bdispatch\b/g, "$4::boolean")
+  .replace(/\benhanced\b/g, "false");
+async function assertM2FactsMatchHelpers(ticket: string | null = null) {
+  const flags = (await db.query(`SELECT app.b013_approvals_enabled($1) approvals,
+    coalesce(app.vendor_dispatch_enabled($1),false) dispatch`, [ORG_ID])).rows[0];
+  const rows = (await db.query(`${m2Facts}
+    ) SELECT id,version_id,allowed,event,retained,pending_cost,
+      EXISTS(SELECT 1 FROM app.b026_vendor_estimates b WHERE b.org_id=$1 AND b.ticket_id=facts.id) expected_retained,
+      job_id IS NOT NULL AND reported_at IS NOT NULL AND confirmed_at IS NULL expected_pending_cost,
+      CASE WHEN $3::boolean THEN app.b104_current_repair_version($1,id) END expected_version,
+      coalesce(app.b013_dispatch_allowed($1,version_id),false) expected_allowed,
+      CASE WHEN $3::boolean AND $4::boolean AND job_id IS NOT NULL AND version_id IS NOT NULL
+        THEN coalesce(app.b104_vendor_latest_event($1,id,job_id,version_id),'none') ELSE 'none' END expected_event
+    FROM facts`, [ORG_ID, ticket, flags.approvals, flags.dispatch])).rows;
+  assert.ok(rows.length > 0, "equivalence oracle must exercise fixture tickets");
+  for (const row of rows) assert.deepEqual(
+    { version: row.version_id, allowed: row.allowed, event: row.event, retained: row.retained, pendingCost: row.pending_cost },
+    { version: row.expected_version, allowed: row.expected_allowed, event: row.expected_event, retained: row.expected_retained, pendingCost: row.expected_pending_cost },
+    `M2 helper equivalence for ${row.id}`);
+}
 async function flag(key: string, value: boolean) {
   await db.query("UPDATE public.organizations SET feature_flags=feature_flags||jsonb_build_object($2::text,$3::boolean) WHERE id=$1", [ORG_ID, key, value]);
 }
@@ -228,6 +255,7 @@ async function readTurn(f?: Fixture) {
   return result as Extract<StaffRepairTurns, { state: "ready" }>;
 }
 async function expectRule(f: Fixture, rule: string, canAct?: boolean) {
+  await assertM2FactsMatchHelpers(f.ticket);
   const result = await readTurn(f);
   assert.ok(result.detail && "rule" in result.detail);
   assert.equal(result.detail.rule, rule);
@@ -753,31 +781,58 @@ test("M2 5000-ticket count and subsequent-page plan budget under actual service_
       FROM unnest($2::uuid[]) WITH ORDINALITY ids(ticket,idx) CROSS JOIN generate_series(1,3) n WHERE idx%5<>0`, [ORG_ID, ids, USERS.admin]);
     await db.query("ANALYZE public.maintenance_tickets"); await db.query("ANALYZE public.repair_vendor_jobs");
     await db.query("ANALYZE app.b013_estimate_versions"); await db.query("ANALYZE app.b013_estimate_heads");
-    // Nested plans are necessary: an outer Function Scan alone cannot explain
-    // the count and ranked-group operators. This is a disposable PG16 prerequisite.
+    // Measure the RPC without instrumentation; auto_explain is diagnostic only.
+    await db.query("LOAD 'auto_explain'");
+    await db.query("SET LOCAL auto_explain.log_min_duration=-1");
+    await db.query("SELECT set_config('app.active_org_id',$1,true),set_config('app.env','live',true)", [ORG_ID]);
+    await db.query("SET LOCAL ROLE service_role");
+    assert.equal((await db.query("SELECT current_user role")).rows[0].role, "service_role");
+    await db.query("SET LOCAL statement_timeout='2s'");
+    const sql = "SELECT app.b3_staff_repair_turns($1,$1,'live',$2,$3,NULL,$4,$5,50) r";
+    const calls = [{ group: "first", args: [ORG_ID, USERS.admin, session, null, null] as unknown[] }];
+    const timedCall = async (call: typeof calls[number]) => {
+      const start = performance.now();
+      const result = (await db.query(sql, call.args)).rows[0].r;
+      const elapsedMs = performance.now() - start;
+      assert.ok(elapsedMs < 2000, `${call.group} plain M2 call: ${elapsedMs} ms`);
+      t.diagnostic(JSON.stringify({ group: call.group, plainMs: elapsedMs }));
+      return result;
+    };
+    const first = await timedCall(calls[0]);
+    for (const group of ["mine", "others"]) {
+      assert.ok(first.next[group], `${group} must exercise a subsequent page`);
+      const call = { group, args: [ORG_ID, USERS.admin, session, group, first.next[group]] };
+      calls.push(call); await timedCall(call);
+    }
+    for (const call of calls) {
+      const plan = (await db.query(`EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) ${sql}`, call.args)).rows[0]["QUERY PLAN"][0];
+      assert.ok(plan["Execution Time"] < 2000, `${call.group} EXPLAIN execution budget`);
+      t.diagnostic(JSON.stringify({ group: call.group, executionMs: plan["Execution Time"], sharedHitBlocks: plan.Plan["Shared Hit Blocks"], sharedReadBlocks: plan.Plan["Shared Read Blocks"] }));
+    }
+    // Configure diagnostic logging as the clone owner, then restore service_role.
+    // No statement timeout: nested instrumentation overhead is not the RPC SLA.
+    await db.query("RESET ROLE");
+    await db.query("SET LOCAL statement_timeout=0");
+    await db.query("SET LOCAL auto_explain.log_analyze=on");
+    await db.query("SET LOCAL auto_explain.log_buffers=on");
+    await db.query("SET LOCAL auto_explain.log_nested_statements=on");
+    await db.query("SET LOCAL auto_explain.log_level='notice'");
+    await db.query("SET LOCAL auto_explain.log_format='text'");
+    await db.query("SET LOCAL auto_explain.sample_rate=1");
+    await db.query("SET LOCAL auto_explain.log_min_duration=0");
+    await db.query("SET LOCAL ROLE service_role");
     const plans: string[] = [];
     const notice = (n: { message?: string }) => { if (n.message?.includes("Query Text:")) plans.push(n.message); };
     db.on("notice", notice);
     try {
-      await db.query("LOAD 'auto_explain'");
-      await db.query("SET LOCAL auto_explain.log_min_duration=0");
-      await db.query("SET LOCAL auto_explain.log_analyze=on");
-      await db.query("SET LOCAL auto_explain.log_buffers=on");
-      await db.query("SET LOCAL auto_explain.log_nested_statements=on");
-      await db.query("SET LOCAL auto_explain.log_level='notice'");
-      await db.query("SELECT set_config('app.active_org_id',$1,true),set_config('app.env','live',true)", [ORG_ID]);
-      await db.query("SET LOCAL ROLE service_role");
-      await db.query("SET LOCAL statement_timeout='2s'");
-      const first = (await db.query("SELECT app.b3_staff_repair_turns($1,$1,'live',$2,$3) r", [ORG_ID, USERS.admin, session])).rows[0].r;
-      for (const group of ["mine", "others"]) {
-        assert.ok(first.next[group], `${group} must exercise a subsequent page`);
-        const plan = (await db.query(`EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON)
-          SELECT app.b3_staff_repair_turns($1,$1,'live',$2,$3,NULL,$4,$5,50)`, [ORG_ID, USERS.admin, session, group, first.next[group]])).rows[0]["QUERY PLAN"][0];
-        assert.ok(plan["Execution Time"] < 2000);
-        t.diagnostic(JSON.stringify({ group, executionMs: plan["Execution Time"], sharedHitBlocks: plan.Plan["Shared Hit Blocks"], sharedReadBlocks: plan.Plan["Shared Read Blocks"] }));
+      for (const call of calls) {
+        plans.length = 0;
+        await db.query(sql, call.args);
+        assert.ok(plans.some(p => p.includes("WITH facts AS MATERIALIZED") && p.includes("Buffers:")), "capture underlying M2 statement plans and buffers");
+        // Includes the outer SELECT as well as nested plans: a conservative bound.
+        assert.ok(plans.length < 50, `${call.group}: ${plans.length} plans indicates per-ticket function calls`);
+        t.diagnostic(`${call.group} diagnostic plans captured: ${plans.length}; SQL and fixture values withheld`);
       }
-      assert.ok(plans.some(p => p.includes("WITH facts AS MATERIALIZED") && p.includes("Buffers:")), "capture underlying M2 statement plans and buffers");
-      t.diagnostic(`nested statement plans captured: ${plans.length}; SQL and fixture values withheld`);
     } finally { db.removeListener("notice", notice); }
   } finally { await db.query("ROLLBACK"); }
 });
@@ -835,5 +890,15 @@ test("staff/tenant dual identity loses staff repair admission after membership e
     assert.equal((await readOn(db, USERS.tenant, sid, f.ticket)).state, "ready");
     await db.query("UPDATE public.org_members SET status='removed' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.tenant]);
     await assert.rejects(readOn(db, USERS.tenant, sid, f.ticket), { code: "42501" });
+  } finally { await db.query("ROLLBACK"); }
+});
+
+test("M2 set-based facts equal helpers for every fixture ticket with both flags ON/OFF", async () => {
+  await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+  try {
+    for (const approvals of [true, false]) for (const dispatch of [true, false]) {
+      await flag("repair_approvals", approvals); await flag("vendor_dispatch", dispatch);
+      await assertM2FactsMatchHelpers();
+    }
   } finally { await db.query("ROLLBACK"); }
 });

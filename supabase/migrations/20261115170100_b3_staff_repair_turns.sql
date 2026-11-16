@@ -64,6 +64,7 @@ BEGIN
    pr.archived_at IS NULL AND (u.id IS NULL OR u.archived_at IS NULL)
      AND (r.id IS NULL OR r.archived_at IS NULL) ancestry_open,
    j.id job_id,j.created_at job_created,j.reported_at,j.confirmed_at,j.reported_cost_minor,
+   j.id IS NOT NULL AND j.reported_at IS NOT NULL AND j.confirmed_at IS NULL pending_cost,
    j.sharing_approved_at,
    coalesce(j.active AND j.revoked_at IS NULL AND j.expires_at>clock_timestamp()
      AND t.status::text IN ('open','triaged','assigned','in_progress','on_hold','resolved')
@@ -72,11 +73,13 @@ BEGIN
    coalesce(reprice.ready,false) reestimate_ready,
    v.id version_id,coalesce(v.requires_owner_decision,false) requires_owner,
    v.submitted_at,d.decision,d.decided_at,e.authorized_at,
-   EXISTS(SELECT 1 FROM app.b026_vendor_estimates b WHERE b.org_id=t.org_id AND b.ticket_id=t.id) retained,
-   CASE WHEN approvals AND dispatch AND v.id IS NOT NULL
-     THEN coalesce(app.b013_dispatch_allowed(t.org_id,v.id),false) ELSE false END allowed,
-   CASE WHEN approvals AND dispatch AND j.id IS NOT NULL AND v.id IS NOT NULL
-     THEN coalesce(app.b104_vendor_latest_event(t.org_id,t.id,j.id,v.id),'none') ELSE 'none' END event,
+   retained_work.ticket_id IS NOT NULL retained,
+   -- b013_dispatch_allowed: the joined version must be the current head;
+   -- an emergency overrides any decision, including rejection. Org flags are
+   -- read once above in the caller's repeatable-read snapshot, not per ticket.
+   coalesce(approvals AND dispatch AND v.id IS NOT NULL AND
+     (NOT v.requires_owner_decision OR d.decision='approved' OR e.id IS NOT NULL),false) allowed,
+   coalesce(ev.event_kind,'none') event,
    ev.occurred_at event_at,
    greatest(t.created_at,sc.changed_at,hj.revoked_at) fallback_at,
    EXISTS(SELECT 1 FROM public.expenses x WHERE x.org_id=t.org_id AND x.ticket_id=t.id AND x.status<>'void') expense_conflict
@@ -85,6 +88,10 @@ BEGIN
  LEFT JOIN public.units u ON u.org_id=t.org_id AND u.id=t.unit_id
  LEFT JOIN public.rooms r ON r.org_id=t.org_id AND r.id=t.room_id
  LEFT JOIN public.repair_vendor_jobs j ON j.org_id=t.org_id AND j.ticket_id=t.id AND j.active AND j.revoked_at IS NULL
+ LEFT JOIN (
+   SELECT DISTINCT b.org_id,b.ticket_id FROM app.b026_vendor_estimates b
+   WHERE b.org_id=selected_org AND (selected_ticket IS NULL OR b.ticket_id=selected_ticket)
+ ) retained_work ON retained_work.org_id=t.org_id AND retained_work.ticket_id=t.id
  -- Mirror submit_estimate's first current owner and threshold/scale availability.
  -- This is a boolean action prerequisite; no owner identity or policy data enters the DTO.
  LEFT JOIN LATERAL (
@@ -109,12 +116,15 @@ BEGIN
    LEFT JOIN app.b013_default_roots root ON root.org_id=t.org_id AND root.principal_id=own.principal_id AND root.currency=pr.currency
    LEFT JOIN app.b013_default_revisions rev ON rev.org_id=root.org_id AND rev.root_id=root.id AND rev.id=root.current_revision AND rev.revision_no=root.version
  ) reprice ON true
- LEFT JOIN LATERAL (SELECT app.b104_current_repair_version(t.org_id,t.id) id WHERE approvals) head ON true
- LEFT JOIN app.b013_estimate_versions v ON approvals AND v.org_id=t.org_id AND v.ticket_id=t.id AND v.id=head.id
+ -- Inline b104_current_repair_version; the composite head key preserves one
+ -- row per ticket, including tickets with no estimate or approvals disabled.
+ LEFT JOIN app.b013_estimate_heads head ON approvals AND head.org_id=t.org_id AND head.ticket_id=t.id
+ LEFT JOIN app.b013_estimate_versions v ON approvals AND v.org_id=t.org_id AND v.ticket_id=t.id AND v.id=head.current_version_id
  LEFT JOIN app.b013_estimate_decisions d ON approvals AND d.org_id=t.org_id AND d.ticket_id=t.id AND d.version_id=v.id
  LEFT JOIN app.b013_repair_emergencies e ON approvals AND e.org_id=t.org_id AND e.ticket_id=t.id AND e.version_id=v.id
  LEFT JOIN LATERAL (
-   SELECT a.occurred_at FROM app.b013_repair_appointments a
+   -- Inline b104_vendor_latest_event and read its timestamp from the same row.
+   SELECT a.event_kind::text event_kind,a.occurred_at FROM app.b013_repair_appointments a
    WHERE approvals AND dispatch AND a.org_id=t.org_id AND a.ticket_id=t.id AND a.repair_vendor_job_id=j.id AND a.version_id=v.id
    ORDER BY a.occurred_at DESC,a.id DESC LIMIT 1
  ) ev ON true
@@ -124,8 +134,7 @@ BEGIN
    WHERE h.org_id=t.org_id AND h.ticket_id=t.id) hj ON true
  WHERE t.org_id=selected_org AND (selected_ticket IS NULL OR t.id=selected_ticket)
  ), predicates AS MATERIALIZED (
- SELECT *,job_id IS NOT NULL AND reported_at IS NOT NULL AND confirmed_at IS NULL pending_cost,
-   job_id IS NOT NULL AND confirmed_at IS NULL unfinished,
+ SELECT *,job_id IS NOT NULL AND confirmed_at IS NULL unfinished,
    approvals AND authorized_at IS NOT NULL emergency,
    NOT retained OR allowed closure_guard,
    CASE WHEN approvals THEN allowed ELSE dispatch AND NOT retained END authorized
