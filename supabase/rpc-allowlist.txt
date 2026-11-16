@@ -74,6 +74,10 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # service-only: app.b093_owner_decided(uuid,uuid,text,uuid,jsonb,integer)
 # service-only: app.b093_owner_decided_ticket(uuid,uuid,text,uuid,uuid)
 
+# MF-3 / MGT-151 service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the MF-3 probe in scripts/check-function-privileges.sh.
+# service-only: app.mf3_topup_record(uuid,uuid,text,uuid,uuid,uuid,uuid,bigint,date,text)
+# service-only: app.mf3_topup_view(uuid,uuid,text,uuid,text,uuid)
 # B-063 service-only inventory (NOT authenticated RPC allowlist entries).
 # ACL/config asserted by the B-063 probe in scripts/check-function-privileges.sh.
 # service-only: app.b063_vendor_workbench(text,uuid)

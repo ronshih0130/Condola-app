@@ -85,10 +85,10 @@ export function estimateRelay(f: EstimateFacts): EstimateRelay {
   if ((rule === "R8" || rule === "R8-blocked") && step !== "dispatch") { hidden.push("manager_in_progress"); return out(null, null, null); }
 
   // 「你」 only on the CURRENT 管 step and only when this viewer can act on it (same rule as the
-  // aria label and 「輪到你」); otherwise the role label. Done 管 steps carry no sub: who
-  // dispatched is not attributed (another manager may have), and future 管 steps say 管理方.
+  // aria label and 「輪到你」); every other 管 step, done or upcoming, says 管理方 (Design Session
+  // OQ-080 / batch 3 redraw: who dispatched is not attributed to a person).
   const mgr = (state: RelayNode["state"]): RelaySub[] =>
-    state === "now" ? [f.turn.viewerCanAct ? { kind: "you" } : { kind: "manager" }] : state === "next" ? [{ kind: "manager" }] : [];
+    state === "now" && f.turn.viewerCanAct ? [{ kind: "you" }] : [{ kind: "manager" }];
   const T: RelayNode = { party: "t", step: "report", state: "done", subs: name(f.names.tenant) };
   const ownerSubs: RelaySub[] = [...name(f.names.owner), ...(c?.decision === "rejected" ? [{ kind: "sent_back" } as const] : [])];
   const O = (state: RelayNode["state"]): RelayNode[] => showOwner ? [{ party: "o", step: "approve_estimate", state, subs: ownerSubs }] : [];
