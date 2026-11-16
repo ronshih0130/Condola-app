@@ -329,3 +329,46 @@ test("B-093 adds two owner gateways reusing the PR-015 admission verbatim, servi
   assert.match(sql, /SET LOCAL statement_timeout='60s'/);
   assert.match(read("scripts/check-function-privileges.sh"), /B-093 gateway ACL\/config mismatch/);
 });
+
+test("MF-3 / MGT-151 adds one RLS table with no application grants and two service-only migration-owned gateways", () => {
+  const sql = read("supabase/migrations/20261116140000_mf3_deposit_topup.sql");
+  const b093 = read("supabase/migrations/20261115200000_b093_owner_decided.sql");
+  // The env/live tuple check is copied byte for byte from the B-093 gateways.
+  const tuple = b093.slice(b093.indexOf("  SELECT 1 FROM public.organizations o\n"), b093.indexOf(" ) THEN RAISE EXCEPTION 'errors.forbidden'"));
+  // The deposit_settlement flag predicate is B-011's isDepositSettlementEnabled (TypeScript reader).
+  const flag = read("src/server/deposit-settlement.ts");
+  assert.ok(tuple.length > 200);
+  for (const part of ["o.feature_flags->'deposit_settlement'='true'::jsonb", "p.key='deposit_settlement' AND p.value->'enabled'='true'::jsonb",
+    "jsonb_typeof(p.value->'allowed_org_ids')='array'", "p.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)",
+    "coalesce(o.live_org_id,o.id)"]) assert.ok(flag.includes(part), part);
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]), ["mf3_topup_record", "mf3_topup_view"]);
+  assert.deepEqual([...sql.matchAll(/CREATE TABLE ([\w.]+)/g)].map(match => match[1]), ["app.deposit_settlement_topups"]);
+  for (const body of sql.split("CREATE FUNCTION").slice(1)) {
+    assert.ok(body.includes(tuple), "env/live tuple");
+    assert.match(body, /current_setting\('app\.active_org_id',true\) IS DISTINCT FROM p_org::text/);
+    assert.match(body, /VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+    assert.match(body, /x\.revoked_at IS NULL AND x\.expires_at>clock_timestamp\(\) FOR SHARE/);
+    assert.match(body, /o\.feature_flags->'deposit_settlement'='true'::jsonb/);
+    assert.match(body, /p\.value->'allowed_org_ids' @> jsonb_build_array\(o\.id::text\)/);
+    assert.match(body, /member_role NOT IN \('admin','manager','accountant'\)/);
+    const code = body.slice(body.indexOf("AS $$"), body.indexOf("END $$;")).replace(/DISTINCT FROM/g, "");
+    for (const ref of code.matchAll(/\b(?:FROM|JOIN|INTO)\s+([a-z_][\w.]*)/g))
+      assert.match(ref[1], /^(?:public\.\w+|app\.\w+|actor|member_role|s|unit|prior|paid|tenant|topup_id)$/, ref[0]);
+  }
+  assert.match(sql, /ALTER TABLE app\.deposit_settlement_topups ENABLE ROW LEVEL SECURITY;/);
+  assert.match(sql, /REVOKE ALL ON app\.deposit_settlement_topups FROM PUBLIC, anon, authenticated, service_role;/);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /GRANT[^;]*ON (?:TABLE )?app\.deposit_settlement_topups|CREATE OR REPLACE|DROP |ALTER TABLE (?!app\.deposit_settlement_topups ENABLE)|CREATE POLICY|\bmethod\b|platform_settings \(|INSERT INTO public\.platform_settings/i);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of ["mf3_topup_record(uuid,uuid,text,uuid,uuid,uuid,uuid,bigint,date,text)", "mf3_topup_view(uuid,uuid,text,uuid,text,uuid)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`));
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+    assert.equal((compact.match(new RegExp(`GRANT[A-Z]*ONFUNCTIONapp\\.${signature.replace(/[()]/g, "\\$&")}`, "g")) ?? []).length, 1);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  }
+  assert.match(sql, /INSERT INTO public\.audit_log/);
+  assert.match(sql, /UNIQUE \(org_id, request_id\)/);
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(sql, /SET LOCAL statement_timeout='60s'/);
+  assert.match(read("scripts/check-function-privileges.sh"), /MF-3 top-up gateway ACL\/config mismatch/);
+  assert.match(read("scripts/check-function-privileges.sh"), /MF-3 top-up table grant to/);
+});
