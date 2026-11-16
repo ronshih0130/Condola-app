@@ -284,8 +284,8 @@
     "sha256": "7a80824228f92e5cd7dd26c266b6ca00c4e76a73d3ee27aae9791f9ab5212cfd"
   },
   "src/app/v/[token]/page.tsx#VendorJobPage": {
-    "reason": "Vendor bearer gateway authenticates token, never staff native role",
-    "sha256": "7b60d284374ad77e21e56db4a88dacc1fbffaacd31069e6cd92565319bf1737c"
+    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission",
+    "sha256": "beaf06d481757f628d8eadac1e46d9bdb158c3bb3cb1096b6a6d2ca316fcc8a8"
   },
   "src/server/notification-center.ts#centerVendorAdmission": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",

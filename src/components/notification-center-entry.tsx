@@ -13,9 +13,16 @@ export async function NotificationCenterEntry({ session }: { session: Session })
   return <p>{state==="busy" ? <span role="status" data-testid="notification-entry-busy">{copy.busy} </span> : null}<Link className="btn" data-testid="notification-center-entry" href={`/${portal}/notifications`}>{state==="busy" ? copy.retry : copy.title}</Link></p>;
 }
 
-export async function VendorNotificationCenterEntry({ token, locale }: { token: string; locale: Locale }) {
+export async function resolveVendorNotificationEntry(token: string) {
   const state=await centerVendorAdmission(token);
   if (state === "disabled" || state === "denied") return null;
+  return { state, href: `/v/${encodeURIComponent(token)}/notifications` };
+}
+
+export async function VendorNotificationCenterEntry({ token, locale }: { token: string; locale: Locale }) {
+  const entry=await resolveVendorNotificationEntry(token);
+  if (!entry) return null;
+  const { state, href }=entry;
   const copy=centerCopy(locale);
-  return <p>{state==="busy" ? <span role="status" data-testid="notification-entry-busy">{copy.busy} </span> : null}<Link className="btn" prefetch={false} data-testid="notification-center-entry" href={`/v/${encodeURIComponent(token)}/notifications`}>{state==="busy" ? copy.retry : copy.title}</Link></p>;
+  return <p>{state==="busy" ? <span role="status" data-testid="notification-entry-busy">{copy.busy} </span> : null}<Link className="btn" prefetch={false} data-testid="notification-center-entry" href={href}>{state==="busy" ? copy.retry : copy.title}</Link></p>;
 }

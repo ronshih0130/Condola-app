@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import "next/dist/server/node-environment-baseline";
 import assert from "node:assert/strict";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
@@ -376,9 +377,11 @@ test("anonymous report waits for concurrent real binding and rechecks identity a
 
 const pageDir = new URL("../app/v/[token]/", import.meta.url);
 let baselineDir: string | undefined;
-/** The pre-B-035 page: the current source with exactly the B-035 entry edits reverted (count-checked). */
+/** The pre-B-035 page: the B-035 commit's page source with exactly the B-035 entry edits reverted (count-checked).
+ * B-085 part 2 (app #180, V-TOKEN) later wraps this page for brand_v3 orgs; the rendered OFF HTML of the CURRENT page
+ * must still equal this baseline, so the baseline is taken from the commit the reverts were written for. */
 async function preB035Page() {
- let source = readFileSync(new URL("page.tsx", pageDir), "utf8");
+ let source = execFileSync("git", ["show", "5d5f859:src/app/v/[token]/page.tsx"], { encoding: "utf8" });
  const revert = (pattern: RegExp, replacement: string, count: number) => {
   const hits = source.match(pattern)?.length ?? 0; assert.equal(hits, count, String(pattern)); source = source.replace(pattern, replacement);
  };
