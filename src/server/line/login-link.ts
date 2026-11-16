@@ -260,7 +260,7 @@ export async function sessionFromFlowOn(c: Client, f: LineFlow, meta: RequestMet
   // Zero candidates: nothing was shown, so nothing is confirmed. "skip" writes no job link or line_confirmed event.
   const closed = await review("skip");
   const token = await lineSessionOn(c, f, closed.userId, closed.identityId, meta, auth.sessionToken);
-  // Existing B026 portal exists. B063 workbench is deliberately not implemented here.
+  // B026 portal path. B-063: /vendor-account itself is the workbench (V-HOME) when it is open for that org.
   return { next: await consentNextOn(c, closed.userId, { persona: "vendor", return_path: "/vendor-account" }), token, orgId: closed.orgId, persona: f.persona };
  }
  const job = await finishVendorFlowOn(c, f);
