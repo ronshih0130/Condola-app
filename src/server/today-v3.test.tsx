@@ -68,6 +68,7 @@ const todayModule = compile(source("src/components/v3/m/today/today.tsx"), {
   "../../../empty-state": emptyState, "../../role-avatar": avatar, "./clear-drawing": drawing, "./signup-notice": notice,
 });
 const TodayPage = todayModule.TodayPage as typeof import("../components/v3/m/today/today").TodayPage;
+const setupOnlyRemaining = todayModule.setupOnlyRemaining as typeof import("../components/v3/m/today/today").setupOnlyRemaining;
 function render(input: Partial<Parameters<typeof TodayPage>[0]> = {}) {
   return renderToStaticMarkup(<TodayPage session={session} turns={turns} monthly={monthly} query={{}} {...input} />);
 }
@@ -198,7 +199,8 @@ function setup(step: 0 | 1 | 2 | 3 | 4, role: "admin" | "manager" = "admin", com
     tenantJoined: complete, permissions: perms.PERMS.flatMap(([key]) => allowed(key) ? [key] : []), checklist: setupChecklist([step > 0, step > 1, step > 2, complete], complete ? "2026-11-14" : null, allowed) };
 }
 test("setup is a shared separate card above groups, excludes headline count and has at most one primary", () => {
-  for (const role of ["admin", "manager"] as const) for (const step of [0, 1, 2, 3] as const) {
+  // Steps 0–1 (DASH-01) are unchanged; steps 2–3 are T-SETUP below.
+  for (const role of ["admin", "manager"] as const) for (const step of [0, 1] as const) {
     const html = render({ setup: setup(step, role), session: { ...session, role } });
     assert.match(html, /輪到你的有 4 件/);
     assert.ok(html.indexOf('data-testid="live-onboarding"') < html.indexOf('data-testid="today-mine"'));
@@ -208,6 +210,39 @@ test("setup is a shared separate card above groups, excludes headline count and 
   assert.match(complete, /<details class="setup-checklist setup-complete"/); assert.doesNotMatch(complete, /class="btn pri"/);
   const accountant = render({ session: { ...session, role: "accountant" }, setup: setup(0) });
   assert.doesNotMatch(accountant, /live-onboarding/);
+});
+
+test("T-SETUP (GS-47): during setup steps 2–3 今天 shows only the headline and the checklist", () => {
+  const interim = { outstanding: 0, owingCount: 0, tickets: 3, occupied: 2, rooms: 4 };
+  const admin = render({ setup: setup(2), interim });
+  assert.match(admin, /<h1[^>]*>王怡君早，還差 2 步就設定好了。<\/h1>/);
+  assert.match(admin, /<h2>開始使用 <span>2／4<\/span><\/h2>/); assert.match(admin, /<progress max="4" value="2"/);
+  assert.match(admin, /v3-today-setup-only/);
+  assert.equal((admin.match(/class="btn pri"/g) ?? []).length, 1); assert.match(admin, /class="btn pri" href="\/m\/units\/unit\/invite">邀請租客</);
+  // Turn groups, waiting groups, the number block, interim KPIs and the supporting line are hidden.
+  assert.doesNotMatch(admin, /today-mine|today-others|confirmed-bills|today-interim|today-supporting|today-clear|today-failure|輪到你的有/);
+  const three = render({ setup: setup(3) });
+  assert.match(three, /還差 1 步就設定好了。/); assert.match(three, /3／4/); assert.match(three, /等租客用邀請加入/);
+  // Managers have no 填公司資料 step: three steps.
+  const manager = render({ setup: setup(2, "manager"), session: { ...session, role: "manager" } });
+  assert.match(manager, /王怡君早，還差 2 步就設定好了。/); assert.match(manager, /1／3/); assert.doesNotMatch(manager, /填公司資料/);
+  assert.match(render({ setup: setup(2), session: { ...session, name: " " } }), /<h1[^>]*>還差 2 步就設定好了。<\/h1>/);
+  // Even a failed turn read stays out of the setup period.
+  assert.doesNotMatch(render({ setup: setup(2), turns: { ...turns, payments: { state: "unavailable" } } }), /today-failure/);
+  assert.match(render({ setup: setup(2), session: { ...session, locale: "en" } }), /Good morning, 王怡君. Steps left before setup is done: 2./);
+});
+
+test("T-SETUP leaves normal 今天 for 0–1 steps, completion, flag OFF and other roles", () => {
+  assert.equal(setupOnlyRemaining(setup(1), "admin"), null);
+  assert.equal(setupOnlyRemaining(setup(2), "admin"), 2); assert.equal(setupOnlyRemaining(setup(3), "manager"), 1);
+  const done = render({ setup: setup(4, "admin", true) });
+  assert.match(done, /輪到你的有 4 件/); assert.match(done, /setup-complete/); assert.doesNotMatch(done, /還差/);
+  const off = render({ setup: { ...setup(2), checklistOn: false, checklist: null } });
+  assert.match(off, /輪到你的有 4 件/); assert.doesNotMatch(off, /還差|live-onboarding/);
+  const accountant = render({ setup: setup(2), session: { ...session, role: "accountant" } });
+  assert.match(accountant, /輪到你的有 4 件/); assert.doesNotMatch(accountant, /還差|live-onboarding/);
+  assert.equal(setupOnlyRemaining(undefined, "admin"), null);
+  assert.doesNotMatch(render({ setupFailed: true }), /還差/);
 });
 
 test("missing optional rental fields omit clauses; missing parent lookup fails instead of linking a room as a unit", async () => {

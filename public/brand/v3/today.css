@@ -47,6 +47,10 @@ html[data-brand="v2"][data-brand-v3] .v3-today-setup { padding: 20px; }
 html[data-brand="v2"][data-brand-v3] .v3-today-setup .setup-checklist { margin: 0; border: 0; padding: 0; background: none; }
 html[data-brand="v2"][data-brand-v3] .v3-today-setup .es-primary { position: static; margin-top: 16px; padding: 0; background: none; box-shadow: none; }
 html[data-brand="v2"][data-brand-v3] .v3-today-setup .btn.pri { color: var(--c-on-primary); }
+/* T-SETUP (GS-47): on phones the single solid 「邀請租客」 is pinned above the tab bar (globals.css .es-primary, ≤600px). */
+@media (max-width: 600px) {
+  html[data-brand="v2"][data-brand-v3] .v3-today-setup-only .es-primary { position: fixed; margin: 0; padding: 12px 16px; background: var(--c-surface); border-top: 1px solid var(--c-border); }
+}
 @media (max-width: 900px) {
   html[data-brand="v2"][data-brand-v3] .v3-today-row { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 16px; }
   html[data-brand="v2"][data-brand-v3] .v3-today-turn { grid-column: 1 / -1; }

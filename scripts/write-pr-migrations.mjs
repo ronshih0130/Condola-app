@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116140000_mf3_deposit_topup.sql": {
+    addOnly: false,
+    reason: "MF-3 / MGT-151 (MO-TOPUP, Round 7 batch 2). Not add-only by the table rule (a new table with NOT NULL columns, CHECK/UNIQUE/FK constraints), though old code never touches it: one new table app.deposit_settlement_topups (RLS on, no application grants; FK to app.deposit_settlement_records) and two new migration-owned VOLATILE service-only SECURITY DEFINER gateways with search_path=pg_catalog,pg_temp: app.mf3_topup_record (pay.record roles; env/live tuple, live auth session, deposit_settlement org+platform flag; received_on not after the org-local today; one 10^15 minor-unit cap on each entry and on the settlement's total paid; org-scoped request_id idempotency; audit_log row) and app.mf3_topup_view (one version for staff, tenant and owner). No existing object, grant, policy, flag or data change; no payment method column; nothing outbound.",
+  },
   "supabase/migrations/20261116120000_pr029_default_privileges.sql": {
     addOnly: false,
     reason: "PR-029 (a), Ron 2026-11-16 ~02:20 PT (relayed): ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, PUBLIC, so new tables stop inheriting the Supabase anon default found on staging. Not add-only (it removes default privileges), but a no-op on databases without a postgres role (CI/local) and fails closed if the current user cannot act for postgres. Existing table grants, authenticated/service_role defaults, sequences, functions, policies, data and flags unchanged.",
