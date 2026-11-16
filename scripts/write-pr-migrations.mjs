@@ -14,6 +14,19 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261115170000_b3_owner_pending_terminal.sql": {
+    addOnly: false,
+    reason: "B-070 3b M1 / B1: replace only PR-015 owner pending body with closed/cancelled exclusion. Existing behavior changes, not add-only. Signature, owner, ACL, history and writers preserved.",
+  },
+  "supabase/migrations/20261115170100_b3_staff_repair_turns.sql": {
+    addOnly: true,
+    reason: "B-070 3b M2: one new migration-owned VOLATILE service-only SECURITY DEFINER read gateway. ACL only for new object; no existing objects, tables, flags or data changed.",
+  },
+  "supabase/migrations/20261115170200_b3_vendor_repair_turn.sql": {
+    addOnly: true,
+    reason: "B-070 3b M3: one new token-only VOLATILE service-only SECURITY DEFINER read gateway. Locks for admission, no business writes or existing privilege changes.",
+  },
+
   "supabase/migrations/20261115160000_b104_vendor_b013_read_helpers.sql": {
     addOnly: true,
     reason: "B-104 / PR-024(a): creates three new service-only STABLE SECURITY DEFINER scalar read helpers in app for current repair version, vendor command existence and latest appointment event. Add-only: ACLs apply only to these new functions; no existing function, table grant, policy, column, data or flag changes. Migration role retains ownership; fixed pg_catalog, pg_temp search_path and org-scoped non-null inputs. Not RPC-exposed.",

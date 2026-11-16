@@ -287,3 +287,13 @@ test("O-EST / OWN-31-AC3: Escape closes without submitting", t => {
   (dialog.props.onCancel as (event: { preventDefault(): void }) => void)({ preventDefault() { prevented = true; } });
   assert.equal(prevented, true); assert.equal(closed, false); assert.equal(writes, 0);
 });
+
+test("B3 O-ROW/O-EST emergency copy keeps actions, omits owner-turn total and contradictory preapproval note", () => {
+  const emergency = { ...row, emergency: { emergency_category: "water", emergency_reason: "Fixture", emergency_photo_refs: [], emergency_notice_intent_at: null } as unknown as NonNullable<EstimateRow["emergency"]> };
+  const html = renderToStaticMarkup(<Home name="" locale="zh-TW" state={{ status: "ready", rows: [emergency] }} />);
+  assert.match(html, /已緊急處理・仍可核准/); assert.doesNotMatch(html, /有 1 件|輪到你/);
+  const panel = renderToStaticMarkup(React.createElement(ui.EstimatePanel as React.ComponentType<{ row: EstimateRow; locale: string; onClose: () => void; onReturned: () => void }>,
+    { row: emergency, locale: "zh-TW", onClose: () => {}, onReturned: () => {} }));
+  assert.match(panel, /已緊急處理・仍可核准/); assert.ok(!panel.includes(copy.brandV3OwnerHomeCopy("zh-TW").note));
+  assert.match(panel, /核准估價/);
+});

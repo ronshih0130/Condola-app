@@ -138,6 +138,26 @@ SQL
 
 # B-104 service-only helper ACL/config probe (app is deliberately not RPC-exposed).
 psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+-- B3b service-only gateway ACL/config probe, migration-owned VOLATILE readers.
+DO $b3b_gateways$
+DECLARE signature text; fn record;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b3_staff_repair_turns(uuid,uuid,text,uuid,uuid,uuid,text,jsonb,integer)',
+  'app.b3_vendor_repair_turn(text)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B3b gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+END $b3b_gateways$;
 DO $b104_helpers$
 DECLARE signature text; fn record; table_name text; role_name text;
 BEGIN

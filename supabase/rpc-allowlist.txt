@@ -63,3 +63,8 @@ app.tenant_signed_pdf_readable(p_org uuid, p_lease uuid)
 # The mutating trigger separately acquires policy locks through its app helper.
 # @mode authenticated
 public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
+
+# B-070 3b service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B3b probe in scripts/check-function-privileges.sh.
+# service-only: app.b3_staff_repair_turns(uuid,uuid,text,uuid,uuid,uuid,text,jsonb,integer)
+# service-only: app.b3_vendor_repair_turn(text)

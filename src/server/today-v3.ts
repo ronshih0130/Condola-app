@@ -1,3 +1,4 @@
+import { staffRepairTurns } from "./b3-repair-turns";
 import { staffPaymentTurns } from "./b3-payment-turns";
 import { staffRentalTurns, type StaffRentalTurns } from "./b3-rental-turns";
 import { staffOverdueTurns } from "./b3-overdue-turns";
@@ -69,19 +70,28 @@ async function todayOperationsEnabled(session: Session): Promise<boolean> {
   if (!row) throw new Error("Missing Today configuration");
   return row.enabled === true;
 }
-export async function readTodayTurns(session: Session, deps = { enabled: todayOperationsEnabled, payments: staffPaymentTurns, rentals: staffRentalTurns, overdue: staffOverdueTurns, roomUnits: roomUnitsFor }): Promise<TodayTurns> {
+type TodayReadDeps = {
+  enabled: typeof todayOperationsEnabled; payments: typeof staffPaymentTurns; rentals: typeof staffRentalTurns;
+  overdue: typeof staffOverdueTurns; roomUnits: typeof roomUnitsFor; repairs?: typeof staffRepairTurns;
+};
+export async function readTodayTurns(session: Session, deps: TodayReadDeps = {
+  enabled: todayOperationsEnabled, payments: staffPaymentTurns, rentals: staffRentalTurns,
+  overdue: staffOverdueTurns, roomUnits: roomUnitsFor, repairs: staffRepairTurns,
+}): Promise<TodayTurns> {
   const paymentAllowed = can(session, "pay.record");
   const rentalAllowed = (session.role === "admin" || session.role === "manager") && can(session, "leases.edit") && can(session, "props.view");
-  if (!paymentAllowed && !rentalAllowed) return { payments: { state: "off" }, rentals: { state: "off" }, overdue: { state: "off" }, roomUnits: {} };
+  const repairAllowed = can(session, "tickets.update");
+  if (!paymentAllowed && !rentalAllowed && !repairAllowed) return { payments: { state: "off" }, rentals: { state: "off" }, overdue: { state: "off" }, repairs: { state: "off" }, roomUnits: {} };
   const gate = await readTodayTurn(async () => ({ state: "ready" as const, enabled: await deps.enabled(session) }));
   if (gate.state !== "ready" || !gate.enabled) {
     const state = gate.state === "unavailable" ? "unavailable" as const : "off" as const;
-    return { payments: { state }, rentals: { state }, overdue: { state }, roomUnits: {} };
+    return { payments: { state }, rentals: { state }, overdue: { state }, repairs: { state }, roomUnits: {} };
   }
-  const [payments, initialRentals, overdue] = await Promise.all([
+  const [payments, initialRentals, overdue, repairs] = await Promise.all([
     paymentAllowed ? readTodayTurn(() => deps.payments(session)) : { state: "off" as const },
     rentalAllowed ? readTodayTurn(() => deps.rentals(session)) : { state: "off" as const },
     paymentAllowed ? readTodayTurn(() => deps.overdue(session)) : { state: "off" as const },
+    repairAllowed ? readTodayTurn(() => (deps.repairs ?? staffRepairTurns)(session)) : { state: "off" as const },
   ]);
   let rentals = initialRentals;
   let roomUnits: Record<string, string> = {};
@@ -90,5 +100,5 @@ export async function readTodayTurns(session: Session, deps = { enabled: todayOp
     if (result.state === "ready") roomUnits = result.units;
     else rentals = result;
   }
-  return { payments, rentals, overdue, roomUnits };
+  return { payments, rentals, overdue, repairs, roomUnits };
 }
