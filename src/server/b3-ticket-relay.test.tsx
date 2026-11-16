@@ -73,7 +73,9 @@ test("MGT-150-AC1/AC3 approved emergency frame: 屋 still open, 廠 now, one why
   assert.ok(page.includes('aria-label="報修進度，現在輪到廠商陳師傅到場維修"'));
   assert.ok(page.includes(">已緊急處理，屋主還可以核准估價。</p>"));
   assert.equal((page.match(/class="v3-why"/g) ?? []).length, 1);
-  for (const sub of ["黃小姐", "你", "張先生", "陳師傅"]) assert.ok(page.includes(`<span class="v3-st-s">${sub}</span>`), sub);
+  for (const sub of ["黃小姐", "張先生", "陳師傅", "管理方"]) assert.ok(page.includes(`<span class="v3-st-s">${sub}</span>`), sub);
+  // The vendor holds the turn: nobody on this page is told 「你」.
+  assert.ok(!page.includes(">你<"));
   // R7a swaps the vendor label to 回報費用.
   const r7a = estimateRelay(facts({ rule: "R7a", holder: "vendor", step: "report_cost", canAct: false }));
   assert.deepEqual(shape(r7a.nodes), ["t:report:done", "m:dispatch:done", "v:report_cost:now", "m:confirm_cost:next"]);
@@ -164,7 +166,18 @@ test("estimate relay invariants over every rule × status × estimate state", ()
   let drawn = 0;
   for (const [rule, holder, step] of rules) for (const status of statuses) for (const current of currents) for (const pendingCost of [true, false]) for (const canAct of [true, false]) {
     const relay = estimateRelay(facts({ rule, holder, step, status, current, pendingCost, canAct }));
+    // F2: only R1/R2 precede R3/R5 in §3's first-match order; any later rule with a head that implies
+    // R3/R5 is a cross-read race and draws nothing.
+    const impliesR3 = !!current && current.requiresOwner && current.decision === null && !current.emergency;
+    const impliesR5 = !!current && current.requiresOwner && (current.decision === "rejected" || current.decision === "more_information") && !current.emergency;
+    if (!["R1", "R2", "R3", "R5"].includes(rule) && (impliesR3 || impliesR5)) {
+      assert.equal(relay.nodes, null, `${rule} with an R3/R5 head`); assert.ok(relay.hidden.includes("snapshot_mismatch"));
+    }
     if (!relay.nodes) { assert.equal(relay.why, null); continue; }
+    // F1: 「你」 only on the current 管 step, only when the viewer can act.
+    for (const node of relay.nodes) if (node.subs.some(sub => sub.kind === "you")) {
+      assert.equal(node.state, "now"); assert.equal(node.party, "m"); assert.equal(canAct, true);
+    }
     drawn++;
     const now = relay.nodes.filter(n => n.state === "now");
     assert.equal(now.length, 1);
@@ -174,6 +187,52 @@ test("estimate relay invariants over every rule × status × estimate state", ()
     if (relay.lead) assert.equal(rule, "R5");
   }
   assert.ok(drawn > 100);
+});
+
+test("F1: a viewer who cannot act is never told 「你」, on the current step or on done steps", () => {
+  const rejected = { requiresOwner: true, decision: "rejected" as const, emergency: false };
+  const cannot: EstimateFacts[] = [
+    facts({ rule: "R5", step: "re_estimate", canAct: false, current: rejected }), // before reestimate_ready
+    facts({ rule: "R2", step: "confirm_cost", canAct: false }), // expense conflict or no exp.add
+    facts({ rule: "R6", step: "dispatch", canAct: false, status: "resolved" }),
+    facts({ rule: "R8", step: "dispatch", canAct: false, status: "open" }),
+    facts({ rule: "R8-blocked", step: "dispatch", canAct: false }),
+  ];
+  for (const input of cannot) {
+    const relay = estimateRelay(input);
+    assert.ok(relay.nodes, input.turn.rule);
+    assert.ok(relay.nodes.every(n => n.subs.every(sub => sub.kind !== "you")), input.turn.rule);
+    const now = relay.nodes.find(n => n.state === "now")!;
+    assert.deepEqual(now.subs, [{ kind: "manager" }]);
+    const page = html({ state: "ready", view: "estimate", relay });
+    assert.ok(!page.includes(">你<"), input.turn.rule);
+    assert.match(page, /aria-label="報修進度，現在輪到管理方/);
+    assert.ok(!page.includes("ticket-relay-lead"));
+  }
+  // A viewer who can act: 「你」 on the current step only; the done 派工 is not attributed to anyone.
+  const can = estimateRelay(facts({ rule: "R2", step: "confirm_cost" }));
+  assert.deepEqual(can.nodes?.map(n => n.party === "m" ? `${n.step}:${n.state}:${n.subs.map(x => x.kind).join(",")}` : n.party),
+    ["t", "dispatch:done:", "v", "confirm_cost:now:you"]);
+  assert.ok(can.hidden.includes("dispatcher_name"));
+  assert.match(html({ state: "ready", view: "estimate", relay: can }), /aria-label="報修進度，現在輪到你核對費用"/);
+});
+
+test("F2: turn R6/R7/R8 with an approval head that implies R3/R5 (cross-read race) draws no relay", () => {
+  const pending = { requiresOwner: true, decision: null, emergency: false };
+  const back = { requiresOwner: true, decision: "rejected" as const, emergency: false };
+  const more = { requiresOwner: true, decision: "more_information" as const, emergency: false };
+  const races: [RepairRule, RepairHolder, RepairStep][] = [["R6", "manager", "dispatch"], ["R7a", "vendor", "report_cost"],
+    ["R7b", "vendor", "do_repair"], ["R8", "manager", "dispatch"], ["R8-blocked", "manager", "dispatch"]];
+  for (const [rule, holder, step] of races) for (const current of [pending, back, more]) {
+    const relay = estimateRelay(facts({ rule, holder, step, canAct: false, current }));
+    assert.equal(relay.nodes, null, `${rule}/${current.decision}`); assert.equal(relay.why, null);
+    assert.ok(relay.hidden.includes("snapshot_mismatch"));
+    assert.doesNotMatch(html({ state: "ready", view: "estimate", relay }), /data-testid="ticket-relay"/);
+  }
+  // Controls: emergency heads and approved heads are valid for these rules; R2 legitimately precedes R3.
+  assert.ok(estimateRelay(facts({ rule: "R7b", holder: "vendor", step: "do_repair", canAct: false, current: { ...pending, emergency: true } })).nodes);
+  assert.ok(estimateRelay(facts({ rule: "R7b", holder: "vendor", step: "do_repair", canAct: false, current: { ...pending, decision: "approved" } })).nodes);
+  assert.ok(estimateRelay(facts({ rule: "R2", step: "confirm_cost", current: pending })).nodes);
 });
 
 test("MGT-150-AC2 / PLT-52-AC4 maintenance frame: 租 → 管 → 廠 → 管, status only, no 屋, no timing, no why-line", () => {
@@ -246,6 +305,15 @@ test("loader: estimate path composes the turn, the current head and facts; state
     assert.ok(page.includes("<h1>民生社區 5F・冷氣不冷</h1>"));
     assert.doesNotMatch(page, /data-testid="ticket-relay"|ticket-relay-lead|ticket-relay-why/);
   }
+});
+
+test("insurance: the estimate facts read itself refuses a non-admin/manager native role before any DB access", async () => {
+  const detail = { ticketId: TICKET, rule: "R7b", holder: "vendor", step: "do_repair", viewerCanAct: false, since: null, sinceExact: false, timezone: "Asia/Taipei", place: "x" };
+  // Even if a full (non-maintenance) DTO reached a maintenance session, the real readEstimateFacts denies it.
+  assert.deepEqual(await loadTicketRelay(maintenanceSession, TICKET, { turns: turnsFor(detail), approvals: async () => [] }), { state: "forbidden" });
+  const reader = read("src/server/b3-ticket-relay.ts");
+  assert.match(reader.slice(reader.indexOf("async function readEstimateFacts"), reader.indexOf("return tx(", reader.indexOf("async function readEstimateFacts"))),
+    /\["admin", "manager"\]\.includes\(native\)\) throw new FlowError\("errors\.forbidden"\)/);
 });
 
 test("REVIEW-CHECKLIST 11: the only control is the 維修 crumb link, ≥44px; CSS is brand_v3-scoped tokens; no tick", () => {

@@ -47,6 +47,9 @@ async function readPublicFacts(input: Session, ticketId: string): Promise<Public
 async function readEstimateFacts(input: Session, ticketId: string, decidedBy: string | null): Promise<EstimateRead | null> {
   const session = await guardEffectiveSession(input, "tickets.update");
   assertPerm(session, "tickets.update");
+  // Estimate facts are for native admin/manager only (the b013_manager_view ceiling), never maintenance.
+  const native = session.customRole?.nativeRole ?? session.role;
+  if (session.kind !== "staff" || !native || !["admin", "manager"].includes(native)) throw new FlowError("errors.forbidden");
   return tx(session.userId, client => withEffectiveReadAuthority(client, session, "tickets.update", () =>
     maybe<EstimateRead>(client, `SELECT t.status::text AS status, coalesce(j.vendor_name, t.vendor_name) AS vendor,
          rc.display_name AS tenant,
