@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { makeT, type Locale } from "../../../i18n";
 import { brandV3OwnerHomeCopy, brandV3OwnerShellCopy, brandV3ShellCopy, brandV3TodayCopy } from "../../../i18n/lanes/brand-v3";
@@ -19,8 +20,12 @@ export type EstimateRow = {
 };
 export type OwnerHomeState = { status: "ready"; rows: EstimateRow[] } | { status: "error" };
 
-export function OwnerHomeV3({ name, locale, state, estimate }: {
-  name: string; locale: Locale; state: OwnerHomeState; estimate?: string;
+/**
+ * FE-OWNEMPTY: `summary` (the O-HOME summary row) renders only when its reader supplies data, and the
+ * O-EMPTY 「看總覽」 link renders only when 總覽 is live (`overviewHref`); neither is invented here.
+ */
+export function OwnerHomeV3({ name, locale, state, estimate, summary, overviewHref }: {
+  name: string; locale: Locale; state: OwnerHomeState; estimate?: string; summary?: React.ReactNode; overviewHref?: string;
 }) {
   const router = useRouter();
   const copy = brandV3OwnerHomeCopy(locale);
@@ -50,10 +55,14 @@ export function OwnerHomeV3({ name, locale, state, estimate }: {
       else heading.current?.focus();
     });
   };
-  const title = state.status === "error" || rows.length === 0 || rows.some(row => row.emergency) ? brandV3OwnerShellCopy(locale).home
-    : (name.trim() ? copy.lead : copy.leadNoName).replace("{name}", name).replace("{count}", String(rows.length));
+  const named = Boolean(name.trim());
+  // FE-OWNEMPTY: at zero the lead is its own sentence, never a second 「首頁」 under the shell title.
+  const title = state.status === "error" || rows.some(row => row.emergency) ? brandV3OwnerShellCopy(locale).home
+    : rows.length === 0 ? (named ? copy.leadEmpty : copy.leadEmptyNoName).replace("{name}", name.trim())
+    : (named ? copy.lead : copy.leadNoName).replace("{name}", name).replace("{count}", String(rows.length));
   return <section className="v3-owner-home" data-testid="owner-home-v3">
     <h2 ref={heading} tabIndex={-1}>{title}</h2>
+    {state.status === "ready" && summary ? <div className="owner-summary" data-testid="owner-summary">{summary}</div> : null}
     <section className="owner-task-card" aria-labelledby="owner-tasks-title">
       <h3 id="owner-tasks-title">{copy.tasks}</h3>
       {state.status === "error" ? <div role="alert"><p>{copy.failure}</p>
@@ -61,7 +70,8 @@ export function OwnerHomeV3({ name, locale, state, estimate }: {
       </div> : rows.length ? <ul className="owner-estimates">{rows.map(row => <li key={row.versionId} data-testid="owner-estimate-row">
         <div><b>{row.property}{row.item}</b><div className="owner-badges"><span>{copy.estimate} {row.amount}</span><span>{row.emergency ? copy.emergencyNote : copy.pending}</span></div></div>
         <button className="owner-action" onClick={event => { trigger.current = event.currentTarget; setSelected(row); setNotice(""); }}>{copy.approve}</button>
-      </li>)}</ul> : <div className="owner-empty"><Illustration name="20" /><h4>{copy.empty}</h4><p>{copy.emptyDetail}</p></div>}
+      </li>)}</ul> : <div className="owner-empty" data-testid="owner-empty"><Illustration name="20" /><h4>{copy.empty}</h4><p>{copy.emptyDetail}</p>
+        {overviewHref ? <Link className="owner-text-link" href={overviewHref}>{copy.overview}</Link> : null}</div>}
       {notice ? <p role="status">{notice}</p> : null}
     </section>
     {selected ? <EstimatePanel key={selected.versionId} row={selected} locale={locale} onClose={close}
