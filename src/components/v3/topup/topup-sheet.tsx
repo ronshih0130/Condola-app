@@ -17,7 +17,7 @@ const newRequest = () => globalThis.crypto.randomUUID();
 /** The viewer's own calendar date; the gateway still applies the org-local today. */
 const localToday = () => dateIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-export type TopupFormState = { amount: string; date: string; note: string; saving: boolean; failed: boolean; retry?: boolean; today?: string };
+export type TopupFormState = { amount: string; date: string; note: string; saving: boolean; failed: boolean; today?: string };
 type FormProps = Omit<Props, "submit" | "leaseId" | "settlementId"> & TopupFormState & {
   titleId: string; firstRef?: React.Ref<HTMLInputElement>; sheetRef?: React.Ref<HTMLDivElement>;
   onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
@@ -28,9 +28,8 @@ type FormProps = Omit<Props, "submit" | "leaseId" | "settlementId"> & TopupFormS
 /**
  * The sheet (MGT-151-AC1/AC3/AC5): 金額 (必填), 日期 (必填), 備註 (選填). When this entry would make 已補 larger
  * than 應補 it asks 「比應補多收 NT${x}，確定嗎？」 and 確定 still saves. After a failed save every field keeps
- * its value, with 「沒有存成功，請再試一次。」; the button reads 「再試一次」 only when the same entry can be sent
- * again (`retry`), otherwise 確定 after an edit. Both message regions stay mounted so screen readers
- * announce a change of text reliably.
+ * its value, with 「沒有存成功，請再試一次。」 and 「再試一次」 (GS-02); 確定 is only the normal confirm.
+ * Both message regions stay mounted so screen readers announce a change of text reliably.
  */
 export function TopupSheetForm(props: FormProps) {
   const c = brandV3TopupCopy(props.locale);
@@ -57,7 +56,7 @@ export function TopupSheetForm(props: FormProps) {
         {c.over.replace("{amount}", topupMoney(over, props.currency, props.minorUnit))}</b> : null}</p>
       <p className="v3-topup-fail" role="alert" data-testid="topup-failed">{props.failed ? c.saveFailed : null}</p>
       <button type="submit" className="btn pri block" disabled={props.saving} aria-busy={props.saving} data-testid="topup-confirm">
-        {props.failed && props.retry !== false ? c.retry : c.confirm}</button>
+        {props.failed ? c.retry : c.confirm}</button>
       <button type="button" className="btn txt block" onClick={props.onClose} disabled={props.saving}>{c.cancel}</button>
     </form>
   </div>;
@@ -84,7 +83,7 @@ export function TopupSheet({ submit = recordDepositTopupAction, leaseId, settlem
   const titleId = useId();
   const [state, dispatch] = useReducer(topupSheetReducer, closedSheet);
   const sender = useRef<ReturnType<typeof createTopupSender> | null>(null);
-  if (!sender.current) sender.current = createTopupSender(submit, newRequest);
+  if (!sender.current) sender.current = createTopupSender(submit);
   const first = useRef<HTMLInputElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
@@ -99,29 +98,30 @@ export function TopupSheet({ submit = recordDepositTopupAction, leaseId, settlem
   const edit = (field: "amount" | "date" | "note") => (value: string) => dispatch({ type: "edit", field, value });
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (state.saving || sender.current!.busy) return;
+    if (state.saving || sender.current!.busy || !state.key) return;
     const amount = checkTopupAmount(state.amount, view.minorUnit);
     if (!amount.ok && amount.reason === "format") return; // the browser's required/number validation covers it
-    // Above the cap, a future date or an over-long note: the GS-02 save error, and the entry must change.
+    // Above the cap, a future date or an over-long note: not sent; the GS-02 save error, input kept.
     if (!amount.ok || !topupDateAllowed(state.date, localToday()) || state.note.trim().length > TOPUP_NOTE_MAX) {
-      dispatch({ type: "done", outcome: "fix" });
+      dispatch({ type: "refused" });
       return;
     }
     dispatch({ type: "start" });
-    const outcome = await sender.current!.send({ leaseId, settlementId },
+    const outcome = await sender.current!.send({ leaseId, settlementId }, state.key,
       { amountMinor: amount.minor, receivedOn: state.date, note: state.note.trim() || null });
     if (outcome === "busy") return;
-    dispatch({ type: "done", outcome });
-    if (outcome === "saved") router.refresh();
+    dispatch({ type: "done", outcome, nextKey: outcome === "invalid" ? newRequest() : undefined });
+    // saved, or landed (conflict: an earlier attempt with this key was recorded): show it, sheet closed.
+    if (outcome === "saved" || outcome === "landed") router.refresh();
   }
 
   return <>
     <button ref={opener} type="button" className="btn pri v3-topup-record" data-testid="topup-record"
-      onClick={() => dispatch({ type: "open", today: localToday() })}>{c.record}</button>
+      onClick={() => dispatch({ type: "open", today: localToday(), key: newRequest() })}>{c.record}</button>
     {state.open ? <div className="v3-topup-layer" data-testid="topup-sheet-layer">
       <div className="v3-topup-dim" aria-hidden="true" onClick={hide} />
       <TopupSheetForm {...view} amount={state.amount} date={state.date} note={state.note} saving={state.saving}
-        failed={state.error !== null} retry={state.error === "retry"} today={localToday()}
+        failed={state.failed} today={localToday()}
         titleId={titleId} firstRef={first} sheetRef={sheet}
         onAmount={edit("amount")} onDate={edit("date")} onNote={edit("note")} onSubmit={save} onClose={hide}
         onKeyDown={event => trapTab(event, sheet.current)} />

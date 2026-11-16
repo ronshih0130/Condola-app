@@ -203,107 +203,138 @@ test("wiring: pages exist only under brand_v3; the action checks consent; nothin
 
 // Stateful TopupSheet rules (MGT-151-AC3/AC5), through the controller the component is wired to.
 const T = { leaseId: LEASE, settlementId: SETTLE };
-const C = { amountMinor: "250000", receivedOn: "2026-11-25", note: "轉帳" };
+const C = { amountMinor: "250000", receivedOn: "2026-11-05", note: "轉帳" };
 function keys() { let n = 0; return () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`; }
-function recorder(results: (TopupResult | Error)[]) {
+/** The gateway's key semantics: same key + same content replays, same key + other content conflicts. */
+function server(options: { loseReply?: number[] } = {}) {
+  const stored = new Map<string, string>(), calls: TopupInput[] = [];
+  return { calls, stored, submit: async (input: TopupInput): Promise<TopupResult> => {
+    calls.push(input);
+    const content = JSON.stringify([input.leaseId, input.settlementId, input.amountMinor, input.receivedOn, input.note ?? null]);
+    const prior = stored.get(input.requestId);
+    if (prior !== undefined && prior !== content) return { ok: false, reason: "conflict" };
+    stored.set(input.requestId, content);
+    if (options.loseReply?.includes(calls.length)) throw new Error("reply lost after commit");
+    return { ok: true, paidMinor: "250000", overMinor: "0", replayed: prior !== undefined };
+  } };
+}
+const stub = (results: (TopupResult | Error)[]) => {
   const calls: TopupInput[] = [];
   return { calls, submit: async (input: TopupInput) => { calls.push(input); const r = results.shift()!; if (r instanceof Error) throw r; return r; } };
+};
+const contentOf = (st: TopupSheetState) => ({ amountMinor: String(Number(st.amount) * 100), receivedOn: st.date, note: st.note || null });
+async function attempt(st: TopupSheetState, sender: ReturnType<typeof createTopupSender>, next: () => string) {
+  st = topupSheetReducer(st, { type: "start" });
+  const outcome = await sender.send(T, st.key!, contentOf(st));
+  assert.notEqual(outcome, "busy");
+  return { outcome, state: topupSheetReducer(st, { type: "done", outcome: outcome as Exclude<typeof outcome, "busy">, nextKey: outcome === "invalid" ? next() : undefined }) };
 }
-const ok: TopupResult = { ok: true, paidMinor: "350000", overMinor: "50000", replayed: false };
 
-test("sheet sender: a retry of the same entry reuses its key; saved, changed or conflicting entries get a new one", async () => {
-  const r = recorder([{ ok: false, reason: "failed" }, ok, { ok: false, reason: "failed" }, { ok: false, reason: "failed" }, ok, ok]);
-  const sender = createTopupSender(r.submit, keys());
-  assert.equal(await sender.send(T, C), "retry");
-  assert.equal(await sender.send(T, { ...C }), "saved");
-  assert.equal(r.calls[0].requestId, r.calls[1].requestId, "retry keeps the key");
-  assert.deepEqual({ ...r.calls[1], requestId: undefined }, { ...T, requestId: undefined, ...C });
-  // After a save the same content is a new entry with a new key.
-  assert.equal(await sender.send(T, C), "retry");
-  assert.notEqual(r.calls[2].requestId, r.calls[1].requestId);
-  // Changed content: new key; back to the failed content: still a new key (only the last attempt is kept).
-  assert.equal(await sender.send(T, { ...C, note: "現金" }), "retry");
-  assert.notEqual(r.calls[3].requestId, r.calls[2].requestId);
-  assert.equal(await sender.send(T, { ...C, note: "現金" }), "saved");
-  assert.equal(r.calls[4].requestId, r.calls[3].requestId);
-  assert.equal(await sender.send(T, { ...C, amountMinor: "1" }), "saved");
-  assert.equal(new Set(r.calls.map(c => c.requestId)).size, 4);
+test("sheet: one key per unsaved entry — a retry and an edit after a failure keep the same key", async () => {
+  const next = keys(), api = stub([{ ok: false, reason: "failed" }, { ok: false, reason: "failed" }, { ok: true, paidMinor: "1", overMinor: "0", replayed: false }]);
+  const sender = createTopupSender(api.submit);
+  let st = topupSheetReducer(closedSheet, { type: "open", today: "2026-11-05", key: next() });
+  st = topupSheetReducer(st, { type: "edit", field: "amount", value: "2500" });
+  let r = await attempt(st, sender, next);
+  assert.equal(r.outcome, "retry");
+  st = topupSheetReducer(r.state, { type: "edit", field: "note", value: "轉帳" });
+  r = await attempt(st, sender, next);
+  assert.equal(api.calls[1].requestId, api.calls[0].requestId, "an edit after a failure keeps the SAME key");
+  r = await attempt(r.state, sender, next);
+  assert.equal(r.outcome, "saved");
+  assert.equal(new Set(api.calls.map(c => c.requestId)).size, 1);
+  assert.deepEqual(r.state, closedSheet);
+  // The next entry gets a new key.
+  const fresh = topupSheetReducer(r.state, { type: "open", today: "2026-11-05", key: next() });
+  assert.notEqual(fresh.key, api.calls[0].requestId);
 });
 
-test("sheet sender: double submit is refused while one is in flight; a thrown error is a retryable failure", async () => {
+test("sheet: lost reply, then an edit and resend — same key, the server answers conflict, the sheet closes and refreshes (no second record)", async () => {
+  const next = keys(), api = server({ loseReply: [1] });
+  const sender = createTopupSender(api.submit);
+  let st = topupSheetReducer(closedSheet, { type: "open", today: "2026-11-05", key: next() });
+  st = topupSheetReducer(st, { type: "edit", field: "amount", value: "2500" });
+  let r = await attempt(st, sender, next);
+  assert.equal(r.outcome, "retry", "the commit happened but the reply was lost");
+  assert.deepEqual([r.state.failed, r.state.amount], [true, "2500"]);
+  st = topupSheetReducer(r.state, { type: "edit", field: "note", value: "轉帳" });
+  r = await attempt(st, sender, next);
+  assert.equal(api.calls[1].requestId, api.calls[0].requestId);
+  assert.equal(r.outcome, "landed", "conflict means the earlier save landed: the TopupSheet refreshes");
+  assert.deepEqual(r.state, closedSheet, "the sheet closes");
+  assert.equal(api.stored.size, 1, "recorded once");
+  // A resend without an edit instead replays the stored row.
+  const api2 = server({ loseReply: [1] }), s2 = createTopupSender(api2.submit);
+  let st2 = topupSheetReducer(topupSheetReducer(closedSheet, { type: "open", today: "2026-11-05", key: next() }), { type: "edit", field: "amount", value: "2500" });
+  st2 = (await attempt(st2, s2, next)).state;
+  const again = await attempt(st2, s2, next);
+  assert.equal(again.outcome, "saved");
+  assert.equal(api2.stored.size, 1);
+});
+
+test("sheet: a real reopen (new sheet and sender instance from the retained pending entry) keeps the key and the input", async () => {
+  const next = keys(), api = stub([{ ok: false, reason: "failed" }, { ok: true, paidMinor: "1", overMinor: "0", replayed: true }]);
+  let st = topupSheetReducer(closedSheet, { type: "open", today: "2026-11-05", key: next() });
+  st = topupSheetReducer(topupSheetReducer(st, { type: "edit", field: "amount", value: "2500" }), { type: "edit", field: "note", value: "轉帳" });
+  st = (await attempt(st, createTopupSender(api.submit), next)).state;
+  const retained = topupSheetReducer(st, { type: "close" });
+  assert.equal(retained.open, false);
+  const reopened = topupSheetReducer(retained, { type: "open", today: "2026-11-06", key: next() });
+  assert.deepEqual([reopened.open, reopened.amount, reopened.date, reopened.note, reopened.failed, reopened.key],
+    [true, "2500", "2026-11-05", "轉帳", true, retained.key], "input, failure and key survive; the offered new key is ignored");
+  const r = await attempt(reopened, createTopupSender(api.submit), next);
+  assert.equal(r.outcome, "saved");
+  assert.equal(api.calls[1].requestId, api.calls[0].requestId);
+});
+
+test("sheet: double submit is refused; a thrown error is a retry; invalid gives a new key; refused input keeps the key", async () => {
   let release!: (r: TopupResult) => void;
   const calls: TopupInput[] = [];
-  const sender = createTopupSender(input => { calls.push(input); return new Promise(res => { release = res; }); }, keys());
-  const first = sender.send(T, C);
+  const sender = createTopupSender(input => { calls.push(input); return new Promise(res => { release = res; }); });
+  const first = sender.send(T, "k", C);
   assert.equal(sender.busy, true);
-  assert.equal(await sender.send(T, C), "busy");
+  assert.equal(await sender.send(T, "k", C), "busy");
   assert.equal(calls.length, 1);
-  release(ok);
+  release({ ok: true, paidMinor: "1", overMinor: "0", replayed: false });
   assert.equal(await first, "saved");
   assert.equal(sender.busy, false);
-  const thrown = recorder([new Error("network down"), ok]);
-  const s2 = createTopupSender(thrown.submit, keys());
-  assert.equal(await s2.send(T, C), "retry");
-  assert.equal(s2.busy, false);
-  assert.equal(await s2.send(T, C), "saved");
-  assert.equal(thrown.calls[0].requestId, thrown.calls[1].requestId);
+  const thrown = createTopupSender(stub([new Error("network down")]).submit);
+  assert.equal(await thrown.send(T, "k", C), "retry");
+  assert.equal(thrown.busy, false);
+  for (const [reason, outcome] of [["invalid", "invalid"], ["conflict", "landed"], ["off", "retry"], ["forbidden", "retry"], ["failed", "retry"]] as const)
+    assert.equal(await createTopupSender(stub([{ ok: false, reason }]).submit).send(T, "k", C), outcome, reason);
+  const base = { ...closedSheet, open: true, amount: "1", date: "2026-11-05", key: "k1" };
+  assert.deepEqual(topupSheetReducer({ ...base, saving: true }, { type: "done", outcome: "invalid", nextKey: "k2" }), { ...base, failed: true, key: "k2" });
+  assert.deepEqual(topupSheetReducer({ ...base, saving: true }, { type: "done", outcome: "retry" }), { ...base, failed: true });
+  assert.deepEqual(topupSheetReducer(base, { type: "refused" }), { ...base, failed: true }, "over cap / future date: not sent, same key");
+  const saving = { ...base, saving: true };
+  assert.equal(topupSheetReducer(saving, { type: "close" }), saving);
+  assert.equal(topupSheetReducer(saving, { type: "edit", field: "amount", value: "9" }), saving);
 });
 
-test("sheet sender: conflict and invalid are not retried with the same key", async () => {
-  for (const reason of ["conflict", "invalid"] as const) {
-    const r = recorder([{ ok: false, reason }, ok]);
-    const sender = createTopupSender(r.submit, keys());
-    assert.equal(await sender.send(T, C), "fix");
-    assert.equal(sender.key, null);
-    assert.equal(await sender.send(T, C), "saved");
-    assert.notEqual(r.calls[0].requestId, r.calls[1].requestId);
-  }
-  for (const reason of ["off", "forbidden", "failed"] as const) {
-    const sender = createTopupSender(recorder([{ ok: false, reason }]).submit, keys());
-    assert.equal(await sender.send(T, C), "retry");
-  }
-});
-
-test("sheet state: input survives a failed save and a close/reopen; same content after reopen keeps the key", async () => {
-  let s: TopupSheetState = topupSheetReducer(closedSheet, { type: "open", today: "2026-11-25" });
-  assert.deepEqual(s, { ...closedSheet, open: true, date: "2026-11-25" });
-  s = topupSheetReducer(s, { type: "edit", field: "amount", value: "2500" });
-  s = topupSheetReducer(s, { type: "edit", field: "note", value: "轉帳" });
-  s = topupSheetReducer(s, { type: "start" });
-  assert.equal(s.saving, true);
-  assert.equal(topupSheetReducer(s, { type: "close" }), s, "no close while saving");
-  assert.equal(topupSheetReducer(s, { type: "edit", field: "amount", value: "9" }), s, "no edits while saving");
-  s = topupSheetReducer(s, { type: "done", outcome: "retry" });
-  assert.deepEqual([s.amount, s.date, s.note, s.error, s.saving, s.unsaved], ["2500", "2026-11-25", "轉帳", "retry", false, true]);
-  s = topupSheetReducer(topupSheetReducer(s, { type: "close" }), { type: "open", today: "2026-11-26" });
-  assert.deepEqual([s.open, s.amount, s.date, s.note], [true, "2500", "2026-11-25", "轉帳"], "reopen keeps the unsaved entry");
-  // The same sender (one per mounted sheet) keeps the key for that same content after the reopen.
-  const r = recorder([{ ok: false, reason: "failed" }, ok]);
-  const sender = createTopupSender(r.submit, keys());
-  await sender.send(T, C);
-  await sender.send(T, C);
-  assert.equal(r.calls[0].requestId, r.calls[1].requestId);
-  s = topupSheetReducer(topupSheetReducer(s, { type: "start" }), { type: "done", outcome: "saved" });
-  assert.deepEqual(s, closedSheet);
-  assert.deepEqual(topupSheetReducer(s, { type: "open", today: "2026-11-27" }), { ...closedSheet, open: true, date: "2026-11-27" }, "after a save the next entry starts empty");
-  const fixed = topupSheetReducer({ ...closedSheet, open: true, amount: "1", saving: true }, { type: "done", outcome: "fix" });
-  assert.deepEqual([fixed.error, fixed.amount], ["fix", "1"]);
-});
-
-test("sheet wiring: TopupSheet uses the controller, traps Tab, returns focus to 記錄已收, keeps live regions mounted", () => {
+test("sheet wiring and copy: every failure reads 「沒有存成功，請再試一次。」 + 「再試一次」; 確定 only as the normal confirm", () => {
   const src = read("src/components/v3/topup/topup-sheet.tsx");
   assert.match(src, /useReducer\(topupSheetReducer, closedSheet\)/);
-  assert.match(src, /createTopupSender\(submit, newRequest\)/);
+  assert.match(src, /sender\.current!\.send\(\{ leaseId, settlementId \}, state\.key,/);
+  assert.match(src, /dispatch\(\{ type: "open", today: localToday\(\), key: newRequest\(\) \}\)/);
+  assert.match(src, /nextKey: outcome === "invalid" \? newRequest\(\) : undefined/);
+  assert.match(src, /if \(outcome === "saved" \|\| outcome === "landed"\) router\.refresh\(\);/);
+  assert.match(src, /dispatch\(\{ type: "refused" \}\)/);
   assert.match(src, /onKeyDown=\{event => trapTab\(event, sheet\.current\)\}/);
   assert.match(src, /else if \(wasOpen\.current\) opener\.current\?\.focus\(\);/);
-  assert.doesNotMatch(src, /request\.current = newRequest\(\)/, "no new key per keystroke");
+  assert.match(src, /\{props\.failed \? c\.retry : c\.confirm\}/);
+  assert.doesNotMatch(src, /retry=|"fix"/);
   const props = { locale: "zh-TW" as const, currency: "TWD", minorUnit: 2, owedMinor: "300000", paidMinor: "100000", titleId: "t" };
-  const quiet = render(<TopupSheetForm {...props} amount="1000" date="2026-11-25" note="" saving={false} failed={false} />);
+  const quiet = render(<TopupSheetForm {...props} amount="1000" date="2026-11-05" note="" saving={false} failed={false} />);
   assert.match(quiet, /<p class="v3-topup-warn" role="status" aria-live="polite" data-testid="topup-over"><\/p>/);
   assert.match(quiet, /<p class="v3-topup-fail" role="alert" data-testid="topup-failed"><\/p>/);
-  const fix = render(<TopupSheetForm {...props} amount="1000" date="2026-11-25" note="" saving={false} failed={true} retry={false} />);
-  assert.ok(text(fix).includes("沒有存成功，請再試一次。"));
-  assert.match(fix, /data-testid="topup-confirm"[^>]*>確定</, "conflict/invalid: no 再試一次 with the same key");
-  assert.match(render(<TopupSheetForm {...props} amount="1" date="2026-11-25" note="" saving={false} failed={false} today="2026-11-25" />), /max="2026-11-25"/);
+  assert.match(quiet, /data-testid="topup-confirm"[^>]*>確定</);
+  const over = render(<TopupSheetForm {...props} amount="2500" date="2026-11-05" note="" saving={false} failed={false} />);
+  assert.ok(text(over).includes("比應補多收 NT$500，確定嗎？") && /data-testid="topup-confirm"[^>]*>確定</.test(over));
+  const failed = render(<TopupSheetForm {...props} amount="99999999999999" date="2026-11-05" note="轉帳" saving={false} failed={true} />);
+  assert.ok(text(failed).includes("沒有存成功，請再試一次。"));
+  assert.match(failed, /data-testid="topup-confirm"[^>]*>再試一次</);
+  for (const kept of ['value="99999999999999"', 'value="2026-11-05"', 'value="轉帳"']) assert.ok(failed.includes(kept), kept);
+  assert.match(render(<TopupSheetForm {...props} amount="1" date="2026-11-05" note="" saving={false} failed={false} today="2026-11-05" />), /max="2026-11-05"/);
   assert.match(read("public/brand/v3/topup.css"), /:is\(\.v3-topup-warn,\.v3-topup-fail\):empty \{ position:absolute;/);
 });
