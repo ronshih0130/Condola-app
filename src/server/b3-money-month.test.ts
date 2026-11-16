@@ -76,7 +76,8 @@ test("MGT-141 due-1/due/due+1: partial becomes overdue, full stays paid, pending
 });
 
 const bill = (n: number): MoneyMonthBill => ({ leaseId: id(n), month, place: "Synthetic 2F A", tenantName: null,
-  currency: "USD", dueDate: "2030-05-01", totalMinor: "9007199254740993", confirmedMinor: "1", remainingMinor: "9007199254740992", status: "partial" });
+  currency: "USD", dueDate: "2030-05-01", totalMinor: "9007199254740993", confirmedMinor: "1", remainingMinor: "9007199254740992", status: "partial",
+  propertyToday: "2030-05-01" });
 const report = (n: number, other = false): MoneyMonthReport => ({ id: id(n), leaseId: id(999), place: "Synthetic", tenantName: null,
   amountMinor: "9007199254740993", currency: "USD", paidOn: "2030-01-01", submittedAt: "2030-04-30T23:00:00.123456Z",
   source: "tenant_portal", ownerPayee: null, bankTransactionId: null, proofFileId: null,
@@ -240,6 +241,45 @@ test("SQL is read-only, shares P1 eligibility verbatim, and does not infer repor
   }
   assert.match(BILLS_LIST_SQL_FOR_TEST, /ORDER BY b.due_date, b.lease_id LIMIT \$7/);
   assert.match(REPORTS_LIST_SQL_FOR_TEST, /ORDER BY p.group_order, p.submitted_at, p.id LIMIT \$7/);
+});
+
+test("PLT-54: due/overdue use each row's property date (the 今天 expression), never the organization date", () => {
+  for (const sql of [BILLS_SUMMARY_SQL_FOR_TEST, BILLS_LIST_SQL_FOR_TEST, REPORTS_SUMMARY_SQL_FOR_TEST, REPORTS_LIST_SQL_FOR_TEST]) {
+    // Same expression as b3-overdue-turns, on the lease's own property (l.property_id), no fallback.
+    assert.match(sql, /l\.id AS lease_id, l\.property_id AS lease_property_id/);
+    assert.match(sql, /\(\$3::timestamptz AT TIME ZONE lp\.timezone\)::date AS property_today/);
+    assert.match(sql, /JOIN properties lp ON lp\.id = t\.lease_property_id AND lp\.org_id = \$1/);
+    assert.match(sql, /GROUP BY lease_id, month, property_today/);
+    assert.match(sql, /WHEN b\.due_date < b\.property_today THEN 'overdue'/);
+    assert.match(sql, /WHEN b\.due_date = b\.property_today THEN 'due_today'/);
+    assert.match(sql, /CASE WHEN b\.due_date = b\.property_today THEN 'due_today' ELSE 'future' END/);
+    assert.doesNotMatch(sql, /c\.today THEN|selected_bill_(facts|states) b CROSS JOIN calendar/, "no due-state comparison against the organization calendar");
+    // PLT-54-AC3: month grouping by invoice period is unchanged.
+    assert.match(sql, /date_trunc\('month', i\.period_start\)::date AS month/);
+    // Planner materialization unchanged.
+    for (const cte of ["confirmed_allocations", "lease_targets", "eligible_leases", "eligible_invoices"]) assert.match(sql, new RegExp(`${cte} AS MATERIALIZED`));
+  }
+  assert.match(BILLS_LIST_SQL_FOR_TEST, /b\.property_today::text AS "propertyToday"/);
+  // The organization calendar remains only for the default month / report dates.
+  assert.match(BILLS_SUMMARY_SQL_FOR_TEST, /SELECT timezone, \(\$3::timestamptz AT TIME ZONE timezone\)::date AS today\s+FROM organizations WHERE id = \$1/);
+});
+
+test("PLT-54: list status uses the row's property date, not the summary's organization date; missing date is unavailable", async () => {
+  const rows = [
+    // Organization says 2030-05-01 (summary.today); these properties are a day either side.
+    { ...bill(1), dueDate: "2030-05-01", confirmedMinor: "0", propertyToday: "2030-05-02", has_pending_report: false },
+    { ...bill(2), dueDate: "2030-04-30", confirmedMinor: "0", propertyToday: "2030-04-30", has_pending_report: false },
+    { ...bill(3), dueDate: "2030-05-01", confirmedMinor: "1", propertyToday: "2030-04-30", has_pending_report: false },
+  ];
+  const result = await moneyMonthBills(session, { month }, { ...ON, transaction: mockTx(sql =>
+    ({ rows: sql === BILLS_SUMMARY_SQL_FOR_TEST ? [summary] : rows })) });
+  assert.equal(result.state, "ready"); if (result.state !== "ready") return;
+  assert.equal(result.today, "2030-05-01");
+  assert.deepEqual(result.rows.map(r => [r.status, r.propertyToday]), [["overdue", "2030-05-02"], ["due_today", "2030-04-30"], ["partial", "2030-04-30"]]);
+  for (const propertyToday of [undefined, null, "", "2030-02-30"]) {
+    assert.deepEqual(await moneyMonthBills(session, { month }, { ...ON, transaction: mockTx(sql =>
+      ({ rows: sql === BILLS_SUMMARY_SQL_FOR_TEST ? [summary] : [{ ...rows[0], propertyToday }] })) }), { state: "unavailable" });
+  }
 });
 
 test("other-report page cursor stays in the other group, with full timestamp precision", async () => {

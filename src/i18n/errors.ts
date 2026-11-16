@@ -34,7 +34,7 @@ export const ERRORS: Record<string, string> = {
   "errors.roomLease": "i_room_lease_exists",
   "errors.paymentState": "i_pay_state",
   "errors.proxyOwnerConfirmRequired": "i_forbidden",
-  "errors.proxyOwnerMismatch": "i_proxy_owner_mismatch", // P52 pending Ron
+  "errors.proxyOwnerMismatch": "i_proxy_owner_mismatch", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
   "errors.matchState": "i_match_state",
   "errors.currency": "i_currency",
   "errors.amountTooHigh": "i_amount_high",

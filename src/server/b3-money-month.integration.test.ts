@@ -61,9 +61,9 @@ async function session(userId: string, orgId: string, role: Role): Promise<Sessi
   return { userId, sessionId, orgId, liveOrgId: orgId, environment: "live", kind: "staff", role,
     locale: "en", calendar: "gregorian", leaseId: null, name: "Synthetic", email: "" };
 }
-async function property(orgId: string, currency = "TWD") {
+async function property(orgId: string, currency = "TWD", timezone = "Asia/Taipei") {
   return (await query<{ id: string }>(`INSERT INTO properties (org_id, name, country_code, currency, timezone)
-    VALUES ($1, 'Money month synthetic', 'TW', $2, 'Asia/Taipei') RETURNING id::text`, [orgId, currency])).rows[0].id;
+    VALUES ($1, 'Money month synthetic', 'TW', $2, $3) RETURNING id::text`, [orgId, currency, timezone])).rows[0].id;
 }
 async function org(): Promise<Org> {
   const orgId = (await query<{ id: string }>(`INSERT INTO organizations (name, country_code, default_currency, timezone)
@@ -173,18 +173,67 @@ test("MGT-141: underlying five buckets, paid wins over report, partial remaining
     ["1500", "1000", "500", "2030-05-02", "partial"]);
 });
 
-test("organization calendar, not property/server calendar: yesterday/today/tomorrow around local midnight", async () => {
+test("PLT-54: property calendar, not organization/server calendar: yesterday/today/tomorrow around local midnight", async () => {
+  // Organization Los Angeles (2030-04-30), property Asia/Taipei (2030-05-01).
   const o = await org(); await query("UPDATE organizations SET timezone = 'America/Los_Angeles' WHERE id = $1", [o.orgId]);
-  for (const due of ["2030-04-29", "2030-04-30", "2030-05-01"]) await invoice(await lease(o), { due });
+  for (const due of ["2030-04-30", "2030-05-01", "2030-05-02"]) await invoice(await lease(o), { due });
   const r = await bills(o.staff.admin, { month: MONTH }, { ...ON, now: () => new Date("2030-05-01T00:30:00Z") });
-  assert.equal(r.today, "2030-04-30"); assert.equal(r.timezone, "America/Los_Angeles");
-  assert.deepEqual(r.rows.map(x => x.status), ["overdue", "due_today", "future"]);
+  assert.equal(r.today, "2030-04-30", "organization date stays for month selection"); assert.equal(r.timezone, "America/Los_Angeles");
+  assert.deepEqual(r.rows.map(x => [x.status, x.propertyToday]),
+    [["overdue", "2030-05-01"], ["due_today", "2030-05-01"], ["future", "2030-05-01"]]);
+});
+
+test("PLT-54 both directions: two properties in different time zones agree with 今天 for the same invoice; month grouping unchanged", async () => {
+  const o = await org(); // organization UTC
+  const taipei = { ...o, property: await property(o.orgId, "TWD", "Asia/Taipei") };
+  const la = { ...o, property: await property(o.orgId, "TWD", "America/Los_Angeles") };
+  const tpeDueAhead = await lease(taipei), tpeOverdue = await lease(taipei), laDueBehind = await lease(la), laFuture = await lease(la);
+  await invoice(tpeDueAhead, { due: "2030-05-01" });
+  await invoice(tpeOverdue, { due: "2030-04-30" });
+  await invoice(laDueBehind, { due: "2030-04-30" });
+  await invoice(laFuture, { due: "2030-05-01" });
+  // Grouping is by invoice period: an April-period invoice due in May stays on April only.
+  const aprilOnly = await lease(taipei); await invoice(aprilOnly, { month: "2030-04", due: "2030-05-01" });
+  const cases = [
+    // UTC 04-30 20:00 = Taipei 05-01 04:00 (property ahead of org) = LA 04-30 13:00 (same date as org).
+    { instant: "2030-04-30T20:00:00Z", orgToday: "2030-04-30", expected: new Map<string, [MoneyMonthStatus, string]>([
+      [tpeDueAhead.id, ["due_today", "2030-05-01"]], // organization would say future
+      [tpeOverdue.id, ["overdue", "2030-05-01"]], // organization would say due_today
+      [laDueBehind.id, ["due_today", "2030-04-30"]], [laFuture.id, ["future", "2030-04-30"]],
+    ]), overdue: [[tpeOverdue.id, 1]] },
+    // UTC 05-01 03:00 = Taipei 05-01 11:00 (same date as org) = LA 04-30 20:00 (property behind org).
+    { instant: "2030-05-01T03:00:00Z", orgToday: "2030-05-01", expected: new Map<string, [MoneyMonthStatus, string]>([
+      [tpeDueAhead.id, ["due_today", "2030-05-01"]], [tpeOverdue.id, ["overdue", "2030-05-01"]],
+      [laDueBehind.id, ["due_today", "2030-04-30"]], // organization would say overdue
+      [laFuture.id, ["future", "2030-04-30"]], // organization would say due_today
+    ]), overdue: [[tpeOverdue.id, 1]] },
+  ] as const;
+  for (const { instant, orgToday, expected, overdue } of cases) {
+    const deps = { ...ON, now: () => new Date(instant) };
+    const r = await bills(o.staff.accountant, { month: MONTH }, deps);
+    assert.equal(r.today, orgToday); assert.equal(r.timezone, "UTC");
+    assert.deepEqual(new Map(r.rows.map(row => [row.leaseId, [row.status, row.propertyToday]])), expected);
+    assert.equal(r.rows.some(row => row.leaseId === aprilOnly.id), false);
+    assert.deepEqual(r.counts, { all: 4, paid: 0, reported: 0, overdue: 1, due_today: 2, future: 1 });
+    for (const filter of ["overdue", "due_today", "future"] as const) {
+      const filtered = await bills(o.staff.accountant, { month: MONTH, status: filter }, deps);
+      assert.deepEqual(filtered.rows.map(row => row.leaseId).sort(),
+        [...expected].filter(([, [status]]) => status === filter).map(([id]) => id).sort());
+    }
+    const april = await bills(o.staff.accountant, { month: "2030-04" }, deps);
+    assert.deepEqual(april.rows.map(row => [row.leaseId, row.month, row.status]), [[aprilOnly.id, "2030-04", "due_today"]]);
+    // 今天 (property calendar, R5) and the 收款 month page agree on every overdue invoice and its day count.
+    const turns = await staffOverdueTurns(o.staff.accountant, { ...deps, gates: async () => ({ enabled: true }) });
+    assert.equal(turns.state, "ready"); if (turns.state !== "ready") throw new Error("overdue reader not ready");
+    assert.deepEqual(turns.others.map(row => [row.leaseId, row.dayNumber]), overdue);
+    assert.deepEqual(r.rows.filter(row => row.status === "overdue").map(row => row.leaseId), overdue.map(([id]) => id));
+  }
 });
 
 test("MGT-141 real confirmed allocations: org midnight, tab counts, pending precedence, 今天 remaining, then fully paid", async () => {
   const o = await org();
   await query("UPDATE organizations SET timezone = 'America/Los_Angeles' WHERE id = $1", [o.orgId]);
-  // 今天 intentionally retains its approved property calendar; align it here to compare the same boundary.
+  // PLT-54: both readers use the property calendar; align the organization too so its date matches as well.
   await query("UPDATE properties SET timezone = 'America/Los_Angeles' WHERE id = $1", [o.property]);
   const partial = await lease(o), full = await lease(o);
   const inv = await invoice(partial, { due: "2030-05-02" });

@@ -32,9 +32,10 @@ const emergency = compile(source("src/app/o/approvals/emergency.tsx"), { "@/serv
 const uiMocks = { "../../../i18n": i18n, "../../../i18n/lanes/brand-v3": copy, "../../../i18n/repair-approval": repairCopy,
   "../../../server/repair-approval-rules": rules, "../../../app/o/approvals/decision-request": wire,
   "../../../app/o/approvals/emergency": emergency, "../illustrations": { Illustration }, "../wait-mark": { WaitMark },
-  "next/navigation": { useRouter: () => ({ refresh() {}, replace() {} }) } };
+  "next/navigation": { useRouter: () => ({ refresh() {}, replace() {} }) },
+  "next/link": { __esModule: true, default: ({ children, ...props }: React.PropsWithChildren<{ href: string }>) => <a {...props}>{children}</a> } };
 const ui = compile(source("src/components/v3/owner/home.tsx"), uiMocks);
-const Home = ui.OwnerHomeV3 as React.ComponentType<{ name: string; locale: i18n.Locale; state: OwnerHomeState; estimate?: string }>;
+const Home = ui.OwnerHomeV3 as React.ComponentType<{ name: string; locale: i18n.Locale; state: OwnerHomeState; estimate?: string; summary?: React.ReactNode; overviewHref?: string }>;
 const Panel = ui.EstimatePanel as React.ComponentType<{ row: EstimateRow; locale: i18n.Locale; onClose: () => void; onReturned: () => void }>;
 
 test("O-HOME / O-ROW / OWN-26-AC1…4: uncapped rows, NONAME, no summary or other task types", () => {
@@ -48,10 +49,26 @@ test("O-HOME / O-ROW / OWN-26-AC1…4: uncapped rows, NONAME, no summary or othe
     assert.doesNotMatch(html, /owner-primary|總覽|空租|續約|退租|確認已收到/);
   }
 });
-test("O-EMPTY / O-STATES / OWN-26-AC6…8 / P52: zero uses home title, errors never masquerade as zero", () => {
+test("FE-OWNEMPTY / O-EMPTY / O-STATES / OWN-26-AC6…8 / P52: zero lead sentence, errors never masquerade as zero", () => {
   const empty = renderToStaticMarkup(<Home name="林小姐" locale="zh-TW" state={{ status: "ready", rows: [] }} />);
-  assert.match(empty, /<h2[^>]*>首頁<\/h2>/); assert.match(empty, /data-v3-illustration="20"/);
-  assert.match(empty, /目前沒有要你處理的事，放心。/); assert.doesNotMatch(empty, /0 件|看總覽|owner-primary/);
+  assert.match(empty, /<h2[^>]*>林小姐，目前沒有要你處理的事。<\/h2>/); assert.doesNotMatch(empty, /首頁/);
+  assert.match(empty, /data-v3-illustration="20"/); assert.match(empty, /data-testid="owner-empty"/);
+  assert.match(empty, /目前沒有要你處理的事，放心。/); assert.doesNotMatch(empty, /0 件|看總覽|owner-primary|owner-summary/);
+  for (const name of ["", "  "]) { // OV-SH-NONAME: the headline drops the name part.
+    const noName = renderToStaticMarkup(<Home name={name} locale="zh-TW" state={{ status: "ready", rows: [] }} />);
+    assert.match(noName, /<h2[^>]*>目前沒有要你處理的事。<\/h2>/); assert.doesNotMatch(noName, /，目前沒有|首頁/);
+  }
+  const en = renderToStaticMarkup(<Home name="Lin" locale="en" state={{ status: "ready", rows: [] }} />);
+  assert.match(en, /<h2[^>]*>Lin, nothing needs you right now\.<\/h2>/);
+  assert.match(renderToStaticMarkup(<Home name="" locale="en" state={{ status: "ready", rows: [] }} />), /<h2[^>]*>Nothing needs you right now\.<\/h2>/);
+  // Order: lead, summary row only when its reader supplies data, then O-EMPTY with 「看總覽」 only when 總覽 is live.
+  const full = renderToStaticMarkup(<Home name="林小姐" locale="zh-TW" state={{ status: "ready", rows: [] }}
+    summary={<a href="/o/overview">summary</a>} overviewHref="/o/overview" />);
+  const at = (needle: string) => { const index = full.indexOf(needle); assert.ok(index >= 0, needle); return index; };
+  assert.ok(at("目前沒有要你處理的事。</h2>") < at('data-testid="owner-summary"'));
+  assert.ok(at('data-testid="owner-summary"') < at('data-testid="owner-empty"'));
+  assert.match(full, /<a class="owner-text-link" href="\/o\/overview">看總覽<\/a>/); assert.doesNotMatch(full, /owner-primary/);
+  assert.doesNotMatch(renderToStaticMarkup(<Home name="林小姐" locale="zh-TW" state={{ status: "error" }} summary="summary" />), /owner-summary/);
   const failed = renderToStaticMarkup(<Home name="林小姐" locale="zh-TW" state={{ status: "error" }} />);
   assert.match(failed, /這裡暫時讀不到，請再試一次。/); assert.match(failed, /再試一次/);
   assert.equal((failed.match(/<button/g) ?? []).length, 1);
@@ -209,6 +226,20 @@ test("O-HOME / OQ-055: OFF /o and approvals HTML equal baseline; ON preserves ex
   assert.ok(html.indexOf("owner-task-card") < html.indexOf("v3-owner-legacy"));
   const failed = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), { ...pageMocks(true), "@/server/owner-home-v3": { ownerHomeEstimates: async () => ({ status: "error" }) } })({ searchParams: Promise.resolve({}) }));
   assert.doesNotMatch(failed, /v3-owner-legacy|0 件/);
+});
+test("FE-OWNEMPTY: no interim tenant box without tenants; one 首頁 at most; OFF keeps the empty legacy table", async () => {
+  const noTenants = { "@/server/queries": { ownerHome: async () => [] } };
+  for (const pending of [[], [row]]) {
+    const html = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), { ...pageMocks(true, pending), ...noTenants })({ searchParams: Promise.resolve({}) }));
+    assert.doesNotMatch(html, /v3-owner-legacy|<table/); assert.doesNotMatch(html, /首頁/);
+    assert.equal(html.includes("林小姐，目前沒有要你處理的事。"), pending.length === 0);
+    assert.equal(html.includes('data-testid="owner-empty"'), pending.length === 0);
+  }
+  const before = execFileSync("git", ["show", "7adc7c343dd3f408655a815cf19b49b669e9f6ad:src/app/o/page.tsx"], { encoding: "utf8" });
+  const off = { ...pageMocks(false), ...noTenants };
+  const baseline = renderToStaticMarkup(await pageFunction(before, off)({ searchParams: Promise.resolve({}) }));
+  assert.equal(renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), off)({ searchParams: Promise.resolve({}) })), baseline);
+  assert.match(baseline, /<table class="t"><tbody><\/tbody><\/table>/);
 });
 test("OQ-055 / O-EST: ON redirects list and pending detail; decided and unknown stay read-only", async () => {
   await assert.rejects(pageFunction(source("src/app/o/approvals/page.tsx"), pageMocks(true))(), /REDIRECT:\/o$/);
