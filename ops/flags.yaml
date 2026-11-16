@@ -556,3 +556,12 @@ flags:
     global_kill: "no platform seed or allowlist of its own; OFF unless every org-level gate below holds; effective brand_v3 off or the B-026 vendor_account gate off also turns it OFF"
     org_override: "organizations.feature_flags.vendor_workbench must be JSON boolean true; effective brand_v3 (with brand_v2) and the B-026 vendor_account gate (with vendor_dispatch) must also be enabled for the same organization"
     activation: "B-063 / VEN-14 signed-in vendor workbench (V-HOME, V-JOBS, V-RECV, vendor shell) at /vendor-account. OFF by default everywhere; OFF keeps /vendor-account exactly the B-026 account page and the new /vendor-account/* routes 404; app.b063_vendor_workbench returns an empty list while OFF; first ON only for Ron's 4 internal orgs after V-12/V-13 linking acceptance, non-author QA and CEO exact-SHA GO; read-only, 0 outbound; rollback = org override to OFF. Owner and expiry are assumptions pending Ron"
+
+  vendor_job_v3:
+    owner: PE
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.vendor_job_v3 requires boolean true enabled and an allowed_org_ids array containing the organization; absent or malformed is OFF"
+    org_override: "organizations.feature_flags.vendor_job_v3 must be boolean true; effective brand_v3, vendor_dispatch and the enhanced vendor_link (platform allowlist + org flag) must also be enabled"
+    activation: "B-105 / R9-VEN vendor case on /v/[token] (Round 7 batch 3: RV-JOB-ACCEPT, RV-DECLINE, RV-JOB-WAIT, RV-PHOTOS, RV-PHOTOS-CLOSED). Staging only and not turned on for any real organization until every RV stage has its back end (GS-01); OFF keeps the V-TOKEN page byte-for-byte; app.b105_* gateways return NULL / refuse while OFF; 0 outbound; rollback = platform_settings / org override to OFF (rows kept). Owner and expiry are assumptions pending Ron"

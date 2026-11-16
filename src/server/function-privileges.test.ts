@@ -330,6 +330,33 @@ test("B-093 adds two owner gateways reusing the PR-015 admission verbatim, servi
   assert.match(read("scripts/check-function-privileges.sh"), /B-093 gateway ACL\/config mismatch/);
 });
 
+test("B-105 adds a revoked private table, four service-only gateways and three internal helpers, migration-owned", () => {
+  const sql = read("supabase/migrations/20261116160000_b105_vendor_case.sql");
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]),
+    ["b105_enabled", "b105_read_job", "b105_vendor_case_admitted", "b105_vendor_case", "b105_vendor_write_job", "b105_vendor_decide", "b105_vendor_attach_photo"]);
+  assert.equal((sql.match(/VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 7);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|DROP|ALTER FUNCTION|GRANT[^;]*\bON (?:TABLE )?(?:app|public)\.|READ ONLY/i);
+  assert.match(sql, /ALTER TABLE app\.b105_vendor_job_decisions ENABLE ROW LEVEL SECURITY;/);
+  assert.match(sql, /REVOKE ALL ON app\.b105_vendor_job_decisions FROM PUBLIC,anon,authenticated,service_role;/);
+  assert.match(sql, /\('vendor_job_v3','\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\) ON CONFLICT DO NOTHING/);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of ["b105_vendor_case(text,boolean)", "b105_vendor_case_admitted(text,boolean)", "b105_vendor_decide(text,boolean,uuid,text,date,text)", "b105_vendor_attach_photo(text,boolean,uuid,text,text,text,bigint,text)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`), signature);
+    assert.ok(read("supabase/rpc-allowlist.txt").includes(`# service-only: app.${signature}`), signature);
+  }
+  for (const signature of ["b105_enabled(uuid,boolean)", "b105_read_job(text,boolean)", "b105_vendor_write_job(text,boolean)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated,service_role;`), signature);
+    assert.ok(!compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}`), signature);
+  }
+  assert.equal((compact.match(/GRANT/g) ?? []).length, 4);
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(sql, /SET LOCAL statement_timeout='60s'/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-105 gateway ACL\/config mismatch/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-105 table privilege leaked/);
+});
+
 test("MF-3 / MGT-151 adds one RLS table with no application grants and two service-only migration-owned gateways", () => {
   const sql = read("supabase/migrations/20261116140000_mf3_deposit_topup.sql");
   const b093 = read("supabase/migrations/20261115200000_b093_owner_decided.sql");

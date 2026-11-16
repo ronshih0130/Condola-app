@@ -146,7 +146,26 @@ test("B-026 vendor estimate submission and manager comparison", async t => {
       // B-085 part 2 / app #180 adds the brand_v3 V-TOKEN shell and notification resolver.
       // Strip only its exact reviewed imports, reads, wrapper and call-site changes before B-035.
       // B-101 (VEN-31 vendor LINE sign-in) adds a gated entry to the V-TOKEN shell; strip exactly those lines too.
+      // B-105 (vendor_job_v3 RV case) adds two imports, one gated case read and one early case return; strip exactly those.
       const withoutReviewedAdditions = (source: string) => source
+        .replace('import { loadVendorCase, vendorCaseStage } from "@/server/b105-vendor-case";\n', "")
+        .replace('import { VendorCaseView } from "@/components/v3/vendor/vendor-case";\n', "")
+        .replace(`  // B-105: the RV case replaces the V-TOKEN job content only when vendor_job_v3 admits this shared link.
+  const vendorCase = tokenBrand && job.vendorLink?.sharingApproved ? await loadVendorCase(token) : null;
+`, "")
+        .replace(`  if (tokenBrand && vendorCase) {
+    const heading = [tokenBrand.property, job.title].filter(Boolean).join("・") || t("i_vendor_page_title");
+    const caseView = vendorCase.state === "ready" ? <VendorCaseView locale={prefs.locale} token={token} heading={heading}
+      company={vendorCase.value.company} stage={vendorCaseStage(vendorCase.value)} presetDate={null}
+      scheduledOn={vendorCase.value.scheduledOn} ownerWaitVersion={vendorCase.value.ownerWaitVersion}
+      estimates={vendorCase.value.estimates} /> : <VendorCaseView locale={prefs.locale} token={token} heading={heading}
+      company="" stage="unavailable" presetDate={null} scheduledOn={null} ownerWaitVersion={null} estimates={false} />;
+    const caseMatch = await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;
+    return <VendorTokenShell locale={prefs.locale} context={tokenBrand} notificationHref={notificationEntry?.href ?? null}
+      loginEntry={caseMatch} title={job.title} address={job.address} window={job.window} status=""
+      reported={false} canReport={false} caseView={caseView}>{null}</VendorTokenShell>;
+  }
+`, "")
         .replace('import { VendorLineMatchEntry } from "@/components/v3/vendor/line-match-entry";\n', "")
         .replace('  const matchEntry = tokenBrand && await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;\n', "")
         .replace(/\n +loginEntry=\{matchEntry\}/, "")

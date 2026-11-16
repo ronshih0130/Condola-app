@@ -123,6 +123,18 @@
     "reason": "Vendor bearer authority; no member session",
     "sha256": "93b0ee792b3461c19897efd5d1ac76e4b5b40da1695cd08c684f7a46ef381f2f"
   },
+  "src/app/api/vendor-jobs/case-decision/route.ts#POST": {
+    "reason": "B-105 vendor bearer authority via the service-only app.b105_vendor_decide gateway (token-only admission, vendor_job_v3); no member session",
+    "sha256": "aa9e903f8195e757a60b721e19af8ea0649bfd47a2e9d0df9589df6e80213ea5"
+  },
+  "src/app/api/vendor-jobs/case-photos/confirm/route.ts#POST": {
+    "reason": "B-105 vendor bearer authority: upload grant bound to the token hash, then the service-only app.b105_vendor_attach_photo gateway (token-only admission, vendor_job_v3); no member session",
+    "sha256": "75a4480dc8d562a707baec34fca35101655abd02d49e3b58a7c4dfa3fc9591cc"
+  },
+  "src/app/v/[token]/photos/page.tsx#VendorCasePhotosPage": {
+    "reason": "B-105 vendor bearer page: the same token gateways as /v/[token] (loadVendorJob, vendorTokenBrand) plus the service-only app.b105_vendor_case read; 404 unless vendor_job_v3 admits this token; no staff role or session",
+    "sha256": "1a5e0002149fc635ccd10106d5e55297ae600f3fdd10ba9f38667a858ce1df87"
+  },
   "src/app/api/vendor-job-response/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
     "sha256": "536cc461639162d3be15323bb9f6fd751e0ba74c775500c32be478ff3f4dabdb"
@@ -284,8 +296,8 @@
     "sha256": "7a80824228f92e5cd7dd26c266b6ca00c4e76a73d3ee27aae9791f9ab5212cfd"
   },
   "src/app/v/[token]/page.tsx#VendorJobPage": {
-    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93.",
-    "sha256": "614ae70bb78aa9ac0a4b629e7c958accec3060222c5302982073426620a59609"
+    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93. B-105: adds one vendor_job_v3 case read through the service-only app.b105_vendor_case bearer gateway and an early return to the RV case view; still token-only, no staff role or session.",
+    "sha256": "659c69fcba9804f8bd422604f157654cf35e92d82460a5507aebd74f48e0c0f7"
   },
   "src/server/notification-center.ts#centerVendorAdmission": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",

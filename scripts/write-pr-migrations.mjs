@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116160000_b105_vendor_case.sql": {
+    addOnly: true,
+    reason: "B-105 / R9-VEN Round 7 batch 3 (GS-25, GS-26, GS-27, GS-49, GS-51; MGT-104-AC2/AC4): vendor case accept/decline and before/after photo sets on /v/[token]. Adds B-105's own default-OFF gate (platform_settings.vendor_job_v3 seeded {enabled:false, allowed_org_ids:[]} with ON CONFLICT DO NOTHING; no existing value changed), one private table app.b105_vendor_job_decisions (RLS on, all privileges revoked from PUBLIC/anon/authenticated/service_role), and migration-owned SECURITY DEFINER functions with search_path pg_catalog, pg_temp: service-only gateways app.b105_vendor_case (read), app.b105_vendor_case_admitted (admission probe), app.b105_vendor_decide and app.b105_vendor_attach_photo (writes), plus internal helpers app.b105_enabled, app.b105_read_job and app.b105_vendor_write_job with no EXECUTE for any API role. Admission is the token bearer (app.open_vendor_job) plus the enhanced case-collaboration link rules; the attach writer inserts one files row and one ticket_attachments row (this job, non-internal, phase before/after) in a single statement while the case is open and accepted, and refuses every existing object it does not own. No existing function, table grant, policy, column, constraint or data change; flags stay OFF; 0 outbound. Not RPC-exposed.",
+  },
   "supabase/migrations/20261116150000_lpq21_sequence_grants.sql": {
     addOnly: false,
     reason: "LPQ-21 / B-108 (Ron 2026-11-16 「LPQ-21 併入 PR」): REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, PUBLIC, plus ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, PUBLIC (no-op where there is no postgres role; fails closed if the runner cannot act for it). Not add-only (it removes privileges); authenticated/service_role, tables, functions, policies, data and flags unchanged.",
