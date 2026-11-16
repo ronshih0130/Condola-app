@@ -286,6 +286,21 @@ BEGIN
   END IF;
  END LOOP;
 END $b109_gateways$;
+-- B-076a service-only phone-history reader ACL/config probe (migration-owned, VOLATILE, no table).
+DO $b076a_gateway$
+DECLARE fn record;
+BEGIN
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b076a_phone_history(uuid,uuid,text,uuid,uuid,bigint,integer)'::regprocedure;
+ IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+  OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+  OR has_function_privilege('anon',fn.oid,'EXECUTE')
+  OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+    WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-076a gateway ACL/config mismatch';
+ END IF;
+END $b076a_gateway$;
 DO $b104_helpers$
 DECLARE signature text; fn record; table_name text; role_name text;
 BEGIN

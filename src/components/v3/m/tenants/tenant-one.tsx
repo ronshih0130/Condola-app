@@ -9,6 +9,8 @@ import { statusKey } from "../../../ui";
 import { EmptyState } from "../../../empty-state";
 import { RoleAvatar } from "../../role-avatar";
 import { TenantsLoading } from "./tenants";
+import { phoneHistoryHref } from "./phone-history";
+import { phoneHistoryCopy } from "../../../../i18n/lanes/brand-v3-phone-history";
 
 export const TenantOneLoading = TenantsLoading;
 export function tenantOneLead(data: TenantOneReady, locale: Locale) {
@@ -41,11 +43,12 @@ export function TenantOneView({ data,locale,id,canAddLease=false }: {
         <div><dt>{c.line}</dt><dd>{data.lineLinked ? c.joined : c.notJoined}</dd></div>
         {data.canViewContact && <div><dt>{d.email}</dt><dd>{data.email || c.absent}</dd></div>}
       </dl>
+      {data.phoneHistory && <Link className="v3-tenant-one-history" href={phoneHistoryHref(id)} data-testid="phone-history-link">{phoneHistoryCopy(locale).entry}</Link>}
     </section>
     {data.canViewContact && data.mobileRequired && <aside className="v3-tenant-one-note"><p>{d.note}</p></aside>}
-    {/* MGT-76 change / pending / history controls intentionally absent: this
-        checkout has no such action or reader. Never wire B-015's immediate
-        name/email/phone editor into the OTP design or invent a send path. */}
+    {/* MGT-76 change / pending controls intentionally absent: this checkout has no such action.
+        Never wire B-015's immediate name/email/phone editor into the OTP design or invent a send
+        path. The history link above is B-076a (B-015 direct edits only). */}
     {!data.leases.length ? <div className="v3-tenants-card v3-tenants-empty"><EmptyState id="TENID" locale={locale} />
       {canAddLease && <Link className="btn" href="/m/leases/new">{t("es_TENID_action")}</Link>}
     </div> : <section className="v3-tenants-card v3-tenant-one-leases" aria-labelledby="tenant-leases-title">

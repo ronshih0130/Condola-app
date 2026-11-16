@@ -191,3 +191,10 @@ test("B-109 shared-meter gateways are inventoried service-only, never authentica
   assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b109_")));
   assert.doesNotMatch(read("supabase/migrations/20261116180000_b109_shared_meter.sql"), /FUNCTION public\./);
 });
+
+test("B-076a phone-history reader is inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  assert.ok(allow.includes("# service-only: app.b076a_phone_history(uuid,uuid,text,uuid,uuid,bigint,integer)"));
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b076a_")));
+  assert.doesNotMatch(read("supabase/migrations/20261116170000_b076a_phone_history.sql"), /FUNCTION public\./);
+});
