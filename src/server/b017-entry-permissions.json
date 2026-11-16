@@ -446,5 +446,7 @@
   "src/server/b3-tenant-one.ts#brandTenantOne": "props.view",
   "src/server/b3-property.ts#brandProperty": "props.view",
   "src/server/b3-leases.ts#brandLeases": "leases.edit",
-  "src/server/b3-repair-turns.ts#staffRepairTurns": "tickets.update"
+  "src/server/b3-repair-turns.ts#staffRepairTurns": "tickets.update",
+  "src/server/b093-owner-decided.ts#ownerDecidedList": null,
+  "src/server/b093-owner-decided.ts#ownerDecidedTicket": null
 }

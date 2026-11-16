@@ -75,6 +75,7 @@ test("OV-SH-PHONE / PLT-46-AC1: owner OFF preserves old readers, order, markup a
       "@/server/auth": { ownerPrivacy: () => assert.fail("OFF must not read firm") },
       "@/server/owner-finance-replies": { ownerReceiptTitleView: () => assert.fail("OFF must not read receipt title") },
       "@/server/notification-center": { centerSessionAdmission: () => assert.fail("OFF must not read notification admission") },
+      "@/server/repair-approval": { repairApprovalsEnabled: () => assert.fail("OFF must not read the 核准紀錄 rollout") },
       "@/server/nav-v3": nav, "@/components/owner-nav": ui.OwnerNav, "@/components/v3/shell/owner-shell": ui.OwnerShell,
     };
     const render = async (text: string) => {
@@ -91,7 +92,7 @@ test("OV-SH-PHONE / PLT-46-AC1: owner OFF preserves old readers, order, markup a
 });
 
 test("OV-SH-ORG / OV-SH-NOTI: ON uses session firm and actual admission; read failures propagate", async () => {
-  for (const admission of ["enabled", "busy", "disabled", "denied"] as const) for (const receiptTitleAvailable of [false, true]) for (const portals of [undefined, { owner: false, tenant: false }, { owner: true, tenant: false }, { owner: false, tenant: true }, { owner: true, tenant: true }]) {
+  for (const admission of ["enabled", "busy", "disabled", "denied"] as const) for (const receiptTitleAvailable of [false, true]) for (const decided of [true, false, "throws"] as const) for (const portals of [undefined, { owner: false, tenant: false }, { owner: true, tenant: false }, { owner: false, tenant: true }, { owner: true, tenant: true }]) {
     const actor = { ...owner, portals };
     const ui = components("zh-TW", "/o", "avatar");
     const calls: string[] = []; let fail = false;
@@ -103,11 +104,14 @@ test("OV-SH-ORG / OV-SH-NOTI: ON uses session firm and actual admission; read fa
       "@/server/auth": { ownerPrivacy: async (id: string) => { assert.equal(id, owner.orgId); calls.push("firm"); return { name: "安居代管" }; } },
       "@/server/notification-center": { centerSessionAdmission: async (s: Session) => { assert.equal(s, actor); calls.push("admission"); if (fail) throw new Error("reader unavailable"); return admission; } },
       "@/server/owner-finance-replies": { ownerReceiptTitleView: async (s: Session) => { assert.equal(s, actor); calls.push("receipt-title"); return receiptTitleAvailable ? { title: null, revisions: [] } : null; } },
+      "@/server/repair-approval": { repairApprovalsEnabled: async (id: string) => { assert.equal(id, owner.orgId); calls.push("decided"); if (decided === "throws") throw new Error("flag read failed"); return decided; } },
       "@/server/nav-v3": nav, "@/components/owner-nav": ui.OwnerNav, "@/components/v3/shell/owner-shell": ui.OwnerShell,
     };
     const Layout = compile(source("src/app/o/layout.tsx"), mocks).default as (p: { children: React.ReactNode }) => Promise<React.ReactNode>;
     const html = renderToStaticMarkup(await Layout({ children: <p>retained</p> }));
-    assert.deepEqual(calls, ["firm", "admission", "receipt-title"]);
+    assert.deepEqual(calls, ["firm", "admission", "receipt-title", "decided"]);
+    // RO-MORE / OV-SH-MORE (B-093): 核准紀錄 only while its page is live; a failed read hides it.
+    assert.equal(html.includes('href="/o/decided"'), decided === true);
     assert.equal(html.includes('href="/o/receipt-title"'), receiptTitleAvailable);
     assert.equal(html.includes('data-testid="switch-role"'), Boolean(portals?.owner && portals.tenant));
     assert.match(html, /owner-shell-v3/); assert.match(html, /安居代管/); assert.match(html, /retained/);
@@ -209,4 +213,27 @@ test("OV-SH-PHONE: mounted marker, title-only lead, and surname initials in both
     assert.match(html, /<div class="shell-phone-lead"><h1>[^<]+<\/h1><\/div>/);
     assert.equal((html.match(new RegExp(`party-name" aria-hidden="true">${initial}</span>`, "gu")) ?? []).length, 2);
   }
+});
+
+test("RO-MORE / OV-SH-MORE / OWN-35 (B-093): 核准紀錄 tops 更多 only when live, and owns its list and decided-ticket paths", () => {
+  for (const locale of ["zh-TW", "en"] as const) for (const decided of [false, true]) {
+    const navigation = nav.ownerNavigationV3({ ...owner, locale }, properties, ["allowed"], "enabled", true, decided);
+    const ids = navigation.more.map(item => item.id);
+    assert.deepEqual(ids, [...(decided ? ["decided"] : []), "receipt-title", "repair-policy-allowed"]);
+    assert.deepEqual(navigation.areas.map(area => area.id), ["home", "statements", "notifications"]);
+    if (!decided) { assert.ok(!navigation.more.some(item => item.href === "/o/decided")); continue; }
+    const title = locale === "en" ? "Approval history" : "核准紀錄";
+    assert.deepEqual(navigation.more[0], { id: "decided", href: "/o/decided", label: title, icon: "doc" });
+    const menu = renderOwner({ locale, open: "more", navigation }).split('data-testid="more-menu"')[1].split('<nav class="tabbar"')[0];
+    assert.equal([...menu.matchAll(/href="([^"]+)"/g)].map(m => m[1])[0], "/o/decided");
+    for (const path of ["/o/decided", "/o/approvals/10000000-0000-4000-8000-0000000000aa"]) {
+      const page = renderOwner({ locale, path, navigation });
+      assert.ok(page.includes(`<div class="shell-phone-lead"><h1>${title}</h1></div>`), path);
+      assert.match(page, /data-area="decided" class="on" aria-current="page"/);
+      assert.match(page, /data-area="more" class="on" aria-current="page"/);
+    }
+  }
+  // Without the entry, an approvals path keeps today's 首頁 fallback.
+  const legacy = renderOwner({ path: "/o/approvals/10000000-0000-4000-8000-0000000000aa" });
+  assert.ok(legacy.includes('<div class="shell-phone-lead"><h1>首頁</h1></div>'));
 });

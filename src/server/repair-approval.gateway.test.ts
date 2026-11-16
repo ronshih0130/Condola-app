@@ -38,6 +38,10 @@ test("B-021 production callers are confined to the owner decision and scoped vie
     "components/v3/owner/home.tsx",
     "server/owner-home-v3.ts",
     "app/o/approvals/page.tsx",
+    // B-093 RO-MORE: the rendering control only (repairApprovalsEnabled) decides whether 核准紀錄 is listed.
+    "app/o/layout.tsx",
+    // B-093 RO-DECIDED view: existing result/field labels from i18n/repair-approval only (no service import).
+    "components/v3/o/decided/decided.tsx",
     "server/vendor-job.ts",
     "server/vendor-repair.ts",
   ].sort());
