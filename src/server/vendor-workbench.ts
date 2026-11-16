@@ -136,19 +136,24 @@ export async function currentVendorWorkbenchView(orgId: string, locale: Locale) 
 }
 
 /**
- * A row opens that job's existing page (/v/[token]). Only for a job both B-026 reads admit for this account
- * in the open workbench organization; the token is read server-side and only for that one job.
+ * A row opens that job's existing page (/v/[token]). The admission is the same as the other workbench routes:
+ * no account session (a job token alone included) → sign in; terms not current → consent; a signed-in person
+ * who is not a vendor account → B1-NOPERM; workbench not open → 404. Then only a job both B-026 reads admit for
+ * this account in the open workbench organization; the token is read server-side and only for that one job.
  */
-export async function vendorWorkbenchJobToken(credential: string | undefined, preferredOrg: string | undefined, jobId: string): Promise<string | null> {
-  if (!UUID.test(jobId)) return null;
-  const access = await vendorWorkbenchAccess(credential, preferredOrg).catch(() => null);
-  if (access?.state !== "on" || !credential) return null;
+export type VendorJobOpen = { state: "open"; token: string } | { state: "login" | "consent" | "noperm" | "missing" };
+export async function vendorWorkbenchJobOpen(credential: string | undefined, preferredOrg: string | undefined, jobId: string): Promise<VendorJobOpen> {
+  const access = await vendorWorkbenchAccess(credential, preferredOrg).catch(() => ({ state: "off" as const }));
+  if (access.state === "anonymous") return { state: "login" };
+  if (access.state === "consent") return { state: "consent" };
+  if (access.state === "other") return { state: "noperm" };
+  if (access.state !== "on" || !credential || !UUID.test(jobId)) return { state: "missing" };
   const view = await vendorWorkbenchView(credential, access.scope.orgId, "zh-TW");
-  if (view.status !== "ready" || ![...view.jobs, ...view.payments].some(row => row.jobId === jobId.toLowerCase() && row.href)) return null;
+  if (view.status !== "ready" || ![...view.jobs, ...view.payments].some(row => row.jobId === jobId.toLowerCase() && row.href)) return { state: "missing" };
   const token = await svc(null, async client => (await client.query<{ token: string }>(
     `SELECT s.token FROM public.repair_vendor_secrets s JOIN public.repair_vendor_jobs j ON j.id=s.job_id
       WHERE s.job_id=$1 AND j.org_id=$2`, [jobId.toLowerCase(), access.scope.orgId])).rows[0]?.token);
-  return token && vendorTokenAcceptable(token.trim()) ? token.trim() : null;
+  return token && vendorTokenAcceptable(token.trim()) ? { state: "open", token: token.trim() } : { state: "missing" };
 }
 
 export function cookieFrom(request: Request, name: string) {

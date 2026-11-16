@@ -76,7 +76,7 @@ const openRoutes: Record<string, Record<string, string>> = {
   "(line)/o/liff/route.ts": { GET: "Public B-033 bootstrap outside protected layouts; strict OFF 404 with Email link; read-only configuration" },
   "api/line/webhook/route.ts": { POST: "B-033 raw-body HMAC signature and selected-OA/org flag gate; provider webhook has no human session" },
   "api/vendor-account-staff/route.ts": { GET: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope", POST: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope" },
-  "vendor-account/jobs/[jobId]/route.ts": { GET: "B-063 row opener: account cookie identity plus current consent via vendorWorkbenchAccess (B-026 gateways); read-only, 404 otherwise; no persona or session writes" },
+  "vendor-account/jobs/[jobId]/route.ts": { GET: "B-063 row opener: account cookie identity plus current consent via vendorWorkbenchAccess (B-026 gateways); no session or token-only → sign-in, stale terms → consent, non-vendor → B1-NOPERM route, else 404; read-only, no persona or session writes" },
   "api/vendor-account/route.ts": { GET: "Account cookie identity plus current consent via authorizeVendorAccountRequest; no persona or session writes", POST: "Account cookie identity plus current consent via authorizeVendorAccountRequest; strict same-origin mutation" },
   "api/vendor-estimate/route.ts": { POST: "B-026 scoped vendor token and flag gateway, no user session" },
   "join/[token]/route.ts": { GET: "Public B-033 unit LINE invite landing; token in the path only, no account session, no outbound" },

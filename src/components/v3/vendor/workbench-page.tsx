@@ -1,7 +1,7 @@
 import React, { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import type { Locale } from "../../../i18n";
-import { VENDOR_WORKBENCH } from "../../../lib/vendor-workbench-paths";
+import { VENDOR_WORKBENCH, VENDOR_WORKBENCH_CONSENT, VENDOR_WORKBENCH_LOGIN } from "../../../lib/vendor-workbench-paths";
 import { currentVendorWorkbench, currentVendorWorkbenchView, type VendorWorkbenchScope } from "../../../server/vendor-workbench";
 import { VendorAccountSync } from "./account-sync";
 import { VendorShellV3 } from "./workbench-shell";
@@ -33,8 +33,8 @@ export function VendorWorkbenchScreen({ scope, screen, locale }: { scope: Vendor
 export async function vendorWorkbenchRoute(locale: Locale): Promise<{ scope: VendorWorkbenchScope } | { page: React.ReactElement }> {
   const access = await currentVendorWorkbench();
   if (access.state === "on") return { scope: access.scope };
-  if (access.state === "anonymous") redirect(`/login?next=${encodeURIComponent(VENDOR_WORKBENCH.home)}`);
-  if (access.state === "consent") redirect(`/consent?next=${encodeURIComponent(VENDOR_WORKBENCH.home)}`);
+  if (access.state === "anonymous") redirect(VENDOR_WORKBENCH_LOGIN);
+  if (access.state === "consent") redirect(VENDOR_WORKBENCH_CONSENT);
   if (access.state === "other") return { page: <VendorNoPerm locale={locale} /> };
   notFound();
 }

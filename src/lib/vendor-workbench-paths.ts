@@ -4,3 +4,6 @@ export const VENDOR_WORKBENCH = {
 } as const;
 export const vendorWorkbenchJobHref = (jobId: string) => `${VENDOR_WORKBENCH.jobs}/${encodeURIComponent(jobId)}`;
 export const isVendorWorkbenchPath = (path: string) => path === VENDOR_WORKBENCH.home || path.startsWith(`${VENDOR_WORKBENCH.home}/`);
+/** Where the workbench routes send someone with no account session, or with terms that are not current. */
+export const VENDOR_WORKBENCH_LOGIN = `/login?next=${encodeURIComponent(VENDOR_WORKBENCH.home)}`;
+export const VENDOR_WORKBENCH_CONSENT = `/consent?next=${encodeURIComponent(VENDOR_WORKBENCH.home)}`;

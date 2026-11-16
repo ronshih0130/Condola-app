@@ -151,29 +151,43 @@ test("vendorWorkbenchView: one B-026 history read plus the B-063 gateway by sess
   assert.equal(noCookie.calls.length, 0);
 });
 
-test("Row 查看 opens only this account's admitted job, pinned to the open organization, never another's", async () => {
+test("Row 查看 opens only this account's admitted job; admission matches the sibling workbench routes", async () => {
   const opened = (fake: Fake, jobId = JOB, credential: string | undefined = CREDENTIAL) => {
     const loaded = load({ history: history(undefined, [job(JOB, "open"), job(JOB2, "resolved")]),
       gateway: [{ jobId: JOB, property: "p", currency: "TWD", waitingMinor: null, openable: true }, { jobId: JOB2, property: "p", currency: "TWD", waitingMinor: null, openable: true }], ...fake });
-    return { loaded, result: (loaded.module.vendorWorkbenchJobToken as (c?: string, o?: string, j?: string) => Promise<string | null>)(credential, ORG, jobId) };
+    return { loaded, result: (loaded.module.vendorWorkbenchJobOpen as (c?: string, o?: string, j?: string) => Promise<{ state: string; token?: string }>)(credential, ORG, jobId) };
   };
   const own = opened({});
-  assert.equal(await own.result, TOKEN);
+  assert.deepEqual(await own.result, { state: "open", token: TOKEN });
   const secret = own.loaded.calls.find(c => c.sql.includes("repair_vendor_secrets"))!;
   assert.match(secret.sql, /WHERE s\.job_id=\$1 AND j\.org_id=\$2/); assert.deepEqual(secret.params, [JOB, ORG]);
-  assert.equal(await opened({}, JOB.toUpperCase()).result, TOKEN);
-  for (const [fake, jobId, credential, why] of [
-    [{}, "not-a-uuid", CREDENTIAL, "malformed id"], [{}, JOB2, CREDENTIAL, "a job with nothing open or waiting"],
-    [{}, "33333333-3333-4333-8333-333333333333", CREDENTIAL, "another account's job"], [{ flag: false }, JOB, CREDENTIAL, "workbench OFF"],
-    [{ brand: false }, JOB, CREDENTIAL, "brand_v3 OFF"], [{ actor: denied }, JOB, TOKEN, "a job token is not an account session"],
-    [{}, JOB, "", "no session"], [{ token: null }, JOB, CREDENTIAL, "no stored link"], [{ token: "short" }, JOB, CREDENTIAL, "malformed stored link"],
-    [{ gateway: [{ jobId: JOB, property: "p", currency: null, waitingMinor: null, openable: false }] }, JOB, CREDENTIAL, "gateway: not openable"],
-    [{ gateway: [] }, JOB, CREDENTIAL, "gateway does not admit it"],
-  ] as [Fake, string, string | undefined, string][]) {
+  assert.deepEqual(await opened({}, JOB.toUpperCase()).result, { state: "open", token: TOKEN });
+  for (const [fake, jobId, credential, state, why] of [
+    [{ actor: denied }, JOB, TOKEN, "login", "a job token is not an account session"], [{}, JOB, "", "login", "no session"],
+    [{ consent: false }, JOB, CREDENTIAL, "consent", "terms not current"], [{ history: history([]) }, JOB, CREDENTIAL, "noperm", "signed in, not a vendor account"],
+    [{ flag: false }, JOB, CREDENTIAL, "missing", "workbench OFF"], [{ brand: false }, JOB, CREDENTIAL, "missing", "brand_v3 OFF"],
+    [{ history: new Error("down") }, JOB, CREDENTIAL, "missing", "a failed admission read is never open"],
+    [{}, "not-a-uuid", CREDENTIAL, "missing", "malformed id"], [{}, JOB2, CREDENTIAL, "missing", "a job with nothing open or waiting"],
+    [{}, "33333333-3333-4333-8333-333333333333", CREDENTIAL, "missing", "another account's job"],
+    [{ token: null }, JOB, CREDENTIAL, "missing", "no stored link"], [{ token: "short" }, JOB, CREDENTIAL, "missing", "malformed stored link"],
+    [{ gateway: [{ jobId: JOB, property: "p", currency: null, waitingMinor: null, openable: false }] }, JOB, CREDENTIAL, "missing", "gateway: not openable"],
+    [{ gateway: [] }, JOB, CREDENTIAL, "missing", "gateway does not admit it"],
+  ] as [Fake, string, string | undefined, string, string][]) {
     const { loaded, result } = opened(fake, jobId, credential);
-    assert.equal(await result, null, why);
+    assert.deepEqual(await result, { state }, why);
     if (why !== "no stored link" && why !== "malformed stored link") assert.ok(!loaded.calls.some(c => c.sql.includes("repair_vendor_secrets")), `${why}: no secret read`);
   }
+});
+
+test("The opener route maps each admission to the sibling routes' outcome and never leaks a token on denial", async () => {
+  const route = readFileSync("src/app/vendor-account/jobs/[jobId]/route.ts", "utf8");
+  assert.match(route, /if \(result\.state === "open"\) return see\(`\/v\/\$\{encodeURIComponent\(result\.token\)\}`\);/);
+  assert.match(route, /if \(result\.state === "login"\) return see\(VENDOR_WORKBENCH_LOGIN\);/);
+  assert.match(route, /if \(result\.state === "consent"\) return see\(VENDOR_WORKBENCH_CONSENT\);/);
+  assert.match(route, /if \(result\.state === "noperm"\) return see\(VENDOR_WORKBENCH\.jobs\);/);
+  assert.match(route, /return new Response\(null, \{ status: 404, headers \}\);\n\}/);
+  assert.equal(paths.VENDOR_WORKBENCH_LOGIN, "/login?next=%2Fvendor-account");
+  assert.equal(paths.VENDOR_WORKBENCH_CONSENT, "/consent?next=%2Fvendor-account");
 });
 
 test("cookieFrom reads exactly the named cookie", () => {
