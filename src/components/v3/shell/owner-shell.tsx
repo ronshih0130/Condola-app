@@ -26,6 +26,8 @@ export function OwnerShellV3({ children, locale, name, firm, navigation, canSwit
     brand={navCopy.brandParty.replace("{brand}", makeT(locale)("i_brand")).replace("{party}", party)}
     context={(name.trim() ? copy.context : copy.contextNoName).replace("{name}", name).replace("{company}", firm)}
     title={current?.label ?? copy.home}
+    // OV-SH-DESK-HEAD: on 首頁 the O-HOME sentence is the page's one h1 and sand lead; the title row keeps 首頁.
+    lead={current?.id === "home" ? null : undefined}
     menuContext={brandV3ShellCopy(locale).menuContext.replace("{role}", party).replace("{company}", firm)}
     menuExtra={canSwitchToTenant ? <a className="shell-account" role="menuitem" data-testid="switch-role" href="/t">{makeT(locale)("i_switch_role_tenant")}</a> : null}
     notification={navigation.areas.find(area => area.id === "notifications")}>

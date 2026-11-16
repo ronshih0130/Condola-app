@@ -40,12 +40,21 @@ export function vendorShellCurrent(path: string) {
   return undefined;
 }
 
-/** Page titles: V-HOME 工作台 (its lead, see the copy lane), V-JOBS 工單, V-RECV its own-status list title, 我的帳號. */
+/**
+ * The sand lead (phone and, per OV-SH-DESK-HEAD, desktop): V-HOME 工作台 (its lead, see the copy lane), V-JOBS 工單,
+ * V-RECV its own-status list title, 我的帳號. The desktop title row shows the area name instead (vendorShellArea).
+ */
 export function vendorShellTitle(current: ReturnType<typeof vendorShellCurrent>, locale: Locale) {
   if (current === "jobs") return vendorWorkbenchCopy(locale).jobsTab;
   if (current === "payments") return ownStatusCopy(locale).vendorListTitle;
   if (current === "account") return makeT(locale)("i_account");
   return vendorTokenCopy(locale).workbench;
+}
+
+/** OV-SH-DESK-HEAD: the desktop title row names the area (工作台, 工單, the V-RECV tab, 我的帳號 as its own page). */
+export function vendorShellArea(current: ReturnType<typeof vendorShellCurrent>, locale: Locale) {
+  if (current === "payments") return ownStatusCopy(locale).vendorTab;
+  return vendorShellTitle(current, locale);
 }
 
 export function VendorShellV3({ children, locale, name, company }: { children: ReactNode; locale: Locale; name: string; company: string }) {
@@ -62,7 +71,9 @@ export function VendorShellV3({ children, locale, name, company }: { children: R
     <ShellV3 areas={[...areas, ...more]} tabs={tabs} path={path} currentId={current} moreOn={current === "account"} moreEntries={more}
       locale={locale} name={name} party="v" company={company} brand={token.brand}
       context={(name.trim() ? token.context : token.contextNoName).replace("{name}", name.trim()).replace("{company}", company)}
-      title={vendorShellTitle(current, locale)}
+      title={vendorShellArea(current, locale)}
+      // 我的帳號 hosts the B-026 page unchanged, which brings its own single h1: no second sand heading there.
+      lead={current === "account" ? null : vendorShellTitle(current, locale)}
       menuContext={brandV3ShellCopy(locale).menuContext.replace("{role}", brandV3Copy(locale).v).replace("{company}", company)}
       account={<Link role="menuitem" className="shell-account" data-testid="avatar-account" href={VENDOR_WORKBENCH.account}>{t("i_account")}</Link>}>
       {children}
