@@ -107,8 +107,11 @@ const plpgsql = (name: string) => new RegExp(`CREATE FUNCTION app\\.${name}\\([\
 test("round-2 finding 2: only LINKED contact links are conflicts; an unlinked historical row never blocks a new binding", () => {
  const body = plpgsql("b101_match");
  assert.match(body, /OR EXISTS\(SELECT 1 FROM public\.line_account_links WHERE org_id=c\.org_id AND contact_id=c\.id AND status='linked' AND unlinked_at IS NULL\n   AND \(login_identity_id IS DISTINCT FROM i\.id OR persona IS DISTINCT FROM 'vendor'\)\)/);
- for (const clause of body.split("\n").filter(l => l.includes("FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id")))
+ // Other identities' historical (unlinked) rows never block. The one exception (review r3) is THIS identity's own
+ // history with the contact, any status: it may return only to the exact current account (no rebind bypass).
+ for (const clause of body.split("\n").filter(l => l.includes("FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id") && !l.includes("login_identity_id=i.id)")))
   assert.match(clause, /status='linked' AND unlinked_at IS NULL/, clause);
+ assert.match(body, /OR \(EXISTS\(SELECT 1 FROM public\.line_account_links WHERE org_id=c\.org_id AND contact_id=c\.id AND login_identity_id=i\.id\)\n   AND \(a\.user_id IS NULL OR a\.user_id IS DISTINCT FROM i\.user_id\)\)/);
  assert.doesNotMatch(body, /line_account_links[^;]*?status<>'linked'/);
 });
 test("round-2 finding 1: no first-sign-in gate; only 'confirm' links jobs and 'skip' closes a zero-candidate review without job writes", () => {
