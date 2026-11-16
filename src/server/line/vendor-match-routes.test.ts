@@ -11,7 +11,7 @@ import type { Client } from "pg";
 
 const requireHere = createRequire(import.meta.url);
 const proof = { browser: "b".repeat(43), csrf: "c".repeat(43) }, job = "11111111-1111-4111-8111-111111111111";
-function setup(opts: { failedList?: boolean; conflict?: boolean; next?: string } = {}) {
+function setup(opts: { failedList?: boolean; conflict?: boolean; next?: string; expired?: boolean } = {}) {
  const calls: string[] = [];
  const mocks: Record<string, unknown> = {
   "next/server": requireHere("next/server"),
@@ -21,7 +21,11 @@ function setup(opts: { failedList?: boolean; conflict?: boolean; next?: string }
   "./login-token": requireHere("./login-token"),
   "./login-routes": { ...http, envGate: () => {} },
   "./vendor-match": {
-   vendorMatchContextOn: async () => ({ f: { id: "flow", org_id: "org-a" }, back: "/v/original-token", jobToken: "original-token" }),
+   // Expired 5-minute window: only proof-bound recovery (back/retry) still resolves the committed binding's entry.
+   vendorMatchContextOn: async (_c: unknown, _h: string, _p: unknown, recovery = false) => {
+    if (opts.expired && !recovery) { calls.push("expired"); throw new (requireHere("./login-token").LineError)(404, "not_found"); }
+    return { f: { id: "flow", org_id: "org-a" }, back: "/v/original-token", jobToken: "original-token" };
+   },
    vendorMatchReviewOn: async (_c: unknown, _f: unknown, action: string) => {
     calls.push(action); if (opts.failedList) throw new Error("unavailable");
     return { jobs: [{ id: job, description: '<script>alert("no")</script>' }], userId: "user-a", identityId: "identity-a", orgId: "org-a" };
@@ -52,6 +56,8 @@ test("VEN-31 V-LINK renders escaped candidates and only approved copy with priva
  assert.equal(r.status, 200); assert.equal(r.headers.get("Cache-Control"), "no-store"); assert.equal(r.headers.get("Referrer-Policy"), "no-referrer");
  assert.equal(r.headers.get("set-cookie"), null); assert.ok(html.includes("&lt;script&gt;")); assert.ok(!html.includes('<script>alert("no")'));
  for (const key of ["title", "body", "remove", "continue", "note", "error", "retry", "back"] as const) assert.ok(html.includes(copy[key]));
+ // screens.md V-LINK: the removal note is present only as a hidden element until a removal happens.
+ assert.ok(html.includes(`<p id="match-note" hidden>${copy.note}</p>`)); assert.equal(html.split(copy.note).length, 2);
  assert.deepEqual(calls, ["list"]);
 });
 test("VEN-31 list failure shows approved recovery without leaking candidates", async () => {
@@ -101,5 +107,34 @@ test("VEN-31 disabled matching flow stops before OAuth admission or writes", asy
  try {
   await assert.rejects(flowOn(client, "flow", proof), (e: unknown) => (e as { status: number }).status === 404);
   assert.equal(calls.length, 3); assert.ok(calls.every(s => !/INSERT|UPDATE/.test(s)));
+ } finally { if (previous === undefined) delete process.env.LINE_PLATFORM_ENABLED; else process.env.LINE_PLATFORM_ENABLED = previous; }
+});
+
+test("VEN-31-AC4 / VEN-15-AC7: after the 5-minute window the page offers 「再試一次」, confirm is refused and retry restarts LINE sign-in", async () => {
+ const { exports, req, calls } = setup({ expired: true });
+ const html = await (await exports.vendorMatchGET(req())).text();
+ assert.ok(html.includes('id="match-review" hidden')); assert.ok(html.includes(`<button type="button" id="match-retry" class="v-token-secondary">${copy.retry}</button>`));
+ assert.ok(html.includes(copy.error)); assert.ok(html.includes('href="/v/original-token"')); assert.ok(!html.includes(job));
+ const confirm = await exports.vendorMatchPOST(req({ action: "confirm" }));
+ assert.equal(confirm.status, 404); assert.equal(confirm.headers.get("set-cookie"), null);
+ const retry = await exports.vendorMatchPOST(req({ action: "retry" }));
+ assert.equal(retry.status, 200); assert.deepEqual(await retry.json(), { next: `/v/liff?flow=${"f".repeat(43)}` });
+ assert.match(retry.headers.get("set-cookie")!, new RegExp(`${http.LINE_FLOW_COOKIE}=${"f".repeat(43)}`));
+ assert.deepEqual(calls, ["expired", "expired", "retry"], "no list/confirm/session after expiry");
+});
+test("VEN-31 context: an expired flow is refused except for proof-bound recovery", async () => {
+ const row = { id: "flow", org_id: "org-a", return_path: "/v/link", persona: "vendor", kind: "login", browser_hash: lineHash(proof.browser), csrf_hash: lineHash(proof.csrf),
+  expires_at: new Date(Date.now() - 1000), verified_hash: "v", consumed_at: new Date() };
+ const client = { query: async (sql: string) => {
+  if (sql.includes("app.b033_line_flows")) return { rows: [row] };
+  if (sql.includes("FROM line_channels")) return { rows: [{ id: "channel", tenant_config_verified_at: new Date(), login_channel_id: "login", login_channel_secret_ref: "local-test" }] };
+  if (sql.includes("app.b101_enabled")) return { rows: [{ enabled: true }] };
+  if (sql.includes("app.b035_vendor_flows")) return { rows: [{ token: "original-token" }] };
+  throw new Error(`Unexpected query: ${sql}`);
+ } } as unknown as Client;
+ const previous = process.env.LINE_PLATFORM_ENABLED; process.env.LINE_PLATFORM_ENABLED = "true";
+ try {
+  await assert.rejects(vendorMatchContextOn(client, "handle", proof), (e: unknown) => (e as { status: number }).status === 404);
+  assert.equal((await vendorMatchContextOn(client, "handle", proof, true)).back, "/v/original-token");
  } finally { if (previous === undefined) delete process.env.LINE_PLATFORM_ENABLED; else process.env.LINE_PLATFORM_ENABLED = previous; }
 });

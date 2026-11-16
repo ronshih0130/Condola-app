@@ -15,6 +15,7 @@
    if (action === "remove") {
     const row = document.querySelector(`[data-job="${jobId}"]`), toast = document.getElementById("match-toast");
     toast.textContent = toast.dataset.template.replace("{工單}", row.querySelector("span").textContent);
+    document.getElementById("match-note").hidden = false;
     const ids = new Set(result.jobs.map(j => j.id));
     document.querySelectorAll("[data-job]").forEach(r => { if (!ids.has(r.dataset.job)) r.remove(); });
    } else if (["/vendor-account", "/consent?next=%2Fvendor-account"].includes(result.next) || /^\/v\/liff\?flow=[\w-]{43}$/.test(result.next)) {

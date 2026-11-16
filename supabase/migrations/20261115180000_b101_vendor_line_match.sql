@@ -3,6 +3,9 @@
 -- no contact data matching, outbound message, notification opt-in or flag mutation.
 BEGIN;
 SET LOCAL lock_timeout='3s';
+-- B-101's own default-OFF gate (same strict platform allowlist + org flag pattern as vendor_account).
+INSERT INTO public.platform_settings(key,value) VALUES
+ ('vendor_line_match','{"enabled":false,"allowed_org_ids":[]}'::jsonb) ON CONFLICT DO NOTHING;
 ALTER TABLE app.b035_vendor_flows ADD COLUMN b101_contact_id uuid REFERENCES public.contacts(id);
 CREATE FUNCTION app.b101_token_contact_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
@@ -38,7 +41,12 @@ REVOKE ALL ON app.b101_vendor_confirmations FROM PUBLIC,anon,authenticated,servi
 
 CREATE FUNCTION app.b101_enabled(p_org uuid,p_env_v2 boolean) RETURNS boolean
 LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,app AS $$
- SELECT app.b026_accounts_enabled(p_org) AND app.b033_portal_enabled(p_org,'vendor') AND
+ SELECT coalesce((SELECT o.feature_flags->'vendor_line_match'='true'::jsonb
+ AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array'
+ AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)
+ FROM public.organizations o CROSS JOIN public.platform_settings f
+ WHERE o.id=p_org AND f.key='vendor_line_match'),false) AND
+ app.b026_accounts_enabled(p_org) AND app.b033_portal_enabled(p_org,'vendor') AND
  coalesce((SELECT feature_flags->'brand_v3'='true'::jsonb AND
  (p_env_v2 OR feature_flags->'brand_v2'='true'::jsonb) FROM public.organizations WHERE id=p_org),false)
 $$;
@@ -47,7 +55,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  IF NOT app.b026_account_lock(p_org) OR app.b101_enabled(p_org,p_env_v2) IS NOT TRUE
  THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
- PERFORM 1 FROM public.platform_settings WHERE key IN ('line_platform','line_vendor_portal','vendor_dispatch','vendor_link') FOR SHARE NOWAIT;
+ PERFORM 1 FROM public.platform_settings WHERE key IN ('line_platform','line_vendor_portal','vendor_dispatch','vendor_link','vendor_line_match') FOR SHARE NOWAIT;
  IF app.b101_enabled(p_org,p_env_v2) IS NOT TRUE THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
 END $$;
 -- Deny every other persona, contact or org, even inactive/historical authority.
@@ -65,7 +73,7 @@ CREATE FUNCTION app.b101_match(p_flow uuid,p_env_v2 boolean) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE f app.b033_line_flows; v app.b035_vendor_flows; j public.repair_vendor_jobs;
  c public.contacts; i app.b033_line_identities; a app.b026_vendor_accounts;
- actor uuid; lid uuid; first_binding boolean:=false;
+ actor uuid; lid uuid; first_binding boolean:=false; created boolean:=false; first_sign_in boolean;
 BEGIN
  SELECT * INTO f FROM app.b033_line_flows WHERE id=p_flow FOR UPDATE;
  IF NOT FOUND OR f.return_path<>'/v/link' OR f.kind<>'login' OR f.persona<>'vendor'
@@ -113,7 +121,17 @@ BEGIN
    AND (login_identity_id IS DISTINCT FROM i.id OR persona IS DISTINCT FROM 'vendor' OR status<>'linked' OR unlinked_at IS NOT NULL))
  OR EXISTS(SELECT 1 FROM public.line_account_links WHERE login_identity_id=i.id AND (org_id<>c.org_id OR contact_id<>c.id))
  OR EXISTS(SELECT 1 FROM app.b033_line_identities WHERE user_id=actor AND id IS DISTINCT FROM i.id)
+ -- A surviving LINE link for this contact is valid only with the exact current account. After a staff
+ -- rebind (account deleted, old link left) the removed user must not silently re-create the account.
+ OR (EXISTS(SELECT 1 FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id)
+   AND (a.user_id IS NULL OR a.user_id IS DISTINCT FROM i.user_id))
+ -- Management already named the account holder: a pending invitation is never pre-empted by LINE.
+ OR (a.user_id IS NULL AND EXISTS(SELECT 1 FROM app.b026_vendor_account_invites WHERE org_id=c.org_id AND contact_id=c.id
+   AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp() AND user_id IS DISTINCT FROM actor))
  THEN RAISE EXCEPTION 'identity_conflict' USING ERRCODE='P0033'; END IF;
+ -- V-LINK is shown only on a first sign-in: this account has never confirmed a B101 sign-in.
+ first_sign_in:=a.user_id IS NULL OR NOT EXISTS(SELECT 1 FROM app.b101_vendor_confirmations
+  WHERE org_id=c.org_id AND contact_id=c.id AND user_id=a.user_id AND confirmed_at IS NOT NULL);
  IF i.id IS NULL THEN
   IF v.flow_id IS NULL THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
   IF actor IS NULL THEN
@@ -127,6 +145,7 @@ BEGIN
  IF a.user_id IS NULL THEN
   IF v.flow_id IS NULL THEN RAISE EXCEPTION 'not_found' USING ERRCODE='P0033'; END IF;
   INSERT INTO app.b026_vendor_accounts(org_id,contact_id,user_id,line_identity_id) VALUES(c.org_id,c.id,actor,i.id);
+  created:=true;
  ELSE
   -- Existing invite provenance is retained; LINE accounts use explicit confirmation thereafter.
   UPDATE app.b026_vendor_accounts SET line_identity_id=i.id WHERE org_id=c.org_id AND contact_id=c.id;
@@ -139,7 +158,8 @@ BEGIN
    VALUES(c.org_id,c.id,f.line_channel_id,'linked',i.id,'vendor',clock_timestamp(),clock_timestamp(),false,false) RETURNING id INTO lid;
   first_binding:=true;
  END IF;
- IF first_binding THEN
+ -- Every account this gateway creates is management-visible, not only a new identity/link.
+ IF first_binding OR created THEN
   INSERT INTO app.b026_vendor_link_events(org_id,job_id,contact_id,user_id,actor_id,reason)
    VALUES(c.org_id,j.id,c.id,actor,actor,'line_first_binding');
   INSERT INTO public.audit_log(org_id,actor_user_id,actor_role,table_name,row_id,action,event_type,new_row)
@@ -148,7 +168,7 @@ BEGIN
  INSERT INTO app.b101_vendor_confirmations(flow_id,org_id,contact_id,user_id,identity_id,link_id)
   VALUES(f.id,c.org_id,c.id,actor,i.id,lid);
  UPDATE app.b033_line_flows SET consumed_at=clock_timestamp() WHERE id=f.id;
- RETURN jsonb_build_object('userId',actor,'identityId',i.id);
+ RETURN jsonb_build_object('userId',actor,'identityId',i.id,'firstSignIn',first_sign_in);
 END $$;
 
 -- Every list/removal/confirmation rechecks live authority, exact scope and gates.
@@ -219,13 +239,15 @@ BEGIN
   confirmed_at=CASE WHEN p_action='confirm' THEN clock_timestamp() ELSE NULL END WHERE flow_id=f.id;
  RETURN jsonb_build_object('jobs',jobs,'userId',r.user_id,'identityId',r.identity_id,'orgId',r.org_id);
 END $$;
--- Ordinary B033 login must not bypass B101 confirmation, persona guards or its gates.
-CREATE FUNCTION app.b101_identity_managed(p_identity uuid) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,app AS $$
- SELECT EXISTS(SELECT 1 FROM app.b026_vendor_accounts WHERE line_identity_id=p_identity)
+-- While B101 is enabled for the account's org, ordinary B033 login must not bypass B101 confirmation,
+-- persona guards or its gates. With B101 OFF these identities use the existing B033 vendor sign-in.
+CREATE FUNCTION app.b101_identity_managed(p_identity uuid,p_env_v2 boolean) RETURNS boolean
+LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+ SELECT EXISTS(SELECT 1 FROM app.b026_vendor_accounts WHERE line_identity_id=p_identity
+  AND app.b101_enabled(org_id,p_env_v2) IS TRUE)
 $$;
-REVOKE ALL ON FUNCTION app.b101_identity_managed(uuid) FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION app.b101_identity_managed(uuid) TO service_role;
+REVOKE ALL ON FUNCTION app.b101_identity_managed(uuid,boolean) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION app.b101_identity_managed(uuid,boolean) TO service_role;
 REVOKE ALL ON FUNCTION app.b101_enabled(uuid,boolean),app.b101_lock(uuid,boolean),app.b101_vendor_only(uuid,uuid,uuid),
  app.b101_match(uuid,boolean),app.b101_review(uuid,boolean,text,uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION app.b101_enabled(uuid,boolean),app.b101_match(uuid,boolean),app.b101_review(uuid,boolean,text,uuid) TO service_role;

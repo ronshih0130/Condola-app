@@ -247,12 +247,20 @@ export async function lineSessionOn(c: Client, f: LineFlow, userId: string, iden
 export async function sessionFromFlowOn(c: Client, f: LineFlow, meta: RequestMeta, auth: AuthInput) {
  if (f.return_path === "/v/link") {
   // B101 only accepts the existing OAuth state/nonce/PKCE path; no bare LIFF ID-token binding.
-  const result = (await c.query("SELECT app.b101_match($1,$2) result", [f.id, brandV2Enabled()])).rows[0].result;
+  const result = (await c.query<{ result: { userId: string; identityId: string; firstSignIn: boolean } }>(
+   "SELECT app.b101_match($1,$2) result", [f.id, brandV2Enabled()])).rows[0].result;
   await credentialsOn(c, result.userId, auth, false);
   const existing = await sessionOn(c, auth.sessionToken);
   if (existing && existing.user_id !== result.userId) rejectLine(409, "account_mismatch");
-  // Session issuance is deferred until V-LINK confirmation.
-  return { next: "/v/link" };
+  const review = async (action: "list" | "confirm") => (await c.query<{ result: { jobs: unknown[]; userId: string; identityId: string; orgId: string } }>(
+   "SELECT app.b101_review($1,$2,$3,NULL) result", [f.id, brandV2Enabled(), action])).rows[0].result;
+  // screens.md V-LINK: shown only on a first sign-in with open jobs; session issuance waits for its confirmation.
+  if ((await review("list")).jobs.length && result.firstSignIn) return { next: "/v/link" };
+  // Repeat sign-in or nothing to review: the same server confirm step runs here and is the only session issuance.
+  const confirmed = await review("confirm");
+  const token = await lineSessionOn(c, f, confirmed.userId, confirmed.identityId, meta, auth.sessionToken);
+  // Existing B026 portal exists. B063 workbench is deliberately not implemented here.
+  return { next: await consentNextOn(c, confirmed.userId, { persona: "vendor", return_path: "/vendor-account" }), token, orgId: confirmed.orgId, persona: f.persona };
  }
  const job = await finishVendorFlowOn(c, f);
  if (job) return job;
@@ -262,7 +270,8 @@ export async function sessionFromFlowOn(c: Client, f: LineFlow, meta: RequestMet
   AND l.org_id=$2 AND l.persona=$3 AND l.status='linked' AND l.unlinked_at IS NULL
   AND app.b033_contact_user(l.org_id,l.contact_id,l.persona)=$4 FOR SHARE`, [ident.id, f.org_id, f.persona, ident.user_id])).rows[0];
  if (!ident || ident.status !== "linked" || ident.unlinked_at || !link) return { action: "account_required" as const };
- if (f.persona === "vendor" && (await c.query("SELECT app.b101_identity_managed($1) managed", [ident.id])).rows[0].managed) rejectLine(404, "not_found");
+ // B101-managed identities must use V-LINK only while B101 is enabled for their org; OFF they sign in here as ordinary linked vendors.
+ if (f.persona === "vendor" && (await c.query("SELECT app.b101_identity_managed($1,$2) managed", [ident.id, brandV2Enabled()])).rows[0].managed) rejectLine(404, "not_found");
  await credentialsOn(c, ident.user_id, auth, false); // Required second factor also applies to LINE sign-in.
  const token = await lineSessionOn(c, f, ident.user_id, ident.id, meta, auth.sessionToken);
  await c.query("UPDATE app.b033_line_flows SET consumed_at=now() WHERE id=$1", [f.id]);
