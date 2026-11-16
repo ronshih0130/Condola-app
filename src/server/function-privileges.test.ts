@@ -353,7 +353,7 @@ test("MF-3 / MGT-151 adds one RLS table with no application grants and two servi
     assert.match(body, /member_role NOT IN \('admin','manager','accountant'\)/);
     const code = body.slice(body.indexOf("AS $$"), body.indexOf("END $$;")).replace(/DISTINCT FROM/g, "");
     for (const ref of code.matchAll(/\b(?:FROM|JOIN|INTO)\s+([a-z_][\w.]*)/g))
-      assert.match(ref[1], /^(?:public\.\w+|app\.\w+|actor|member_role|s|unit|prior|paid|tenant|topup_id)$/, ref[0]);
+      assert.match(ref[1], /^(?:public\.\w+|app\.\w+|actor|member_role|s|unit|prior|paid|tenant|topup_id|today)$/, ref[0]);
   }
   assert.match(sql, /ALTER TABLE app\.deposit_settlement_topups ENABLE ROW LEVEL SECURITY;/);
   assert.match(sql, /REVOKE ALL ON app\.deposit_settlement_topups FROM PUBLIC, anon, authenticated, service_role;/);

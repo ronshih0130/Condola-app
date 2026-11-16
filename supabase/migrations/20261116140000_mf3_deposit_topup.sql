@@ -36,12 +36,14 @@ ALTER TABLE app.deposit_settlement_topups ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON app.deposit_settlement_topups FROM PUBLIC, anon, authenticated, service_role;
 
 -- MGT-151-AC1/AC3/AC4 writer. Over the amount owed is saved (the form warns first); the result says by how much.
+-- One cap, 1000000000000000 minor units, bounds each entry AND the settlement's total paid, so every
+-- committed total stays readable. received_on may not be later than the org-local today.
 -- Statuses: recorded | disabled | invalid | unavailable | conflict. Denials raise 42501.
 CREATE FUNCTION app.mf3_topup_record(p_org uuid,p_live uuid,p_env text,p_session uuid,p_request uuid,
  p_lease uuid,p_settlement uuid,p_amount_minor bigint,p_received_on date,p_note text)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE actor uuid; member_role text; s record; prior record; unit smallint; note text;
- owed bigint; paid bigint; topup_id uuid; replayed boolean:=false; result jsonb;
+ owed bigint; paid bigint; topup_id uuid; replayed boolean:=false; result jsonb; today date;
 BEGIN
  IF current_setting('app.active_org_id',true) IS DISTINCT FROM p_org::text
    OR current_setting('app.env',true) IS DISTINCT FROM p_env
@@ -69,9 +71,10 @@ BEGIN
  IF member_role IS NULL OR member_role NOT IN ('admin','manager','accountant') THEN
   RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  note:=nullif(btrim(p_note),'');
- IF p_request IS NULL OR p_lease IS NULL OR p_settlement IS NULL OR p_amount_minor IS NULL
+ SELECT (clock_timestamp() AT TIME ZONE o.timezone)::date INTO today FROM public.organizations o WHERE o.id=p_org;
+ IF today IS NULL OR p_request IS NULL OR p_lease IS NULL OR p_settlement IS NULL OR p_amount_minor IS NULL
    OR p_amount_minor<=0 OR p_amount_minor>1000000000000000 OR p_received_on IS NULL
-   OR p_received_on NOT BETWEEN DATE '2000-01-01' AND DATE '2100-12-31'
+   OR p_received_on NOT BETWEEN DATE '2000-01-01' AND DATE '2100-12-31' OR p_received_on>today
    OR char_length(coalesce(note,''))>500 THEN
   RETURN jsonb_build_object('status','invalid');
  END IF;
@@ -97,6 +100,11 @@ BEGIN
  SELECT c.minor_unit INTO unit FROM public.currencies c WHERE c.code=btrim(s.currency);
  IF NOT FOUND THEN RETURN jsonb_build_object('status','unavailable'); END IF;
  owed:=s.confirmed_total_deduction_minor-s.deposit_held_minor;
+ SELECT coalesce(sum(t.amount_minor),0) INTO paid FROM app.deposit_settlement_topups t
+ WHERE t.org_id=p_org AND t.lease_id=p_lease AND t.settlement_id=p_settlement;
+ IF topup_id IS NULL AND paid+p_amount_minor>1000000000000000 THEN
+  RETURN jsonb_build_object('status','invalid');
+ END IF;
  IF topup_id IS NULL THEN
   INSERT INTO app.deposit_settlement_topups(org_id,lease_id,settlement_id,amount_minor,currency,minor_unit,
    received_on,note,request_id,recorded_by)

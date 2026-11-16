@@ -8,7 +8,9 @@ import { depositTopupView, parseTopupView, recordDepositTopup, type TopupView } 
 import { TopupError, TopupReadView, TopupStaffView } from "../components/v3/topup/topup";
 import { TopupSheetForm } from "../components/v3/topup/topup-sheet";
 import { brandV3TopupCopy } from "../i18n/lanes/brand-v3-topup";
-import { parseTopupAmount, topupDay, topupMoney, topupOver, validTopupDate } from "../lib/deposit-topup";
+import { bigintMinor, checkTopupAmount, dateIn, latestLocalToday, parseTopupAmount, TOPUP_MAX_MINOR, topupDateAllowed, topupDay, topupMinorWithinCap, topupMoney, topupOver, validTopupDate } from "../lib/deposit-topup";
+import { closedSheet, createTopupSender, topupSheetReducer, type TopupSheetState } from "../components/v3/topup/topup-controller";
+import type { TopupInput, TopupResult } from "./mf3-deposit-topup";
 import type { Session } from "./types";
 Object.assign(globalThis, { React });
 
@@ -36,7 +38,8 @@ function client(result: unknown, seen: { sql: string; args?: unknown[] }[]) {
 test("pure helpers: exact minor-unit money, amount parsing, over amount, frame date", () => {
   assert.equal(topupMoney("300000", "TWD", 2), "NT$3,000");
   assert.equal(topupMoney("2400000", "TWD ", 2), "NT$24,000");
-  assert.equal(topupMoney("1250", "USD", 2), "USD 12.5");
+  assert.equal(topupMoney("1250", "USD", 2), "USD 12.50");
+  assert.equal(topupMoney("1200", "USD", 2), "USD 12");
   assert.equal(topupMoney("5", "JPY", 0), "JPY 5");
   assert.equal(parseTopupAmount("2,500", 2), "250000");
   assert.equal(parseTopupAmount("2500.5", 2), "250050");
@@ -50,6 +53,21 @@ test("pure helpers: exact minor-unit money, amount parsing, over amount, frame d
   assert.equal(topupDay("2026-01-05"), "1/5");
   assert.equal(validTopupDate("2026-11-25"), true);
   for (const bad of ["2026-02-30", "1999-12-31", "2101-01-01", "11/25", ""]) assert.equal(validTopupDate(bad), false, bad);
+  // One cap for an entry and for the total paid; settlement figures may be any bigint.
+  assert.deepEqual(checkTopupAmount("10000000000000", 2), { ok: true, minor: TOPUP_MAX_MINOR });
+  assert.deepEqual(checkTopupAmount("10000000000000.01", 2), { ok: false, reason: "range" });
+  assert.deepEqual(checkTopupAmount("abc", 2), { ok: false, reason: "format" });
+  assert.equal(topupMinorWithinCap(TOPUP_MAX_MINOR), true);
+  assert.equal(topupMinorWithinCap("1000000000000001"), false);
+  assert.equal(bigintMinor("9223372036854775807"), true);
+  assert.equal(bigintMinor("9223372036854775808"), false);
+  // Received dates: not later than today.
+  assert.equal(topupDateAllowed("2026-11-25", "2026-11-25"), true);
+  assert.equal(topupDateAllowed("2026-11-26", "2026-11-25"), false);
+  const now = new Date("2026-11-16T11:30:00Z");
+  assert.equal(dateIn("America/Los_Angeles", now), "2026-11-16");
+  assert.equal(dateIn("Asia/Taipei", now), "2026-11-16");
+  assert.equal(latestLocalToday(now), "2026-11-17", "UTC+14 is already the next day");
 });
 
 test("copy is verbatim from the approved frames (Round 7 batch 2) and passes the wording rules", () => {
@@ -96,7 +114,8 @@ test("MGT-151-AC3/AC5 sheet: required fields, warn over 應補 and still 確定;
   for (const s of ["記錄已收", "關閉", "金額（必填）", "日期（必填）", "備註（選填）", "確定", "取消"]) assert.ok(plainText.includes(s), s);
   assert.equal((plain.match(/ required=""/g) ?? []).length, 2, "amount and date are required, the note is not");
   assert.match(plain, /role="dialog"/); assert.match(plain, /aria-modal="true"/);
-  assert.doesNotMatch(plain, /topup-over|topup-failed|<select/);
+  assert.doesNotMatch(plainText, /比應補多收|沒有存成功/);
+  assert.doesNotMatch(plain, /<select/);
   const over = text(render(<TopupSheetForm {...props} amount="2500" date="2026-11-25" note="轉帳" saving={false} failed={false} />));
   assert.ok(over.includes("比應補多收 NT$500，確定嗎？"));
   assert.ok(over.includes("確定") && !over.includes("再試一次"));
@@ -134,17 +153,21 @@ test("reader: OFF never opens a transaction; pinned org/env; exact gateway args;
     [staff, { ...view("staff"), leaseId: SETTLE }]] as const)
     assert.deepEqual(await depositTopupView(session, LEASE, { v3: async () => true, transaction: client(bad, []) }), { state: "unavailable" }, JSON.stringify(bad));
   assert.throws(() => parseTopupView({ ...view("staff"), currency: "twd" }, LEASE, "staff"));
+  // Settlement figures may be any bigint; a paid total or entry above the one cap is rejected, never shown.
+  assert.ok(parseTopupView({ ...view("staff"), depositMinor: "9223372036854775000", deductionMinor: "9223372036854775807", owedMinor: "807" }, LEASE, "staff"));
+  assert.throws(() => parseTopupView({ ...view("staff"), paidMinor: "1000000000000001", entries: [{ id: E1, amountMinor: "1000000000000001", receivedOn: "2026-11-20" }] }, LEASE, "staff"));
   const deny = (async () => { throw Object.assign(new Error("denied"), { cause: { code: "42501" } }); }) as never;
   assert.deepEqual(await depositTopupView(owner, LEASE, { v3: async () => true, transaction: deny }), { state: "forbidden" });
 });
 
 test("writer: staff only; invalid input never reaches the gateway; statuses map; same key is passed through", async () => {
-  const input = { leaseId: LEASE, settlementId: SETTLE, requestId: "00000000-0000-4000-8000-0000000000f1", amountMinor: "250000", receivedOn: "2026-11-25", note: " 轉帳 " };
+  const input = { leaseId: LEASE, settlementId: SETTLE, requestId: "00000000-0000-4000-8000-0000000000f1", amountMinor: "250000", receivedOn: "2026-11-05", note: " 轉帳 " };
   assert.deepEqual(await recordDepositTopup(tenant, input, { v3: async () => true, transaction: never }), { ok: false, reason: "forbidden" });
   assert.deepEqual(await recordDepositTopup(owner, input, { v3: async () => true, transaction: never }), { ok: false, reason: "forbidden" });
   assert.deepEqual(await recordDepositTopup({ ...staff, role: "maintenance" }, input, { v3: async () => true, transaction: never }), { ok: false, reason: "forbidden" });
   assert.deepEqual(await recordDepositTopup(staff, input, { v3: async () => false, transaction: never }), { ok: false, reason: "off" });
-  for (const bad of [{ amountMinor: "0" }, { amountMinor: "1.5" }, { amountMinor: "10000000000000001" }, { receivedOn: "2026-02-30" }, { requestId: "x" }, { note: "x".repeat(501) }, { settlementId: "x" }])
+  const tomorrowAnywhere = new Date(Date.parse(`${latestLocalToday()}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  for (const bad of [{ amountMinor: "0" }, { amountMinor: "1.5" }, { amountMinor: "1000000000000001" }, { receivedOn: tomorrowAnywhere }, { receivedOn: "2026-02-30" }, { requestId: "x" }, { note: "x".repeat(501) }, { settlementId: "x" }])
     assert.deepEqual(await recordDepositTopup(staff, { ...input, ...bad }, { v3: async () => true, transaction: never }), { ok: false, reason: "invalid" }, JSON.stringify(bad));
   const seen: { sql: string; args?: unknown[] }[] = [];
   const ok = await recordDepositTopup({ ...staff, role: "accountant" }, input, { v3: async () => true,
@@ -152,7 +175,7 @@ test("writer: staff only; invalid input never reaches the gateway; statuses map;
   assert.deepEqual(ok, { ok: true, paidMinor: "350000", overMinor: "50000", replayed: false });
   assert.deepEqual(seen[2].args, [ORG, "live"]);
   assert.match(seen[3].sql, /^SELECT app\.mf3_topup_record\(\$1::uuid,\$2::uuid,\$3::text,\$4::uuid,\$5::uuid,\$6::uuid,\$7::uuid,\$8::bigint,\$9::date,\$10::text\) AS result$/);
-  assert.deepEqual(seen[3].args, [ORG, ORG, "live", base.sessionId, input.requestId, LEASE, SETTLE, "250000", "2026-11-25", "轉帳"]);
+  assert.deepEqual(seen[3].args, [ORG, ORG, "live", base.sessionId, input.requestId, LEASE, SETTLE, "250000", "2026-11-05", "轉帳"]);
   for (const [status, reason] of [["disabled", "off"], ["invalid", "invalid"], ["conflict", "conflict"], ["unavailable", "failed"], ["weird", "failed"]])
     assert.deepEqual(await recordDepositTopup(staff, input, { v3: async () => true, transaction: client({ status }, []) }), { ok: false, reason });
   const deny = (async () => { throw Object.assign(new Error("denied"), { cause: { code: "42501" } }); }) as never;
@@ -176,4 +199,111 @@ test("wiring: pages exist only under brand_v3; the action checks consent; nothin
   const css = read("public/brand/v3/topup.css");
   for (const rule of [/\.v3-topup \.btn \{ min-height:44px; min-width:44px; \}/, /\.v3-topup-sheet \.btn \{ min-height:44px; min-width:44px; \}/,
     /\.v3-topup-field input \{ min-height:44px;/, /\.v3-topup-crumb a \{[^}]*min-height:44px; min-width:44px;/]) assert.match(css, rule);
+});
+
+// Stateful TopupSheet rules (MGT-151-AC3/AC5), through the controller the component is wired to.
+const T = { leaseId: LEASE, settlementId: SETTLE };
+const C = { amountMinor: "250000", receivedOn: "2026-11-25", note: "轉帳" };
+function keys() { let n = 0; return () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`; }
+function recorder(results: (TopupResult | Error)[]) {
+  const calls: TopupInput[] = [];
+  return { calls, submit: async (input: TopupInput) => { calls.push(input); const r = results.shift()!; if (r instanceof Error) throw r; return r; } };
+}
+const ok: TopupResult = { ok: true, paidMinor: "350000", overMinor: "50000", replayed: false };
+
+test("sheet sender: a retry of the same entry reuses its key; saved, changed or conflicting entries get a new one", async () => {
+  const r = recorder([{ ok: false, reason: "failed" }, ok, { ok: false, reason: "failed" }, { ok: false, reason: "failed" }, ok, ok]);
+  const sender = createTopupSender(r.submit, keys());
+  assert.equal(await sender.send(T, C), "retry");
+  assert.equal(await sender.send(T, { ...C }), "saved");
+  assert.equal(r.calls[0].requestId, r.calls[1].requestId, "retry keeps the key");
+  assert.deepEqual({ ...r.calls[1], requestId: undefined }, { ...T, requestId: undefined, ...C });
+  // After a save the same content is a new entry with a new key.
+  assert.equal(await sender.send(T, C), "retry");
+  assert.notEqual(r.calls[2].requestId, r.calls[1].requestId);
+  // Changed content: new key; back to the failed content: still a new key (only the last attempt is kept).
+  assert.equal(await sender.send(T, { ...C, note: "現金" }), "retry");
+  assert.notEqual(r.calls[3].requestId, r.calls[2].requestId);
+  assert.equal(await sender.send(T, { ...C, note: "現金" }), "saved");
+  assert.equal(r.calls[4].requestId, r.calls[3].requestId);
+  assert.equal(await sender.send(T, { ...C, amountMinor: "1" }), "saved");
+  assert.equal(new Set(r.calls.map(c => c.requestId)).size, 4);
+});
+
+test("sheet sender: double submit is refused while one is in flight; a thrown error is a retryable failure", async () => {
+  let release!: (r: TopupResult) => void;
+  const calls: TopupInput[] = [];
+  const sender = createTopupSender(input => { calls.push(input); return new Promise(res => { release = res; }); }, keys());
+  const first = sender.send(T, C);
+  assert.equal(sender.busy, true);
+  assert.equal(await sender.send(T, C), "busy");
+  assert.equal(calls.length, 1);
+  release(ok);
+  assert.equal(await first, "saved");
+  assert.equal(sender.busy, false);
+  const thrown = recorder([new Error("network down"), ok]);
+  const s2 = createTopupSender(thrown.submit, keys());
+  assert.equal(await s2.send(T, C), "retry");
+  assert.equal(s2.busy, false);
+  assert.equal(await s2.send(T, C), "saved");
+  assert.equal(thrown.calls[0].requestId, thrown.calls[1].requestId);
+});
+
+test("sheet sender: conflict and invalid are not retried with the same key", async () => {
+  for (const reason of ["conflict", "invalid"] as const) {
+    const r = recorder([{ ok: false, reason }, ok]);
+    const sender = createTopupSender(r.submit, keys());
+    assert.equal(await sender.send(T, C), "fix");
+    assert.equal(sender.key, null);
+    assert.equal(await sender.send(T, C), "saved");
+    assert.notEqual(r.calls[0].requestId, r.calls[1].requestId);
+  }
+  for (const reason of ["off", "forbidden", "failed"] as const) {
+    const sender = createTopupSender(recorder([{ ok: false, reason }]).submit, keys());
+    assert.equal(await sender.send(T, C), "retry");
+  }
+});
+
+test("sheet state: input survives a failed save and a close/reopen; same content after reopen keeps the key", async () => {
+  let s: TopupSheetState = topupSheetReducer(closedSheet, { type: "open", today: "2026-11-25" });
+  assert.deepEqual(s, { ...closedSheet, open: true, date: "2026-11-25" });
+  s = topupSheetReducer(s, { type: "edit", field: "amount", value: "2500" });
+  s = topupSheetReducer(s, { type: "edit", field: "note", value: "轉帳" });
+  s = topupSheetReducer(s, { type: "start" });
+  assert.equal(s.saving, true);
+  assert.equal(topupSheetReducer(s, { type: "close" }), s, "no close while saving");
+  assert.equal(topupSheetReducer(s, { type: "edit", field: "amount", value: "9" }), s, "no edits while saving");
+  s = topupSheetReducer(s, { type: "done", outcome: "retry" });
+  assert.deepEqual([s.amount, s.date, s.note, s.error, s.saving, s.unsaved], ["2500", "2026-11-25", "轉帳", "retry", false, true]);
+  s = topupSheetReducer(topupSheetReducer(s, { type: "close" }), { type: "open", today: "2026-11-26" });
+  assert.deepEqual([s.open, s.amount, s.date, s.note], [true, "2500", "2026-11-25", "轉帳"], "reopen keeps the unsaved entry");
+  // The same sender (one per mounted sheet) keeps the key for that same content after the reopen.
+  const r = recorder([{ ok: false, reason: "failed" }, ok]);
+  const sender = createTopupSender(r.submit, keys());
+  await sender.send(T, C);
+  await sender.send(T, C);
+  assert.equal(r.calls[0].requestId, r.calls[1].requestId);
+  s = topupSheetReducer(topupSheetReducer(s, { type: "start" }), { type: "done", outcome: "saved" });
+  assert.deepEqual(s, closedSheet);
+  assert.deepEqual(topupSheetReducer(s, { type: "open", today: "2026-11-27" }), { ...closedSheet, open: true, date: "2026-11-27" }, "after a save the next entry starts empty");
+  const fixed = topupSheetReducer({ ...closedSheet, open: true, amount: "1", saving: true }, { type: "done", outcome: "fix" });
+  assert.deepEqual([fixed.error, fixed.amount], ["fix", "1"]);
+});
+
+test("sheet wiring: TopupSheet uses the controller, traps Tab, returns focus to 記錄已收, keeps live regions mounted", () => {
+  const src = read("src/components/v3/topup/topup-sheet.tsx");
+  assert.match(src, /useReducer\(topupSheetReducer, closedSheet\)/);
+  assert.match(src, /createTopupSender\(submit, newRequest\)/);
+  assert.match(src, /onKeyDown=\{event => trapTab\(event, sheet\.current\)\}/);
+  assert.match(src, /else if \(wasOpen\.current\) opener\.current\?\.focus\(\);/);
+  assert.doesNotMatch(src, /request\.current = newRequest\(\)/, "no new key per keystroke");
+  const props = { locale: "zh-TW" as const, currency: "TWD", minorUnit: 2, owedMinor: "300000", paidMinor: "100000", titleId: "t" };
+  const quiet = render(<TopupSheetForm {...props} amount="1000" date="2026-11-25" note="" saving={false} failed={false} />);
+  assert.match(quiet, /<p class="v3-topup-warn" role="status" aria-live="polite" data-testid="topup-over"><\/p>/);
+  assert.match(quiet, /<p class="v3-topup-fail" role="alert" data-testid="topup-failed"><\/p>/);
+  const fix = render(<TopupSheetForm {...props} amount="1000" date="2026-11-25" note="" saving={false} failed={true} retry={false} />);
+  assert.ok(text(fix).includes("沒有存成功，請再試一次。"));
+  assert.match(fix, /data-testid="topup-confirm"[^>]*>確定</, "conflict/invalid: no 再試一次 with the same key");
+  assert.match(render(<TopupSheetForm {...props} amount="1" date="2026-11-25" note="" saving={false} failed={false} today="2026-11-25" />), /max="2026-11-25"/);
+  assert.match(read("public/brand/v3/topup.css"), /:is\(\.v3-topup-warn,\.v3-topup-fail\):empty \{ position:absolute;/);
 });

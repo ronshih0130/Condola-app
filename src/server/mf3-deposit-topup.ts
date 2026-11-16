@@ -5,7 +5,7 @@ import { FlowError, logServerError } from "./errors";
 import { assertPerm } from "./perms";
 import { isUuid } from "./repair-rules";
 import type { Session } from "./types";
-import { TOPUP_NOTE_MAX, validTopupDate } from "../lib/deposit-topup";
+import { bigintMinor, latestLocalToday, TOPUP_MAX_MINOR, TOPUP_NOTE_MAX, topupDateAllowed, topupMinorWithinCap } from "../lib/deposit-topup";
 
 /**
  * MF-3 / MGT-151-AC1…AC5 (MO-TOPUP, 租約 › {租客} › 退租結算). One admitted SQL snapshot per read and one
@@ -30,11 +30,10 @@ export type TopupResult =
 type Deps = { v3?: typeof brandV3ReadForOrg; transaction?: typeof svc };
 type Kind = Session["kind"];
 
-const MAX_MINOR = BigInt("1000000000000000");
+const MAX_MINOR = BigInt(TOPUP_MAX_MINOR);
 const day = /^\d{4}-\d{2}-\d{2}$/;
 const str = (value: unknown): value is string => typeof value === "string";
 const uuid = (value: unknown): value is string => str(value) && isUuid(value);
-const minor = (value: unknown): value is string => str(value) && /^[0-9]{1,16}$/.test(value);
 
 /** svc rethrows DB errors through mapDbError, which keeps the SQLSTATE in `cause.code`. */
 function sqlDenied(error: unknown): boolean {
@@ -48,12 +47,12 @@ export function parseTopupView(value: unknown, leaseId: string, kind: Kind): Top
   const v = value as Record<string, unknown>;
   if (!v || typeof v !== "object" || v.leaseId !== leaseId || !uuid(v.settlementId) || !(v.tenant === null || str(v.tenant))
     || !str(v.currency) || !/^[A-Z]{3}$/.test(v.currency) || !Number.isInteger(v.minorUnit) || (v.minorUnit as number) < 0
-    || (v.minorUnit as number) > 4 || ![v.depositMinor, v.deductionMinor, v.owedMinor, v.paidMinor].every(minor)
+    || (v.minorUnit as number) > 4 || ![v.depositMinor, v.deductionMinor, v.owedMinor].every(bigintMinor) || !topupMinorWithinCap(v.paidMinor)
     || BigInt(v.owedMinor as string) <= BigInt(0) || v.canRecord !== (kind === "staff") || (kind !== "staff" && v.tenant !== null) || !Array.isArray(v.entries))
     throw new Error("Invalid top-up view");
   let sum = BigInt(0);
   for (const row of v.entries as Record<string, unknown>[]) {
-    if (!row || !uuid(row.id) || !minor(row.amountMinor) || !str(row.receivedOn) || !day.test(row.receivedOn)
+    if (!row || !uuid(row.id) || !topupMinorWithinCap(row.amountMinor) || !str(row.receivedOn) || !day.test(row.receivedOn)
       || Object.keys(row).length !== 3) throw new Error("Invalid top-up entry");
     sum += BigInt(row.amountMinor);
   }
@@ -106,7 +105,8 @@ export async function recordDepositTopup(input: Session, form: TopupInput, deps:
     const note = typeof form?.note === "string" ? form.note.trim() : "";
     if (!form || !uuid(form.leaseId) || !uuid(form.settlementId) || !uuid(form.requestId)
       || !str(form.amountMinor) || !/^[1-9][0-9]{0,15}$/.test(form.amountMinor) || BigInt(form.amountMinor) > MAX_MINOR
-      || !str(form.receivedOn) || !validTopupDate(form.receivedOn) || note.length > TOPUP_NOTE_MAX
+      // Not after today anywhere (UTC+14); the gateway then applies the org-local today exactly.
+      || !str(form.receivedOn) || !topupDateAllowed(form.receivedOn, latestLocalToday()) || note.length > TOPUP_NOTE_MAX
       || (form.note !== undefined && form.note !== null && typeof form.note !== "string")) return { ok: false, reason: "invalid" };
     const result = await (deps.transaction ?? svc)(session.userId, async client => {
       await client.query("SET LOCAL statement_timeout = '5s'");
@@ -119,7 +119,7 @@ export async function recordDepositTopup(input: Session, form: TopupInput, deps:
       )).rows[0]?.result ?? null;
     });
     const status = result?.status;
-    if (status === "recorded" && minor(result?.paidMinor) && minor(result?.overMinor) && typeof result?.replayed === "boolean")
+    if (status === "recorded" && topupMinorWithinCap(result?.paidMinor) && bigintMinor(result?.overMinor) && typeof result?.replayed === "boolean")
       return { ok: true, paidMinor: result.paidMinor, overMinor: result.overMinor, replayed: result.replayed };
     if (status === "disabled") return { ok: false, reason: "off" };
     if (status === "invalid") return { ok: false, reason: "invalid" };

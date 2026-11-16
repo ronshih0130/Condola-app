@@ -31,6 +31,8 @@ html[data-brand="v2"][data-brand-v3] .v3-topup-field input { min-height:44px; fo
 html[data-brand="v2"][data-brand-v3] .v3-topup-field input:focus-visible { outline:2px solid var(--c-focus); outline-offset:1px; }
 html[data-brand="v2"][data-brand-v3] .v3-topup-warn { margin:0; padding:10px 14px; border-radius:var(--r-md); background:var(--c-warning-soft); color:var(--c-text); }
 html[data-brand="v2"][data-brand-v3] .v3-topup-fail { margin:0; color:var(--c-text); font-weight:600; }
+/* The two message regions stay mounted (live regions announce text changes); empty, they leave the grid flow. */
+html[data-brand="v2"][data-brand-v3] :is(.v3-topup-warn,.v3-topup-fail):empty { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 html[data-brand="v2"][data-brand-v3] .v3-topup-sheet .btn { min-height:44px; min-width:44px; }
 html[data-brand="v2"][data-brand-v3] .v3-topup-sheet .btn.block { width:100%; }
 @media (max-width:50em) {
