@@ -229,7 +229,7 @@ test("T-SETUP (GS-47): during setup steps 2–3 今天 shows only the headline a
   assert.match(render({ setup: setup(2), session: { ...session, name: " " } }), /<h1[^>]*>還差 2 步就設定好了。<\/h1>/);
   // Even a failed turn read stays out of the setup period.
   assert.doesNotMatch(render({ setup: setup(2), turns: { ...turns, payments: { state: "unavailable" } } }), /today-failure/);
-  assert.match(render({ setup: setup(2), session: { ...session, locale: "en" } }), /Good morning, 王怡君. 2 more steps and setup is done./);
+  assert.match(render({ setup: setup(2), session: { ...session, locale: "en" } }), /Good morning, 王怡君. Steps left before setup is done: 2./);
 });
 
 test("T-SETUP leaves normal 今天 for 0–1 steps, completion, flag OFF and other roles", () => {
