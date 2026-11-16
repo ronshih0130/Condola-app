@@ -75,10 +75,11 @@ test("PLT-51-AC1 / AC3 / AC4: completion mark renders the entire logo with the t
 });
 
 test("PLT-47-AC5: approved illustrations retain decorative SVG geometry and theme variables", () => {
-  for (const name of ["04", "05", "06", "08", "24", "26"] as const) {
+  for (const name of ["04", "05", "06", "08", "19", "24", "26"] as const) {
     const html = renderToStaticMarkup(<Illustration name={name} />);
     assert.match(html, /viewBox="0 0 176 120"/);
     assert.match(html, /aria-hidden="true"/);
+    assert.match(html, /focusable="false"/);
     assert.match(html, /var\(--c-primary\)/);
     assert.equal((html.match(/var\(--c-brand\)/g) ?? []).length, 1);
     assert.doesNotMatch(html, /#[0-9a-f]{3,8}|<title|aria-label/i);
