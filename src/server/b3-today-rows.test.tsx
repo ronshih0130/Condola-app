@@ -114,7 +114,7 @@ test("T-ROWS-2 / T-REPAIR full frame: kind order, one avatar and sentence per ro
   assert.equal((html.match(/class="party party-o"/g) ?? []).length, 1); assert.equal((html.match(/class="party party-v"/g) ?? []).length, 1);
   assert.doesNotMatch(html, /<button|class="btn pri"|rail|逾期 \d+ 天<\/span><\/a><\/li><li data-turn-kind="repair/);
   // T-LINE: every action in kind order, and only the parties that have rows.
-  assert.match(html, /確認 1 筆繳款、核對 1 筆費用、派工 1 件、重新估價 1 件、回覆 3 則、對帳 1 筆、月結 1 個月、詢問 1 份續約、提早找租客 1 件、找新租客 1 件。另外 5 件在等租客、屋主和廠商。/);
+  assert.match(html, /確認 1 筆繳款、核對 1 筆費用、派工 1 件、重新估價 1 件、處理中 1 件、回覆 3 則、對帳 1 筆、月結 1 個月、詢問 1 份續約、提早找租客 1 件、找新租客 1 件。另外 5 件在等租客、屋主、廠商和管理方。/);
   // Main line property, second line the repair item; the overdue badge never appears without an agreed date (no source).
   assert.match(html, /<strong>信義路 2 樓<\/strong><span>浴室天花板滴水・廠商沒有接<\/span>/);
   assert.equal((html.match(/逾期 \d+ 天/g) ?? []).length, 1, "only the rent row's badge");
@@ -123,10 +123,10 @@ test("T-ROWS-2 / T-REPAIR full frame: kind order, one avatar and sentence per ro
 test("MGT-149-AC2/AC5: viewer who cannot act reads 等管理方{step}, never 輪到你, and is not counted", () => {
   const blocked = repair("manager", "confirm_cost", { viewerCanAct: false, rule: "R8-blocked" });
   const html = render({ ...empty, repairs: repairs([], [blocked, repair("vendor", "report_cost", { viewerCanAct: false })]) });
-  assert.match(html, /王怡君早，今天沒有輪到你的事。/); assert.match(html, /另外 2 件在等廠商。/); assert.doesNotMatch(html, /在等[^<]*管理方。/);
-  // Only staff-held waits: no drawn party to name, so no waiting sentence (the group still shows).
+  // T-WAIT is kept; T-HEAD-VAR names 管理方 last when a staff-held row waits on someone else.
+  assert.match(html, /王怡君早，今天沒有輪到你的事。/); assert.match(html, /另外 2 件在等廠商和管理方。/);
   const staffOnly = render({ ...empty, repairs: repairs([], [blocked]) });
-  assert.doesNotMatch(staffOnly, /另外 \d+ 件在等/); assert.match(staffOnly, /等別人・1 件/);
+  assert.match(staffOnly, /今天沒有輪到你的事。/); assert.match(staffOnly, /另外 1 件在等管理方。/); assert.match(staffOnly, /等別人・1 件/);
   assert.match(html, /等管理方核對費用/); assert.match(html, /等廠商回報費用/); assert.doesNotMatch(html, /輪到你・|第 \d+ 天|data-testid="today-mine"/);
   assert.throws(() => render({ ...empty, repairs: repairs([repair("manager", "done")]) }), /Unapproved repair step/);
 });
@@ -312,4 +312,29 @@ test("approved new words are used verbatim (screens.md § Round 7 batch 2)", () 
   for (const word of ["核對費用", "派工", "重新估價", "處理中", "核准估價", "到場維修", "回報費用"]) assert.ok(Object.values(zh).includes(word), word);
   // Kinds with no data source stay hidden (GS-44): no strings for them ship.
   for (const missing of ["審閱期剩", "付押金", "簽名", "點交", "匯出", "加入失敗", "押金還沒結算", "逾期未完工"]) assert.ok(!JSON.stringify(zh).includes(missing), missing);
+});
+
+test("T-HEAD-VAR (Round 7 batch 4): every drawn headline variant, verbatim", () => {
+  const headline = (html: string) => [html.match(/<h1[^>]*>(.*?)<\/h1>/)?.[1], html.match(/data-testid="today-supporting">(.*?)<\/p>/)?.[1] ?? null];
+  // 有輪到你、也有等別人: 「派工 1 件、處理中 2 件。另外 2 件在等屋主和管理方。」
+  const both = render({ ...empty, repairs: repairs([repair("manager", "dispatch"), repair("manager", "in_progress"), repair("manager", "in_progress")],
+    [repair("owner", "approve_estimate", { viewerCanAct: false }), repair("manager", "confirm_cost", { viewerCanAct: false, rule: "R2" })]) });
+  assert.deepEqual(headline(both), ["王怡君早，今天輪到你的有 3 件。", "派工 1 件、處理中 2 件。另外 2 件在等屋主和管理方。"]);
+  // 有輪到你、沒有等別人: no 「另外…」 sentence.
+  const mineOnly = render({ ...empty, payments: { state: "ready", counts: [{ holder: "manager", step: "confirm_payment", count: 1 }], yourTurn: 1, mine: [payment("P1")], others: [] },
+    repairs: repairs([repair("manager", "dispatch")]) });
+  assert.deepEqual(headline(mineOnly), ["王怡君早，今天輪到你的有 2 件。", "確認 1 筆繳款、派工 1 件。"]);
+  // 沒有輪到你、只有等別人: T-WAIT, never 「0 件」.
+  const waitOnly = render({ ...empty, overdue, repairs: repairs([], [repair("vendor", "do_repair", { viewerCanAct: false }), repair("vendor", "report_cost", { viewerCanAct: false })]) });
+  assert.deepEqual(headline(waitOnly), ["王怡君早，今天沒有輪到你的事。", "另外 3 件在等租客和廠商。"]);
+  assert.doesNotMatch(waitOnly, /0 件/);
+  // All four parties, in order; 待你回覆 counts once in N.
+  const all = render({ ...empty, overdue, reply: kinds.reply, repairs: repairs([], [repair("manager", "dispatch", { viewerCanAct: false }), repair("vendor", "do_repair", { viewerCanAct: false }),
+    repair("owner", "approve_estimate", { viewerCanAct: false })]) });
+  assert.deepEqual(headline(all), ["王怡君早，今天輪到你的有 1 件。", "回覆 3 則。另外 4 件在等租客、屋主、廠商和管理方。"]);
+  // No name: drop 「{名字}早，」.
+  assert.equal(headline(render({ ...empty, repairs: repairs([repair("manager", "in_progress")]) }, { session: { ...session, name: "" } }))[0], "今天輪到你的有 1 件。");
+  const zh = copy.brandV3TodayCopy("zh-TW");
+  assert.equal(zh.inProgressSummary, "處理中 {count} 件"); assert.equal(zh.partyManager, "管理方");
+  assert.doesNotMatch(render({ ...empty, repairs: repairs([repair("owner", "approve_estimate", { viewerCanAct: false })]) }, { session: { ...session, locale: "en" } }), /\{[a-z]+\}/i);
 });
