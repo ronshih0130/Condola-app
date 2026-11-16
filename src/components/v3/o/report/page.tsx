@@ -6,6 +6,7 @@ import { StatementDocument } from "@/components/statement-document";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { OwnerNetLedgerPanel } from "@/components/owner-net-ledger-panel";
 import { OwnerReportReplies } from "@/components/owner-report-replies";
+import { Illustration } from "@/components/v3/illustrations";
 import { loadOwnerReport, type OwnerReportData } from "@/server/owner-report-v3";
 import type { Session } from "@/server/types";
 
@@ -30,7 +31,7 @@ export async function OwnerReportPage({ session, month }: { session: Session; mo
 export function OwnerReportView({ data, locale }: { data: OwnerReportData; locale: Locale }) {
   const t = makeT(locale), copy = brandV3OwnerReportCopy(locale);
   if (!data.month) return <section className="v3-owner-report" data-testid="owner-report-empty">
-    <h2>{t("i_owner_nav_stmt")}</h2><p>{t("i_statement_empty")}</p>
+    <div className="owner-empty"><Illustration name="19" /><h2>{copy.empty}</h2></div>
   </section>;
   const title = (month: string) => copy.title.replace("{month}", locale === "en" ? month : String(Number(month.slice(5))));
   return <section className="v3-owner-report" data-testid="owner-report" data-month={data.month}>

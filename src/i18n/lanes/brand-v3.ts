@@ -119,11 +119,12 @@ export function brandV3OwnerStateCopy(locale: Locale) {
     ? { error: "This is temporarily unavailable. Please try again.", retry: "Try again" }
     : { error: "這裡暫時讀不到，請再試一次。", retry: "再試一次" };
 }
-// O-RPT / O-RPT-SRC, D14. No P52 empty/one-off/other-source proposals.
+// O-RPT / O-RPT-SRC, D14. O-RPT-EMPTY heading: P52 approved 2026-11-15 11:42 PT (PR-018).
+// No drafted supporting sentence; no one-off/other-source proposals.
 export function brandV3OwnerReportCopy(locale: Locale) {
   return locale === "en"
-    ? { rent: "Rent income", title: "Monthly report · {month}", note: "Opening this report does not constitute confirmation or agreement.", source: "View source", sourceLine: "{n} confirmed payments · {date}" }
-    : { rent: "租金收入", title: "{month} 月月報", note: "打開月報不構成確認或同意。", source: "查來源", sourceLine: "{n} 筆已確認的繳款・{date}" };
+    ? { rent: "Rent income", title: "Monthly report · {month}", empty: "No monthly reports yet", note: "Opening this report does not constitute confirmation or agreement.", source: "View source", sourceLine: "{n} confirmed payments · {date}" }
+    : { rent: "租金收入", title: "{month} 月月報", empty: "還沒有月報", note: "打開月報不構成確認或同意。", source: "查來源", sourceLine: "{n} 筆已確認的繳款・{date}" };
 }
 // O-HOME / O-EST / O-EMPTY / O-STATES, revision 9; P52 zero lead uses the existing home title.
 export function brandV3OwnerHomeCopy(locale: Locale) {
