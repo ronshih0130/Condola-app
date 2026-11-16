@@ -18,6 +18,10 @@ const added = {
     addOnly: true,
     reason: "B-093 / OWN-35 (RO-DECIDED): two new migration-owned VOLATILE service-only SECURITY DEFINER read gateways, app.b093_owner_decided (keyset page of the owner's own decided estimates) and app.b093_owner_decided_ticket (one ticket's decided versions and status). Admission copies app.b013_owner_history: env/live tuple, app.b013_actor, app.b013_approvals_enabled and the PR-015 org-local current property-owner predicate, plus decided_by = actor. ACLs apply only to these new functions (EXECUTE to service_role only); no existing function, table grant, policy, column, data or flag changes; no writes. Fixed pg_catalog, pg_temp search_path. Not RPC-exposed.",
   },
+  "supabase/migrations/20261115190000_pr026_revoke_default_auth_grants.sql": {
+    addOnly: false,
+    reason: "PR-026 (a), Ron 2026-11-15 20:44 PT: REVOKE ALL ON nine public tables (auth_challenges, auth_login_attempts, auth_password_resets, auth_sessions, lease_signed_pdfs, listing_terms, month_closes, sample_marks, user_mfa) FROM anon, PUBLIC — Supabase default grants found on staging that main never grants. Not add-only (it removes privileges), but a no-op on databases built from main; RLS stays ON; authenticated/service_role untouched; no data, policy or flag change.",
+  },
   "supabase/migrations/20261115170000_b3_owner_pending_terminal.sql": {
     addOnly: false,
     reason: "B-070 3b M1 / B1: replace only PR-015 owner pending body with closed/cancelled exclusion. Existing behavior changes, not add-only. Signature, owner, ACL, history and writers preserved.",
