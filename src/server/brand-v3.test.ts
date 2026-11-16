@@ -92,6 +92,7 @@ test("PLT-46-AC1: actual root layout OFF serialization matches the pre-v3 commit
       "@/server/sandbox": { sandboxChrome: async () => ({ environment: "live" }) },
       "@/server/session": { requestPrefs: async () => ({ locale }), readSession: async () => session },
       "@/lib/brand-root": { brandRoot },
+      "@/server/vendor-workbench": { vendorWorkbenchBrandOrg: async () => null },
       "@/components/v3/role-avatar": { RoleAvatar },
     };
     const render = async (source: string) => {
