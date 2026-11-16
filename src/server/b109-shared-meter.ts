@@ -23,7 +23,18 @@ export type SharedMeterInput = { propertyId: string; requestId: string; spaceIds
 export type SharedMeterResult =
   | { ok: true; revision: number; effectiveFrom: string; spaceCount: number; method: SplitMethod; replayed: boolean }
   | { ok: false; reason: "off" | "forbidden" | "invalid" | "conflict" | "failed" };
-type Deps = { v3?: typeof brandV3ReadForOrg; transaction?: typeof svc };
+type Deps = { v3?: typeof brandV3ReadForOrg; transaction?: typeof svc; flag?: (orgId: string) => Promise<boolean> };
+
+/** The same shared_meter predicate the gateways check (org flag + platform enabled + allowlist), read before any role
+ *  check so a feature that is OFF is a 404 for every role, never a 403 page that reveals it. */
+async function sharedMeterFlagOn(orgId: string): Promise<boolean> {
+  if (!uuid(orgId)) return false;
+  return svc(null, async client => (await client.query<{ on: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM public.organizations o JOIN public.platform_settings f ON f.key='shared_meter'
+       WHERE o.id=$1 AND o.feature_flags->'shared_meter'='true'::jsonb
+         AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array'
+         AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)) AS on`, [orgId])).rows[0]?.on === true);
+}
 
 const str = (value: unknown): value is string => typeof value === "string";
 const uuid = (value: unknown): value is string => str(value) && isUuid(value);
@@ -54,6 +65,7 @@ export function parseSharedMeterView(value: unknown): Omit<Extract<SharedMeterVi
 
 async function admit(input: Session, deps: Deps): Promise<Session | { state: "off" | "forbidden" }> {
   if (!(await (deps.v3 ?? brandV3ReadForOrg)(input.orgId))) return { state: "off" };
+  if (!(await (deps.flag ?? sharedMeterFlagOn)(input.orgId))) return { state: "off" };
   // props.edit is admin + manager (GS-06: accountants and maintenance never see the entry).
   const session = await guardEffectiveSession(input, "props.edit");
   assertPerm(session, "props.edit");

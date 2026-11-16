@@ -93,31 +93,39 @@ test("MGT-90-AC6 states: field errors, GS-02 save failure keeps inputs with 再�
   }
 });
 
+test("shared_meter OFF is a 404 (off) for every role, checked before the role check", async () => {
+  for (const actor of [staff, { ...staff, role: "accountant" as const }, { ...staff, role: "maintenance" as const }]) {
+    assert.deepEqual(await sharedMeterView(actor, P, { v3: async () => true, flag: async () => false, transaction: never }), { state: "off" });
+    assert.deepEqual(await saveSharedMeter(actor, { propertyId: P, requestId: id(9), spaceIds: [id(1)], method: "even", startReading: "1" },
+      { v3: async () => true, flag: async () => false, transaction: never }), { ok: false, reason: "off" });
+  }
+});
+
 test("reader/writer: OFF never opens a transaction; P-ACC/P-MNT/portals 403; pinned org/env; exact gateway args; strict DTO", async () => {
   assert.deepEqual(await sharedMeterView(staff, P, { v3: async () => false, transaction: never }), { state: "off" });
   for (const actor of [{ ...staff, role: "accountant" as const }, { ...staff, role: "maintenance" as const }, { ...staff, kind: "owner" as const, role: null }, { ...staff, sessionId: "x" }]) {
-    assert.deepEqual(await sharedMeterView(actor, P, { v3: async () => true, transaction: never }), { state: "forbidden" });
-    assert.deepEqual(await saveSharedMeter(actor, { propertyId: P, requestId: id(9), spaceIds: [id(1)], method: "even", startReading: "1" }, { v3: async () => true, transaction: never }), { ok: false, reason: "forbidden" });
+    assert.deepEqual(await sharedMeterView(actor, P, { v3: async () => true, flag: async () => true, transaction: never }), { state: "forbidden" });
+    assert.deepEqual(await saveSharedMeter(actor, { propertyId: P, requestId: id(9), spaceIds: [id(1)], method: "even", startReading: "1" }, { v3: async () => true, flag: async () => true, transaction: never }), { ok: false, reason: "forbidden" });
   }
   const seen: { sql: string; args?: unknown[] }[] = [];
-  assert.deepEqual(await sharedMeterView(staff, P, { v3: async () => true, transaction: client(ready, seen) }), { state: "ready", ...ready });
+  assert.deepEqual(await sharedMeterView(staff, P, { v3: async () => true, flag: async () => true, transaction: client(ready, seen) }), { state: "ready", ...ready });
   assert.deepEqual(seen[2].args, [ORG, "live"]);
   assert.equal(seen[3].sql, "SELECT app.b109_shared_meter_view($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid) AS result");
-  assert.deepEqual(await sharedMeterView(staff, P, { v3: async () => true, transaction: client(null, []) }), { state: "off" });
+  assert.deepEqual(await sharedMeterView(staff, P, { v3: async () => true, flag: async () => true, transaction: client(null, []) }), { state: "off" });
   for (const bad of [{ ...ready, nextEffectiveFrom: "2026-12-02" }, { ...ready, spaces: [{ ...spaces[0], label: null }] },
     { ...ready, config: { revision: 1, spaceIds: [], method: "even", startReading: "1", effectiveFrom: "2026-12-01" } },
     { ...ready, config: { revision: 1, spaceIds: [id(1)], method: "none", startReading: "1", effectiveFrom: "2026-12-01" } }])
-    assert.deepEqual(await sharedMeterView(staff, P, { v3: async () => true, transaction: client(bad, []) }), { state: "unavailable" });
+    assert.deepEqual(await sharedMeterView(staff, P, { v3: async () => true, flag: async () => true, transaction: client(bad, []) }), { state: "unavailable" });
   assert.throws(() => parseSharedMeterView({ ...ready, spaces: [{ ...spaces[0], id: "x" }] }));
   const saves: { sql: string; args?: unknown[] }[] = [];
   const ok = await saveSharedMeter(staff, { propertyId: P, requestId: id(9), spaceIds: [id(1), id(2)], method: "sub_meter", startReading: " 1,284.5 " },
-    { v3: async () => true, transaction: client({ status: "saved", configId: id(8), revision: 2, effectiveFrom: "2026-12-01", spaceCount: 2, method: "sub_meter", replayed: false }, saves) });
+    { v3: async () => true, flag: async () => true, transaction: client({ status: "saved", configId: id(8), revision: 2, effectiveFrom: "2026-12-01", spaceCount: 2, method: "sub_meter", replayed: false }, saves) });
   assert.deepEqual(ok, { ok: true, revision: 2, effectiveFrom: "2026-12-01", spaceCount: 2, method: "sub_meter", replayed: false });
   assert.deepEqual(saves[3].args, [ORG, ORG, "live", staff.sessionId, id(9), P, [id(1), id(2)], "sub_meter", "1284.5"]);
   for (const bad of [{ spaceIds: [] }, { spaceIds: [id(1), id(1)] }, { method: "none" }, { startReading: "-1" }, { startReading: "1.2345" }, { requestId: "x" }])
-    assert.deepEqual(await saveSharedMeter(staff, { propertyId: P, requestId: id(9), spaceIds: [id(1)], method: "even", startReading: "1", ...bad }, { v3: async () => true, transaction: never }), { ok: false, reason: "invalid" }, JSON.stringify(bad));
+    assert.deepEqual(await saveSharedMeter(staff, { propertyId: P, requestId: id(9), spaceIds: [id(1)], method: "even", startReading: "1", ...bad }, { v3: async () => true, flag: async () => true, transaction: never }), { ok: false, reason: "invalid" }, JSON.stringify(bad));
   for (const [status, reason] of [["disabled", "off"], ["invalid", "invalid"], ["conflict", "conflict"], ["weird", "failed"]] as const)
-    assert.deepEqual(await saveSharedMeter(staff, { propertyId: P, requestId: id(9), spaceIds: [id(1)], method: "even", startReading: "1" }, { v3: async () => true, transaction: client({ status }, []) }), { ok: false, reason });
+    assert.deepEqual(await saveSharedMeter(staff, { propertyId: P, requestId: id(9), spaceIds: [id(1)], method: "even", startReading: "1" }, { v3: async () => true, flag: async () => true, transaction: client({ status }, []) }), { ok: false, reason });
 });
 
 test("wiring: route under brand_v3 with consent; action checks consent; B-017 map; flag registered; ≥44px targets; no outbound", () => {
@@ -142,16 +150,16 @@ test("split preview caller: page admission mirrored; input mirrors the gateway; 
   const input = { propertyId: P, period: "2026-12-01", kwh: "10", amountMinor: "1000" };
   assert.deepEqual(await sharedMeterSplit(staff, input, { v3: async () => false, transaction: never }), { state: "off" });
   for (const actor of [{ ...staff, role: "accountant" as const }, { ...staff, role: "maintenance" as const }, { ...staff, kind: "tenant" as const, role: null }])
-    assert.deepEqual(await sharedMeterSplit(actor, input, { v3: async () => true, transaction: never }), { state: "forbidden" });
+    assert.deepEqual(await sharedMeterSplit(actor, input, { v3: async () => true, flag: async () => true, transaction: never }), { state: "forbidden" });
   for (const bad of [{ period: "2026-12-02" }, { kwh: "1.2345" }, { kwh: "-1" }, { amountMinor: "1.5" }, { amountMinor: "1000000000000001" }, { propertyId: "x" }])
-    assert.deepEqual(await sharedMeterSplit(staff, { ...input, ...bad }, { v3: async () => true, transaction: never }), { state: "unavailable" }, JSON.stringify(bad));
+    assert.deepEqual(await sharedMeterSplit(staff, { ...input, ...bad }, { v3: async () => true, flag: async () => true, transaction: never }), { state: "unavailable" }, JSON.stringify(bad));
   const rows = [{ id: id(1), kind: "room", unitLabel: "3F", label: "A", weight: "60", kwh: "5.609", amountMinor: "561" },
     { id: id(2), kind: "room", unitLabel: "3F", label: "B", weight: "30", kwh: "2.803", amountMinor: "280" },
     { id: id(3), kind: "room", unitLabel: "3F", label: "C", weight: "10", kwh: "0.934", amountMinor: "93" },
     { id: id(4), kind: "whole_unit", unitLabel: "5F", label: null, weight: "7", kwh: "0.654", amountMinor: "66" }];
   const ready = { status: "ready", period: "2026-12-01", revision: 3, method: "sub_meter", effectiveFrom: "2026-12-01", startReading: "0.000", kwh: "10.000", amountMinor: "1000", rows };
   const seen: { sql: string; args?: unknown[] }[] = [];
-  const result = await sharedMeterSplit(staff, input, { v3: async () => true, transaction: client(ready, seen) });
+  const result = await sharedMeterSplit(staff, input, { v3: async () => true, flag: async () => true, transaction: client(ready, seen) });
   assert.equal(result.state, "ready");
   assert.equal(seen[3].sql, "SELECT app.b109_shared_meter_split($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::date,$7::numeric,$8::bigint) AS result");
   assert.deepEqual(seen[3].args, [ORG, ORG, "live", staff.sessionId, P, "2026-12-01", "10", "1000"]);
@@ -166,6 +174,6 @@ test("split preview caller: page admission mirrored; input mirrors the gateway; 
   assert.deepEqual(parseSharedMeterSplit({ status: "none", period: "2026-12-01" }), { state: "none" });
   for (const bad of [{ ...ready, rows: [{ ...rows[0], kwh: "5.610" }, ...rows.slice(1)] }, { ...ready, rows: [{ ...rows[0], amountMinor: "560" }, ...rows.slice(1)] },
     { ...ready, rows: [] }, { ...ready, method: "none" }, { status: "missing_readings", spaces: [] }, { status: "weird" }])
-    assert.deepEqual(await sharedMeterSplit(staff, input, { v3: async () => true, transaction: client(bad, []) }), { state: "unavailable" }, JSON.stringify(bad).slice(0, 60));
+    assert.deepEqual(await sharedMeterSplit(staff, input, { v3: async () => true, flag: async () => true, transaction: client(bad, []) }), { state: "unavailable" }, JSON.stringify(bad).slice(0, 60));
   assert.equal((JSON.parse(read("src/server/b017-entry-permissions.json")) as Record<string, unknown>)["src/server/b109-shared-meter.ts#sharedMeterSplit"], "props.edit");
 });
