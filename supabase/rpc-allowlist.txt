@@ -87,3 +87,8 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # B-063 service-only inventory (NOT authenticated RPC allowlist entries).
 # ACL/config asserted by the B-063 probe in scripts/check-function-privileges.sh.
 # service-only: app.b063_vendor_workbench(text,uuid)
+
+# B-112 service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-112 probe in scripts/check-function-privileges.sh.
+# service-only: app.b112_vendor_address(text,uuid,boolean)
+# service-only: app.b112_save_vendor_address(text,uuid,boolean,uuid,integer,text)

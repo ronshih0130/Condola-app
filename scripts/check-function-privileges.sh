@@ -256,6 +256,37 @@ BEGIN
   END IF;
  END LOOP;
 END $b105_gateways$;
+-- B-112 service-only gateways and internal helpers, migration-owned VOLATILE definers; private ledger revoked.
+DO $b112_gateways$
+DECLARE signature text; fn record; role_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b112_vendor_address(text,uuid,boolean)',
+  'app.b112_save_vendor_address(text,uuid,boolean,uuid,integer,text)',
+  'app.b112_enabled(uuid,boolean)',
+  'app.b112_account_profile(text,uuid,boolean,boolean)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b112_enabled%' AND signature NOT LIKE 'app.b112_account_profile%')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-112 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.b112_address_saves'::regclass) THEN
+  RAISE EXCEPTION 'B-112 table RLS is off';
+ END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  IF has_table_privilege(role_name,'app.b112_address_saves','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege(role_name,'app.b112_address_saves','SELECT,INSERT,UPDATE,REFERENCES') THEN
+   RAISE EXCEPTION 'B-112 table privilege leaked to %',role_name;
+  END IF;
+ END LOOP;
+END $b112_gateways$;
 DO $b104_helpers$
 DECLARE signature text; fn record; table_name text; role_name text;
 BEGIN
