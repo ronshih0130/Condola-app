@@ -68,7 +68,9 @@ function withoutApprovedReportRentNames(source: string, rel: string) {
 
 // PENDING-RON PR-016 (Ron 2026-11-15 11:42 PT): exact owner/vendor own-status strings, in their own lane only.
 const OWN_STATUS_LANE = "src/i18n/lanes/brand-v3-own-status.ts";
-const OWN_STATUS_EXACT = ["代屋主確認收款", "收款帳戶是屋主的，你只是代他在系統裡記下「已收到」，不是代他收錢。", "已代{屋主}記下這筆收款。", "收款", "待收款", "待收款紀錄"];
+// B-063 adds two approved vendor empty-state strings (VEN-14-AC4 V-EMPTY; V-RECV empty, PR-018).
+const OWN_STATUS_EXACT = ["代屋主確認收款", "收款帳戶是屋主的，你只是代他在系統裡記下「已收到」，不是代他收錢。", "已代{屋主}記下這筆收款。", "收款", "待收款", "待收款紀錄",
+  "目前沒有未結案件，也沒有待收款。免下載 App，用這個網頁就行。", "還沒有待收款紀錄"];
 function withoutOwnStatus(source: string, rel: string) {
   if (rel !== OWN_STATUS_LANE) return source;
   let out = source;

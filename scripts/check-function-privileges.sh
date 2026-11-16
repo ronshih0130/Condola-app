@@ -206,6 +206,21 @@ BEGIN
   END IF;
  END LOOP;
 END $mf3_topup$;
+-- B-063 service-only gateway ACL/config probe, migration-owned VOLATILE vendor workbench reader.
+DO $b063_gateway$
+DECLARE fn record;
+BEGIN
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b063_vendor_workbench(text,uuid)'::regprocedure;
+ IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+  OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+  OR has_function_privilege('anon',fn.oid,'EXECUTE')
+  OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+    WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-063 gateway ACL/config mismatch: app.b063_vendor_workbench(text,uuid)';
+ END IF;
+END $b063_gateway$;
 DO $b104_helpers$
 DECLARE signature text; fn record; table_name text; role_name text;
 BEGIN

@@ -64,7 +64,8 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
   }
   // Account shell has its own read-only cookie authentication; avoid session touch
   // and unrelated persona/sandbox provisioning, including while its flag is OFF.
-  if (path === "/vendor-account") return { session: null, seedSample: false };
+  // B-063: the vendor workbench routes under it use the same account authentication.
+  if (path === "/vendor-account" || path.startsWith("/vendor-account/")) return { session: null, seedSample: false };
   const portalCookie = jar.get(PORTAL_ROLE_COOKIE)?.value ?? null;
   let seedSample = false;
   const found = await withMissingConsentFallback(() => client.query<IdentityRow>(
