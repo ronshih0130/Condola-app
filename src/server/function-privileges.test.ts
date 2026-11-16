@@ -430,3 +430,37 @@ test("B-063 adds one vendor workbench gateway reusing the B-026 history job read
   assert.match(sql, /SET LOCAL lock_timeout='5s'/);
   assert.match(sql, /SET LOCAL statement_timeout='60s'/);
 });
+
+test("B-076a adds one service-only, migration-owned phone-history reader and no table, grant or policy", () => {
+  const sql = read("supabase/migrations/20261116170000_b076a_phone_history.sql");
+  const b093 = read("supabase/migrations/20261115200000_b093_owner_decided.sql");
+  const tuple = b093.slice(b093.indexOf("  SELECT 1 FROM public.organizations o\n"), b093.indexOf(" ) THEN RAISE EXCEPTION 'errors.forbidden'"));
+  assert.ok(tuple.length > 200);
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]), ["b076a_phone_history"]);
+  assert.ok(sql.includes(tuple), "env/live tuple");
+  assert.match(sql, /current_setting\('app\.active_org_id',true\) IS DISTINCT FROM p_org::text/);
+  assert.match(sql, /VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+  assert.match(sql, /x\.revoked_at IS NULL AND x\.expires_at>clock_timestamp\(\) FOR SHARE/);
+  assert.match(sql, /WHERE m\.org_id=p_live AND m\.user_id=actor AND m\.status::text='active' FOR SHARE;/);
+  assert.match(sql, /member_role NOT IN \('admin','manager'\)/);
+  assert.match(sql, /o\.feature_flags->'tenant_directory_edit'='true'::jsonb/);
+  assert.match(sql, /c\.org_id=p_org AND c\.id=p_contact AND c\.is_tenant/);
+  assert.match(sql, /a\.reason='tenant_directory_contact_edit' AND 'phone_e164'=ANY\(a\.changed_cols\)/);
+  assert.match(sql, /JOIN app\.b015_edit_commands cmd ON cmd\.org_id=a\.org_id AND cmd\.actor_id=a\.actor_user_id/);
+  assert.match(sql, /OPEN: only B-015 staff edits are listed/);
+  const code = sql.slice(sql.indexOf("AS $$"), sql.indexOf("END $$;")).replace(/DISTINCT FROM/g, "");
+  for (const ref of code.matchAll(/\b(?:FROM|JOIN)\s+([a-z_][\w.]*)/g))
+    assert.match(ref[1], /^(?:public\.\w+|app\.\w+|h|masked)$/, ref[0]);
+  // The raw numbers are only read inside the CTE; the returned object carries masked values only.
+  const returned = sql.slice(sql.indexOf("SELECT jsonb_build_object('tenant'"), sql.indexOf("INTO result;"));
+  assert.doesNotMatch(returned, /old_phone|new_phone|phone_e164/);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|CREATE TABLE|ALTER |DROP |INSERT |UPDATE |DELETE |GRANT[^;]*TABLE|CREATE POLICY|platform_settings \(/i);
+  const compact = sql.replace(/\s+/g, ""), signature = "b076a_phone_history(uuid,uuid,text,uuid,uuid,bigint,integer)";
+  assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`));
+  assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+  assert.equal((compact.match(/GRANT[A-Z]*ONFUNCTION/g) ?? []).length, 1);
+  assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  assert.match(read("scripts/check-function-privileges.sh"), /B-076a gateway ACL\/config mismatch/);
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(sql, /SET LOCAL statement_timeout='60s'/);
+});

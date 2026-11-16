@@ -183,3 +183,10 @@ test("B-063 vendor workbench gateway is inventoried service-only, never authenti
   assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b063_")));
   assert.doesNotMatch(read("supabase/migrations/20261116100000_b063_vendor_workbench.sql"), /FUNCTION public\./);
 });
+
+test("B-076a phone-history reader is inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  assert.ok(allow.includes("# service-only: app.b076a_phone_history(uuid,uuid,text,uuid,uuid,bigint,integer)"));
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b076a_")));
+  assert.doesNotMatch(read("supabase/migrations/20261116170000_b076a_phone_history.sql"), /FUNCTION public\./);
+});
