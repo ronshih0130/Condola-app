@@ -209,10 +209,10 @@ test("F1: a viewer who cannot act is never told 「你」, on the current step o
     assert.match(page, /aria-label="報修進度，現在輪到管理方/);
     assert.ok(!page.includes("ticket-relay-lead"));
   }
-  // A viewer who can act: 「你」 on the current step only; the done 派工 is not attributed to anyone.
+  // A viewer who can act: 「你」 on the current step only; the done 派工 says 管理方 (batch 3 redraw), never a person.
   const can = estimateRelay(facts({ rule: "R2", step: "confirm_cost" }));
   assert.deepEqual(can.nodes?.map(n => n.party === "m" ? `${n.step}:${n.state}:${n.subs.map(x => x.kind).join(",")}` : n.party),
-    ["t", "dispatch:done:", "v", "confirm_cost:now:you"]);
+    ["t", "dispatch:done:manager", "v", "confirm_cost:now:you"]);
   assert.ok(can.hidden.includes("dispatcher_name"));
   assert.match(html({ state: "ready", view: "estimate", relay: can }), /aria-label="報修進度，現在輪到你核對費用"/);
 });
