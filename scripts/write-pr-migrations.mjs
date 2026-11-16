@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116150000_lpq21_sequence_grants.sql": {
+    addOnly: false,
+    reason: "LPQ-21 / B-108 (Ron 2026-11-16 「LPQ-21 併入 PR」): REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, PUBLIC, plus ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, PUBLIC (no-op where there is no postgres role; fails closed if the runner cannot act for it). Not add-only (it removes privileges); authenticated/service_role, tables, functions, policies, data and flags unchanged.",
+  },
   "supabase/migrations/20261116120000_pr029_default_privileges.sql": {
     addOnly: false,
     reason: "PR-029 (a), Ron 2026-11-16 ~02:20 PT (relayed): ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, PUBLIC, so new tables stop inheriting the Supabase anon default found on staging. Not add-only (it removes default privileges), but a no-op on databases without a postgres role (CI/local) and fails closed if the current user cannot act for postgres. Existing table grants, authenticated/service_role defaults, sequences, functions, policies, data and flags unchanged.",
