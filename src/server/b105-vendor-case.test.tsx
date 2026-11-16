@@ -6,7 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { VendorCaseView, type VendorCaseViewProps } from "../components/v3/vendor/vendor-case";
 import { VendorCasePhotos } from "../components/v3/vendor/vendor-case-photos";
 import { vendorCaseCopy } from "../i18n/lanes/brand-v3-vendor-case";
-import { parseDecisionInput, parseVendorCase, vendorCaseStage, type VendorCase } from "./b105-vendor-case";
+import { calendarDate, loadVendorCase, parseDecisionInput, parseVendorCase, vendorCaseStage, type VendorCase } from "./b105-vendor-case";
+import { createDecisionController, createPhotoUploadController } from "../components/v3/vendor/vendor-case-controller";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const token = Buffer.alloc(32, 7).toString("base64url");
@@ -165,4 +166,110 @@ test("44px targets and 0 outbound: shell-scoped CSS and no messaging imports in 
     "src/components/v3/vendor/vendor-case-photo-upload.tsx", "supabase/migrations/20261116160000_b105_vendor_case.sql"]) {
     assert.doesNotMatch(read(file), /line\/(?:push|messaging)|sendSms|sendEmail|resend|twilio|outbox|b039|b028_notification|pushMessage/i, file);
   }
+});
+
+// ---- Round 2: admission-gated read errors (Codex 2), strict dates (Codex 3), client controllers (UI 14-17) ----
+
+test("a failed case read shows v3 state only after a positive vendor_job_v3 admission; otherwise legacy", async () => {
+  const calls: string[] = [];
+  const run = (answers: Record<string, unknown>) => async (sql: string) => {
+    const key = sql.includes("_admitted") ? "probe" : "case"; calls.push(key);
+    const answer = answers[key]; if (answer instanceof Error) throw answer; return answer;
+  };
+  assert.equal(await loadVendorCase(token, run({ case: null })), null, "OFF / not admitted");
+  assert.deepEqual(calls, ["case"]);
+  assert.equal(await loadVendorCase(token, run({ case: new Error("db"), probe: false })), null, "not proven ON -> legacy");
+  assert.equal(await loadVendorCase(token, run({ case: new Error("db"), probe: new Error("db") })), null, "probe failed -> legacy");
+  assert.equal(await loadVendorCase(token, run({ case: new Error("db"), probe: "true" })), null, "only boolean true admits");
+  assert.deepEqual(await loadVendorCase(token, run({ case: new Error("db"), probe: true })), { state: "unavailable" });
+  assert.deepEqual(await loadVendorCase(token, run({ case: { malformed: true } })), { state: "unavailable" }, "non-NULL answer is admission");
+  assert.equal((await loadVendorCase(token, run({ case: base })))?.state, "ready");
+  assert.equal(await loadVendorCase("short", run({ case: base })), null);
+});
+
+test("calendar dates are strict: impossible days never reach the date cast", () => {
+  for (const ok of ["2026-02-28", "2028-02-29", "2026-12-31", "0001-01-01"]) assert.equal(calendarDate(ok), true, ok);
+  for (const bad of ["2026-02-29", "2026-02-30", "2026-04-31", "2026-13-01", "2026-00-10", "2026-01-00", "0000-01-01", "2026-1-01", " 2026-01-01", 20260101]) {
+    assert.equal(calendarDate(bad), false, String(bad));
+  }
+  const requestId = "00000000-0000-4000-8000-000000000003";
+  assert.equal(parseDecisionInput({ requestId, decision: "accepted", agreedOn: "2026-02-30" }), null);
+  assert.ok(read("src/server/b105-vendor-case.ts").includes('["22007", "22008", "22P02"]'), "a date cast error maps to rejected_invalid");
+});
+
+type Call = { url: string; body: unknown };
+function fakeFetch(responses: Array<{ status: number; body: unknown } | Error>) {
+  const calls: Call[] = [];
+  const fetch = async (url: string, init: RequestInit) => {
+    calls.push({ url, body: typeof init.body === "string" ? JSON.parse(init.body) : init.body });
+    const next = responses.shift(); if (!next) throw new Error("unexpected fetch");
+    if (next instanceof Error) throw next;
+    return new Response(JSON.stringify(next.body), { status: next.status, headers: { "content-type": "application/json" } });
+  };
+  return { calls, fetch };
+}
+
+test("decision controller: double-submit guard, one request id across retries, conflict reloads, invalid keeps state", async () => {
+  let reloads = 0; let n = 0;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const { calls, fetch } = fakeFetch([new Error("offline"), { status: 503, body: { status: "busy" } }, { status: 200, body: { status: "recorded" } }]);
+  const slow = async (url: string, init: RequestInit) => { await gate; return fetch(url, init); };
+  const c = createDecisionController({ fetch: slow, reload: () => { reloads++; }, newId: () => `id-${++n}` });
+  const first = c.submit(token, "accepted", { agreedOn: "2026-11-21" });
+  assert.equal(await c.submit(token, "accepted", { agreedOn: "2026-11-21" }), "busy", "second click while pending");
+  release();
+  assert.equal(await first, "failed");
+  assert.equal(await c.submit(token, "accepted", { agreedOn: "2026-11-21" }), "failed");
+  assert.equal(await c.submit(token, "accepted", { agreedOn: "2026-11-21" }), "recorded");
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls.map(call => (call.body as { requestId: string }).requestId), ["id-1", "id-1", "id-1"]);
+  assert.equal(reloads, 1);
+
+  const conflict = fakeFetch([{ status: 409, body: { status: "rejected_conflict" } }]);
+  const d = createDecisionController({ fetch: conflict.fetch, reload: () => { reloads++; }, newId: () => `id-${++n}` });
+  assert.equal(await d.submit(token, "declined", { reason: " 這週排不出時間 " }), "conflict");
+  assert.equal(reloads, 2, "another tab decided: reload so the stored decision shows");
+  assert.deepEqual(conflict.calls[0].body, { token, requestId: "id-4", decision: "declined", reason: "這週排不出時間" });
+
+  const invalid = fakeFetch([{ status: 400, body: { status: "rejected_invalid" } }]);
+  const e = createDecisionController({ fetch: invalid.fetch, reload: () => { reloads++; }, newId: () => `id-${++n}` });
+  assert.equal(await e.submit(token, "accepted", { agreedOn: "" }), "invalid");
+  assert.equal(reloads, 2, "invalid keeps the page and its inputs");
+  assert.deepEqual(invalid.calls[0].body, { token, requestId: "id-5", decision: "accepted", agreedOn: null });
+});
+
+test("upload controller: busy during prepare, file kept on retry, retry after upload only repeats confirm", async () => {
+  const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "修好.jpg", { type: "image/jpeg" });
+  let reloads = 0;
+  let finishPrepare!: () => void;
+  const preparing = new Promise<void>(resolve => { finishPrepare = resolve; });
+  const { calls, fetch } = fakeFetch([
+    { status: 200, body: { ok: true, uploadUrl: "https://storage.test/up", path: "org/o/tickets/t/f.jpg", uploadToken: "grant" } },
+    { status: 200, body: {} },
+    { status: 400, body: { ok: false, error: "errors.generic" } },
+    new Error("offline"),
+    { status: 200, body: { ok: true, id: "attachment" } },
+  ]);
+  let prepared = 0;
+  const c = createPhotoUploadController({ fetch, reload: () => { reloads++; }, token, phase: "before",
+    prepare: async f => { prepared++; await preparing; return { file: f, mime: "image/jpeg" }; } });
+  const first = c.pick(file);
+  assert.equal(c.busy, true, "busy while HEIC/size checks run");
+  assert.equal(await c.pick(file), "busy", "a second pick during preparation is refused");
+  finishPrepare();
+  assert.equal(await first, "failed");
+  assert.equal(prepared, 1);
+  assert.equal(c.kept?.file, file, "the chosen file is kept");
+  assert.deepEqual(c.kept?.signed, { path: "org/o/tickets/t/f.jpg", uploadToken: "grant" });
+  assert.equal(await c.retry(), "failed");
+  assert.equal(await c.retry(), "saved");
+  assert.deepEqual(calls.map(call => call.url), ["/api/vendor-jobs/photos/sign", "https://storage.test/up",
+    "/api/vendor-jobs/case-photos/confirm", "/api/vendor-jobs/case-photos/confirm", "/api/vendor-jobs/case-photos/confirm"]);
+  for (const call of calls.slice(2)) assert.deepEqual(call.body, { token, phase: "before", path: "org/o/tickets/t/f.jpg", fileName: "修好.jpg", mime: "image/jpeg", size: 4, uploadToken: "grant" });
+  assert.equal(c.kept, null); assert.equal(reloads, 1);
+
+  const refused = createPhotoUploadController({ fetch: fakeFetch([]).fetch, reload: () => { reloads++; }, token, phase: "after", prepare: async () => "too big" });
+  assert.deepEqual(await refused.pick(file), { invalid: "too big" });
+  assert.equal(refused.kept, null);
 });

@@ -1,7 +1,9 @@
 import { brandV2Enabled } from "./brand-v2";
-import { svc } from "./db";
+import { maybe, svc } from "./db";
 import { FlowError } from "./errors";
-import { confirmVendorPhoto } from "./vendor-repair";
+import { acceptPhotoObject, assertPhotoMeta, isTicketPhotoPath, photoFileId } from "./repair-rules";
+import { inspectRepairObject, removeRepairObject, vendorUploadGrantMatches } from "./ticket-photos";
+import { recordStoredFileUsage } from "./usage-events";
 import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
 
 /**
@@ -65,14 +67,32 @@ export function vendorCaseStage(value: Pick<VendorCase, "closed" | "decision" | 
   return value.ownerWaitVersion !== null ? "owner_wait" : "open";
 }
 
-/** null: OFF or not admitted (callers keep their existing response). unavailable: GS-02 read error. */
-export async function loadVendorCase(token: string): Promise<LoadedVendorCase | null> {
+type Run = (sql: string, params: unknown[]) => Promise<unknown>;
+const runSvc: Run = (sql, params) => svc(null, async client => (await client.query<{ r: unknown }>(sql, params)).rows[0]?.r ?? null);
+
+/**
+ * null: OFF, not admitted, or not proven ON (callers keep the legacy V-TOKEN response).
+ * unavailable: vendor_job_v3 positively admits this bearer, but the case could not be read (GS-02 read error).
+ */
+export async function loadVendorCase(token: string, run: Run = runSvc): Promise<LoadedVendorCase | null> {
   if (!vendorTokenAcceptable(token)) return null;
+  const params = [hashVendorToken(token), brandV2Enabled()];
+  let raw: unknown;
   try {
-    const raw = await svc(null, async client => (await client.query<{ c: unknown }>(
-      "SELECT app.b105_vendor_case($1,$2) AS c", [hashVendorToken(token), brandV2Enabled()])).rows[0]?.c ?? null);
-    return raw === null ? null : { state: "ready", value: parseVendorCase(raw) };
+    raw = await run("SELECT app.b105_vendor_case($1,$2) AS r", params);
   } catch {
+    // The flag is not proven ON by a failed read: only a positive admission answer may show a v3 state.
+    try {
+      return (await run("SELECT app.b105_vendor_case_admitted($1,$2) AS r", params)) === true ? { state: "unavailable" } : null;
+    } catch {
+      return null;
+    }
+  }
+  if (raw === null || raw === undefined) return null;
+  try {
+    return { state: "ready", value: parseVendorCase(raw) };
+  } catch {
+    // A non-NULL answer is itself a positive admission.
     return { state: "unavailable" };
   }
 }
@@ -81,6 +101,16 @@ export type DecisionInput = { requestId: string; decision: "accepted" | "decline
 export type DecisionResult = { status: "recorded"; decision: "accepted" | "declined"; replayed: boolean }
   | { status: "rejected_invalid" | "rejected_conflict" };
 
+/** A real calendar day as YYYY-MM-DD (rejects 2026-02-30, 2026-13-01 and years outside 1..9999). */
+export function calendarDate(value: unknown): value is string {
+  if (typeof value !== "string" || !DATE.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const date = new Date(Date.UTC(2000, month - 1, day));
+  date.setUTCFullYear(year);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 /** Request-shape validation shared by the route and the tests; the gateway re-validates everything. */
 export function parseDecisionInput(value: unknown): DecisionInput | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -88,7 +118,7 @@ export function parseDecisionInput(value: unknown): DecisionInput | null {
   if (typeof v.requestId !== "string" || !UUID.test(v.requestId)) return null;
   if (v.decision !== "accepted" && v.decision !== "declined") return null;
   const agreedOn = v.agreedOn == null || v.agreedOn === "" ? null : v.agreedOn;
-  if (agreedOn !== null && (typeof agreedOn !== "string" || !DATE.test(agreedOn) || Number.isNaN(Date.parse(`${agreedOn}T00:00:00Z`)))) return null;
+  if (agreedOn !== null && !calendarDate(agreedOn)) return null;
   if (v.reason != null && typeof v.reason !== "string") return null;
   const reason = typeof v.reason === "string" && v.reason.trim() ? v.reason.trim() : null;
   if (reason !== null && reason.length > 500) return null;
@@ -97,9 +127,15 @@ export function parseDecisionInput(value: unknown): DecisionInput | null {
   return { requestId: v.requestId, decision: v.decision, agreedOn: agreedOn as string | null, reason };
 }
 
+function sqlState(error: unknown) {
+  return (error as { code?: string }).code ?? (error as { cause?: { code?: string } }).cause?.code;
+}
 function denied(error: unknown) {
-  const code = (error as { code?: string }).code ?? (error as { cause?: { code?: string } }).cause?.code;
-  return code === "42501";
+  return sqlState(error) === "42501";
+}
+/** 22007 invalid_datetime_format, 22008 datetime_field_overflow, 22P02 invalid_text_representation. */
+function badInput(error: unknown) {
+  return ["22007", "22008", "22P02"].includes(sqlState(error) ?? "");
 }
 
 /** 接受工單 / 確定不接. Throws FlowError("errors.notFound") when the bearer is not admitted (nothing written). */
@@ -111,28 +147,66 @@ export async function decideVendorCase(token: string, input: DecisionInput): Pro
       [hashVendorToken(token), brandV2Enabled(), input.requestId, input.decision, input.agreedOn, input.reason])).rows[0].r);
   } catch (error) {
     if (denied(error)) throw new FlowError("errors.notFound");
+    if (badInput(error)) return { status: "rejected_invalid" };
     throw error;
   }
 }
 
 /**
- * RV-PHOTOS upload confirm: only an accepted, open case. The existing vendor confirm attaches the file
- * (same storage, limits and link checks); the B-105 gateway then tags this job's own upload with its set.
- * A retry with the same upload is idempotent end to end, so a failed tag never needs a second file.
+ * RV-PHOTOS upload confirm. The case must be accepted and open. The upload grant (issued by the existing vendor
+ * sign route to this token, ticket and path) and the stored bytes are checked first; then ONE service transaction
+ * runs app.b105_vendor_attach_photo, which writes the files row and the attachment with its set together, and
+ * records stored-file usage. A refusal or failure leaves no file row or attachment behind. Retrying the same
+ * upload returns the same attachment.
  */
-export async function confirmVendorCasePhoto(token: string, phase: CasePhase, input: Parameters<typeof confirmVendorPhoto>[1]) {
+const DISCARD = new Set(["errors.photoLimit", "errors.photoType", "errors.photoSize", "errors.photoStorage", "errors.photoHeic"]);
+export type CasePhotoInput = { path: string; fileName: string; mime: string; size: number; uploadToken: string };
+type CasePhotoDeps = { inspect?: typeof inspectRepairObject; remove?: typeof removeRepairObject };
+
+export async function confirmVendorCasePhoto(token: string, phase: CasePhase, input: CasePhotoInput, deps: CasePhotoDeps = {}) {
+  if (!vendorTokenAcceptable(token) || (phase !== "before" && phase !== "after")) throw new FlowError("errors.notFound");
+  const hash = hashVendorToken(token);
   const loaded = await loadVendorCase(token);
   if (!loaded) throw new FlowError("errors.notFound");
   if (loaded.state !== "ready") throw new FlowError("errors.generic");
   const stage = vendorCaseStage(loaded.value);
   if (stage !== "open" && stage !== "owner_wait") throw new FlowError("errors.notFound");
-  const id = await confirmVendorPhoto(token, input);
+  const job = await svc(null, client => maybe<{ org_id: string; ticket_id: string }>(client,
+    "SELECT org_id::text, ticket_id::text FROM app.open_vendor_job($1)", [hash]));
+  if (!job) throw new FlowError("errors.notFound");
+  const fileId = photoFileId(input.path);
+  if (!fileId || !isTicketPhotoPath(input.path, job.org_id, job.ticket_id)
+    || !vendorUploadGrantMatches(hash, job.ticket_id, input.path, input.uploadToken ?? "")) throw new FlowError("errors.forbidden");
+  let accepted: { size: number; mime: string };
+  let fileName: string;
   try {
-    await svc(null, client => client.query("SELECT app.b105_vendor_photo_phase($1,$2,$3::uuid,$4)",
-      [hashVendorToken(token), brandV2Enabled(), id, phase]));
+    const meta = assertPhotoMeta({ fileName: input.fileName, mime: input.mime, size: input.size });
+    fileName = meta.fileName;
+    const stored = await (deps.inspect ?? inspectRepairObject)(input.path);
+    accepted = acceptPhotoObject({ size: stored.size, mime: stored.mime, header: stored.header }, meta.mime);
+  } catch (error) {
+    // A rejected object that no file row references is this grant's own orphan: remove it, as the existing confirm does.
+    if (error instanceof FlowError && DISCARD.has(error.key)) {
+      const referenced = await svc(null, client => maybe<{ id: string }>(client,
+        "SELECT id::text FROM public.files WHERE storage_path=$1", [input.path]));
+      if (!referenced) await (deps.remove ?? removeRepairObject)(input.path);
+    }
+    throw error;
+  }
+  let result: { status: string; id?: string; replayed?: boolean };
+  try {
+    result = await svc(null, async client => {
+      const r = (await client.query<{ r: { status: string; id?: string; replayed?: boolean } }>(
+        "SELECT app.b105_vendor_attach_photo($1,$2,$3::uuid,$4,$5,$6,$7::bigint,$8) AS r",
+        [hash, brandV2Enabled(), fileId, input.path, fileName, accepted.mime, accepted.size, phase])).rows[0].r;
+      if (r.status === "recorded" && !r.replayed) await recordStoredFileUsage(client, job.org_id, fileId);
+      return r;
+    });
   } catch (error) {
     if (denied(error)) throw new FlowError("errors.notFound");
     throw error;
   }
-  return id;
+  if (result.status === "rejected_limit") throw new FlowError("errors.photoLimit");
+  if (result.status !== "recorded" || !result.id) throw new FlowError("errors.required");
+  return result.id;
 }

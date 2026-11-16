@@ -184,15 +184,18 @@ DECLARE signature text; fn record; role_name text;
 BEGIN
  FOREACH signature IN ARRAY ARRAY[
   'app.b105_vendor_case(text,boolean)',
+  'app.b105_vendor_case_admitted(text,boolean)',
   'app.b105_vendor_decide(text,boolean,uuid,text,date,text)',
-  'app.b105_vendor_photo_phase(text,boolean,uuid,text)',
+  'app.b105_vendor_attach_photo(text,boolean,uuid,text,text,text,bigint,text)',
   'app.b105_enabled(uuid,boolean)',
+  'app.b105_read_job(text,boolean)',
   'app.b105_vendor_write_job(text,boolean)'
  ] LOOP
   SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
   IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
    OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
-   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b105_enabled%' AND signature NOT LIKE 'app.b105_vendor_write_job%')
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b105_enabled%'
+     AND signature NOT LIKE 'app.b105_read_job%' AND signature NOT LIKE 'app.b105_vendor_write_job%')
    OR has_function_privilege('anon',fn.oid,'EXECUTE')
    OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
@@ -204,7 +207,8 @@ BEGIN
   RAISE EXCEPTION 'B-105 table RLS is off';
  END IF;
  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
-  IF has_table_privilege(role_name,'app.b105_vendor_job_decisions','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+  IF has_table_privilege(role_name,'app.b105_vendor_job_decisions','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege(role_name,'app.b105_vendor_job_decisions','SELECT,INSERT,UPDATE,REFERENCES') THEN
    RAISE EXCEPTION 'B-105 table privilege leaked to %',role_name;
   END IF;
  END LOOP;

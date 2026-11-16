@@ -77,5 +77,6 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # B-105 service-only inventory (NOT authenticated RPC allowlist entries).
 # ACL/config asserted by the B-105 probe in scripts/check-function-privileges.sh.
 # service-only: app.b105_vendor_case(text,boolean)
+# service-only: app.b105_vendor_case_admitted(text,boolean)
 # service-only: app.b105_vendor_decide(text,boolean,uuid,text,date,text)
-# service-only: app.b105_vendor_photo_phase(text,boolean,uuid,text)
+# service-only: app.b105_vendor_attach_photo(text,boolean,uuid,text,text,text,bigint,text)

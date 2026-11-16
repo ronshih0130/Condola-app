@@ -4,6 +4,7 @@ import React, { useId, useRef, useState } from "react";
 import type { Locale } from "../../../i18n";
 import { vendorCaseCopy } from "../../../i18n/lanes/brand-v3-vendor-case";
 import type { VendorCaseStage } from "../../../server/b105-vendor-case";
+import { createDecisionController } from "./vendor-case-controller";
 
 /**
  * B-105 Round 7 batch 3 job content inside the V-TOKEN shell (VEN-26-AC1 amended; GS-25, GS-26, GS-49).
@@ -28,9 +29,6 @@ export type VendorCaseViewProps = {
 
 type Pending = "accepted" | "declined" | null;
 
-function newRequestId() {
-  return globalThis.crypto.randomUUID();
-}
 
 export function VendorCaseView(props: VendorCaseViewProps) {
   const copy = vendorCaseCopy(props.locale);
@@ -83,52 +81,44 @@ export function CaseStyles() {
   return <link rel="stylesheet" href="/brand/v3/vendor-case.css" />;
 }
 
-async function postDecision(body: Record<string, unknown>) {
-  const response = await fetch("/api/vendor-jobs/case-decision", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-  });
-  const result = (await response.json().catch(() => null)) as { status?: string } | null;
-  return response.ok && result?.status === "recorded";
-}
-
 function AcceptDecision(props: VendorCaseViewProps) {
   const copy = vendorCaseCopy(props.locale);
   const id = useId();
   const sheet = useRef<HTMLDialogElement>(null);
+  const acceptForm = useRef<HTMLFormElement>(null);
+  const declineForm = useRef<HTMLFormElement>(null);
   const [date, setDate] = useState(props.presetDate ?? "");
   const [reason, setReason] = useState("");
   const [pending, setPending] = useState<Pending>(null);
   const [failed, setFailed] = useState<Pending>(null);
-  // One request id per decision kind, kept across retries so a retry is a replay, never a second write.
-  const [requests] = useState(() => ({ accepted: newRequestId(), declined: newRequestId() }));
+  // One request id per decision kind for this page, so a retry is a replay, never a second write.
+  const [controller] = useState(() => createDecisionController({
+    fetch: (input, init) => fetch(input, init), reload: () => window.location.reload(),
+  }));
 
   async function decide(decision: "accepted" | "declined") {
-    if (pending) return;
+    if (controller.busy) return;
     setPending(decision); setFailed(null);
-    try {
-      const ok = await postDecision(decision === "accepted"
-        ? { token: props.token, requestId: requests.accepted, decision, agreedOn: date || null }
-        : { token: props.token, requestId: requests.declined, decision, reason: reason.trim() || null });
-      if (ok) { window.location.reload(); return; }
-      setFailed(decision);
-    } catch {
-      setFailed(decision);
-    } finally {
-      setPending(null);
-    }
+    const outcome = await controller.submit(props.token, decision, { agreedOn: date, reason });
+    setPending(null);
+    // recorded / conflict reload the page (the stored decision shows); invalid and failed keep every input.
+    if (outcome === "invalid" || outcome === "failed") setFailed(decision);
   }
+  // 「再試一次」 resubmits the form, so the browser checks (date min, required) run again.
+  const retry = (decision: "accepted" | "declined") =>
+    (decision === "accepted" ? acceptForm : declineForm).current?.requestSubmit();
   const failure = (decision: "accepted" | "declined") => failed === decision ? <div className="v-case-error" role="alert">
     <p>{copy.saveError}</p>
-    <button type="button" className="v-token-secondary" onClick={() => decide(decision)} disabled={pending !== null}>{copy.retry}</button>
+    <button type="button" className="v-token-secondary" onClick={() => retry(decision)} disabled={pending !== null}>{copy.retry}</button>
   </div> : null;
 
   return <>
-    <form className="v-case-form" onSubmit={event => { event.preventDefault(); void decide("accepted"); }}>
+    <form ref={acceptForm} className="v-case-form" onSubmit={event => { event.preventDefault(); void decide("accepted"); }}>
       {props.presetDate ? <p className="v-case-help">{copy.duePreset}</p> : null}
       <label className="v-case-field" htmlFor={`${id}-due`}>{copy.dueLabel}</label>
       <input id={`${id}-due`} className="v-case-input" type="date" name="agreedOn" value={date}
         min={props.scheduledOn ?? undefined} required={props.presetDate !== null}
-        aria-describedby={`${id}-due-help`} onChange={event => setDate(event.target.value)} />
+        aria-describedby={`${id}-due-help`} onChange={event => { setDate(event.target.value); setFailed(null); }} />
       <p className="v-case-help" id={`${id}-due-help`}>{copy.dueHelp}</p>
       {failure("accepted")}
       <button type="submit" className="v-token-primary v-case-block" disabled={pending !== null} aria-busy={pending === "accepted"}>{copy.accept}</button>
@@ -136,11 +126,11 @@ function AcceptDecision(props: VendorCaseViewProps) {
         onClick={() => sheet.current?.showModal()}>{copy.decline}</button>
     </form>
     <dialog ref={sheet} className="v-token-sheet v-case-sheet" aria-labelledby={`${id}-sheet`}>
-      <form onSubmit={event => { event.preventDefault(); void decide("declined"); }}>
+      <form ref={declineForm} onSubmit={event => { event.preventDefault(); void decide("declined"); }}>
         <h2 id={`${id}-sheet`}>{copy.declineTitle}</h2>
         <label className="v-case-field" htmlFor={`${id}-reason`}>{copy.declineReason}</label>
         <input id={`${id}-reason`} className="v-case-input" type="text" name="reason" maxLength={500} value={reason}
-          onChange={event => setReason(event.target.value)} />
+          onChange={event => { setReason(event.target.value); setFailed(null); }} />
         {failure("declined")}
         <button type="submit" className="v-token-primary v-case-block" disabled={pending !== null} aria-busy={pending === "declined"}>{copy.declineConfirm}</button>
         <button type="button" className="v-case-text v-case-block" onClick={() => sheet.current?.close()}>{copy.cancel}</button>

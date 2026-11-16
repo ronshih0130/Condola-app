@@ -2,7 +2,8 @@
 -- GS-25 (接單 is the first stage), GS-26 (owner wait: no vendor primary), GS-27 (after photos), GS-49 (decline
 -- with an optional reason), GS-51 (photos read-only after close), MGT-104-AC2/AC4 (agreed completion date).
 -- Adds B-105's own default-OFF gate (platform_settings.vendor_job_v3, seeded OFF with ON CONFLICT DO NOTHING),
--- one private table (RLS on, no application grants) and three service-only SECURITY DEFINER gateways.
+-- one private table (RLS on, no application grants), four service-only SECURITY DEFINER gateways (case read,
+-- admission probe, decision, atomic photo attach) and three internal helpers with no API EXECUTE.
 -- Admission is the token bearer only (app.open_vendor_job) plus the enhanced case-collaboration link rules;
 -- no existing object, table grant, policy or data changes. 0 outbound: nothing here sends or queues a message.
 BEGIN;
@@ -46,12 +47,10 @@ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 $$;
 REVOKE ALL ON FUNCTION app.b105_enabled(uuid,boolean) FROM PUBLIC,anon,authenticated,service_role;
 
--- Read: this one job's case facts. NULL when OFF or the bearer is not admitted (same as an unknown token).
-CREATE FUNCTION app.b105_vendor_case(p_token_hash text,p_env_v2 boolean) RETURNS jsonb
+-- Read admission shared by the case read and the probe: the admitted job, or NULL. No locks, no writes.
+CREATE FUNCTION app.b105_read_job(p_token_hash text,p_env_v2 boolean) RETURNS public.repair_vendor_jobs
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE opened record; j public.repair_vendor_jobs; t public.maintenance_tickets;
- d app.b105_vendor_job_decisions; head uuid; v app.b013_estimate_versions;
- closed boolean; wait_version bigint; photos jsonb; company text;
 BEGIN
  IF p_token_hash IS NULL OR p_token_hash !~ '^[0-9a-f]{64}$' THEN RETURN NULL; END IF;
  SELECT * INTO opened FROM app.open_vendor_job(p_token_hash);
@@ -62,6 +61,29 @@ BEGIN
  IF t.id IS NULL OR j.id IS NULL OR NOT j.active OR j.revoked_at IS NOT NULL OR j.expires_at<=clock_timestamp()
   OR j.scope<>'case_collaboration' OR j.sharing_approved_at IS NULL OR j.vendor_contact_id IS NULL
   OR j.vendor_contact_id IS DISTINCT FROM t.assigned_vendor_contact_id THEN RETURN NULL; END IF;
+ RETURN j;
+END $$;
+REVOKE ALL ON FUNCTION app.b105_read_job(text,boolean) FROM PUBLIC,anon,authenticated,service_role;
+
+-- Probe: true only when this bearer is admitted with vendor_job_v3 ON. The page renders a v3 read error only
+-- after this positive answer; any failure or false keeps the legacy V-TOKEN page.
+CREATE FUNCTION app.b105_vendor_case_admitted(p_token_hash text,p_env_v2 boolean) RETURNS boolean
+LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT (app.b105_read_job(p_token_hash,p_env_v2)).id IS NOT NULL
+$$;
+REVOKE ALL ON FUNCTION app.b105_vendor_case_admitted(text,boolean) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION app.b105_vendor_case_admitted(text,boolean) TO service_role;
+
+-- Read: this one job's case facts. NULL when OFF or the bearer is not admitted (same as an unknown token).
+CREATE FUNCTION app.b105_vendor_case(p_token_hash text,p_env_v2 boolean) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE j public.repair_vendor_jobs; t public.maintenance_tickets;
+ d app.b105_vendor_job_decisions; head uuid; v app.b013_estimate_versions;
+ closed boolean; wait_version bigint; photos jsonb; company text;
+BEGIN
+ j:=app.b105_read_job(p_token_hash,p_env_v2);
+ IF j.id IS NULL THEN RETURN NULL; END IF;
+ SELECT * INTO t FROM public.maintenance_tickets WHERE org_id=j.org_id AND id=j.ticket_id;
  closed:=t.status::text NOT IN ('open','triaged','assigned','in_progress','on_hold','resolved');
  SELECT * INTO d FROM app.b105_vendor_job_decisions WHERE vendor_job_id=j.id AND org_id=j.org_id;
  SELECT o.name INTO company FROM public.organizations o WHERE o.id=j.org_id;
@@ -74,7 +96,8 @@ BEGIN
    AND NOT EXISTS(SELECT 1 FROM app.b013_repair_emergencies x WHERE x.org_id=v.org_id AND x.ticket_id=v.ticket_id AND x.version_id=v.id)
   THEN wait_version:=v.version_no; END IF;
  END IF;
- -- This vendor job's own uploads only. A NULL phase is the 處理後 set (GS-27: earlier uploads count).
+ -- This vendor job's own uploads only. Uploads through this case always carry their set (atomic attach);
+ -- a NULL phase can only be a pre-B-105 V-TOKEN upload, which GS-27 counts as 處理後.
  -- viewable mirrors the existing byte route: own uploads while open, otherwise only staff-shared photos.
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',a.id,'name',f.file_name,
    'phase',CASE WHEN a.phase='before' THEN 'before' ELSE 'after' END,
@@ -82,7 +105,8 @@ BEGIN
      WHERE s.org_id=a.org_id AND s.job_id=j.id AND s.attachment_id=a.id))
    ORDER BY a.created_at,a.id),'[]'::jsonb) INTO photos
  FROM public.ticket_attachments a JOIN public.files f ON f.id=a.file_id AND f.org_id=a.org_id
- WHERE a.org_id=t.org_id AND a.ticket_id=t.id AND a.vendor_job_id=j.id AND NOT a.is_internal;
+ WHERE a.org_id=t.org_id AND a.ticket_id=t.id AND a.vendor_job_id=j.id AND NOT a.is_internal
+  AND (a.phase IS NULL OR a.phase IN ('before','after'));
  RETURN jsonb_build_object('company',coalesce(company,''),'closed',closed,
   'decision',d.decision,'agreedCompletionOn',d.agreed_completion_on,'scheduledOn',t.scheduled_on,
   'ownerWaitVersion',wait_version,'estimates',coalesce(app.b026_estimates_enabled(j.org_id),false),'photos',photos);
@@ -141,23 +165,42 @@ END $$;
 REVOKE ALL ON FUNCTION app.b105_vendor_decide(text,boolean,uuid,text,date,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION app.b105_vendor_decide(text,boolean,uuid,text,date,text) TO service_role;
 
--- Write: tag one of this job's own uploads as 處理前 or 處理後. Only after 接單, only while the case is open.
-CREATE FUNCTION app.b105_vendor_photo_phase(p_token_hash text,p_env_v2 boolean,p_attachment uuid,p_phase text)
-RETURNS jsonb
+-- Write: attach one checked upload to this job in its set (處理前 / 處理後), files row and attachment in one
+-- statement transaction. Only after 接單, only while the case is open. The caller has verified the upload grant
+-- and the stored bytes. A replay of the same object in the same set returns it; any other existing object,
+-- including the tenant's, internal or another job's, is refused unchanged.
+CREATE FUNCTION app.b105_vendor_attach_photo(p_token_hash text,p_env_v2 boolean,p_file uuid,p_path text,
+ p_file_name text,p_mime text,p_size bigint,p_phase text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE j public.repair_vendor_jobs;
+DECLARE j public.repair_vendor_jobs; existing record; attachment uuid;
 BEGIN
  j:=app.b105_vendor_write_job(p_token_hash,p_env_v2);
  IF NOT EXISTS(SELECT 1 FROM app.b105_vendor_job_decisions d WHERE d.vendor_job_id=j.id AND d.decision='accepted')
  THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
- IF p_attachment IS NULL OR p_phase IS NULL OR p_phase NOT IN ('before','after')
+ IF p_file IS NULL OR p_phase IS NULL OR p_phase NOT IN ('before','after') OR p_path IS NULL
+  OR p_path !~* ('^org/'||j.org_id::text||'/tickets/'||j.ticket_id::text||'/'||p_file::text||'\.(jpg|png|webp)$')
+  OR p_file_name IS NULL OR length(btrim(p_file_name)) NOT BETWEEN 1 AND 180
+  OR p_mime IS NULL OR p_mime NOT IN ('image/jpeg','image/png','image/webp')
+  OR p_size IS NULL OR p_size<=0 OR p_size>5242880
  THEN RETURN '{"status":"rejected_invalid"}'::jsonb; END IF;
- UPDATE public.ticket_attachments a SET phase=p_phase
-  WHERE a.id=p_attachment AND a.org_id=j.org_id AND a.ticket_id=j.ticket_id AND a.vendor_job_id=j.id
-   AND NOT a.is_internal AND (a.phase IS NULL OR a.phase=p_phase);
- IF NOT FOUND THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
- RETURN '{"status":"recorded"}'::jsonb;
+ SELECT a.id,a.vendor_job_id,a.phase,a.is_internal INTO existing
+  FROM public.files f JOIN public.ticket_attachments a ON a.file_id=f.id AND a.org_id=f.org_id
+  WHERE f.storage_path=p_path OR f.id=p_file LIMIT 1;
+ IF FOUND THEN
+  IF existing.vendor_job_id=j.id AND NOT existing.is_internal AND existing.phase=p_phase THEN
+   RETURN jsonb_build_object('status','recorded','id',existing.id,'replayed',true); END IF;
+  RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501';
+ END IF;
+ IF EXISTS(SELECT 1 FROM public.files f WHERE f.storage_path=p_path OR f.id=p_file)
+ THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ IF (SELECT count(*) FROM public.ticket_attachments a WHERE a.ticket_id=j.ticket_id)>=8
+ THEN RETURN '{"status":"rejected_limit"}'::jsonb; END IF;
+ INSERT INTO public.files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes)
+ VALUES (p_file,j.org_id,'ticket-photos-private',p_path,btrim(p_file_name),p_mime,p_size);
+ INSERT INTO public.ticket_attachments(org_id,ticket_id,file_id,is_internal,vendor_job_id,phase)
+ VALUES (j.org_id,j.ticket_id,p_file,false,j.id,p_phase) RETURNING id INTO attachment;
+ RETURN jsonb_build_object('status','recorded','id',attachment,'replayed',false);
 END $$;
-REVOKE ALL ON FUNCTION app.b105_vendor_photo_phase(text,boolean,uuid,text) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION app.b105_vendor_photo_phase(text,boolean,uuid,text) TO service_role;
+REVOKE ALL ON FUNCTION app.b105_vendor_attach_photo(text,boolean,uuid,text,text,text,bigint,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION app.b105_vendor_attach_photo(text,boolean,uuid,text,text,text,bigint,text) TO service_role;
 COMMIT;
