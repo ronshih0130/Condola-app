@@ -9,7 +9,6 @@ import ts from "typescript";
 import { cursorParam, ownerDecidedList, ownerDecidedTicket, parseCursor, type DecidedLine, type DecidedTicket } from "./b093-owner-decided";
 import { DecidedError, DecidedListView, DecidedLoading, DecidedNoPerm, DecidedTicketView, decidedPageHref } from "../components/v3/o/decided/decided";
 import { brandV3OwnerDecidedCopy } from "../i18n/lanes/brand-v3-owner-decided";
-import { repairApprovalCopy } from "../i18n/repair-approval";
 import { Illustration } from "../components/v3/illustrations";
 import type { Session } from "./types";
 Object.assign(globalThis, { React });
@@ -91,10 +90,10 @@ test("cursor round-trips through the URL without person data; junk falls back to
 test("RO-DECIDED list: 物件・項目, 金額, date, existing result labels in gateway order; read-only rows open the view", () => {
   for (const locale of ["zh-TW", "en"] as const) {
     const html = renderToStaticMarkup(<DecidedListView locale={locale} calendar="gregorian" rows={lines} next={null} />);
-    const labels = repairApprovalCopy(locale);
+    const labels = brandV3OwnerDecidedCopy(locale).result;
     const found = [...html.matchAll(/class="decided-badge [^"]+">([^<]+)</g)].map(m => m[1]);
     assert.deepEqual(found, [labels.approved, labels.rejected, labels.more_information]);
-    if (locale === "zh-TW") assert.deepEqual(found, ["已核准", "已拒絕", "要求補充資料"]);
+    if (locale === "zh-TW") assert.deepEqual(found, ["已核准", "退回", "要求補充資料"]); // RO-DECIDED row; OQ-079 ruling
     assert.deepEqual([...html.matchAll(/href="([^"]+)"/g)].map(m => m[1]), [`/o/approvals/${T1}`, `/o/approvals/${T2}`, `/o/approvals/${T2}`]);
     assert.ok(html.indexOf("景興路套房・洗手台漏水") < html.indexOf("信義路 2 樓・換熱水器"));
     assert.ok(html.includes("NT$4,500")); assert.ok(html.includes("NT$12,800")); assert.ok(html.includes("USD 62.50"));
@@ -145,7 +144,9 @@ test("OWN-35-AC2 view: version, scope, the owner's reason only when given, later
   assert.equal((html.match(/<dt>原因<\/dt>/g) ?? []).length, 1); assert.ok(html.includes("請附兩家報價"));
   assert.ok(html.includes("<dt>工作範圍</dt>")); assert.ok(html.includes("<dt>決定時間</dt>"));
   assert.match(html, /<a class="owner-text-link" href="\/o\/decided">核准紀錄<\/a>/);
-  assert.doesNotMatch(html, /owner-primary|<button|<form|<input|<textarea|核准估價|退回/);
+  assert.doesNotMatch(html, /owner-primary|<button|<form|<input|<textarea|核准估價/);
+  // 退回 may appear only as the result badge (OQ-079), never as an action.
+  assert.doesNotMatch(html, /<(?:button|a)[^>]*>[^<]*退回/);
   const unknown = renderToStaticMarkup(<DecidedTicketView locale="en" calendar="gregorian" detail={{ ...detail, status: "mystery" }} />);
   assert.match(unknown, /data-testid="owner-decided-status">—</);
 });
@@ -278,7 +279,8 @@ test("page wrappers map reader states: 403 → B1-NOPERM, unavailable → in-pla
 test("RO-DECIDED view imports labels only: never the B-013 service, no money/decision writer, no new result strings", () => {
   const view = read("src/components/v3/o/decided/decided.tsx");
   assert.doesNotMatch(view, /server\/repair-approval["']|decision-request|postOwnerDecision|"use client"/);
-  assert.match(view, /repairApprovalCopy\(locale\)\[decision\]/);
+  assert.match(view, /brandV3OwnerDecidedCopy\(locale\)\.result\[decision\]/);
   const lane = read("src/i18n/lanes/brand-v3-owner-decided.ts");
-  assert.doesNotMatch(lane, /已核准|已拒絕|退回|要求補充資料/);
+  // Result labels come from the RO-DECIDED row (OQ-079): 退回, never the legacy 已拒絕.
+  assert.match(lane, /rejected: "退回"/); assert.doesNotMatch(lane, /已拒絕/);
 });
