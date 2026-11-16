@@ -100,6 +100,7 @@ type Element = React.ReactElement<Record<string, unknown>>;
 const page = async (token: string, query: Record<string, string> = {}) =>
   await VendorPage({ params: Promise.resolve({ token }), searchParams: Promise.resolve(query) }) as Element;
 const caseView = (element: Element) => (element.props.caseView as Element).props as { stage: { stage: string; receipt?: { docNo: string }; scans?: unknown[] }; mode: string; uploaded: boolean; brand: { buyerName: string; name: string; company: string } };
+const notFound404 = (error: unknown) => String((error as { digest?: string }).digest).includes("404");
 const counts = async (ticket: string) => (await db.query(`SELECT (SELECT count(*) FROM vendor_documents WHERE ticket_id=$1)::int docs,
   (SELECT count(*) FROM app.b025_received_marks m JOIN vendor_document_grants g ON g.id=m.grant_id WHERE g.ticket_id=$1)::int marks`, [ticket])).rows[0];
 
@@ -113,6 +114,14 @@ test("OFF in every gate: the B-025 page and the manager reader are unchanged", a
       () => db.query(`UPDATE organizations SET feature_flags=feature_flags||'{"vendor_docs_v3":true}' WHERE id=$1`, [ORG_ID])],
     ["brand_v3 off", () => db.query(`UPDATE organizations SET feature_flags=feature_flags||'{"brand_v3":false}' WHERE id=$1`, [ORG_ID]),
       () => db.query(`UPDATE organizations SET feature_flags=feature_flags||'{"brand_v3":true}' WHERE id=$1`, [ORG_ID])],
+    // Malformed values fail closed.
+    ...[{ enabled: "true", allowed_org_ids: [ORG_ID] }, { enabled: 1, allowed_org_ids: [ORG_ID] }, { enabled: true, allowed_org_ids: ORG_ID },
+      { enabled: true, allowed_org_ids: { [ORG_ID]: true } }, { enabled: true }, [ORG_ID], "on"].map(value => [`platform value ${JSON.stringify(value)}`,
+      () => db.query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='vendor_docs_v3'`, [JSON.stringify(value)]),
+      () => docsFlag([ORG_ID, ORG2_ID])] as [string, () => Promise<unknown>, () => Promise<unknown>]),
+    ...["\"true\"", "1", "null", "{}"].map(value => [`org flag ${value}`,
+      () => db.query(`UPDATE organizations SET feature_flags=jsonb_set(feature_flags,'{vendor_docs_v3}',$1::jsonb) WHERE id=$2`, [value, ORG_ID]),
+      () => db.query(`UPDATE organizations SET feature_flags=feature_flags||'{"vendor_docs_v3":true}' WHERE id=$1`, [ORG_ID])] as [string, () => Promise<unknown>, () => Promise<unknown>]),
   ];
   const admin = await login(USERS.admin);
   for (const [label, apply, restore] of gates) {
@@ -125,6 +134,47 @@ test("OFF in every gate: the B-025 page and the manager reader are unchanged", a
   }
   assert.equal((await page(f.token)).type, VendorTokenShell, "restored");
   assert.equal(await vendorDocsV3Brand("x".repeat(43)), null, "unknown grant");
+  // B-025 admission OFF: the page keeps its own 404 even with vendor_docs_v3 ON; no v3 state is rendered.
+  await db.query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','false') WHERE key='vendor_documents'`);
+  try {
+    await assert.rejects(page(f.token), notFound404);
+    assert.equal(await vendorDocsV3Brand(f.token), null);
+    assert.deepEqual(await loadTicketDocuments(admin, f.ticket), { state: "off" });
+  } finally { await db.query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','true') WHERE key='vendor_documents'`); }
+  await db.query(`UPDATE organizations SET feature_flags=feature_flags||'{"vendor_documents":false}' WHERE id=$1`, [ORG_ID]);
+  try { await assert.rejects(page(f.token), notFound404); assert.equal(await vendorDocsV3Brand(f.token), null); }
+  finally { await db.query(`UPDATE organizations SET feature_flags=feature_flags||'{"vendor_documents":true}' WHERE id=$1`, [ORG_ID]); }
+  assert.equal((await page(f.token)).type, VendorTokenShell);
+});
+
+test("bearer reader: expired and revoked grants are refused; a poisoned buyer selection discloses no receipt title", async () => {
+  const expired = await fixture("individual");
+  await db.query("UPDATE vendor_document_grants SET expires_at=now()-interval '1 second' WHERE token_hash=encode(sha256(convert_to($1,'UTF8')),'hex')", [expired.token]);
+  assert.equal(await vendorDocsV3Brand(expired.token), null, "expired");
+  await assert.rejects(page(expired.token), notFound404, "expired keeps the B-025 404");
+  const revoked = await fixture("individual");
+  await db.query("UPDATE vendor_document_grants SET revoked_at=now() WHERE token_hash=encode(sha256(convert_to($1,'UTF8')),'hex')", [revoked.token]);
+  assert.equal(await vendorDocsV3Brand(revoked.token), null, "revoked");
+  await assert.rejects(page(revoked.token), notFound404, "revoked keeps the B-025 404");
+
+  // Owners elsewhere: same org on another property, and another org. Their receipt titles must never appear.
+  const otherProperty = (await db.query("SELECT p.id FROM properties p WHERE p.org_id=$1 AND p.archived_at IS NULL AND p.id<>(SELECT property_id FROM maintenance_tickets WHERE id=$2) LIMIT 1", [ORG_ID, expired.ticket])).rows[0].id;
+  const elsewhere = (await db.query("INSERT INTO contacts(org_id,is_owner,display_name,receipt_title) VALUES($1,true,'Elsewhere','另一個物件的抬頭') RETURNING id", [ORG_ID])).rows[0].id;
+  await db.query("INSERT INTO property_owners(org_id,property_id,owner_contact_id,is_primary) VALUES($1,$2,$3,false)", [ORG_ID, otherProperty, elsewhere]);
+  const foreignProperty = (await db.query("SELECT id FROM properties WHERE org_id=$1 AND archived_at IS NULL LIMIT 1", [ORG2_ID])).rows[0].id;
+  const foreign = (await db.query("INSERT INTO contacts(org_id,is_owner,display_name,receipt_title) VALUES($1,true,'Foreign','別家公司的抬頭') RETURNING id", [ORG2_ID])).rows[0].id;
+  await db.query("INSERT INTO property_owners(org_id,property_id,owner_contact_id,is_primary) VALUES($1,$2,$3,false)", [ORG2_ID, foreignProperty, foreign]);
+  for (const [label, contactId, title] of [["unrelated property", elsewhere, "另一個物件的抬頭"], ["another org", foreign, "別家公司的抬頭"]]) {
+    const f = await fixture("individual");
+    await db.query("UPDATE vendor_document_grants SET buyer_selection=$2::jsonb WHERE token_hash=encode(sha256(convert_to($1,'UTF8')),'hex')",
+      [f.token, JSON.stringify({ kind: "owner", contactId })]);
+    const brand = await vendorDocsV3Brand(f.token);
+    assert.ok(brand, `${label}: the grant itself is still admitted, so the buyer filter is what is tested`);
+    assert.equal(brand.buyerName, null, label);
+    assert.ok(!JSON.stringify(brand).includes(title), label);
+    const element = await page(f.token).catch(() => null);
+    assert.ok(!JSON.stringify(element?.props ?? {}, (_key, value) => typeof value === "function" ? undefined : value).includes(title), `${label}: page`);
+  }
 });
 
 test("rec-type1-preview: individual issuer previews, then one confirm marks full payment and issues once", async () => {

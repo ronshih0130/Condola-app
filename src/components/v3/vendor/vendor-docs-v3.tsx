@@ -3,6 +3,7 @@
 import React, { useId, useState } from "react";
 import type { Locale } from "../../../i18n";
 import { vendorDocsCopy } from "../../../i18n/lanes/brand-v3-vendor-docs";
+import { taipeiToday } from "../../../server/money";
 import type { VendorDocsBrand, VendorDocsV3Stage } from "../../../server/gs32-vendor-docs";
 
 /**
@@ -42,6 +43,11 @@ export async function sendOnce(fetchImpl: Fetch, body: Record<string, unknown>) 
   return response.ok;
 }
 
+/** Controls while a write is in flight: disabled, announced busy, and a second press is ignored. */
+export function pendingControl(state: "idle" | "pending" | "failed", ready = true) {
+  return { disabled: !ready || state === "pending", "aria-busy": state === "pending" };
+}
+
 export function VendorDocsV3(props: VendorDocsV3Props) {
   const copy = vendorDocsCopy(props.locale);
   const job = [props.brand.property, props.brand.ticketTitle].filter(Boolean).join("・");
@@ -73,8 +79,9 @@ export function VendorDocsV3(props: VendorDocsV3Props) {
 function Type1Preview(props: VendorDocsV3Props) {
   const copy = vendorDocsCopy(props.locale);
   const [state, setState] = useState<"idle" | "pending" | "failed">("idle");
-  const [body] = useState(() => type1IssueBody(props.token, props.remainingMinor, () => globalThis.crypto.randomUUID(),
-    new Date().toISOString().slice(0, 10)));
+  // The server checks the document date against Asia/Taipei (vendor-receipt.ts checkDate), so the date is taken
+  // there too, never in UTC. (The B-025 panel still uses a UTC date; left unchanged.)
+  const [body] = useState(() => type1IssueBody(props.token, props.remainingMinor, () => globalThis.crypto.randomUUID(), taipeiToday()));
   async function issue() {
     if (state === "pending") return;
     setState("pending");
@@ -97,10 +104,13 @@ function Type1Preview(props: VendorDocsV3Props) {
         <div><dt>{copy.number}</dt><dd>{copy.noNumber}</dd></div>
       </dl>
       <p className="v-docs-small">{copy.signLine.replace("{name}", props.brand.name)}</p>
+      {/* FRAME QUESTION (for the Design Session): the frame shows this approved line unconditionally, while the
+          sentence itself is about a company payer (issuer-types.md: 「類型 1 且開給管理公司」). Shown for a company
+          buyer only until the frame says otherwise. */}
       {props.brand.buyerKind === "company" ? <p className="v-docs-small">{copy.withholding}</p> : null}
       {state === "failed" ? <div className="v-docs-error" role="alert"><p>{copy.saveError}</p>
         <button type="button" className="v-token-secondary" onClick={() => void issue()}>{copy.retry}</button></div> : null}
-      <button type="button" className="v-token-primary v-docs-block" disabled={state === "pending"} aria-busy={state === "pending"} onClick={() => void issue()}>{copy.issue}</button>
+      <button type="button" className="v-token-primary v-docs-block" {...pendingControl(state)} onClick={() => void issue()}>{copy.issue}</button>
       <button type="button" className="v-docs-text v-docs-block" onClick={() => window.history.back()}>{copy.close}</button>
     </section>
   </>;
@@ -143,10 +153,11 @@ function PaperUpload(props: VendorDocsV3Props & { docNo: string; documentId: str
       <p>{copy.paperSibling.replace("{number}", props.docNo)}</p>
       <input id={`${id}-file`} className="v-docs-file" type="file" accept="image/jpeg,image/png,application/pdf" disabled={state === "pending"}
         data-testid="paper-file" onChange={event => { setFile(event.target.files?.[0] ?? null); setRequest(null); setState("idle"); }} />
-      <label className="v-docs-zone" htmlFor={`${id}-file`}>{file ? file.name : copy.paperZone}</label>
+      {/* GS-44: the frame draws only the zone text; a chosen file shows as 「上傳」 turning solid, not its name. */}
+      <label className="v-docs-zone" htmlFor={`${id}-file`} data-chosen={file ? "true" : undefined}>{copy.paperZone}</label>
       {state === "failed" ? <div className="v-docs-error" role="alert"><p>{copy.saveError}</p>
         <button type="button" className="v-token-secondary" onClick={() => void upload()}>{copy.retry}</button></div> : null}
-      <button type="button" className="v-token-primary v-docs-block" disabled={!file || state === "pending"} aria-busy={state === "pending"} onClick={() => void upload()}>{copy.upload}</button>
+      <button type="button" className="v-token-primary v-docs-block" {...pendingControl(state, file !== null)} onClick={() => void upload()}>{copy.upload}</button>
       <a className="v-docs-text v-docs-block" href={path}>{copy.cancel}</a>
     </section>
   </>;

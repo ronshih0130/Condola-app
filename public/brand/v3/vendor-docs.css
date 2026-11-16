@@ -28,3 +28,4 @@
 .v3-docs .v3-doc-num { font-variant-numeric: tabular-nums; }
 .v3-docs .v3-doc-void { opacity: .6; }
 .v3-docs .v3-doc-mark-void { background: transparent; border: 1px solid var(--c-border-strong); }
+.v3-docs .v3-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }

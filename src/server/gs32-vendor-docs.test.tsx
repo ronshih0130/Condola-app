@@ -4,7 +4,7 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TicketDocumentsV3 } from "../components/v3/m/tickets/ticket-documents";
-import { VendorDocsV3, money, sendOnce, type1IssueBody, type VendorDocsV3Props } from "../components/v3/vendor/vendor-docs-v3";
+import { VendorDocsV3, money, pendingControl, sendOnce, type1IssueBody, type VendorDocsV3Props } from "../components/v3/vendor/vendor-docs-v3";
 import { vendorDocsCopy } from "../i18n/lanes/brand-v3-vendor-docs";
 import { orderTicketDocuments, vendorDocsV3FlagOn, vendorDocsV3Stage, type TicketDocument } from "./gs32-vendor-docs";
 
@@ -92,7 +92,7 @@ test("DOC-VOID m-docs: nature marks, voided last and muted with the amount struc
   const ordered = orderTicketDocuments(rows);
   assert.deepEqual(ordered.map(d => d.id), ["r", "s", "v"]);
   const html = renderToStaticMarkup(<TicketDocumentsV3 locale="zh-TW" currency="TWD" documents={ordered} />);
-  for (const text of [">文件<", "收據 RCP-2026-019", "完工明細 CS-2026-004", "完工明細（非稅務憑證）", "已作廢", "<s class=\"v3-doc-num\">NT$5,200</s>", "開給", "林雅婷"]) assert.ok(html.includes(text), text);
+  for (const text of [">文件<", "收據 RCP-2026-019", "完工明細 CS-2026-004", "完工明細（非稅務憑證）", "已作廢", "<s class=\"v3-doc-num\"><span class=\"v3-sr\">已作廢 </span>NT$5,200</s>", "開給", "林雅婷"]) assert.ok(html.includes(text), text);
   assert.ok(html.indexOf("RCP-2026-018") > html.indexOf("CS-2026-004"), "voided last");
   assert.match(html, /class="v3-doc v3-doc-void" data-status="voided"/);
   assert.doesNotMatch(html, /<button|<form|請款單|上傳之統一發票|href="\/api/);
@@ -117,4 +117,29 @@ test("0 outbound and scoped styles", () => {
   for (const line of css.split("\n").filter(line => line.includes("{"))) assert.match(line, /^\.(?:v-token-v3|v3-docs) /, line);
   assert.match(css, /\.v-docs-text \{[^}]*min-height: 44px/);
   assert.match(css, /\.v-docs-zone \{[^}]*min-height: 88px/);
+});
+
+test("pending guard: the solid is disabled and announced busy while a write is in flight; upload also needs a file", () => {
+  assert.deepEqual(pendingControl("idle"), { disabled: false, "aria-busy": false });
+  assert.deepEqual(pendingControl("pending"), { disabled: true, "aria-busy": true });
+  assert.deepEqual(pendingControl("failed"), { disabled: false, "aria-busy": false }, "a failure re-enables the same request");
+  assert.deepEqual(pendingControl("idle", false), { disabled: true, "aria-busy": false }, "no file chosen");
+  assert.deepEqual(pendingControl("pending", true), { disabled: true, "aria-busy": true });
+  const source = read("src/components/v3/vendor/vendor-docs-v3.tsx");
+  assert.equal((source.match(/\{\.\.\.pendingControl\(state(?:, file !== null)?\)\}/g) ?? []).length, 2, "both solids use the guard");
+  assert.match(source, /if \(state === "pending"\) return;/);
+  assert.match(source, /if \(!file \|\| state === "pending"\) return;/);
+  const idle = view({});
+  assert.match(idle, /class="v-token-primary v-docs-block" aria-busy="false"[^>]*>確認已全額收款並開立</);
+});
+
+test("UI review fixes: Taipei document date, voided amount announced, no file name in the zone, frame question noted", () => {
+  const source = read("src/components/v3/vendor/vendor-docs-v3.tsx");
+  assert.match(source, /type1IssueBody\(props\.token, props\.remainingMinor, \(\) => globalThis\.crypto\.randomUUID\(\), taipeiToday\(\)\)/);
+  assert.doesNotMatch(source, /toISOString\(\)\.slice\(0, 10\)/);
+  assert.doesNotMatch(source, /file\.name/, "GS-44: the chosen file name is not drawn");
+  assert.match(source, /FRAME QUESTION/);
+  const stage = { stage: "receipt_evidence" as const, receipt: { id: "r1", docNo: "RCP-2026-019" }, scans: [] };
+  assert.match(view({ stage, mode: "paper" }), /<label class="v-docs-zone"[^>]*>點這裡上傳收據照片或 PDF<\/label>/);
+  assert.match(read("public/brand/v3/vendor-docs.css"), /\.v3-docs \.v3-sr \{[^}]*clip-path: inset\(50%\)/);
 });

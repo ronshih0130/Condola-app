@@ -29,7 +29,7 @@ export function TicketDocumentsV3({ locale, currency, documents }: { locale: Loc
           <span className={`v3-doc-mark${voided ? " v3-doc-mark-void" : ""}`}>{voided ? copy.markVoid : nature}</span></div>
         <dl>
           <div><dt>{copy.amount}</dt><dd>{voided
-            ? <s className="v3-doc-num">{money(currency, doc.totalMinor)}</s>
+            ? <s className="v3-doc-num"><span className="v3-sr">{copy.markVoid} </span>{money(currency, doc.totalMinor)}</s>
             : <span className="v3-doc-num">{money(currency, doc.totalMinor)}</span>}</dd></div>
           {doc.buyerName ? <div><dt>{copy.billedTo}</dt><dd>{doc.buyerName}</dd></div> : null}
         </dl>
