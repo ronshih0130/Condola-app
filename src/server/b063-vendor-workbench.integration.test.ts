@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import test, { mock } from "node:test";
 import nextHeaders from "next/headers";
 import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import VendorAccountPage from "../app/vendor-account/page";
 import VendorAccountPanel from "../app/vendor-account/panel";
 import VendorJobsPage from "../app/vendor-account/jobs/page";
@@ -36,7 +37,8 @@ const coast: Session = { ...admin, userId: USERS.coastAdmin, sessionId: randomUU
 const sql = (q: string, values: unknown[] = []) => withClient(client => client.query(q, values));
 const tables = ["app.b026_vendor_accounts", "app.b026_vendor_job_accounts", "app.b026_vendor_link_events", "app.b025_received_marks",
   "public.contacts", "public.auth_sessions", "public.repair_vendor_jobs", "public.repair_vendor_secrets", "public.maintenance_tickets",
-  "public.organizations", "public.vendor_profiles", "public.vendor_document_grants", "public.vendor_documents", "public.audit_log"];
+  "public.organizations", "public.properties", "public.platform_settings", "public.vendor_profiles", "public.vendor_document_grants",
+  "public.vendor_documents", "public.audit_log"];
 async function snapshot() {
   return withClient(async client => {
     const result: Record<string, string> = {};
@@ -96,8 +98,17 @@ test("B-063 vendor workbench: own linked jobs only, amounts waiting, denial matr
       path = route;
       try {
         const element = await page() as React.ReactElement;
-        return element.type === VendorAccountPanel ? "panel" : element.type === VendorNoPerm ? "noperm"
-          : element.type === VendorWorkbenchScreen || element.type === VendorShellV3 ? "screen" : "other";
+        // OFF and B1-NOPERM render to HTML: the B-026 page must be byte-identical to the pre-B-063 page body
+        // (`return <VendorAccountPanel />`), and B1-NOPERM must carry its approved content.
+        if (element.type === VendorAccountPanel || element.type === VendorNoPerm) {
+          const html = renderToStaticMarkup(element);
+          if (html === legacyHtml) return "panel";
+          if (html.includes('data-testid="vendor-noperm"') && html.includes('data-v3-illustration="26"')
+            && html.includes("你目前的角色看不到這一頁，需要的話請公司管理員幫你開。") && html.includes(">回到首頁</a>")) return "noperm";
+          return `unexpected html ${html.slice(0, 120)}`;
+        }
+        // The ON screen streams async server content (RSC only), so it is identified by its component.
+        return element.type === VendorWorkbenchScreen || element.type === VendorShellV3 ? "screen" : "other";
       } catch (error) {
         const digest = String((error as { digest?: string }).digest);
         if (digest === "NEXT_HTTP_ERROR_FALLBACK;404") return "404";
@@ -109,6 +120,8 @@ test("B-063 vendor workbench: own linked jobs only, amounts waiting, denial matr
     return { home: await outcome("/vendor-account", VendorAccountPage), jobs: await outcome("/vendor-account/jobs", VendorJobsPage),
       payments: await outcome("/vendor-account/payments", VendorPaymentsPage), account: await outcome("/vendor-account/account", VendorWorkbenchAccountPage) };
   }
+  const legacyHtml = renderToStaticMarkup(React.createElement(VendorAccountPanel));
+  assert.match(legacyHtml, /<h1>廠商帳號<\/h1>/);
   const OFF = { home: "panel", jobs: "404", payments: "404", account: "404" };
   const NOPERM = { home: "panel", jobs: "noperm", payments: "noperm", account: "noperm" };
   const SIGN_IN = { home: "panel", jobs: `redirect ${LOGIN}`, payments: `redirect ${LOGIN}`, account: `redirect ${LOGIN}` };
@@ -167,25 +180,33 @@ test("B-063 vendor workbench: own linked jobs only, amounts waiting, denial matr
         assert.equal(await (await accountGET(new Request(`${origin}/api/vendor-account`, { headers: { cookie: `condola_session=${credential}` } }))).text(), legacy);
         assert.deepEqual(await snapshot(), before, label);
       }
-      // The B-026 gate OFF: no vendor account is visible at all, so every new route denies (B1-NOPERM), the
-      // opener included, and /vendor-account stays the B-026 page.
+      // PR-032 (a): the B-026 gate OFF (platform setting, or the org flag) makes the workbench OFF for everyone:
+      // every new route and the opener 404, /vendor-account is the B-026 page, with vendor_workbench and brand_v3 ON.
       await workbench(ORG_ID, true);
-      await sql("UPDATE platform_settings SET value='{\"enabled\":false,\"allowed_org_ids\":[]}'::jsonb WHERE key='vendor_account'");
-      const before = await snapshot();
-      assert.deepEqual(await vendorWorkbenchAccess(credential, ORG_ID), { state: "other" });
-      assert.deepEqual(await gateway(credential, ORG_ID), []);
-      assert.deepEqual(await routes(credential), NOPERM);
-      for (const job of [visit, billed]) assert.equal(await opened(credential, job.jobId), "303 /vendor-account/jobs");
-      assert.deepEqual(await snapshot(), before);
-      await vendorAccountGate([ORG_ID, ORG2_ID]);
+      for (const gateOff of ["platform", "org"] as const) {
+        if (gateOff === "platform") await sql("UPDATE platform_settings SET value='{\"enabled\":false,\"allowed_org_ids\":[]}'::jsonb WHERE key='vendor_account'");
+        else await sql("UPDATE organizations SET feature_flags=feature_flags-'vendor_account' WHERE id=ANY($1::uuid[])", [[ORG_ID, ORG2_ID]]);
+        const before = await snapshot();
+        for (const session of [credential, staffCredential, visit.token, null]) {
+          assert.deepEqual(await vendorWorkbenchAccess(session ?? undefined, ORG_ID), { state: "off" }, `${gateOff}: ${session}`);
+          assert.deepEqual(await routes(session), OFF, `${gateOff}: ${session}`);
+          assert.deepEqual(await routes(session, null), OFF, `${gateOff}: ${session}, no org cookie`);
+          for (const job of [visit, billed, stranger]) assert.equal(await opened(session, job.jobId), "404", `${gateOff}: ${session} ${job.jobId}`);
+        }
+        assert.deepEqual(await gateway(credential, ORG_ID), []);
+        assert.deepEqual(await snapshot(), before, gateOff);
+        await vendorAccountGate([ORG_ID, ORG2_ID]);
+      }
     });
 
     await workbench(ORG_ID, true);
     await t.test("An expired link is shown before expiry and excluded after it, by the gateway, the view and the opener", async () => {
+      const preExpiry = await snapshot();
       assert.ok((await gateway(credential, ORG_ID)).some(row => row.jobId === expiring.jobId && row.openable));
       const live = await vendorWorkbenchView(credential, ORG_ID, "zh-TW");
       assert.ok(live.status === "ready" && live.jobs.some(row => row.jobId === expiring.jobId && row.href));
       assert.equal(await opened(credential, expiring.jobId), `303 /v/${expiring.token}`);
+      assert.deepEqual(await snapshot(), preExpiry, "the positive controls write nothing");
       await sql("UPDATE repair_vendor_jobs SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [expiring.jobId]);
       const before = await snapshot();
       assert.ok(!(await gateway(credential, ORG_ID)).some(row => row.jobId === expiring.jobId));

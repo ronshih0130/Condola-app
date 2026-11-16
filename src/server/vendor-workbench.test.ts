@@ -16,12 +16,13 @@ const ORG = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", ORG2 = "bbbbbbbb-bbbb-4bbb-8
 const JOB = "11111111-1111-4111-8111-111111111111", JOB2 = "22222222-2222-4222-8222-222222222222";
 const TOKEN = "A".repeat(43), CREDENTIAL = "account-session-credential";
 type Fake = { history?: VendorAccountHistory | Error; actor?: string | Error; consent?: boolean; flag?: boolean | null; company?: string;
-  brand?: boolean; gateway?: unknown[] | Error; token?: string | null; path?: string; cookies?: Record<string, string> };
+  brand?: boolean; gateway?: unknown[] | Error; token?: string | null; path?: string; cookies?: Record<string, string>; live?: string[] };
 function load(fake: Fake) {
   const calls: { sql: string; params: unknown[] }[] = [];
   const query = async (sql: string, params: unknown[]) => {
     calls.push({ sql, params });
     if (sql.includes("b026_account_actor")) { if (fake.actor instanceof Error) throw fake.actor; return { rows: [{ actor: fake.actor ?? "actor" }] }; }
+    if (sql.includes("SELECT id::text FROM public.organizations")) return { rows: (fake.live ?? [ORG]).map(id => ({ id })) };
     if (sql.includes("vendor_workbench'")) return { rows: fake.flag === null ? [] : [{ open: fake.flag ?? true, company: fake.company ?? "安居物業" }] };
     if (sql.includes("b063_vendor_workbench")) { if (fake.gateway instanceof Error) throw fake.gateway; return { rows: [{ result: fake.gateway ?? [] }] }; }
     if (sql.includes("repair_vendor_secrets")) return { rows: fake.token === null ? [] : [{ token: fake.token ?? TOKEN }] };
@@ -61,19 +62,41 @@ const job = (jobId: string, status: string, extra: Partial<VendorAccountHistory[
   ({ jobId, orgId: ORG, ticketId: "ticket", status, description: " 浴室天花板滴水 ", readOnly: status === "closed" || status === "cancelled", ...extra });
 const denied = Object.assign(new Error("errors.forbidden"), { cause: { code: "42501" } });
 
-test("VEN-14-AC7: no credential, an oversized one or a rejected session is anonymous; nothing else is read", async () => {
+test("VEN-14-AC7: no credential, an oversized one or a rejected session is anonymous where the workbench is live; no account read", async () => {
+  type Access = (c?: string, o?: string) => Promise<unknown>;
   for (const credential of [undefined, "", "x".repeat(513)]) {
-    const { module, calls } = load({});
-    assert.deepEqual(await (module.vendorWorkbenchAccess as (c?: string, o?: string) => Promise<unknown>)(credential, ORG), { state: "anonymous" });
-    assert.equal(calls.length, 0);
+    const { module, calls, historyCalls } = load({});
+    assert.deepEqual(await (module.vendorWorkbenchAccess as Access)(credential, ORG), { state: "anonymous" });
+    assert.deepEqual(calls.map(call => call.sql === "brand" ? "brand" : call.sql.includes("vendor_workbench'")), [true, "brand"], "only the live check for the cookie's organization");
+    assert.deepEqual(calls[0].params, [ORG]); assert.deepEqual(historyCalls, []);
   }
   const { module, calls, historyCalls } = load({ actor: denied });
-  assert.deepEqual(await (module.vendorWorkbenchAccess as (c?: string, o?: string) => Promise<unknown>)(TOKEN, ORG), { state: "anonymous" });
-  assert.equal(calls.length, 1); assert.deepEqual(historyCalls, []);
+  assert.deepEqual(await (module.vendorWorkbenchAccess as Access)(TOKEN, ORG), { state: "anonymous" });
+  assert.deepEqual(historyCalls, []);
   // The session is looked up by its hash, never by the raw value.
   assert.deepEqual(calls[0].params, [createHash("sha256").update(TOKEN).digest("hex")]);
   const other = load({ actor: Object.assign(new Error("lock"), { cause: { code: "55P03" } }) });
-  await assert.rejects((other.module.vendorWorkbenchAccess as (c?: string, o?: string) => Promise<unknown>)(CREDENTIAL, ORG), /lock/);
+  await assert.rejects((other.module.vendorWorkbenchAccess as Access)(CREDENTIAL, ORG), /lock/);
+});
+
+test("PR-032 (a): where the workbench is not open (own flag, B-026 gate or brand_v3), sign-in, consent and B1-NOPERM become OFF", async () => {
+  type Access = (c?: string, o?: string) => Promise<unknown>;
+  const access = (fake: Fake, credential?: string, org?: string) => (load(fake).module.vendorWorkbenchAccess as Access)(credential, org);
+  for (const [fake, credential, live] of [[{}, undefined, "anonymous"], [{ actor: denied }, TOKEN, "anonymous"], [{ consent: false }, CREDENTIAL, "consent"],
+    [{ history: history([]) }, CREDENTIAL, "other"]] as [Fake, string | undefined, string][]) {
+    assert.deepEqual(await access(fake, credential, ORG), { state: live });
+    assert.deepEqual(await access({ ...fake, flag: false }, credential, ORG), { state: "off" }, `${live}: cookie org not open`);
+    assert.deepEqual(await access({ ...fake, brand: false }, credential, ORG), { state: "off" }, `${live}: brand_v3 off`);
+    assert.deepEqual(await access(fake, credential), { state: live }, `${live}: no cookie, an organization is open`);
+    assert.deepEqual(await access({ ...fake, live: [] }, credential), { state: "off" }, `${live}: no cookie, none open`);
+    assert.deepEqual(await access({ ...fake, brand: false }, credential), { state: "off" }, `${live}: no cookie, the open one has no brand_v3`);
+  }
+  // A vendor whose B-026 gate is OFF has no listed account: OFF, never B1-NOPERM.
+  assert.deepEqual(await access({ history: history([]), flag: false }, CREDENTIAL, ORG), { state: "off" });
+  const { module, calls } = load({ live: [] });
+  await (module.vendorWorkbenchAccess as Access)(undefined, "not-a-uuid");
+  const scan = calls.find(call => call.sql.includes("SELECT id::text FROM public.organizations"))!.sql;
+  for (const part of ["feature_flags->'vendor_workbench'='true'::jsonb", "feature_flags->'brand_v3'='true'::jsonb", "coalesce(app.b026_accounts_enabled(id),false)"]) assert.ok(scan.includes(part), part);
 });
 
 test("VEN-14-AC8 admission matrix: consent, persona, organization choice, own flag and brand_v3 all required", async () => {
@@ -94,7 +117,8 @@ test("VEN-14-AC8 admission matrix: consent, persona, organization choice, own fl
   const { module, calls } = load({ flag: false });
   await (module.vendorWorkbenchAccess as (c?: string, o?: string) => Promise<unknown>)(CREDENTIAL, ORG);
   assert.ok(!calls.some(call => call.sql === "brand"), "brand is read only after the org flag");
-  assert.match(calls.find(call => call.sql.includes("vendor_workbench'"))!.sql, /coalesce\(feature_flags->'vendor_workbench'='true'::jsonb,false\)/);
+  const gate = calls.find(call => call.sql.includes("vendor_workbench'"))!.sql;
+  assert.match(gate, /coalesce\(feature_flags->'vendor_workbench'='true'::jsonb,false\) AND coalesce\(app\.b026_accounts_enabled\(id\),false\)/);
 });
 
 test("currentVendorWorkbench never fails open; the root brand helper only answers on /vendor-account paths", async () => {

@@ -17,8 +17,8 @@ import { isVendorWorkbenchPath, vendorWorkbenchJobHref } from "../lib/vendor-wor
  * B-063 / VEN-14, VEN-15-AC6: the signed-in vendor workbench. Identity is the existing account session cookie
  * (B-026 / B-033 portal cookies) through the B-026 gateways; a job token is never an account credential
  * (VEN-14-AC7). The workbench exists for an organization only when its own `vendor_workbench` flag, effective
- * brand_v3 and the B-026 vendor account gate are all on. Anything else is OFF: /vendor-account stays the
- * B-026 account page byte for byte, and the /vendor-account/* routes 404.
+ * brand_v3 and the B-026 vendor account gate are all on (PR-032 = a). Anything else is OFF: /vendor-account stays
+ * the B-026 account page byte for byte, and the /vendor-account/* routes and the row opener 404.
  */
 
 export type VendorWorkbenchScope = { orgId: string; name: string; company: string };
@@ -35,31 +35,58 @@ const denied = (error: unknown) => {
 };
 
 /**
+ * The workbench is open for an organization only when its own vendor_workbench flag, the B-026 vendor account
+ * gate (platform setting + org flag, app.b026_accounts_enabled) and effective brand_v3 are all on (PR-032 = a).
+ */
+async function workbenchOpen(orgId: string): Promise<{ open: boolean; company: string }> {
+  const org = await svc(null, async client => (await client.query<{ open: boolean; company: string }>(
+    `SELECT coalesce(feature_flags->'vendor_workbench'='true'::jsonb,false) AND coalesce(app.b026_accounts_enabled(id),false) AS open,
+            name AS company FROM public.organizations WHERE id=$1`, [orgId])).rows[0]);
+  return { open: org?.open === true && await brandV3EnabledForOrg(orgId), company: org?.company ?? "" };
+}
+/**
+ * Whether the workbench routes exist for this request when no vendor account admits it (no session, a job token,
+ * stale terms, a non-vendor): the request's organization (condola_org) when it names one, otherwise any
+ * organization. Where it is not open anywhere they apply, the routes are OFF (404) rather than a sign-in or
+ * B1-NOPERM page.
+ */
+async function workbenchLive(preferredOrg: string | undefined) {
+  if (preferredOrg && UUID.test(preferredOrg)) return (await workbenchOpen(preferredOrg.toLowerCase())).open;
+  const candidates = await svc(null, async client => (await client.query<{ id: string }>(
+    `SELECT id::text FROM public.organizations WHERE feature_flags->'vendor_workbench'='true'::jsonb
+      AND feature_flags->'brand_v3'='true'::jsonb AND coalesce(app.b026_accounts_enabled(id),false) ORDER BY id`)).rows);
+  for (const candidate of candidates) if (await brandV3EnabledForOrg(candidate.id)) return true;
+  return false;
+}
+
+/**
  * Which organization the workbench shows and whether it is open there. The organization is the session's
  * current one (condola_org, set by the B-101 sign-in) when the vendor holds an account there; a vendor with
  * accounts in exactly one organization needs no cookie. More than one and no current one: OFF (OV-SH-ORG gap).
+ * anonymous / consent / other are returned only where the workbench is live (see workbenchLive); else OFF.
  */
 export async function vendorWorkbenchAccess(credential: string | undefined, preferredOrg: string | undefined): Promise<VendorWorkbenchAccess> {
-  if (!credential || credential.length > 512) return { state: "anonymous" };
+  const unless = async (state: "anonymous" | "consent" | "other"): Promise<VendorWorkbenchAccess> =>
+    await workbenchLive(preferredOrg) ? { state } : { state: "off" };
+  if (!credential || credential.length > 512) return unless("anonymous");
   let actor: string;
   try {
     actor = await svc(null, async client => (await client.query<{ actor: string }>(
       "SELECT app.b026_account_actor($1) AS actor", [credentialHash(credential)])).rows[0].actor);
   } catch (error) {
-    if (denied(error)) return { state: "anonymous" };
+    if (denied(error)) return unless("anonymous");
     throw error;
   }
-  if (!consentCoversCurrent(await readConsent(actor))) return { state: "consent" };
+  if (!consentCoversCurrent(await readConsent(actor))) return unless("consent");
   const history = await vendorAccountHistory(credential);
   const orgs = [...new Set(history.settings.map(item => item.orgId))];
-  if (!orgs.length) return { state: "other" };
+  // B-026 lists an account only where its gate is on, so a vendor whose gate is OFF lands here too: off, not NOPERM.
+  if (!orgs.length) return unless("other");
   const orgId = preferredOrg && UUID.test(preferredOrg) && orgs.includes(preferredOrg.toLowerCase()) ? preferredOrg.toLowerCase()
     : orgs.length === 1 ? orgs[0] : null;
   if (!orgId) return { state: "off" };
-  const org = await svc(null, async client => (await client.query<{ open: boolean; company: string }>(
-    "SELECT coalesce(feature_flags->'vendor_workbench'='true'::jsonb,false) AS open, name AS company FROM public.organizations WHERE id=$1",
-    [orgId])).rows[0]);
-  if (org?.open !== true || !(await brandV3EnabledForOrg(orgId))) return { state: "off" };
+  const org = await workbenchOpen(orgId);
+  if (!org.open) return { state: "off" };
   const name = history.settings.find(item => item.orgId === orgId)?.name ?? "";
   return { state: "on", scope: { orgId, name: name.trim(), company: org.company } };
 }
