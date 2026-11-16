@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MASKED, parseAfter, parsePhoneHistory, phoneHistory, type PhoneHistoryRow } from "./b076a-phone-history";
-import { PhoneHistoryView, phoneHistoryActor, phoneHistoryHref } from "../components/v3/m/tenants/phone-history";
+import { MASKED, parseAfter, parsePhoneHistory, parseTrail, phoneHistory, PHONE_HISTORY_PAGE, type PhoneHistoryRow } from "./b076a-phone-history";
+import { PhoneHistoryView, phoneHistoryActor, phoneHistoryHref, phoneHistoryPager } from "../components/v3/m/tenants/phone-history";
 import { phoneHistoryCopy } from "../i18n/lanes/brand-v3-phone-history";
 import type { Session } from "./types";
 import type { Client } from "pg";
@@ -75,7 +75,7 @@ test("reader: OFF never opens a transaction; P-ACC/P-MNT/portals/bad ids are 403
   assert.match(seen[0].sql, /statement_timeout = '2s'/); assert.match(seen[1].sql, /lock_timeout = '1s'/);
   assert.deepEqual(seen[2].args, [ORG, "live"]);
   assert.equal(seen[3].sql, "SELECT app.b076a_phone_history($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::bigint,$7::integer) AS result");
-  assert.deepEqual(seen[3].args, [ORG, ORG, "live", staff.sessionId, C, "42", 20]);
+  assert.deepEqual(seen[3].args, [ORG, ORG, "live", staff.sessionId, C, "42", 25]);
   assert.deepEqual(await phoneHistory(staff, C, {}, { v3: async () => true, transaction: client(null, []) }), { state: "off" });
   // A full or unexpected number shape never renders: the whole page is unavailable instead.
   for (const bad of [{ ...rows[0], newMasked: "0912345678" }, { ...rows[0], oldMasked: "+886933123456" }, { ...rows[0], oldMasked: "•••‑•••‑12" }, { ...rows[0], status: "verified" },
@@ -139,4 +139,26 @@ test("tenant page renders 「查看改號紀錄」 only for admin/manager with t
   } finally {
     if (saved === undefined) delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST; else process.env.CUSTOM_ROLES_ORG_ALLOWLIST = saved;
   }
+});
+
+test("MGT-76-AC13 pager: 25 a page; 「上一頁」 on the left from page 2; the trail is validated", () => {
+  assert.equal(PHONE_HISTORY_PAGE, 25);
+  const base = `/m/tenants/${C}/phone-history`;
+  // Page 1 → 2 → 3, then back.
+  assert.deepEqual(phoneHistoryPager(C, undefined, [], "90"), { prev: null, next: `${base}?after=90` });
+  assert.deepEqual(phoneHistoryPager(C, "90", [], "60"), { prev: base, next: `${base}?after=60&trail=90` });
+  assert.deepEqual(phoneHistoryPager(C, "60", ["90"], "30"), { prev: `${base}?after=90`, next: `${base}?after=30&trail=90.60` });
+  assert.deepEqual(phoneHistoryPager(C, "30", ["90", "60"], null), { prev: `${base}?after=60&trail=90`, next: null });
+  assert.deepEqual(parseTrail("90.60", "30"), ["90", "60"]);
+  for (const [raw, after] of [["90.60", undefined], ["60.90", "30"], ["90.30", "30"], ["90.x", "30"], ["9223372036854775808", "30"], [["90"], "30"], ["", "30"]] as const)
+    assert.deepEqual(parseTrail(raw, after), [], JSON.stringify(raw));
+  assert.deepEqual(parseTrail(Array.from({ length: 201 }, (_, i) => String(1000 - i)).join("."), "1"), [], "too long");
+  // Rendered: page 2 shows 上一頁 then 下一頁 (prev first, on the left); page 1 shows only 下一頁; one page shows neither.
+  const p2 = renderToStaticMarkup(<PhoneHistoryView data={{ state: "ready", ...page, next: "7" }} id={C} locale="zh-TW" after="42" trail={[]} />);
+  assert.match(p2, new RegExp(`<nav class="v3-phone-history-pager"[^>]*><a class="btn" data-testid="phone-history-prev" href="${base}">上一頁</a><a class="btn" data-testid="phone-history-next" href="${base}\\?after=7&amp;trail=42">下一頁</a></nav>`));
+  const p1 = renderToStaticMarkup(<PhoneHistoryView data={{ state: "ready", ...page, next: "7" }} id={C} locale="zh-TW" />);
+  assert.doesNotMatch(p1, /上一頁/);
+  assert.match(p1, /下一頁/);
+  assert.doesNotMatch(renderToStaticMarkup(<PhoneHistoryView data={{ state: "ready", ...page }} id={C} locale="zh-TW" />), /v3-phone-history-pager/);
+  assert.doesNotMatch(read("src/components/v3/m/tenants/phone-history.tsx"), /GS-44/);
 });

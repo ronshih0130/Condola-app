@@ -3,7 +3,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { svc } from "./db";
-import { phoneHistory } from "./b076a-phone-history";
+import { parseAfter, parseTrail, phoneHistory } from "./b076a-phone-history";
+import { phoneHistoryHref, phoneHistoryPager } from "../components/v3/m/tenants/phone-history";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { resetAndSeed } from "./seed";
 import { cloneTestDatabase } from "./test-database-clone";
@@ -285,4 +286,34 @@ test("native accountant and maintenance stay denied even when a custom role gran
   }
   // A native manager still reads it after the custom-role fixture is removed.
   assert.ok(await read("manager"));
+});
+
+test("MGT-76-AC13: 61 edits page forward and back by 25, newest first, no overlap, no gap", async () => {
+  await flag(true);
+  const many = randomUUID();
+  await db.query(`INSERT INTO public.contacts(id,org_id,is_tenant,display_name,email,phone_e164) VALUES($1,$2,true,'Many',$3,NULL)`, [many, ORG_ID, `${randomUUID()}@example.test`]);
+  for (let n = 0; n < 61; n++) await edit(n % 2 ? "admin" : "manager", many, `+8869${String(10000000 + n).padStart(8, "0")}`);
+  const all = (await db.query(`SELECT a.id::text id FROM public.audit_log a WHERE a.table_name='contacts' AND a.row_id=$1 AND a.reason='tenant_directory_contact_edit'
+    AND 'phone_e164'=ANY(a.changed_cols) ORDER BY a.id DESC`, [many])).rows.map(r => r.id as string);
+  assert.equal(all.length, 61);
+  const read = async (href: string) => {
+    const q = new URL(href, "http://x").searchParams;
+    const after = parseAfter(q.get("after") ?? undefined), trail = parseTrail(q.get("trail") ?? undefined, after);
+    const data = await phoneHistory(session("manager", "manager"), many, { after }, { v3 });
+    if (data.state !== "ready") assert.fail(data.state);
+    return { ids: data.rows.map(r => r.id), pager: phoneHistoryPager(many, after, trail, data.next) };
+  };
+  // Forward.
+  const pages: string[][] = [], hrefs: string[] = [phoneHistoryHref(many)];
+  let current = await read(hrefs[0]);
+  pages.push(current.ids);
+  assert.equal(current.pager.prev, null, "no 上一頁 on page 1");
+  while (current.pager.next) { hrefs.push(current.pager.next); current = await read(current.pager.next); pages.push(current.ids); }
+  assert.deepEqual(pages.map(p => p.length), [25, 25, 11]);
+  assert.deepEqual(pages.flat(), all, "newest first, no overlap, no gap");
+  // Back from the last page to the first, through 上一頁 links only.
+  const back: string[][] = [current.ids];
+  while (current.pager.prev) { current = await read(current.pager.prev); back.unshift(current.ids); }
+  assert.deepEqual(back, pages);
+  assert.deepEqual(new Set(pages.flat()).size, 61);
 });

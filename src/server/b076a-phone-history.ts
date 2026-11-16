@@ -23,7 +23,8 @@ export type PhoneHistory =
   | { state: "ready"; tenant: string; place: string | null; rows: PhoneHistoryRow[]; next: string | null };
 type Deps = { v3?: typeof brandV3ReadForOrg; transaction?: typeof svc };
 
-const PAGE = 20;
+/** MGT-76-AC13 (GS-56 = A): 25 rows a page, newest first. */
+export const PHONE_HISTORY_PAGE = 25;
 const str = (value: unknown): value is string => typeof value === "string";
 const BIGINT_MAX = BigInt("9223372036854775807");
 /** A positive signed-bigint audit row id; anything out of range is not an id. */
@@ -41,6 +42,20 @@ function sqlDenied(error: unknown): boolean {
 }
 
 /** `?after=` is an audit row id (a positive signed bigint); anything else, out of range included, falls back to the first page. */
+const TRAIL_MAX = 200;
+/**
+ * MGT-76-AC13 back-paging without a gateway change: `?trail=` carries the start cursors of the pages between
+ * page 1 and this one ("."-joined, oldest page first). Every page is still one keyset read (`id < after`), so
+ * pages never overlap or skip. A trail that is not strictly decreasing and above `after` (or too long) is
+ * dropped, and 「上一頁」 then returns to page 1.
+ */
+export function parseTrail(raw: unknown, after: string | undefined): string[] {
+  if (after === undefined || typeof raw !== "string" || !raw) return [];
+  const ids = raw.split(".");
+  if (ids.length > TRAIL_MAX || !ids.every(x => parseAfter(x) !== undefined)) return [];
+  const all = [...ids, after].map(x => BigInt(x));
+  return all.every((x, i) => i === 0 || all[i - 1] > x) ? ids : [];
+}
 export function parseAfter(raw: unknown): string | undefined {
   return id(raw) ? raw : undefined;
 }
@@ -78,7 +93,7 @@ export async function phoneHistory(input: Session, contactId: string, options: {
       await client.query("SELECT set_config('app.active_org_id',$1,true),set_config('app.env',$2,true)", [session.orgId, session.environment]);
       const row = (await client.query<{ result: unknown }>(
         "SELECT app.b076a_phone_history($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::bigint,$7::integer) AS result",
-        [session.orgId, session.liveOrgId, session.environment, session.sessionId, contactId, after, PAGE],
+        [session.orgId, session.liveOrgId, session.environment, session.sessionId, contactId, after, PHONE_HISTORY_PAGE],
       )).rows[0];
       if (!row) throw new Error("Missing phone history snapshot");
       return parsePhoneHistory(row.result);
