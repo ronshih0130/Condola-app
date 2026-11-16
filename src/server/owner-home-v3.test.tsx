@@ -51,21 +51,21 @@ test("O-HOME / O-ROW / OWN-26-AC1…4: uncapped rows, NONAME, no summary or othe
 });
 test("FE-OWNEMPTY / O-EMPTY / O-STATES / OWN-26-AC6…8 / P52: zero lead sentence, errors never masquerade as zero", () => {
   const empty = renderToStaticMarkup(<Home name="林小姐" locale="zh-TW" state={{ status: "ready", rows: [] }} />);
-  assert.match(empty, /<h2[^>]*>林小姐，目前沒有要你處理的事。<\/h2>/); assert.doesNotMatch(empty, /首頁/);
+  assert.match(empty, /<h1[^>]*>林小姐，目前沒有要你處理的事。<\/h1>/); assert.doesNotMatch(empty, /首頁/);
   assert.match(empty, /data-v3-illustration="20"/); assert.match(empty, /data-testid="owner-empty"/);
   assert.match(empty, /目前沒有要你處理的事，放心。/); assert.doesNotMatch(empty, /0 件|看總覽|owner-primary|owner-summary/);
   for (const name of ["", "  "]) { // OV-SH-NONAME: the headline drops the name part.
     const noName = renderToStaticMarkup(<Home name={name} locale="zh-TW" state={{ status: "ready", rows: [] }} />);
-    assert.match(noName, /<h2[^>]*>目前沒有要你處理的事。<\/h2>/); assert.doesNotMatch(noName, /，目前沒有|首頁/);
+    assert.match(noName, /<h1[^>]*>目前沒有要你處理的事。<\/h1>/); assert.doesNotMatch(noName, /，目前沒有|首頁/);
   }
   const en = renderToStaticMarkup(<Home name="Lin" locale="en" state={{ status: "ready", rows: [] }} />);
-  assert.match(en, /<h2[^>]*>Lin, nothing needs you right now\.<\/h2>/);
-  assert.match(renderToStaticMarkup(<Home name="" locale="en" state={{ status: "ready", rows: [] }} />), /<h2[^>]*>Nothing needs you right now\.<\/h2>/);
+  assert.match(en, /<h1[^>]*>Lin, nothing needs you right now\.<\/h1>/);
+  assert.match(renderToStaticMarkup(<Home name="" locale="en" state={{ status: "ready", rows: [] }} />), /<h1[^>]*>Nothing needs you right now\.<\/h1>/);
   // Order: lead, summary row only when its reader supplies data, then O-EMPTY with 「看總覽」 only when 總覽 is live.
   const full = renderToStaticMarkup(<Home name="林小姐" locale="zh-TW" state={{ status: "ready", rows: [] }}
     summary={<a href="/o/overview">summary</a>} overviewHref="/o/overview" />);
   const at = (needle: string) => { const index = full.indexOf(needle); assert.ok(index >= 0, needle); return index; };
-  assert.ok(at("目前沒有要你處理的事。</h2>") < at('data-testid="owner-summary"'));
+  assert.ok(at("目前沒有要你處理的事。</h1>") < at('data-testid="owner-summary"'));
   assert.ok(at('data-testid="owner-summary"') < at('data-testid="owner-empty"'));
   assert.match(full, /<a class="owner-text-link" href="\/o\/overview">看總覽<\/a>/); assert.doesNotMatch(full, /owner-primary/);
   assert.doesNotMatch(renderToStaticMarkup(<Home name="林小姐" locale="zh-TW" state={{ status: "error" }} summary="summary" />), /owner-summary/);

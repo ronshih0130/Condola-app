@@ -15,8 +15,11 @@ export type ShellV3Props = {
   locale: Locale; name: string; party: "m" | "o" | "v"; brand: string; context: string; company: string; title: string; menuContext: string;
   canSwitchCompany?: boolean; orgMenu?: ReactNode; account?: ReactNode; menuExtra?: ReactNode; banner?: ReactNode;
   buildSha?: string; notification?: ShellEntry; moreEntries?: ShellEntry[];
-  /** OV-SH-DESK-HEAD: the sand lead's heading when it differs from the title row's area name (owner/vendor only). */
-  lead?: string;
+  /**
+   * OV-SH-DESK-HEAD: the sand lead's heading when it differs from the title row's area name (owner/vendor only).
+   * null: the page renders its own single h1 (O-HOME's sentence), so the shell renders no sand heading at all.
+   */
+  lead?: string | null;
 };
 
 /** Shared phone/desktop chrome and the single focus-managed menu used by the manager, owner and (B-063) vendor portals. */
@@ -97,7 +100,7 @@ export function ShellV3({ children, areas, tabs, path, currentId, moreOn, locale
     </aside>
     <div className="main shell-content">
       <div className="deskbar"><span className="page-title-desk">{title}</span>{bell}{avatar}</div>
-      {party !== "m" ? <div className="shell-phone-lead"><h1>{lead ?? title}</h1></div> : null}
+      {party !== "m" && lead !== null ? <div className="shell-phone-lead"><h1>{lead ?? title}</h1></div> : null}
       {banner}
       {current && (current.links?.length ?? 0) > 1 ? <nav className="subchips" aria-label={current.label}>{current.links?.map(item => <Link key={item.href} href={item.href} className={pathWithin(path, item.href) ? "on" : undefined} aria-current={pathWithin(path, item.href) ? "page" : undefined}>{item.label}</Link>)}</nav> : null}
       {children}

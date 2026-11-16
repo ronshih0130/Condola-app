@@ -61,16 +61,16 @@ export function OwnerHomeV3({ name, locale, state, estimate, summary, overviewHr
     : rows.length === 0 ? (named ? copy.leadEmpty : copy.leadEmptyNoName).replace("{name}", name.trim())
     : (named ? copy.lead : copy.leadNoName).replace("{name}", name.trim()).replace("{count}", String(rows.length));
   return <section className="v3-owner-home" data-testid="owner-home-v3">
-    <h2 ref={heading} tabIndex={-1}>{title}</h2>
+    <h1 ref={heading} tabIndex={-1}>{title}</h1>
     {state.status === "ready" && summary ? <div className="owner-summary" data-testid="owner-summary">{summary}</div> : null}
     <section className="owner-task-card" aria-labelledby="owner-tasks-title">
-      <h3 id="owner-tasks-title">{copy.tasks}</h3>
+      <h2 id="owner-tasks-title">{copy.tasks}</h2>
       {state.status === "error" ? <div role="alert"><p>{copy.failure}</p>
         <button className="owner-action owner-primary" onClick={() => router.refresh()}>{brandV3TodayCopy(locale).retry}</button>
       </div> : rows.length ? <ul className="owner-estimates">{rows.map(row => <li key={row.versionId} data-testid="owner-estimate-row">
         <div><b>{row.property}{row.item}</b><div className="owner-badges"><span>{copy.estimate} {row.amount}</span><span>{row.emergency ? copy.emergencyNote : copy.pending}</span></div></div>
         <button className="owner-action" onClick={event => { trigger.current = event.currentTarget; setSelected(row); setNotice(""); }}>{copy.approve}</button>
-      </li>)}</ul> : <div className="owner-empty" data-testid="owner-empty"><Illustration name="20" /><h4>{copy.empty}</h4><p>{copy.emptyDetail}</p>
+      </li>)}</ul> : <div className="owner-empty" data-testid="owner-empty"><Illustration name="20" /><h3>{copy.empty}</h3><p>{copy.emptyDetail}</p>
         {overviewHref ? <Link className="owner-text-link" href={overviewHref}>{copy.overview}</Link> : null}</div>}
       {notice ? <p role="status">{notice}</p> : null}
     </section>

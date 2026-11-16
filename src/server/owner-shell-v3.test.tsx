@@ -13,6 +13,11 @@ import * as repairCopy from "../i18n/lanes/repair-owner-policy";
 import * as nav from "./nav-v3";
 import { RoleAvatar } from "../components/v3/role-avatar";
 import { ShellIcon } from "../components/v3/shell/icon";
+import { Illustration } from "../components/v3/illustrations";
+import { WaitMark } from "../components/v3/wait-mark";
+import * as approvalCopy from "../i18n/repair-approval";
+import * as rules from "./repair-approval-rules";
+import * as wire from "../app/o/approvals/decision-request";
 import type { CenterAdmission } from "./notification-center";
 import type { Session } from "./types";
 
@@ -50,11 +55,11 @@ function components(locale: i18n.Locale, path: string, open: "avatar" | "more" |
     OwnerShell: compile(source("src/components/v3/shell/owner-shell.tsx"), { ...sharedMocks, "./shared-shell": shared }),
   };
 }
-function renderOwner({ path = "/o", locale = "zh-TW", name = owner.name, admission = "enabled", open = null, navigation, receiptTitleAvailable = false, canSwitchToTenant = false }: {
-  path?: string; locale?: i18n.Locale; name?: string; admission?: CenterAdmission; open?: "avatar" | "more" | null; navigation?: nav.OwnerNavigationV3; receiptTitleAvailable?: boolean; canSwitchToTenant?: boolean;
+function renderOwner({ path = "/o", locale = "zh-TW", name = owner.name, admission = "enabled", open = null, navigation, receiptTitleAvailable = false, canSwitchToTenant = false, children }: {
+  path?: string; locale?: i18n.Locale; name?: string; admission?: CenterAdmission; open?: "avatar" | "more" | null; navigation?: nav.OwnerNavigationV3; receiptTitleAvailable?: boolean; canSwitchToTenant?: boolean; children?: React.ReactNode;
 } = {}) {
   const Shell = components(locale, path, open).OwnerShell.OwnerShellV3 as React.ComponentType<Record<string, unknown>>;
-  return renderToStaticMarkup(<Shell canSwitchToTenant={canSwitchToTenant} locale={locale} name={name} firm="安居代管" navigation={navigation ?? nav.ownerNavigationV3({ ...owner, locale }, properties, ["allowed", "unassigned"], admission, receiptTitleAvailable)}><main data-testid="content">existing owner content</main></Shell>);
+  return renderToStaticMarkup(<Shell canSwitchToTenant={canSwitchToTenant} locale={locale} name={name} firm="安居代管" navigation={navigation ?? nav.ownerNavigationV3({ ...owner, locale }, properties, ["allowed", "unassigned"], admission, receiptTitleAvailable)}>{children ?? <main data-testid="content">existing owner content</main>}</Shell>);
 }
 
 test("OV-SH-PHONE / PLT-46-AC1: owner OFF preserves old readers, order, markup and redirects", async () => {
@@ -126,7 +131,8 @@ test("OV-SH-PHONE / OV-SH-DESK / OV-SH-ORG / PLT-44: shared markup, plain contex
     const html = renderOwner({ path });
     assert.match(html, /租多啦・屋主/); assert.match(html, /<div class="cap">林小姐 你好｜管理方：安居代管<\/div>/);
     assert.match(html, /class="appbar navy"/); assert.match(html, /class="sidebar"/); assert.match(html, /class="deskbar"/);
-    assert.match(html, /class="shell-phone-lead"/); assert.match(html, /existing owner content/);
+    // OV-SH-DESK-HEAD (batch 4): on 首頁 the page's O-HOME sentence is the h1 and sand lead; the shell adds none.
+    assert.equal(html.includes('class="shell-phone-lead"'), path !== "/o", path); assert.match(html, /existing owner content/);
     assert.equal((html.match(/data-testid="shell-bell"/g) ?? []).length, 2);
     assert.equal((html.match(/data-testid="avatar-menu-trigger"/g) ?? []).length, 2);
     const active = path === "/o" ? "home" : path.startsWith("/o/statements") ? "statements" : path === "/o/notifications" ? "notifications" : "more";
@@ -208,7 +214,7 @@ test("OV-SH-ME: dual-role owners get the shipped tenant switch in the avatar men
 
 test("OV-SH-PHONE: mounted marker, title-only lead, and surname initials in both locales", () => {
   for (const locale of ["zh-TW", "en"] as const) for (const [name, initial] of [["Jane Smith", "S"], ["  alex   chen  ", "C"], ["林小姐", "林"], ["𠮷田 太郎", "𠮷"], ["Alex", "A"]]) {
-    const html = renderOwner({ locale, name });
+    const html = renderOwner({ locale, name, path: "/o/statements" });
     assert.match(html, /<div data-v3-shell="" class="v3-shell v3-owner-shell"/);
     assert.match(html, /<div class="shell-phone-lead"><h1>[^<]+<\/h1><\/div>/);
     assert.equal((html.match(new RegExp(`party-name" aria-hidden="true">${initial}</span>`, "gu")) ?? []).length, 2);
@@ -236,4 +242,45 @@ test("RO-MORE / OV-SH-MORE / OWN-35 (B-093): 核准紀錄 tops 更多 only when 
   // Without the entry, an approvals path keeps today's 首頁 fallback.
   const legacy = renderOwner({ path: "/o/approvals/10000000-0000-4000-8000-0000000000aa" });
   assert.ok(legacy.includes('<div class="shell-phone-lead"><h1>首頁</h1></div>'));
+});
+
+// OV-SH-DESK-HEAD (round 7 batch 4) heading result: the same markup serves phone and desktop (CSS only moves it).
+const headings = (html: string) => [...html.matchAll(/<h([1-6])[^>]*>(.*?)<\/h\1>/g)].map(m => [Number(m[1]), m[2].replace(/<[^>]+>/g, "")] as const);
+function ownerHome() {
+  const runtime = { "react": React, "react/jsx-runtime": requireHere("react/jsx-runtime"), "node:crypto": requireHere("node:crypto") };
+  const load = (file: string, mocks: Record<string, unknown>) => compile(source(file), { ...runtime, ...mocks });
+  const emergency = load("src/app/o/approvals/emergency.tsx", { "@/server/repair-approval-rules": rules });
+  return load("src/components/v3/owner/home.tsx", { "../../../i18n": i18n, "../../../i18n/lanes/brand-v3": copy, "../../../i18n/repair-approval": approvalCopy,
+    "../../../server/repair-approval-rules": rules, "../../../app/o/approvals/decision-request": wire, "../../../app/o/approvals/emergency": emergency,
+    "../illustrations": { Illustration }, "../wait-mark": { WaitMark }, "next/navigation": { useRouter: () => ({ refresh() {}, replace() {} }) },
+    "next/link": link }).OwnerHomeV3 as React.ComponentType<Record<string, unknown>>;
+}
+test("OV-SH-DESK-HEAD: owner 首頁 exposes exactly one h1, the O-HOME sentence; headings step down; the title row is not a heading", () => {
+  const Home = ownerHome();
+  const estimate = { ticketId: "t", versionId: "v", requestId: "r", version: "1", property: "仁愛路 6F", item: "門鎖卡住", amount: "NT$2,800", vendor: null, scope: "s", managementExplanation: null, emergency: null };
+  for (const locale of ["zh-TW", "en"] as const) for (const [state, expected] of [
+    [{ status: "ready", rows: [estimate] }, locale === "en" ? "林小姐, 1 items need your attention." : "林小姐，有 1 件事要你處理。"],
+    [{ status: "ready", rows: [] }, locale === "en" ? "林小姐, nothing needs you right now." : "林小姐，目前沒有要你處理的事。"],
+    [{ status: "error" }, locale === "en" ? "Home" : "首頁"],
+  ] as const) {
+    const html = renderOwner({ locale, children: <Home name="林小姐" locale={locale} state={state} /> });
+    const list = headings(html);
+    assert.deepEqual(list.filter(([level]) => level === 1), [[1, expected]], `${locale} ${state.status}`);
+    assert.equal(list[0][0], 1, "the h1 comes first");
+    for (let i = 1; i < list.length; i++) assert.ok(list[i][0] <= list[i - 1][0] + 1, `no skipped level: ${JSON.stringify(list)}`);
+    assert.doesNotMatch(html, /class="shell-phone-lead"/);
+    assert.ok(html.includes(`<span class="page-title-desk">${locale === "en" ? "Home" : "首頁"}</span>`), "title row names the area, as text");
+  }
+  // Nothing hides the sentence at either width: no display:none on it, and the shell has no hidden lead left to rely on.
+  const css = source("public/brand/v3/owner.css") + source("public/brand/v3/shell.css");
+  assert.doesNotMatch(css, /v3-owner-home[^{]*\{[^}]*display:\s*none/);
+  assert.doesNotMatch(css, /:has\(\.v3-owner-home\)/);
+  assert.doesNotMatch(css, /\.shell-phone-lead\s*\{[^}]*display:\s*none/);
+});
+test("OV-SH-DESK-HEAD: every other owner page has exactly one h1, the shell's sand heading", () => {
+  for (const path of ["/o/statements", "/o/statements/statement-id", "/o/notifications", "/o/repair-policy/allowed", "/o/approvals/x"]) {
+    const html = renderOwner({ path });
+    assert.equal(headings(html).filter(([level]) => level === 1).length, 1, path);
+    assert.match(html, /<div class="shell-phone-lead"><h1>[^<]+<\/h1><\/div>/, path);
+  }
 });

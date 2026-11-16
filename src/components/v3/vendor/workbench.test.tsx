@@ -17,6 +17,7 @@ import { RoleAvatar } from "../role-avatar";
 import { ShellIcon } from "../shell/icon";
 import { VendorEmpty, VendorHome, VendorJobs, VendorNoPerm, VendorPayments, VendorWorkbenchError, VendorWorkbenchLoading } from "./workbench";
 import type { VendorJobRow, VendorPaymentRow } from "../../../server/vendor-workbench";
+import VendorAccountPanel from "../../../app/vendor-account/panel";
 
 // B-063 component tests: V-HOME, V-EMPTY, V-JOBS, V-RECV (rows, empty, loading, error), B1-NOPERM and the
 // vendor shell (OV-SH-PHONE / DESK / MORE / ME / NONAME / ORG / NOTI), plus the /vendor-account OFF parity.
@@ -177,9 +178,9 @@ function shell(locale: i18n.Locale, path: string, open: "avatar" | "more" | null
     "../../../lib/vendor-workbench-paths": paths, "../shell/shared-shell": shared,
   });
 }
-function renderShell({ path = "/vendor-account", locale = "zh-TW", name = "陳師傅", open = null }: { path?: string; locale?: i18n.Locale; name?: string; open?: "avatar" | "more" | null } = {}) {
+function renderShell({ path = "/vendor-account", locale = "zh-TW", name = "陳師傅", open = null, children }: { path?: string; locale?: i18n.Locale; name?: string; open?: "avatar" | "more" | null; children?: React.ReactNode } = {}) {
   const Shell = shell(locale, path, open).VendorShellV3 as React.ComponentType<Record<string, unknown>>;
-  return html(<Shell locale={locale} name={name} company="安居物業"><p data-testid="content">content</p></Shell>);
+  return html(<Shell locale={locale} name={name} company="安居物業">{children ?? <p data-testid="content">content</p>}</Shell>);
 }
 
 test("OV-SH-PHONE / OV-SH-DESK / OV-SH-ORG: vendor wordmark, plain context, phone tabs and desktop areas", () => {
@@ -203,9 +204,11 @@ test("OV-SH-NOTI: a signed-in vendor has no notification page, so no bell and no
 
 test("OV-SH-DESK-HEAD: the title row names the area, the sand lead keeps the phone heading (V-RECV 收款 / 待收款紀錄)", () => {
   for (const [path, area, desk, lead] of [["/vendor-account", "home", "工作台", "工作台"], ["/vendor-account/jobs", "jobs", "工單", "工單"],
-    ["/vendor-account/payments", "payments", "收款", "待收款紀錄"], ["/vendor-account/account", "account", "我的帳號", "我的帳號"]] as const) {
+    ["/vendor-account/payments", "payments", "收款", "待收款紀錄"], ["/vendor-account/account", "account", "我的帳號", null]] as const) {
     const markup = renderShell({ path });
-    assert.ok(markup.includes(`<div class="shell-phone-lead"><h1>${lead}</h1></div>`), path);
+    // 我的帳號 hosts the B-026 page, whose own h1 is the page heading: the shell adds no second one there.
+    if (lead) assert.ok(markup.includes(`<div class="shell-phone-lead"><h1>${lead}</h1></div>`), path);
+    else assert.doesNotMatch(markup, /shell-phone-lead/, path);
     assert.ok(markup.includes(`<span class="page-title-desk">${desk}</span>`), path);
     assert.match(markup, new RegExp(`data-area="${area}" class="on" aria-current="page"`));
     if (area === "account") assert.match(markup, /data-area="more" class="on" aria-current="page"/);
@@ -214,18 +217,41 @@ test("OV-SH-DESK-HEAD: the title row names the area, the sand lead keeps the pho
   assert.ok(en.includes('<span class="page-title-desk">Payments</span>')); assert.ok(en.includes('<div class="shell-phone-lead"><h1>Awaiting payment</h1></div>'));
 });
 
-test("OV-SH-DESK-HEAD CSS: owner/vendor show the sand lead on desktop (managers have none); O-HOME's sentence is that lead; 44px kept", () => {
+// Heading result: the same markup serves phone and desktop; CSS only shows the sand lead on desktop too.
+const headings = (markup: string) => [...markup.matchAll(/<h([1-6])[^>]*>(.*?)<\/h\1>/g)].map(m => [Number(m[1]), m[2].replace(/<[^>]+>/g, "")] as const);
+test("OV-SH-DESK-HEAD: every vendor page has exactly one h1 and its headings step down; the title row is text", () => {
+  // App files compile with the classic JSX runtime under tsx (the B-026 panel lives in src/app).
+  const runtime = globalThis as typeof globalThis & { React?: typeof React }; const previousReact = runtime.React; runtime.React = React;
+  try {
+  for (const [path, body, h1, desk] of [
+    ["/vendor-account", <VendorHome key="h" jobs={jobs} payments={payments} locale="zh-TW" />, "工作台", "工作台"],
+    ["/vendor-account", <VendorHome key="e" jobs={[]} payments={[]} locale="zh-TW" />, "工作台", "工作台"],
+    ["/vendor-account", <VendorHome key="o" jobs={[]} payments={payments} locale="zh-TW" />, "工作台", "工作台"],
+    ["/vendor-account/jobs", <VendorJobs key="j" jobs={jobs} locale="zh-TW" />, "工單", "工單"],
+    ["/vendor-account/jobs", <VendorJobs key="je" jobs={[]} locale="zh-TW" />, "工單", "工單"],
+    ["/vendor-account/payments", <VendorPayments key="p" payments={payments} locale="zh-TW" />, "待收款紀錄", "收款"],
+    ["/vendor-account/payments", <VendorPayments key="pe" payments={[]} locale="zh-TW" />, "待收款紀錄", "收款"],
+    ["/vendor-account/payments", <VendorWorkbenchLoading key="l" screen="payments" locale="zh-TW" />, "待收款紀錄", "收款"],
+    ["/vendor-account/account", <VendorAccountPanel key="a" />, "廠商帳號", "我的帳號"],
+  ] as const) {
+    const markup = renderShell({ path, children: body });
+    const list = headings(markup);
+    assert.deepEqual(list.filter(([level]) => level === 1), [[1, h1]], path);
+    assert.equal(list[0][0], 1, `${path}: the h1 comes first`);
+    for (let i = 1; i < list.length; i++) assert.ok(list[i][0] <= list[i - 1][0] + 1, `${path}: ${JSON.stringify(list)}`);
+    assert.ok(markup.includes(`<span class="page-title-desk">${desk}</span>`), path);
+  }
+  } finally { runtime.React = previousReact; }
+});
+
+test("OV-SH-DESK-HEAD CSS: owner/vendor sand lead stays visible on desktop; nothing hides a page h1; 44px kept", () => {
   const shellCss = source("public/brand/v3/shell.css"), ownerCss = source("public/brand/v3/owner.css");
   const desktop = shellCss.slice(shellCss.lastIndexOf("@media(min-width:64em) {"));
   assert.match(desktop, /\.v3-owner-shell \.shell-phone-lead\{ display:block;/);
-  assert.match(desktop, /\.v3-owner-shell \.page-title-desk\{ font-size:1rem;/);
-  assert.doesNotMatch(shellCss, /\.v3-shell \.shell-phone-lead\{ display:none; \}/);
-  assert.match(ownerCss, /\.v3-owner-shell:has\(\.v3-owner-home\) \.shell-phone-lead \{ display:none; \}/);
-  assert.match(ownerCss, /\.v3-owner-shell \.v3-owner-home > h2 \{ background:var\(--c-tint-soft\); color:var\(--c-text\);/);
-  for (const css of [shellCss, ownerCss]) assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b/i);
-  // Managers render no sand lead at all, so the desktop rule cannot reach them.
-  const managerShell = source("src/components/v3/shell/shared-shell.tsx");
-  assert.match(managerShell, /\{party !== "m" \? <div className="shell-phone-lead"><h1>\{lead \?\? title\}<\/h1><\/div> : null\}/);
+  for (const css of [shellCss, ownerCss]) {
+    assert.doesNotMatch(css, /\.shell-phone-lead[^{]*\{[^}]*display:\s*none/);
+    assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b/i);
+  }
   assert.match(source("public/brand/v3/vendor.css"), /\.vendor-action \{[^}]*min-width:44px; min-height:44px/);
 });
 

@@ -71,7 +71,9 @@ export function VendorShellV3({ children, locale, name, company }: { children: R
     <ShellV3 areas={[...areas, ...more]} tabs={tabs} path={path} currentId={current} moreOn={current === "account"} moreEntries={more}
       locale={locale} name={name} party="v" company={company} brand={token.brand}
       context={(name.trim() ? token.context : token.contextNoName).replace("{name}", name.trim()).replace("{company}", company)}
-      title={vendorShellArea(current, locale)} lead={vendorShellTitle(current, locale)}
+      title={vendorShellArea(current, locale)}
+      // 我的帳號 hosts the B-026 page unchanged, which brings its own single h1: no second sand heading there.
+      lead={current === "account" ? null : vendorShellTitle(current, locale)}
       menuContext={brandV3ShellCopy(locale).menuContext.replace("{role}", brandV3Copy(locale).v).replace("{company}", company)}
       account={<Link role="menuitem" className="shell-account" data-testid="avatar-account" href={VENDOR_WORKBENCH.account}>{t("i_account")}</Link>}>
       {children}
