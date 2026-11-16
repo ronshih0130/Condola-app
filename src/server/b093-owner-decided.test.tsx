@@ -147,6 +147,8 @@ test("OWN-35-AC2 view: version, scope, the owner's reason only when given, later
   assert.doesNotMatch(html, /owner-primary|<button|<form|<input|<textarea|核准估價/);
   // 退回 may appear only as the result badge (OQ-079), never as an action.
   assert.doesNotMatch(html, /<(?:button|a)[^>]*>[^<]*退回/);
+  assert.deepEqual([...html.matchAll(/class="decided-badge [^"]+">([^<]+)</g)].map(m => m[1]).sort(), ["已核准", "退回"].sort());
+  assert.doesNotMatch(html, /已拒絕/);
   const unknown = renderToStaticMarkup(<DecidedTicketView locale="en" calendar="gregorian" detail={{ ...detail, status: "mystery" }} />);
   assert.match(unknown, /data-testid="owner-decided-status">—</);
 });
@@ -276,7 +278,7 @@ test("page wrappers map reader states: 403 → B1-NOPERM, unavailable → in-pla
   }
 });
 
-test("RO-DECIDED view imports labels only: never the B-013 service, no money/decision writer, no new result strings", () => {
+test("RO-DECIDED view imports labels only: never the B-013 service, no money/decision writer; result labels come from the lane", () => {
   const view = read("src/components/v3/o/decided/decided.tsx");
   assert.doesNotMatch(view, /server\/repair-approval["']|decision-request|postOwnerDecision|"use client"/);
   assert.match(view, /brandV3OwnerDecidedCopy\(locale\)\.result\[decision\]/);
