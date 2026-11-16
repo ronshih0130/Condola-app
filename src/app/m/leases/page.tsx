@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { LeasesV3Page } from "@/components/v3/m/leases/page";
+import { LeasesLoading } from "@/components/v3/m/leases/leases";
 import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
@@ -16,6 +20,10 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const raw = await searchParams;
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/leases.css" /><Suspense key={`${raw.q ?? ""}:${raw.page ?? ""}`} fallback={<LeasesLoading locale={session.locale} />}><LeasesV3Page session={session} params={raw} /></Suspense></>;
+  }
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
   const result = await searchLeases(session, raw);
