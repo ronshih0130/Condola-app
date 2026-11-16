@@ -8,7 +8,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import postcss from "postcss";
 import * as i18n from "../i18n";
-import * as ownStatus from "../i18n/lanes/brand-v3-own-status";
 import * as copy from "../i18n/lanes/brand-v3-money";
 import * as brand from "../i18n/lanes/brand-v3";
 import * as center from "../i18n/lanes/notification-center";
@@ -40,14 +39,7 @@ const model = compile(source("src/server/money-page.ts"), {
 }) as typeof Model;
 const session: Session = { kind: "staff", role: "admin", orgId: "org", liveOrgId: "org", userId: "user", sessionId: "session", name: "王怡君", email: "fixture@example.invalid", locale: "zh-TW", environment: "live", calendar: "gregorian", leaseId: null };
 const confirm = async () => {};
-const proxy = compile(source("src/components/v3/m/money/proxy-confirmation.tsx"), {
-  "next/navigation": { useRouter: () => ({ refresh() {} }) },
-  "../../../../i18n/lanes/brand-v3-money": copy, "../../../../i18n/lanes/brand-v3": brand,
-  "../../../../i18n/lanes/brand-v3-own-status": ownStatus,
-  "../../../../server/actions": { actionConfirmPaymentOwnerProxy: confirm }, "../../completion-check": { CompletionCheck },
-});
 const view = compile(source("src/components/v3/m/money/money.tsx"), {
-  "./proxy-confirmation": proxy,
   "next/link": { __esModule: true, default: "a" }, "../../../../i18n": i18n,
   "../../../../i18n/lanes/brand-v3-money": copy, "../../../../i18n/lanes/brand-v3": brand,
   "../../../../i18n/lanes/notification-center": center,
@@ -60,7 +52,7 @@ function bill(status: MoneyMonthBill["status"], leaseId = status): MoneyMonthBil
   return { leaseId, status, month: "2026-11", place: `Property ${leaseId}`, tenantName: `Tenant ${leaseId}`, currency: "TWD", dueDate: "2026-11-10", propertyToday: "2026-11-14", totalMinor: "3200000", confirmedMinor: status === "paid" ? "3200000" : "1000000", remainingMinor: status === "paid" ? "0" : "2200000" };
 }
 function report(id: string, other = false): MoneyMonthReport {
-  return { id, leaseId: "reported", place: "Property reported", tenantName: "Tenant reported", amountMinor: "50000", currency: "TWD", paidOn: "2026-10-01", submittedAt: `2026-11-${id === "r1" ? "10" : "11"}T18:00:00Z`, source: "tenant_portal", ownerPayee: null, bankTransactionId: null, proofFileId: null, billRows: other ? [] : [{ leaseId: "reported", month: "2026-11" }], attachment: other ? "other" : "oldest_unpaid" };
+  return { id, leaseId: "reported", place: "Property reported", tenantName: "Tenant reported", amountMinor: "50000", currency: "TWD", paidOn: "2026-10-01", submittedAt: `2026-11-${id === "r1" ? "10" : "11"}T18:00:00Z`, source: "tenant_portal", bankTransactionId: null, proofFileId: null, billRows: other ? [] : [{ leaseId: "reported", month: "2026-11" }], attachment: other ? "other" : "oldest_unpaid" };
 }
 const bills: Extract<MoneyMonthBills, { state: "ready" }> = {
   state: "ready", month: "2026-11", today: "2026-11-14", timezone: "Asia/Taipei", population: "rent_roll_active_unarchived",
@@ -106,24 +98,6 @@ test("其他回報 only at top of 輪到你; multiple attached reports oldest fi
 test("paid is the only state with the existing completion mark; unpaid rows never animate confirmation", () => {
   assert.match(render({ tab: "paid" }), /v3-check/);
   for (const tab of ["yours", "overdue", "future"] as const) assert.doesNotMatch(render({ tab }), /v3-check/);
-});
-
-test("M-PROXY: owner payee opens the sheet; management and unassigned payees retain the normal action", () => {
-  const ownerReports = { ...reports, attached: [{ ...report("r1"), ownerPayee: { contactId: "owner", displayName: "Synthetic owner" } }, report("r2")] };
-  for (const role of ["admin", "manager", "accountant"] as const) {
-    const html = render({ session: { ...session, role }, reports: ownerReports });
-    assert.equal((html.match(/data-testid="confirm-owner-payment"/g) ?? []).length, 1);
-    assert.equal((html.match(/data-testid="confirm-payment"/g) ?? []).length, 1);
-    assert.match(html, /name="paymentId" value="r2"/);
-    assert.doesNotMatch(html, /name="paymentId" value="r1"|v3-proxy-sheet/);
-  }
-  // Even an incorrectly supplied ready DTO cannot give a denied viewer a button.
-  for (const viewer of [{ ...session, role: "maintenance" as const }, { ...session, kind: "owner" as const },
-    { ...session, customRole: { orgId: "org", userId: "user", sessionId: "session", nativeRole: "admin" as const, assigned: true,
-      keys: ["stmt.view" as const], photos: false, audit: false } }]) {
-    assert.doesNotMatch(render({ session: viewer, reports: ownerReports }), /data-testid="confirm-(owner-)?payment"/);
-  }
-  assert.doesNotMatch(render({ reports: { state: "forbidden" } }), /confirm-owner-payment/);
 });
 
 test("MGT-141: due-state tab membership, remaining line, headline and completion across the due boundary", () => {
@@ -420,12 +394,5 @@ test("輪到你 without report access falls back to 全部: no `reported` bill f
     assert.deepEqual(billInputs, [{ month: "2026-11", status: undefined, cursor: undefined }]);
     assert.equal(data.tab, "all"); assert.equal(data.cursor, undefined); assert.equal(data.reports.state, "forbidden");
     assert.doesNotMatch(render(data), /money-tab-yours/);
-  }
-});
-
-test("month heading persists as focus destination when refresh removes the confirmed report", () => {
-  for (const current of [reports, { ...reports, attached: [], other: [], yourTurn: 0 }]) {
-    const html = render({ reports: current });
-    assert.match(html, /<h1 id="money-month-heading" tabindex="-1">/);
   }
 });
