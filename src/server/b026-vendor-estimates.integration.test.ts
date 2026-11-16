@@ -145,7 +145,11 @@ test("B-026 vendor estimate submission and manager comparison", async t => {
       // those reviewed additions; everything else must still equal the B-026 baseline byte for byte.
       // B-085 part 2 / app #180 adds the brand_v3 V-TOKEN shell and notification resolver.
       // Strip only its exact reviewed imports, reads, wrapper and call-site changes before B-035.
+      // B-101 (VEN-31 vendor LINE sign-in) adds a gated entry to the V-TOKEN shell; strip exactly those lines too.
       const withoutReviewedAdditions = (source: string) => source
+        .replace('import { VendorLineMatchEntry } from "@/components/v3/vendor/line-match-entry";\n', "")
+        .replace('  const matchEntry = tokenBrand && await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;\n', "")
+        .replace(/\n +loginEntry=\{matchEntry\}/, "")
         .replace('import type { ReactNode } from "react";\n', "")
         .replace('import { VendorTokenShell } from "@/components/v3/vendor/token-shell";\n', "")
         .replace('import { vendorTokenBrand } from "@/server/vendor-token-brand";\n', "")

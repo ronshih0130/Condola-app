@@ -1,3 +1,4 @@
+import { brandV2Enabled } from "../brand-v2";
 import { finishVendorFlowOn, vendorScopeOn } from "./vendor-scope";
 import { hashVendorToken, vendorTokenAcceptable } from "../vendor-repair-rules";
 import { randomBytes } from "node:crypto";
@@ -89,6 +90,8 @@ export async function flowOn(c: Client, handle: string, proof: BrowserProof, loc
  if (!f || !f.org_id || !equalHash(proof.browser, f.browser_hash) || !equalHash(proof.csrf, f.csrf_hash)) rejectLine(404, "not_found");
  const ch = await channelOn(c, f.org_id, f.persona);
  if (ch.id !== f.line_channel_id) rejectLine(404, "not_found");
+ // B101 OFF must stop before OAuth start, attempt admission, verification or writes.
+ if (f.return_path === "/v/link" && !(await c.query("SELECT app.b101_enabled($1,$2) enabled", [f.org_id, brandV2Enabled()])).rows[0].enabled) rejectLine(404, "not_found");
  if (f.consumed_at) rejectLine(409, "already_consumed");
  if (f.expires_at.getTime() <= Date.now()) rejectLine(410, "flow_expired");
  if (f.attempts > 5) rejectLine(429, "rate_limited");
@@ -105,7 +108,7 @@ export async function admit(c: Client, scope: string, limit = 30) {
  if (!r.rows[0]) rejectLine(429, "rate_limited");
 }
 export async function createLineFlow(input: { purpose: LineFlow["kind"]; inviteToken?: string; orgId?: string; contactId?: string;
- persona?: LinePersona; returnPath?: string; sessionToken?: string; jobToken?: string }, proof: BrowserProof) {
+ persona?: LinePersona; returnPath?: string; sessionToken?: string; jobToken?: string; vendorMatch?: string }, proof: BrowserProof) {
  return lineTransaction(async c => {
   if (!readLineConfig().platformEnabled) rejectLine(404, "not_found");
   let org = input.orgId, contact = input.contactId ?? null, persona = input.persona, invitation: Invite | undefined;
@@ -128,6 +131,10 @@ export async function createLineFlow(input: { purpose: LineFlow["kind"]; inviteT
   }
   if (!org || !persona) rejectLine(404, "not_found");
   const ch = await channelOn(c, org, persona);
+  if (input.vendorMatch !== undefined) {
+   if (input.vendorMatch !== "true" || input.purpose !== "login" || persona !== "vendor" || input.contactId || input.inviteToken || input.returnPath
+    || !(await c.query("SELECT app.b101_enabled($1,$2) enabled", [org, brandV2Enabled()])).rows[0].enabled) rejectLine(404, "not_found");
+  }
   if (invitation) await inviteOn(c, invitation.id, invitation.code_hash);
   let user: string | null = null;
   if (input.purpose === "bind" || input.purpose === "unlink") {
@@ -138,7 +145,7 @@ export async function createLineFlow(input: { purpose: LineFlow["kind"]; inviteT
   }
   // A login hint carries no authority over a contact. The verified identity selects owned links later.
   if (input.purpose === "login") contact = null;
-  const next = returnPath(persona, input.returnPath);
+  const next = input.vendorMatch === "true" ? "/v/link" : returnPath(persona, input.returnPath);
   await admit(c, `create-org:${org}`, 100);
   await admit(c, `create:${org}:${proof.browser}`, 20);
   const flow = randomProof();
@@ -147,7 +154,10 @@ export async function createLineFlow(input: { purpose: LineFlow["kind"]; inviteT
    VALUES($1,$2,$3,$4,$5,$6,now()+interval '5 minutes',$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id,expires_at`,
    [lineHash(flow), input.purpose, ch.id, persona, lineHash(randomProof()), lineHash(randomProof()), org, contact,
     invitation?.id ?? null, invitation?.code_hash ?? null, user, lineHash(proof.browser), lineHash(proof.csrf), next]);
-  if (job) await c.query("INSERT INTO app.b035_vendor_flows(flow_id,job_id,token_hash) VALUES($1,$2,$3)",
+  if (job && input.vendorMatch === "true") await c.query(`INSERT INTO app.b035_vendor_flows(flow_id,job_id,token_hash,b101_contact_id)
+   SELECT $1,id,$3,vendor_contact_id FROM repair_vendor_jobs WHERE id=$2`,
+   [result.rows[0].id, job.job_id, hashVendorToken(input.jobToken!)]);
+  else if (job) await c.query("INSERT INTO app.b035_vendor_flows(flow_id,job_id,token_hash) VALUES($1,$2,$3)",
    [result.rows[0].id, job.job_id, hashVendorToken(input.jobToken!)]);
   return { flow, expiresAt: result.rows[0].expires_at.toISOString(), persona, liffId: ch.liff_id };
  });
@@ -175,7 +185,7 @@ export async function verifyFlowOn(c: Client, f: LineFlow, idToken: string, reso
  f.verified_hash = hash;
  return hash;
 }
-async function credentialsOn(c: Client, userId: string, input: AuthInput, requirePassword = true) {
+export async function credentialsOn(c: Client, userId: string, input: AuthInput, requirePassword = true) {
  const account = (await c.query<Account>(`SELECT id,email,email_confirmed_at,
   encrypted_password IS NOT NULL AND encrypted_password<>'' AS has_password,
   encrypted_password=crypt($2,encrypted_password) AS matches FROM auth.users WHERE id=$1 FOR UPDATE`, [userId, input.password ?? ""])).rows[0];
@@ -223,7 +233,7 @@ async function auditOn(c: Client, f: LineFlow, userId: string, event: string, li
   VALUES($1,$2,'app','b033_line_events',$3,'insert',$4,$5::jsonb)`,
   [f.org_id, userId, linkId ?? f.id, event, JSON.stringify({ persona: f.persona, ...(linkId ? { linkId } : {}) })]);
 }
-async function lineSessionOn(c: Client, f: LineFlow, userId: string, identityId: string, meta: RequestMeta, sessionToken?: string) {
+export async function lineSessionOn(c: Client, f: LineFlow, userId: string, identityId: string, meta: RequestMeta, sessionToken?: string) {
  const existing = await sessionOn(c, sessionToken);
  if (existing && existing.user_id !== userId) rejectLine(409, "account_mismatch");
  // Reuse a valid same-user Condola session across entry and QR/invite paths. Never mint a second one.
@@ -235,6 +245,24 @@ async function lineSessionOn(c: Client, f: LineFlow, userId: string, identityId:
  return token;
 }
 export async function sessionFromFlowOn(c: Client, f: LineFlow, meta: RequestMeta, auth: AuthInput) {
+ if (f.return_path === "/v/link") {
+  // B101 only accepts the existing OAuth state/nonce/PKCE path; no bare LIFF ID-token binding.
+  const result = (await c.query<{ result: { userId: string; identityId: string } }>(
+   "SELECT app.b101_match($1,$2) result", [f.id, brandV2Enabled()])).rows[0].result;
+  await credentialsOn(c, result.userId, auth, false);
+  const existing = await sessionOn(c, auth.sessionToken);
+  if (existing && existing.user_id !== result.userId) rejectLine(409, "account_mismatch");
+  const review = async (action: "list" | "skip") => (await c.query<{ result: { jobs: unknown[]; userId: string; identityId: string; orgId: string } }>(
+   "SELECT app.b101_review($1,$2,$3,NULL) result", [f.id, brandV2Enabled(), action])).rows[0].result;
+  // VEN-15-AC3/AC4: ANY sign-in (first or repeat) with open, not-yet-linked jobs shows V-LINK; nothing is linked and
+  // no session is issued until the vendor confirms there (POST /v/link).
+  if ((await review("list")).jobs.length) return { next: "/v/link" };
+  // Zero candidates: nothing was shown, so nothing is confirmed. "skip" writes no job link or line_confirmed event.
+  const closed = await review("skip");
+  const token = await lineSessionOn(c, f, closed.userId, closed.identityId, meta, auth.sessionToken);
+  // Existing B026 portal exists. B063 workbench is deliberately not implemented here.
+  return { next: await consentNextOn(c, closed.userId, { persona: "vendor", return_path: "/vendor-account" }), token, orgId: closed.orgId, persona: f.persona };
+ }
  const job = await finishVendorFlowOn(c, f);
  if (job) return job;
  const ident = (await c.query(`SELECT * FROM app.b033_line_identities WHERE line_channel_id=$1 AND provider_user_hash=$2 FOR UPDATE`,
@@ -243,6 +271,8 @@ export async function sessionFromFlowOn(c: Client, f: LineFlow, meta: RequestMet
   AND l.org_id=$2 AND l.persona=$3 AND l.status='linked' AND l.unlinked_at IS NULL
   AND app.b033_contact_user(l.org_id,l.contact_id,l.persona)=$4 FOR SHARE`, [ident.id, f.org_id, f.persona, ident.user_id])).rows[0];
  if (!ident || ident.status !== "linked" || ident.unlinked_at || !link) return { action: "account_required" as const };
+ // B101-managed identities must use V-LINK only while B101 is enabled for their org; OFF they sign in here as ordinary linked vendors.
+ if (f.persona === "vendor" && (await c.query("SELECT app.b101_identity_managed($1,$2) managed", [ident.id, brandV2Enabled()])).rows[0].managed) rejectLine(404, "not_found");
  await credentialsOn(c, ident.user_id, auth, false); // Required second factor also applies to LINE sign-in.
  const token = await lineSessionOn(c, f, ident.user_id, ident.id, meta, auth.sessionToken);
  await c.query("UPDATE app.b033_line_flows SET consumed_at=now() WHERE id=$1", [f.id]);
@@ -347,6 +377,7 @@ export async function callbackLineLogin(input: { flow: string; state: string; co
   if (peek.invitation_id && peek.invitation_hash) await inviteOn(c, peek.invitation_id, peek.invitation_hash);
   const f = await flowOn(c, input.flow, proof, true);
   if (!f.oauth_started_at || !equalHash(input.state, f.state_hash) || !equalHash(input.verifier, f.pkce_hash)) rejectLine(401, "invalid_line_token");
+  if (input.error && f.return_path === "/v/link") rejectLine(401, "invalid_line_token");
   if (input.error) { await c.query("UPDATE app.b033_line_flows SET consumed_at=now() WHERE id=$1", [f.id]); return { next: "/login" }; }
   if (!input.code || f.verified_hash) rejectLine(409, "already_consumed");
   const ch = await channelOn(c, f.org_id, f.persona);

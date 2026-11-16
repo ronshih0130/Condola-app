@@ -34,7 +34,7 @@ const pageSource = source("src/app/v/[token]/page.tsx");
 const legacyNotificationSource = execFileSync("git", ["show", "3e87c93:src/components/notification-center-entry.tsx"], { encoding: "utf8" });
 const baseline = execFileSync("git", ["show", "3e87c93:src/app/v/[token]/page.tsx"], { encoding: "utf8" });
 
-type Scenario = { admission?: "enabled" | "busy" | "disabled" | "denied"; enabled?: boolean; v2?: boolean; locale?: i18n.Locale; job?: VendorJobPage | null; state?: Record<string, unknown> | null; line?: boolean };
+type Scenario = { admission?: "enabled" | "busy" | "disabled" | "denied"; enabled?: boolean; v2?: boolean; locale?: i18n.Locale; job?: VendorJobPage | null; state?: Record<string, unknown> | null; line?: boolean; match?: boolean };
 function page(text: string, scenario: Scenario) {
   const locale = scenario.locale ?? "zh-TW";
   const v2 = scenario.v2 ?? false;
@@ -68,6 +68,7 @@ function page(text: string, scenario: Scenario) {
   const mocks = {
     "@/i18n": i18n, "@/i18n/lanes/vendor-link": linkCopy,
     "@/components/v3/vendor/token-shell": { VendorTokenShell },
+    "@/components/v3/vendor/line-match-entry": { VendorLineMatchEntry: () => <aside data-testid="line-match-entry" /> },
     "@/server/vendor-token-brand": { vendorTokenBrand: async (value: string, shared: boolean) => {
       assert.equal(value, token); calls.push(`brand:${shared}`); return scenario.enabled ? { ...context, property: shared ? context.property : "" } : null;
     } },
@@ -75,7 +76,7 @@ function page(text: string, scenario: Scenario) {
     "@/server/vendor-job": { resolveVendorJobState: async (value: string) => { assert.equal(value, token); calls.push("state"); return scenario.state ?? null; } },
     "@/server/brand-v2": { brandV2Enabled: () => v2 },
     "@/server/session": { requestPrefs: async () => ({ locale }) },
-    "@/server/line/vendor-entry": { vendorLineEntryEnabled: async () => { calls.push("line"); return scenario.line ?? false; } },
+    "@/server/line/vendor-entry": { vendorLineEntryEnabled: async (_token: string, match = false) => { calls.push(match ? "line-match" : "line"); return match ? scenario.match ?? false : scenario.line ?? false; } },
     "@/components/notification-center-entry": notificationEntry,
     "@/components/vendor-link-details": details,
     "@/components/ticket-photos": { TicketPhotoUpload: (props: { inputTestId: string; signPath: string; confirmPath: string; extra: { token: string } }) => {
@@ -117,7 +118,8 @@ test("invalid / expired / revoked / unshared-invalid token response stays identi
 test("ON: exact token job only; existing photo, report and appointment forms survive with their original write boundaries", async () => {
   const current = page(pageSource, { enabled: true, state: { locked: false, requestId: "request", versionId: "version" } });
   const html = await current.html();
-  assert.deepEqual(current.calls, ["job", "brand:true", "state"]);
+  // B101 adds a read-only match gate on the ON branch; the legacy/OFF snapshot is unchanged.
+  assert.deepEqual(current.calls, ["job", "brand:true", "state", "line-match"]);
   for (const marker of ["v-token-v3", "vendor-issue-photo", "vendor-done-photo", "vendor-photo", "vendor-submit", "vendor-propose", "vendor-reject", "vendor-complete"]) assert.ok(html.includes(`data-testid="${marker}"`), marker);
   for (const path of ["/existing-vendor-report", "/api/vendor-job-response", "/api/vendor-job-completion", "/api/vendor-jobs/photos/sign", "/api/vendor-jobs/photos/confirm"]) assert.ok(html.includes(path));
   assert.match(html, /name="requestId" value="request"/); assert.match(html, /name="versionId" value="version"/);
@@ -203,4 +205,14 @@ test("estimate and document routes retain baseline bytes; this slice creates no 
     const baseline = file === "src/server/vendor-repair.ts" ? "d6d738a" : "3e87c93";
     assert.equal(source(file), execFileSync("git", ["show", `${baseline}:${file}`], { encoding: "utf8" }));
   }
+});
+
+// VEN-31-AC1: only the gated Brand 3 shell offers login at the job and restricted-tab sheet.
+test("B101 entry appears in both approved slots only when the combined matching gate is enabled", async () => {
+ const on = await page(pageSource, { enabled: true, match: true }).html();
+ assert.equal((on.match(/data-testid="line-match-entry"/g) ?? []).length, 2);
+ const off = await page(pageSource, { enabled: true, match: false }).html();
+ assert.ok(!off.includes('data-testid="line-match-entry"'));
+ const legacy = await page(pageSource, { enabled: false, match: true }).html();
+ assert.ok(!legacy.includes('data-testid="line-match-entry"'));
 });

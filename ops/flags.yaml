@@ -538,3 +538,12 @@ flags:
     global_kill: "platform_settings.today_dash enabled must be boolean true and allowed_org_ids must be an all-string array including this organization; missing or malformed is OFF"
     org_override: "organizations.feature_flags.today_dash must be boolean true"
     activation: "B-042 今天 operations dashboard v1 (MGT-95); requires today_home. OFF by default everywhere; hosted activation permitted ONLY for Ron's 4 allowlisted internal orgs (290b776d, c55c4cd7, abe00ada, f833d997) after per-flag QA verdict and CEO exact-SHA GO; app.b042_* recorders refuse while OFF; 0 real outbound; rollback = platform_settings / org override to OFF (rows kept). Owner and expiry are assumptions pending Ron (OQ-B042-29)"
+
+  vendor_line_match:
+    owner: PE
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.vendor_line_match requires boolean true enabled and an allowed_org_ids array containing the organization; absent or malformed is OFF"
+    org_override: "organizations.feature_flags.vendor_line_match must be boolean true; vendor_account (with vendor_dispatch), line_vendor_portal (with line_platform and LINE_PLATFORM_ENABLED) and effective brand_v3 must also be enabled"
+    activation: "B-101 / VEN-31 vendor LINE sign-in matched to the token job's vendor contact (V-LINK). OFF by default everywhere; OFF keeps every pre-B-101 path, including the legacy /v/liff?org= LIFF ID-token login, and B-101-bound identities sign in through the existing B033 vendor path; app.b101_* gateways refuse while OFF; 0 outbound; rollback = platform_settings / org override to OFF (rows kept). Owner and expiry are assumptions pending Ron"
