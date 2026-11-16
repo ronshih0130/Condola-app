@@ -151,7 +151,10 @@
           flow = (await response.json()).flow;
         }
         startOAuth(flow);
-      } catch { location.assign("/v/link?error=1"); }
+      } catch {
+        // A failure before any flow exists lands on the static V-LINK error; its retry restarts this same org entry.
+        location.assign("/v/link?error=1" + (config.flow ? "" : "&org=" + encodeURIComponent(config.orgId)));
+      }
       return;
     }
     // Exactly the landings /api/line/session can return for a vendor flow: job claim, return path

@@ -39,6 +39,17 @@ for (const present of [true, false]) test(`VEN-31-AC2: OAuth state/nonce/PKCE pa
  assert.deepEqual(next, ["/api/line/login/start?flow=opaque"]);
  assert.deepEqual(posts, present ? [] : [{ purpose: "login", persona: "vendor", orgId: "org", vendorMatch: "true", csrf: "proof" }]);
 });
+for (const present of [true, false]) test(`cross-model finding: a failed tokenless /api/line/flows lands on the static V-LINK error with the same org entry (rate limited, SDK present=${present})`, async () => {
+ const next: string[] = [], posts: Record<string, string>[] = [];
+ await runInNewContext(script, {
+  document: { getElementById: () => ({ textContent: JSON.stringify({ vendorMatch: true, persona: "vendor", flow: null, orgId: "44444444-4444-4444-8444-444444444444", csrf: "proof" }) }) },
+  window: present ? { liff: { init: () => { throw new Error("Bare SDK token must not bind"); } } } : {},
+  location: { assign: (v: string) => next.push(v) },
+  fetch: async (_path: string, init: RequestInit) => { posts.push(JSON.parse(String(init.body))); return { ok: false, status: 429, json: async () => ({}) }; },
+ });
+ assert.equal(posts.length, 1);
+ assert.deepEqual(next, ["/v/link?error=1&org=44444444-4444-4444-8444-444444444444"], "no OAuth start, no flow handle, only the org entry hint");
+});
 const renderedFlow = "33333333-3333-4333-8333-333333333333", shownSnapshot = "a".repeat(64), afterRemoval = "b".repeat(64);
 test("VEN-15-AC4: browser removal is server-confirmed, busy-safe, text-only and announces the approved toast", async () => {
  const row = { dataset: { job: "job-a" }, querySelector: () => ({ textContent: "<img onerror=bad>" }), remove: () => { removed = true; } };

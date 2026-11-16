@@ -16,7 +16,7 @@ const proof = { browser: "b".repeat(43), csrf: "c".repeat(43) }, job = "11111111
 const FLOW_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", FLOW_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", newer = "22222222-2222-4222-8222-222222222222";
 const flowOf = (handle: string) => handle === "f".repeat(43) ? FLOW_B : FLOW_A;
 const digest = (flow: string, ids: string[]) => createHash("sha256").update(`${flow}:${ids.join(",")}`).digest("hex");
-function setup(opts: { failedList?: boolean; conflict?: boolean; next?: string; expired?: boolean } = {}) {
+function setup(opts: { failedList?: boolean; conflict?: boolean; next?: string; expired?: boolean; unknownFlow?: boolean; noJob?: boolean } = {}) {
  const calls: string[] = [];
  // Emulates app.b101_review: each flow's frozen candidate list; remove/confirm require that flow's current digest.
  const frozen: Record<string, string[]> = { [FLOW_A]: [job], [FLOW_B]: [job, newer] };
@@ -30,8 +30,10 @@ function setup(opts: { failedList?: boolean; conflict?: boolean; next?: string; 
   "./vendor-match": {
    // Expired 5-minute window: only proof-bound recovery (back/retry) still resolves the committed binding's entry.
    vendorMatchContextOn: async (_c: unknown, handle: string, _p: unknown, recovery = false) => {
+    if (opts.unknownFlow) { calls.push("context"); throw new (requireHere("./login-token").LineError)(404, "not_found"); }
     if (opts.expired && !recovery) { calls.push("expired"); throw new (requireHere("./login-token").LineError)(404, "not_found"); }
-    return { f: { id: flowOf(handle), org_id: "org-a" }, back: "/v/original-token", jobToken: "original-token" };
+    return opts.noJob ? { f: { id: flowOf(handle), org_id: "org-a" }, back: "/v/liff", jobToken: undefined }
+     : { f: { id: flowOf(handle), org_id: "org-a" }, back: "/v/original-token", jobToken: "original-token" };
    },
    vendorMatchReviewOn: async (_c: unknown, f: { id: string }, action: string, jobId?: string, snapshot?: string) => {
     calls.push(action); if (opts.failedList) throw new Error("unavailable");
@@ -193,4 +195,49 @@ test("review r1 finding 2: after a second-tab retry and sign-in, the original ta
  // The second tab, which rendered the newer list, still confirms normally.
  const done = await exports.vendorMatchPOST(req({ action: "confirm", flow: second.flow, snapshot: second.snapshot }, undefined, handle));
  assert.equal(done.status, 200); assert.match(done.headers.get("set-cookie")!, /HttpOnly/);
+});
+
+// Cross-model finding: a tokenless /v/liff?org= entry whose /api/line/flows request failed lands on /v/link?error=1 with no flow.
+const ORG = "44444444-4444-4444-8444-444444444444";
+const preFlow = (query: string, cookies = "") => new Request(`https://app.test/v/link?${query}`, { headers: cookies ? { Cookie: cookies } : {} });
+function staticError(html: string, retry: string) {
+ assert.ok(html.includes(`<div id="match-error"><p role="alert">${copy.error}</p>`));
+ assert.ok(html.includes(`<a id="match-retry" class="v-token-secondary" href="${retry}" referrerpolicy="no-referrer">${copy.retry}</a>`));
+ assert.ok(!html.includes(copy.back), "no job token to return to: no 「先回這一案」");
+ for (const absent of ["match-review", "match-bootstrap", "vendor-line-match.js", "data-job", copy.body, copy.continue, copy.remove, "csrf"]) assert.ok(!html.includes(absent), absent);
+}
+test("pre-flow failure: no flow cookie renders only the static approved V-LINK error, retrying the same org entry", async () => {
+ for (const cookies of ["", `${http.LINE_BROWSER_COOKIE}=${proof.browser}; ${http.LINE_CSRF_COOKIE}=${proof.csrf}`]) {
+  const { exports, calls } = setup(); const r = await exports.vendorMatchGET(preFlow(`error=1&org=${ORG}`, cookies));
+  assert.equal(r.status, 200); assert.equal(r.headers.get("set-cookie"), null); assert.equal(r.headers.get("Cache-Control"), "no-store");
+  assert.match(r.headers.get("Content-Security-Policy")!, /default-src 'none'/);
+  staticError(await r.text(), `/v/liff?org=${ORG}`); assert.deepEqual(calls, [], "no flow is read, created or trusted");
+ }
+});
+test("pre-flow failure: the bootstrap's org hint wins over a stale flow cookie, which is never read", async () => {
+ const { exports, calls, req } = setup(); const stale = req().headers.get("cookie")!;
+ const r = await exports.vendorMatchGET(preFlow(`error=1&org=${ORG}`, stale));
+ assert.equal(r.status, 200); staticError(await r.text(), `/v/liff?org=${ORG}`); assert.deepEqual(calls, []);
+});
+test("pre-flow failure: a hostile or malformed retry hint cannot redirect; retry falls back to the generic vendor entry", async () => {
+ for (const org of ["https://evil.test", "//evil.test", "javascript:alert(1)", `${ORG}&next=https://evil.test`, `${ORG}"><script>`, ""]) {
+  const { exports } = setup(); const r = await exports.vendorMatchGET(preFlow(`error=1&org=${encodeURIComponent(org)}`));
+  assert.equal(r.status, 200); const html = await r.text(); staticError(html, "/v/liff"); assert.ok(!html.includes("evil")); assert.ok(!html.includes("<script>"));
+ }
+ const { exports } = setup(); staticError(await (await exports.vendorMatchGET(preFlow("error=1"))).text(), "/v/liff");
+});
+test("pre-flow failure: an unknown flow cookie on an error landing shows the static error, not an error response", async () => {
+ const { exports, req, calls } = setup({ unknownFlow: true });
+ const r = await exports.vendorMatchGET(new Request("https://app.test/v/link?error=1", { headers: req().headers }));
+ assert.equal(r.status, 200); staticError(await r.text(), "/v/liff"); assert.deepEqual(calls, ["context"]);
+ // Without the error marker an unknown or missing flow is still refused (no review page without a flow).
+ assert.equal((await setup({ unknownFlow: true }).exports.vendorMatchGET(req())).status, 404);
+ assert.equal((await setup({ unknownFlow: true }).exports.vendorMatchGET(preFlow("", `${http.LINE_BROWSER_COOKIE}=${proof.browser}; ${http.LINE_CSRF_COOKIE}=${proof.csrf}`))).status, 404);
+});
+for (const withJob of [true, false]) test(`V-LINK error: 「先回這一案」 ${withJob ? "returns to the proof-bound job token" : "is absent without a job token"}`, async () => {
+ const { exports, req } = setup({ noJob: !withJob });
+ const html = await (await exports.vendorMatchGET(new Request("https://app.test/v/link?error=1", { headers: req().headers }))).text();
+ assert.ok(html.includes(`<p role="alert">${copy.error}</p>`)); assert.ok(html.includes(`id="match-retry" class="v-token-secondary">${copy.retry}</button>`));
+ assert.equal(html.includes(copy.back), withJob); assert.equal(html.includes('href="/v/original-token"'), withJob);
+ assert.ok(!html.includes('href="/v/liff"'));
 });
