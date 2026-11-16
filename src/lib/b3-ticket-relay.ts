@@ -54,12 +54,17 @@ function consistent(f: EstimateFacts): boolean {
   // B3: an effective emergency is never an owner or re-estimate turn.
   const impliesR3 = !!c && c.requiresOwner && c.decision === null && !c.emergency;
   const impliesR5 = !!c && c.requiresOwner && (c.decision === "rejected" || c.decision === "more_information") && !c.emergency;
+  // The end pill comes from the ticket status read separately: a reopen between the reads must not draw a
+  // closed/resolved relay on an open ticket (rules: R1 = closed|cancelled, R4 = resolved).
+  if (rule === "R1") return f.status === "closed" || f.status === "cancelled";
+  if (rule === "R4") return f.status === "resolved" && !impliesR3 && !impliesR5;
+  if (f.status === "closed" || f.status === "cancelled") return false;
   if (rule === "R3") return impliesR3;
   if (rule === "R5") return impliesR5;
   // §3 first-match order: only R1 and R2 legitimately precede R3/R5. A later rule with a head that
   // implies R3/R5 means the head changed between the two reads (e.g. turn R7b, then a new
   // approval-needing estimate): never draw 廠 as current with 屋 dimmed.
-  if (rule === "R1" || rule === "R2") return true;
+  if (rule === "R2") return true;
   return !impliesR3 && !impliesR5;
 }
 

@@ -302,6 +302,15 @@ test("F1: a viewer who cannot act is never told 「你」, on the current step o
   assert.match(canPage, />管理方</, "the done 派工 step shows 管理方 on the page");
 });
 
+test("end pill vs ticket status: a reopen or close between the two reads draws nothing", () => {
+  for (const [rule, status] of [["R1", "open"], ["R1", "resolved"], ["R4", "open"], ["R4", "closed"], ["R6", "closed"], ["R8", "cancelled"]] as [RepairRule, RepairStatus][]) {
+    const relay = estimateRelay(facts({ rule, holder: rule === "R1" || rule === "R4" ? "none" : "manager", step: rule === "R1" || rule === "R4" ? "done" : "dispatch", status }));
+    assert.equal(relay.nodes, null, `${rule} with status ${status}`); assert.ok(relay.hidden.includes("snapshot_mismatch"));
+  }
+  for (const [rule, status, end] of [["R1", "closed", "closed"], ["R1", "cancelled", "cancelled"], ["R4", "resolved", "resolved"]] as [RepairRule, RepairStatus, string][])
+    assert.equal(estimateRelay(facts({ rule, holder: "none", step: "done", status })).end, end);
+});
+
 test("F2: turn R6/R7/R8 with an approval head that implies R3/R5 (cross-read race) draws no relay", () => {
   const pending = { requiresOwner: true, decision: null, emergency: false };
   const back = { requiresOwner: true, decision: "rejected" as const, emergency: false };
