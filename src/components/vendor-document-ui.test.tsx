@@ -28,7 +28,8 @@ function render(element: React.ReactElement) {
 
 test('OFF baseline: staff ticket page is byte-for-byte unchanged and layout returns the children', () => {
   const page = readFileSync(new URL('../app/m/tickets/[id]/page.tsx', import.meta.url));
-  assert.equal(createHash('sha256').update(page).digest('hex'), '52f85c3d778eb18d4b5787170f32b27c9b99e57b9534cbab7bdec541c2393cb7');
+  // Re-pinned for MGT-150 (TK-RELAY): a brand_v3-only branch; with brand_v3 OFF the page renders exactly as before.
+  assert.equal(createHash('sha256').update(page).digest('hex'), '61d40b176a64a952f1606bd7604805d91d5b474efa24407286b6e4d8224523f4');
   const layout = readFileSync(new URL('../app/m/tickets/[id]/layout.tsx', import.meta.url), 'utf8');
   assert.match(layout, /if \(!view\) return children;/);
   const pageSource = readFileSync(new URL('../app/v/documents/[token]/page.tsx', import.meta.url), 'utf8');

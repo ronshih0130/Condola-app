@@ -44,6 +44,8 @@ test("B-021 production callers are confined to the owner decision and scoped vie
     "components/v3/o/decided/decided.tsx",
     "server/vendor-job.ts",
     "server/vendor-repair.ts",
+    // MGT-150 TK-RELAY: the existing scoped manager view (managerApprovalView) only, for admin/manager estimate viewers.
+    "server/b3-ticket-relay.ts",
   ].sort());
 });
 
