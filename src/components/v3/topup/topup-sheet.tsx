@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Locale } from "../../../i18n";
 import { brandV3TopupCopy } from "../../../i18n/lanes/brand-v3-topup";
 import { checkTopupAmount, dateIn, parseTopupAmount, TOPUP_NOTE_MAX, topupDateAllowed, topupMoney, topupOver } from "../../../lib/deposit-topup";
-import { closedSheet, createTopupSender, topupSheetReducer } from "./topup-controller";
+import { closedSheet, createTopupSender, topupSheetReducer, topupSignature } from "./topup-controller";
 import { recordDepositTopupAction } from "../../../server/mf3-deposit-topup-actions";
 import type { TopupInput, TopupResult } from "../../../server/mf3-deposit-topup";
 
@@ -62,6 +62,15 @@ export function TopupSheetForm(props: FormProps) {
   </div>;
 }
 
+/**
+ * MO-TOPUP-DUP toast (OQ-081): the app's existing `.toast` (globals.css), v3 colours in topup.css. The
+ * status region stays mounted and only its text changes, so it is announced; empty, it is visually
+ * hidden. No timer: it goes when the sheet is opened again or the page reloads.
+ */
+export function TopupDupToast({ show, locale }: { show: boolean; locale: Locale }) {
+  return <div className="toast v3-topup-toast" role="status" data-testid="topup-dup">{show ? brandV3TopupCopy(locale).dup : null}</div>;
+}
+
 /** Tab and Shift+Tab stay inside the sheet while it is open. */
 export function trapTab(event: React.KeyboardEvent<HTMLElement>, root: HTMLElement | null) {
   if (event.key !== "Tab" || !root) return;
@@ -106,12 +115,13 @@ export function TopupSheet({ submit = recordDepositTopupAction, leaseId, settlem
       dispatch({ type: "refused" });
       return;
     }
-    dispatch({ type: "start" });
-    const outcome = await sender.current!.send({ leaseId, settlementId }, state.key,
-      { amountMinor: amount.minor, receivedOn: state.date, note: state.note.trim() || null });
+    const content = { amountMinor: amount.minor, receivedOn: state.date, note: state.note.trim() || null };
+    dispatch({ type: "start", signature: topupSignature(content) });
+    const outcome = await sender.current!.send({ leaseId, settlementId }, state.key, content);
     if (outcome === "busy") return;
     dispatch({ type: "done", outcome });
-    // saved, or landed (conflict: an earlier attempt with this key was recorded): show it, sheet closed.
+    // saved, or landed (conflict: an earlier attempt with this key was recorded): show it, sheet closed;
+    // landed after an edit also shows the MO-TOPUP-DUP toast (state.dupNotice).
     if (outcome === "saved" || outcome === "landed") router.refresh();
   }
 
@@ -126,5 +136,6 @@ export function TopupSheet({ submit = recordDepositTopupAction, leaseId, settlem
         onAmount={edit("amount")} onDate={edit("date")} onNote={edit("note")} onSubmit={save} onClose={hide}
         onKeyDown={event => trapTab(event, sheet.current)} />
     </div> : null}
+    <TopupDupToast show={state.dupNotice} locale={view.locale} />
   </>;
 }
