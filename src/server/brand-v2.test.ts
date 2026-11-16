@@ -241,7 +241,8 @@ test("v2 manifest uses approved values and unchanged relative icons", () => {
   const path = "public/brand/v2/favicon/site.webmanifest";
   const manifestPath = join(root, path);
   const manifest = JSON.parse(read(path));
-  const previous = JSON.parse(execFileSync("git", ["show", `a3c96c2:${path}`], {
+  // Historical 05b6814 (merged via 53391dd; no recorded PR) is the last manifest edit; a3c96c2 is absent from recovered history.
+  const previous = JSON.parse(execFileSync("git", ["show", `05b6814ae502fc92c4f7b547281a20f005959da9:${path}`], {
     cwd: root, encoding: "utf8",
   }));
   assert.equal(manifest.name, "Condola 租多啦");
@@ -499,8 +500,9 @@ test("owner, tenant header, and statement logos forward the optional v2 flag", (
   const ownerLayout = read("src/app/o/layout.tsx");
   assert.ok(ownerLayout.includes('import { brandV2EnabledForOrg } from "@/server/brand-v2";'));
   assert.ok(ownerLayout.includes('const v2 = await brandV2EnabledForOrg(session.orgId);'));
+  // PR #164 (0ec9cfb) retains the legacy OwnerNav repairPolicyIds added by e64dd0a.
   assert.ok(ownerLayout.includes(
-    '<OwnerNav properties={properties} {...(v2 ? { v2: true } : {})}>{children}</OwnerNav>',
+    '<OwnerNav properties={properties} repairPolicyIds={repairPolicyIds} {...(v2 ? { v2: true } : {})}>{children}</OwnerNav>',
   ));
   const ownerNav = read("src/components/owner-nav.tsx");
   assert.ok(ownerNav.includes("v2?: boolean;"));
@@ -681,11 +683,17 @@ test("every server auth page passes the flag and join omits the OFF client prop"
     const source = readFileSync(path, "utf8");
     const tags = [...source.matchAll(/<AuthBrand\b[^>]*\/>/g)];
     if (!tags.length) continue;
-    assert.ok(source.includes('import { brandV2Enabled } from "@/server/brand-v2";'), path);
+    assert.match(source, /import \{[^}]*\bbrandV2Enabled\b[^}]*\} from "@\/server\/brand-v2";/, path);
     assert.doesNotMatch(source, /^\s*["']use client["']/);
     for (const [tag] of tags) {
       usages++;
-      assert.match(tag, /\bv2=\{brandV2Enabled\(\)\}/, path);
+      // PR #154 (6a70a29) retains cb16f4d's login-local flag and token import; all other auth pages call inline.
+      if (path === join(root, "src/app/login/page.tsx")) {
+        assert.ok(source.includes("const v2 = brandV2Enabled();"), path);
+        assert.match(tag, /\bv2=\{v2\}/, path);
+      } else {
+        assert.match(tag, /\bv2=\{brandV2Enabled\(\)\}/, path);
+      }
     }
   }
   assert.equal(usages, 13, "update when auth pages change");

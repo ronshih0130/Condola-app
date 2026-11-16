@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { brandRoot } from "../lib/brand-root";
 import { BRAND_V2_PAGE_STYLES } from "./brand-v2";
 
 const root = new URL("../../", import.meta.url);
@@ -10,7 +11,7 @@ const pages: Record<string, string[]> = {
   "o-home": ["src/app/o/page.tsx"],
   "o-approvals": ["src/app/o/approvals/page.tsx"],
   "v-job": ["src/app/v/[token]/page.tsx", "src/components/vendor-link-details.tsx"],
-  "m-home": ["src/app/m/page.tsx"],
+  "m-home": ["src/components/dashboard-content.tsx"],
 };
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 function selectors(css: string): string[] {
@@ -31,7 +32,15 @@ test("every page stylesheet is listed and loaded only with the ON theme", () => 
   assert.deepEqual([...BRAND_V2_PAGE_STYLES].sort(), Object.keys(pages).map((id) => `/brand/v2/pages/${id}.css`).sort());
   const layout = read("src/app/layout.tsx");
   const themeIdx = layout.indexOf('href="/brand/v2/theme.css"');
-  const pagesIdx = layout.indexOf("BRAND_V2_PAGE_STYLES.map");
+  // PR #150 (66f4498) moved the ON-only stylesheet list into brandRoot.
+  const pagesIdx = layout.indexOf("pageStylesheets.map");
+  assert.ok(layout.includes("const root = brandRoot({ v2, v3 });"));
+  assert.ok(layout.includes("const pageStylesheets = root.stylesheets.slice(1);"));
+  for (const v3 of [false, true]) {
+    assert.deepEqual(brandRoot({ v2: false, v3 }).stylesheets, []);
+    assert.deepEqual(brandRoot({ v2: true, v3 }).stylesheets.slice(0, 1 + BRAND_V2_PAGE_STYLES.length),
+      ["/brand/v2/theme.css", ...BRAND_V2_PAGE_STYLES]);
+  }
   assert.ok(themeIdx > 0 && pagesIdx > themeIdx, "page styles render next to the ON-only theme link");
 });
 
@@ -40,7 +49,12 @@ for (const id of Object.keys(pages)) {
     const css = read(`public/brand/v2/pages/${id}.css`);
     const sels = selectors(css);
     assert.ok(sels.length > 0);
-    for (const s of sels) assert.match(s, /^html\[data-brand="v2"\] \[data-v2-(page|shell)/, s);
+    for (const s of sels) {
+      // Historical 2c53c74 (merged via 53391dd; no recorded PR) scoped the owner sibling with :has.
+      const ownerSibling = /^html\[data-brand="v2"\] \[data-testid="owner-properties"\]:has\(~ \[data-v2-page="o-home"\]\)(?: > \.small)?$/;
+      if (id === "o-home" && ownerSibling.test(s)) continue;
+      assert.match(s, /^html\[data-brand="v2"\] \[data-v2-(page|shell)/, s);
+    }
     const body = stripComments(css);
     assert.doesNotMatch(body, /#[0-9a-fA-F]{3,8}\b/, "no hex colours");
     assert.doesNotMatch(body, /\brgba?\(|\bhsla?\(/, "no literal colours");
@@ -49,7 +63,16 @@ for (const id of Object.keys(pages)) {
   test(`${id}: TSX hooks render nothing when the flag is OFF`, () => {
     for (const file of pages[id]) {
       const src = read(file);
-      assert.match(src, id === "v-job" ? /brandV2Enabled\(\)/ : /const v2 = await brandV2EnabledForOrg\(session\.orgId\);/);
+      if (id === "m-home") {
+        // PR #145 (94759e6) moved dashboard hooks into DashboardContent and passes the org flag as v2.
+        const page = read("src/app/m/page.tsx");
+        assert.match(page, /const \[v2, query, data, setup\] = await Promise\.all\(\[\s*brandV2EnabledForOrg\(session\.orgId\),/);
+        assert.match(page, /<DashboardContent\b[^>]*\bv2=\{v2\}/);
+        assert.match(src, /export function DashboardContent\(\{[^}]*\bv2\b/);
+      } else {
+        assert.match(src, id === "v-job" ? /brandV2Enabled\(\)/ : /const v2 = await brandV2EnabledForOrg\(session\.orgId\);/);
+      }
+      assert.match(src, /data-v2-[a-z-]+=\{/, `${file}: page hooks must remain covered`);
       for (const m of src.matchAll(/data-v2-[a-z-]+=\{([^}]*)\}/g)) {
         assert.match(m[1], /^v2( && [^?]+)? \? .+ : undefined$/, `${file}: ${m[0]}`);
       }
