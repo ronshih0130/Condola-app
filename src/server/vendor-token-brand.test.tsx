@@ -207,9 +207,27 @@ test("estimate and document routes retain baseline bytes; this slice creates no 
     // Batch 3b part (a) (d6d738a) extracted loadVendorJobOn for its single-snapshot vendor read (no new write);
     // that reviewed change is its baseline. Every other file must still equal the pre-V-TOKEN source.
     const baseline = file === "src/server/vendor-repair.ts" ? "d6d738a" : "3e87c93";
-    assert.equal(source(file), execFileSync("git", ["show", `${baseline}:${file}`], { encoding: "utf8" }));
+    assert.equal(withoutGs32(file, source(file)), execFileSync("git", ["show", `${baseline}:${file}`], { encoding: "utf8" }));
   }
 });
+
+/** GS-32 (vendor_docs_v3, Round 7 batch 4) adds three imports, an optional searchParams and one gated early return
+ * to the document page; strip exactly those (each must match once). No write path is added: the 3.0 views post to
+ * the existing B-025 actions. */
+function withoutGs32(file: string, text: string) {
+  if (file !== "src/app/v/documents/[token]/page.tsx") return text;
+  const cut = (from: string, to: string) => {
+    const start = text.indexOf(from), end = text.indexOf(to, start);
+    assert.ok(start >= 0 && end > start && text.indexOf(from, start + 1) < 0, from);
+    text = text.slice(0, start) + text.slice(end);
+  };
+  const swap = (from: string, to: string) => { assert.equal(text.split(from).length, 2, from); text = text.replace(from, to); };
+  swap('import { VendorTokenShell } from "@/components/v3/vendor/token-shell";\nimport { VendorDocsV3 } from "@/components/v3/vendor/vendor-docs-v3";\nimport { vendorDocsV3Brand, vendorDocsV3Stage } from "@/server/gs32-vendor-docs";\n', "");
+  swap("({ params, searchParams }: { params: Promise<{ token: string }>; searchParams?: Promise<{ paper?: string; uploaded?: string }> })",
+    "({ params }: { params: Promise<{ token: string }> })");
+  cut("  // GS-32 (vendor_docs_v3 + brand_v3)", "  return <VendorDocumentsPanel");
+  return text;
+}
 
 // VEN-31-AC1: only the gated Brand 3 shell offers login at the job and restricted-tab sheet.
 test("B101 entry appears in both approved slots only when the combined matching gate is enabled", async () => {

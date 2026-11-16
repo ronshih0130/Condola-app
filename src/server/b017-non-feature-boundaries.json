@@ -295,6 +295,10 @@
     "reason": "Tenant-only preference gateway rejects staff before any query",
     "sha256": "7a80824228f92e5cd7dd26c266b6ca00c4e76a73d3ee27aae9791f9ab5212cfd"
   },
+  "src/app/v/documents/[token]/page.tsx#VendorDocumentsPage": {
+    "reason": "B-025 vendor document-grant bearer page (vendorDocumentContext admits the grant token, no staff role or session). GS-32 adds one presentation read through the same grant admission (vendorDocsV3Brand) gated by vendor_docs_v3 + brand_v3; writes stay on the existing B-025 actions.",
+    "sha256": "49eecb77b4ec3c3d9061b56817e3c3aab36d6e14a4405c6b6633e26266981778"
+  },
   "src/app/v/[token]/page.tsx#VendorJobPage": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93. B-105: adds one vendor_job_v3 case read through the service-only app.b105_vendor_case bearer gateway and an early return to the RV case view; still token-only, no staff role or session.",
     "sha256": "659c69fcba9804f8bd422604f157654cf35e92d82460a5507aebd74f48e0c0f7"
