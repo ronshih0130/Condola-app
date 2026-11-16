@@ -31,7 +31,7 @@ export function MoneyPage({ session, month, tab, bills, reports, error, cursor }
   const forBill = (bill: MoneyMonthBill) => attached.filter(report => report.billRows.some(target => target.leaseId === bill.leaseId && target.month === month));
   const count = (key: MoneyTab) => key === "yours" ? reportReady ? reports.yourTurn : undefined
     : bills.state === "ready" ? bills.counts[key] : undefined;
-  const visible = bills.state === "ready" ? bills.rows.filter(row => moneyBillMatchesTab(row, bills.today, tab)) : [];
+  const visible = bills.state === "ready" ? bills.rows.filter(row => moneyBillMatchesTab(row, tab)) : [];
   const supporting = [reportReady && reports.yourTurn > 0 ? text("pending", { count: reports.yourTurn }) : "",
     ...(bills.state === "ready" ? bills.outstanding.currencies.filter(value => BigInt(value.amountMinor) > BigInt(0)).map(value =>
       `${t("i_open_balance")} ${moneyLabel(value.amountMinor, value.currency, locale)}・${t("i_tenant_count", { count: value.leaseCount })}`) : []),

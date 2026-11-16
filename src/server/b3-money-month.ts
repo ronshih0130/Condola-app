@@ -17,11 +17,16 @@ export type MoneyMonthStatus = typeof MONEY_MONTH_STATUSES[number];
 export type MoneyMonthBill = {
   leaseId: string; month: string; place: string; tenantName: string | null; currency: string;
   dueDate: string; totalMinor: string; confirmedMinor: string; remainingMinor: string; status: MoneyMonthStatus;
+  /** PLT-54: the lease property's local date at the captured instant; due/overdue are judged against it.
+   * Classification input only, never rendered (PLT-54-AC2: no time zone shown). */
+  propertyToday: string;
 };
 export type MoneyMonthCurrencyTotal = {
   currency: string; totalMinor: string; confirmedMinor: string; billedRows: number; paidRows: number;
 };
 export type MoneyMonthBills = { state: "off" } | { state: "unavailable" } | {
+  /** Organization calendar: default-month selection and report dates only. PLT-54: due/overdue use each
+   * row's propertyToday, never this value. */
   state: "ready"; month: string; today: string; timezone: string;
   /** No separately reviewed ended/archive expansion exists in rule 8. */
   population: "rent_roll_active_unarchived";
@@ -66,6 +71,11 @@ export function moneyMonthStatus(total: string, confirmed: string, pending: bool
 }
 
 /** $1 org, $2 first day of selected month, $3 one captured instant.
+ * PLT-54 (Ron 2026-11-15, B-103) supersedes PR-011's organization-calendar due/overdue: each bill row is
+ * judged against its lease property's local date, the exact 今天 overdue expression (b3-overdue-turns:
+ * ($2::timestamptz AT TIME ZONE pr.timezone)::date on l.property_id; properties.timezone is NOT NULL, so
+ * neither reader has a fallback). Month grouping stays by invoice period; the organization calendar
+ * remains only for the default month and report dates.
  * Build ALL eligible months before attaching reports; navigation must not retarget a report.
  * Rent-roll space join preserved, including its whole-unit/by-room fallback and its lack of
  * a unit archived_at predicate. Rule 8 does not yet specify expansion to ended/archive rows.
@@ -87,16 +97,19 @@ WITH calendar AS (
   -- room of a by-room unit; a unit-targeted lease counts on a whole unit, or on a by-room unit that has no
   -- non-archived room. Each step is materialized so a fresh table without planner statistics cannot turn
   -- this into a rescanned units x leases loop (measured: 2 s in CI with 58 invoices; spaces x OR join: 4.4 s).
-  SELECT l.id AS lease_id, r.id AS room_id, r.label AS room_label,
+  SELECT l.id AS lease_id, l.property_id AS lease_property_id, r.id AS room_id, r.label AS room_label,
          CASE WHEN r.id IS NOT NULL THEN r.unit_id ELSE l.target_unit_id END AS unit_id
     FROM leases l
     LEFT JOIN rooms r ON r.id = l.target_room_id AND r.org_id = $1 AND r.archived_at IS NULL
    WHERE l.org_id = $1 AND l.status IN ('pending_signature','active')
 ), eligible_leases AS MATERIALIZED (
-  SELECT t.lease_id, pr.name || ' ' || u.label || coalesce(' ' || t.room_label, '') AS place
+  SELECT t.lease_id, pr.name || ' ' || u.label || coalesce(' ' || t.room_label, '') AS place,
+         ($3::timestamptz AT TIME ZONE lp.timezone)::date AS property_today
     FROM lease_targets t
     JOIN units u ON u.org_id = $1 AND u.id = t.unit_id
     JOIN properties pr ON pr.id = u.property_id AND pr.org_id = $1 AND pr.archived_at IS NULL
+    -- PLT-54: the lease's own property calendar (the one 今天 uses); one date per lease.
+    JOIN properties lp ON lp.id = t.lease_property_id AND lp.org_id = $1
    WHERE (t.room_id IS NOT NULL AND u.rental_mode = 'by_room')
       OR (t.room_id IS NULL AND (u.rental_mode = 'whole_unit' OR NOT EXISTS (
             SELECT 1 FROM rooms rx WHERE rx.unit_id = u.id AND rx.org_id = $1 AND rx.archived_at IS NULL)))
@@ -104,7 +117,7 @@ WITH calendar AS (
   -- Driven from the invoice (one row per invoice) joined to its eligible lease.
   SELECT i.id, e.lease_id, date_trunc('month', i.period_start)::date AS month,
          i.currency::text AS currency, i.due_date, i.total_minor,
-         coalesce(a.confirmed, 0) AS confirmed, e.place
+         coalesce(a.confirmed, 0) AS confirmed, e.place, e.property_today
     FROM invoices i
     JOIN eligible_leases e ON e.lease_id = i.lease_id
     LEFT JOIN confirmed_allocations a ON a.invoice_id = i.id
@@ -114,8 +127,9 @@ WITH calendar AS (
   SELECT lease_id, month, min(currency) AS currency, count(DISTINCT currency)::int AS currency_count,
          min(place) AS place, sum(total_minor) AS total, sum(confirmed) AS confirmed,
          greatest(sum(total_minor) - sum(confirmed), 0) AS remaining,
-         coalesce(min(due_date) FILTER (WHERE confirmed < total_minor), min(due_date)) AS due_date
-    FROM eligible_invoices GROUP BY lease_id, month
+         coalesce(min(due_date) FILTER (WHERE confirmed < total_minor), min(due_date)) AS due_date,
+         property_today
+    FROM eligible_invoices GROUP BY lease_id, month, property_today
 ), pending_reports AS (
   SELECT p.* FROM payments p WHERE ${PENDING_TENANT_REPORT_SQL}
 ), explicit_targets AS (
@@ -140,18 +154,18 @@ WITH calendar AS (
   SELECT b.*, CASE
            WHEN b.confirmed >= b.total THEN 'paid'
            WHEN b.has_pending_report THEN 'reported'
-           WHEN b.due_date < c.today THEN 'overdue'
+           WHEN b.due_date < b.property_today THEN 'overdue'
            WHEN b.confirmed > 0 AND b.confirmed < b.total THEN 'partial'
-           WHEN b.due_date = c.today THEN 'due_today'
+           WHEN b.due_date = b.property_today THEN 'due_today'
            ELSE 'future' END AS status
-    FROM selected_bill_facts b CROSS JOIN calendar c
+    FROM selected_bill_facts b
 ), selected_bills AS (
   -- Keep five filter buckets: partial before due is future; on due is due_today
   -- (no dedicated due_today tab). Pending reports still belong to reported.
   SELECT b.*, CASE WHEN b.status = 'partial'
-                  THEN CASE WHEN b.due_date = c.today THEN 'due_today' ELSE 'future' END
+                  THEN CASE WHEN b.due_date = b.property_today THEN 'due_today' ELSE 'future' END
                   ELSE b.status END AS filter_status
-    FROM selected_bill_states b CROSS JOIN calendar c
+    FROM selected_bill_states b
 ), selected_reports AS (
   SELECT p.*, CASE WHEN EXISTS (SELECT 1 FROM attachments a WHERE a.report_id = p.id) THEN 1 ELSE 0 END AS group_order
     FROM pending_reports p
@@ -181,7 +195,8 @@ SELECT c.today::text, c.timezone,
 export const BILLS_LIST_SQL_FOR_TEST = `${POPULATION_SQL}
 SELECT b.lease_id::text AS "leaseId", to_char(b.month, 'YYYY-MM') AS month, b.place,
        tenant.display_name AS "tenantName", b.currency, b.due_date::text AS "dueDate",
-       b.total::text AS "totalMinor", b.confirmed::text AS "confirmedMinor", b.remaining::text AS "remainingMinor", b.has_pending_report
+       b.total::text AS "totalMinor", b.confirmed::text AS "confirmedMinor", b.remaining::text AS "remainingMinor",
+       b.property_today::text AS "propertyToday", b.has_pending_report
   FROM selected_bills b
   LEFT JOIN LATERAL (
     SELECT c.display_name FROM lease_parties lp JOIN contacts c ON c.id = lp.contact_id AND c.org_id = $1
@@ -331,9 +346,11 @@ export async function moneyMonthBills(session: Session, input: BillsInput, deps:
         const counts = { all: summary.all_count, paid: 0, reported: 0, overdue: 0, due_today: 0, future: 0, ...summary.counts };
         const page = (await client.query<BillRow>(BILLS_LIST_SQL_FOR_TEST,
           [...params, input.status ?? null, cursor?.date ?? null, cursor?.id ?? null, MONEY_MONTH_LIST_LIMIT + 1])).rows;
-        const rows = page.slice(0, MONEY_MONTH_LIST_LIMIT).map(({ has_pending_report, ...row }): MoneyMonthBill => ({
-          ...row, status: moneyMonthStatus(row.totalMinor, row.confirmedMinor, has_pending_report, row.dueDate, summary.today),
-        }));
+        const rows = page.slice(0, MONEY_MONTH_LIST_LIMIT).map(({ has_pending_report, ...row }): MoneyMonthBill => {
+          // PLT-54: never fall back to the organization date; a missing property date is unavailable.
+          if (!validDate(row.propertyToday)) throw new Error("Missing property date");
+          return { ...row, status: moneyMonthStatus(row.totalMinor, row.confirmedMinor, has_pending_report, row.dueDate, row.propertyToday) };
+        });
         const last = rows.at(-1);
         return { state: "ready" as const, month: input.month, today: summary.today, timezone: summary.timezone,
           population: "rent_roll_active_unarchived" as const, counts, filteredCount: input.status ? counts[input.status] : counts.all,
