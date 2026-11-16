@@ -119,18 +119,21 @@ export function brandV3OwnerStateCopy(locale: Locale) {
     ? { error: "This is temporarily unavailable. Please try again.", retry: "Try again" }
     : { error: "這裡暫時讀不到，請再試一次。", retry: "再試一次" };
 }
-// O-RPT / O-RPT-SRC, D14. No P52 empty/one-off/other-source proposals.
+// O-RPT / O-RPT-SRC, D14. O-RPT-EMPTY heading: P52 approved 2026-11-15 11:42 PT (PR-018).
+// No drafted supporting sentence; no one-off/other-source proposals.
 export function brandV3OwnerReportCopy(locale: Locale) {
   return locale === "en"
-    ? { rent: "Rent income", title: "Monthly report · {month}", note: "Opening this report does not constitute confirmation or agreement.", source: "View source", sourceLine: "{n} confirmed payments · {date}" }
-    : { rent: "租金收入", title: "{month} 月月報", note: "打開月報不構成確認或同意。", source: "查來源", sourceLine: "{n} 筆已確認的繳款・{date}" };
+    ? { rent: "Rent income", title: "Monthly report · {month}", empty: "No monthly reports yet", note: "Opening this report does not constitute confirmation or agreement.", source: "View source", sourceLine: "{n} confirmed payments · {date}" }
+    : { rent: "租金收入", title: "{month} 月月報", empty: "還沒有月報", note: "打開月報不構成確認或同意。", source: "查來源", sourceLine: "{n} 筆已確認的繳款・{date}" };
 }
-// O-HOME / O-EST / O-EMPTY / O-STATES, revision 9; P52 zero lead uses the existing home title.
+// O-HOME / O-EST / O-EMPTY / O-STATES, revision 9. FE-OWNEMPTY (2026-11-15) replaces the zero-lead title fallback.
 export function brandV3OwnerHomeCopy(locale: Locale) {
   return locale === "en" ? {
     lead: "{name}, {count} items need your attention.", leadNoName: "{count} items need your attention.",
+    leadEmpty: "{name}, nothing needs you right now.", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
+    leadEmptyNoName: "Nothing needs you right now.", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
     tasks: "Needs your attention", estimate: "Estimate", pending: "Awaiting approval", approve: "Approve estimate",
-    empty: "Nothing needs your attention", emptyDetail: "Nothing needs your attention right now. Rest easy.",
+    empty: "Nothing needs your attention", emptyDetail: "Nothing needs your attention right now. Rest easy.", overview: "See overview",
     failure: "This is temporarily unavailable. Please try again.", title: "Approve this estimate",
     prompt: "The estimate for {item} is {amount}. Approve it?", property: "Property", item: "Item", vendor: "Vendor",
     description: "Description", version: "Version", versionNumber: "Version {n}",
@@ -140,8 +143,10 @@ export function brandV3OwnerHomeCopy(locale: Locale) {
     handoff: "The manager and vendor now see the same version. The vendor can start as agreed.",
   } : {
     lead: "{name}，有 {count} 件事要你處理。", leadNoName: "有 {count} 件事要你處理。",
+    leadEmpty: "{name}，目前沒有要你處理的事。", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
+    leadEmptyNoName: "目前沒有要你處理的事。", // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023)
     tasks: "要你處理", estimate: "估價", pending: "待核准", approve: "核准估價",
-    empty: "目前沒有要你處理的事", emptyDetail: "目前沒有要你處理的事，放心。",
+    empty: "目前沒有要你處理的事", emptyDetail: "目前沒有要你處理的事，放心。", overview: "看總覽",
     failure: "這裡暫時讀不到，請再試一次。", title: "核准這筆估價",
     prompt: "{item}估價 {amount}，要不要核准？", property: "物件", item: "項目", vendor: "廠商",
     description: "說明", version: "版本", versionNumber: "第 {n} 版",

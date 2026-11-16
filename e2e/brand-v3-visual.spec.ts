@@ -585,12 +585,16 @@ for (const size of SIZES) {
       await expect(home.locator("h2").first()).toContainText(`有 ${count} 件事要你處理。`);
       for (const button of await rows.getByRole("button", { name: "核准估價" }).all()) await assertShellControl(button, "owner estimate");
     } else {
-      await expect(home.locator("h2").first()).toHaveText("首頁");
+      // FE-OWNEMPTY: the zero lead is its own sentence; 「首頁」 appears only once (the shell title).
+      await expect(home.locator("h2").first()).toHaveText(/目前沒有要你處理的事。$/);
+      await expect(home).not.toContainText("首頁");
       await expect(home.locator('[data-v3-illustration="20"]')).toBeVisible();
       await expect(home).toContainText("目前沒有要你處理的事，放心。");
     }
     await expect(home.locator(".owner-primary")).toHaveCount(0);
-    await expect(page.locator(".v3-owner-legacy table.t")).toBeVisible();
+    // FE-OWNEMPTY: the interim tenant card renders only with tenant rows (no empty white box).
+    const legacy = page.locator(".v3-owner-legacy");
+    if (await legacy.count()) await expect(legacy.locator("table.t tbody tr").first()).toBeVisible();
     await expect(page.getByTestId("owner-shell-v3").locator('a[href="/o/approvals"]')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     await page.goto("/o/approvals");

@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { Illustration } from "../components/v3/illustrations";
 import ts from "typescript";
 import postcss from "postcss";
 import * as i18n from "../i18n";
@@ -48,6 +49,7 @@ function ui(loader: unknown = async () => { throw new Error("unavailable"); }) {
     "@/components/statement-document": document, "@/components/pdf-download-button": pdf,
     "@/components/owner-net-ledger-panel": ledgerPanel, "@/components/owner-report-replies": repliesPanel,
     "@/server/owner-report-v3": { loadOwnerReport: loader },
+    "@/components/v3/illustrations": { Illustration },
   });
 }
 function model(overrides: Record<string, unknown> = {}) {
@@ -139,7 +141,7 @@ test("O-RPT / OWN-27-AC4 / OWN-02 / OWN-21: original document figures and lines,
       const matches = (text: string) => [...text.matchAll(new RegExp(`data-testid="${id}"[^>]*>(.*?)</(?:td|p)>`, "g"))].map(m => m[1]);
       assert.deepEqual(matches(html), matches(expected), id); assert.ok(matches(expected).length, id);
     }
-    assert.doesNotMatch(html, /Private Tenant|一次性費用|19-envelope/);
+    assert.doesNotMatch(html, /Private Tenant|一次性費用|data-v3-illustration|owner-report-empty/);
     assert.match(html, new RegExp(copy.brandV3OwnerReportCopy(locale).note.replaceAll(".", "\\.")));
     assert.match(html, /data-href="\/api\/pdf\/statements\/s1"/);
   }
@@ -159,18 +161,31 @@ test("O-RPT-SRC / D14: disclosure only within rent; hidden on unavailable or inc
   }
 });
 
-test("O-RPT-EMPTY / O-STATES: only shipped empty text, blank loading, in-place error and retry", async () => {
-  const { OwnerReportView, OwnerReportLoading, OwnerReportPage } = ui();
-  const data = await model({ listStatements: async () => [], ownerStatementPropertyNames: async () => assert.fail("empty report has no property query") }).loadOwnerReport(actor, undefined);
-  assert.deepEqual(data.reports, []);
-  const empty = renderToStaticMarkup(<OwnerReportView data={data} locale="zh-TW" />);
-  assert.match(empty, new RegExp(i18n.makeT("zh-TW")("i_statement_empty")));
-  assert.doesNotMatch(empty, /svg|img|沒有月報|statement-document|查來源/);
+test("O-RPT-EMPTY: approved heading and drawing 19 only, including draft/void-only histories", async () => {
+  for (const locale of ["zh-TW", "en"] as const) for (const rows of [[], [{ ...row, status: "draft" }, { ...row, id: "void", status: "void" }]]) {
+    const { loadOwnerReport } = model({ listStatements: async () => rows,
+      ownerStatementPropertyNames: async () => assert.fail("no issued report has no property query"),
+      statementDetail: async () => assert.fail("no issued report has no detail query"),
+    });
+    const { OwnerReportPage } = ui(loadOwnerReport);
+    const html = renderToStaticMarkup(await OwnerReportPage({ session: { ...actor, locale }, month: "2026-10" }));
+    assert.match(html, /data-testid="owner-report-empty"/);
+    assert.match(html, /data-v3-illustration="19"/);
+    assert.match(html, /aria-hidden="true" focusable="false"/);
+    assert.match(html, new RegExp(`<h2>${locale === "en" ? "No monthly reports yet" : "還沒有月報"}</h2>`));
+    assert.match(html, /d="M47 67l39 23 39-23"/);
+    assert.doesNotMatch(html, /<p\b|<a\b|<button\b|<nav\b|<article\b|<details\b|statement-document|report-month|report-rent-source|owner-report-(loading|error)|data-testid="(ledger|replies)"|aria-busy|role="alert"/);
+  }
+});
+
+test("O-STATES: blank loading and in-place error never show the empty state", async () => {
+  const { OwnerReportLoading, OwnerReportPage } = ui();
   const loading = renderToStaticMarkup(<OwnerReportLoading locale="zh-TW" />);
   assert.match(loading, /aria-busy="true"/); assert.doesNotMatch(loading, /NT\$|0 件|statement-rent/);
   const failure = renderToStaticMarkup(await OwnerReportPage({ session: actor, month: "2026-10" }));
   assert.match(failure, /這裡暫時讀不到，請再試一次。/); assert.match(failure, /href="\/o\/statements\?month=2026-10"[^>]*>再試一次/);
   assert.doesNotMatch(failure, /statement-document|NT\$|btn pri/);
+  for (const html of [loading, failure]) assert.doesNotMatch(html, /data-v3-illustration|owner-report-empty|還沒有月報|No monthly reports yet/);
 });
 
 test("O-RPT / OWN-02: removed authority after listing produces error without partial figures", async () => {
