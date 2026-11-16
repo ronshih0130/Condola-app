@@ -167,3 +167,10 @@ test("B-093 owner gateways are inventoried service-only, never authenticated RPC
   }
   assert.doesNotMatch(read("supabase/migrations/20261115200000_b093_owner_decided.sql"), /FUNCTION public\./);
 });
+
+test("B-063 vendor workbench gateway is inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  assert.ok(allow.includes("# service-only: app.b063_vendor_workbench(text,uuid)"));
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b063_")));
+  assert.doesNotMatch(read("supabase/migrations/20261116100000_b063_vendor_workbench.sql"), /FUNCTION public\./);
+});

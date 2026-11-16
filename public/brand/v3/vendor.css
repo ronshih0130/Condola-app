@@ -1,0 +1,33 @@
+/* B-063 vendor workbench (V-HOME, V-EMPTY, V-JOBS, V-RECV) inside the owner/vendor shell. Tokens only,
+   44px targets, rows use outline pills; one information model at 390 and 1280 (desktop only widens). */
+html[data-brand="v2"][data-brand-v3] .v3-vendor-workbench { color:var(--c-text); overflow-wrap:anywhere; display:grid; gap:16px; max-width:56rem; }
+html[data-brand="v2"][data-brand-v3] .vendor-card { background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); padding:20px; }
+html[data-brand="v2"][data-brand-v3] .vendor-card > h2 { margin:0 0 4px; font-size:1.125rem; }
+html[data-brand="v2"][data-brand-v3] .vendor-card[role="alert"] > p { margin:0 0 16px; }
+html[data-brand="v2"][data-brand-v3] .vendor-card-empty { margin:12px 0 0; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .vendor-rows { list-style:none; padding:0; margin:0; }
+html[data-brand="v2"][data-brand-v3] .vendor-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 16px; padding:16px 0; border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .vendor-card > .vendor-rows:first-child > .vendor-row:first-child { border-top:0; padding-top:4px; }
+html[data-brand="v2"][data-brand-v3] .vendor-row-main { flex:1; min-width:12rem; display:flex; flex-direction:column; gap:8px; }
+html[data-brand="v2"][data-brand-v3] .vendor-row-main > b { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+html[data-brand="v2"][data-brand-v3] .vendor-badges { display:flex; flex-wrap:wrap; align-items:center; gap:8px; color:var(--c-text-2); font-size:.875rem; }
+html[data-brand="v2"][data-brand-v3] .vendor-badge { padding:4px 10px; border-radius:var(--r-pill); font-size:.875rem; white-space:nowrap; }
+html[data-brand="v2"][data-brand-v3] .vendor-badge-info { background:var(--c-info-soft); color:var(--c-info); }
+html[data-brand="v2"][data-brand-v3] .vendor-badge-warn { background:var(--c-warning-soft); color:var(--c-warning); }
+html[data-brand="v2"][data-brand-v3] .v3-vendor-workbench .num { font-variant-numeric:tabular-nums; }
+html[data-brand="v2"][data-brand-v3] .vendor-note { margin:12px 0 0; color:var(--c-text-2); font-size:.875rem; }
+html[data-brand="v2"][data-brand-v3] .vendor-action { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; padding:10px 18px; border:1px solid var(--c-primary); border-radius:var(--r-pill); background:var(--c-surface); color:var(--c-primary); font:inherit; font-weight:600; text-decoration:none; }
+html[data-brand="v2"][data-brand-v3] .vendor-action.vendor-primary { background:var(--c-primary); color:var(--c-on-primary); }
+html[data-brand="v2"][data-brand-v3] .vendor-action:focus-visible { outline:2px solid var(--c-focus); outline-offset:2px; }
+html[data-brand="v2"][data-brand-v3] .vendor-empty { text-align:center; padding:32px 20px; }
+html[data-brand="v2"][data-brand-v3] .vendor-empty > h2 { margin:0 0 8px; }
+html[data-brand="v2"][data-brand-v3] .vendor-empty > p { margin:0; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .vendor-skeleton { display:flex; flex-direction:column; gap:8px; padding:16px 0; }
+html[data-brand="v2"][data-brand-v3] .vendor-skeleton + .vendor-skeleton { border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .vendor-skeleton span { display:block; height:14px; width:60%; border-radius:var(--r-sm); background:var(--c-tint-soft); }
+html[data-brand="v2"][data-brand-v3] .vendor-skeleton span + span { width:30%; }
+/* B1-NOPERM for a signed-in non-vendor: outside any v3 shell, so it carries its own scoped tokens (like V-TOKEN). */
+.vendor-noperm { color:var(--c-text); background:var(--c-bg); font-family:var(--font-sans); max-width:560px; margin:0 auto; padding:48px 16px; text-align:center; }
+.vendor-noperm .v3-illustration { display:block; width:176px; max-width:100%; height:auto; margin:0 auto 16px; }
+.vendor-noperm-home { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; padding:10px 24px; border:1px solid var(--c-primary); border-radius:var(--r-btn); background:var(--c-primary); color:var(--c-on-primary); text-decoration:none; }
+.vendor-noperm-home:focus-visible { outline:2px solid var(--c-focus); outline-offset:3px; }
