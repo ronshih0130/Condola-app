@@ -13,7 +13,10 @@ test.after(async () => { await db.end(); });
 
 const seqPrivs = async (name: string) => (await db.query(`SELECT has_sequence_privilege('anon', $1::regclass, 'USAGE') usage,
     has_sequence_privilege('anon', $1::regclass, 'SELECT') sel, has_sequence_privilege('anon', $1::regclass, 'UPDATE') upd,
-    has_sequence_privilege('authenticated', $1::regclass, 'USAGE') auth,
+    (has_sequence_privilege('authenticated', $1::regclass, 'USAGE') AND has_sequence_privilege('authenticated', $1::regclass, 'SELECT')
+      AND has_sequence_privilege('authenticated', $1::regclass, 'UPDATE')) auth,
+    (has_sequence_privilege('service_role', $1::regclass, 'USAGE') AND has_sequence_privilege('service_role', $1::regclass, 'SELECT')
+      AND has_sequence_privilege('service_role', $1::regclass, 'UPDATE')) svc,
     coalesce((SELECT bool_or(a.grantee = 0) FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.oid = $1::regclass), false) pub`,
   [name])).rows[0];
 
@@ -41,19 +44,20 @@ test("LPQ-21: Supabase-style grants on an existing and a new postgres sequence a
     await db.query("SET LOCAL ROLE postgres");
     await db.query("CREATE SEQUENCE public.lpq21_existing");
     await db.query("RESET ROLE");
-    assert.deepEqual(await seqPrivs("public.lpq21_existing"), { usage: true, sel: true, upd: true, auth: true, pub: true }, "simulation grants anon first");
+    assert.deepEqual(await seqPrivs("public.lpq21_existing"), { usage: true, sel: true, upd: true, auth: true, svc: true, pub: true }, "simulation grants anon first");
 
     await db.query(SQL);
-    assert.deepEqual(await seqPrivs("public.lpq21_existing"), { usage: false, sel: false, upd: false, auth: true, pub: false });
+    assert.deepEqual(await seqPrivs("public.lpq21_existing"), { usage: false, sel: false, upd: false, auth: true, svc: true, pub: false });
     await db.query("SET LOCAL ROLE postgres");
     await db.query("CREATE SEQUENCE public.lpq21_new");
     await db.query("RESET ROLE");
-    assert.deepEqual(await seqPrivs("public.lpq21_new"), { usage: false, sel: false, upd: false, auth: true, pub: false });
+    assert.deepEqual(await seqPrivs("public.lpq21_new"), { usage: false, sel: false, upd: false, auth: true, svc: true, pub: false });
     const dflt = (await db.query(`SELECT coalesce(bool_or(a.grantee = 'anon'::regrole), false) anon, coalesce(bool_or(a.grantee = 0), false) pub,
-        coalesce(bool_or(a.grantee = 'authenticated'::regrole), false) auth
+        coalesce(bool_or(a.grantee = 'authenticated'::regrole AND a.privilege_type = 'USAGE'), false) auth,
+        coalesce(bool_or(a.grantee = 'service_role'::regrole AND a.privilege_type = 'USAGE'), false) svc
       FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) a
       WHERE d.defaclrole = 'postgres'::regrole AND d.defaclnamespace = 'public'::regnamespace AND d.defaclobjtype = 'S'`)).rows[0];
-    assert.deepEqual(dflt, { anon: false, pub: false, auth: true });
+    assert.deepEqual(dflt, { anon: false, pub: false, auth: true, svc: true });
     await db.query(SQL);
   } finally { await db.query("ROLLBACK"); }
 });
