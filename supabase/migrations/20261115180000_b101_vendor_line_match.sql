@@ -127,6 +127,10 @@ BEGIN
  -- rebind (account deleted, old link left linked) the removed user must not silently re-create the account.
  OR (EXISTS(SELECT 1 FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id AND status='linked' AND unlinked_at IS NULL)
    AND (a.user_id IS NULL OR a.user_id IS DISTINCT FROM i.user_id))
+ -- This identity's own history with this contact (any status): it may come back only to the exact current account,
+ -- so a user removed by a staff rebind cannot return by unlinking and relinking once the new invite lapses.
+ OR (EXISTS(SELECT 1 FROM public.line_account_links WHERE org_id=c.org_id AND contact_id=c.id AND login_identity_id=i.id)
+   AND (a.user_id IS NULL OR a.user_id IS DISTINCT FROM i.user_id))
  -- Management already named the account holder: a pending invitation is never pre-empted by LINE (fail-closed,
  -- even for the invitee's own new LINE identity until they claim; the caller shows the approved V-LINK error).
  OR (a.user_id IS NULL AND EXISTS(SELECT 1 FROM app.b026_vendor_account_invites WHERE org_id=c.org_id AND contact_id=c.id

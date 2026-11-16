@@ -285,6 +285,20 @@ test("VEN-31 concurrent first sign-ins bind only one identity to the contact",as
  assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_accounts WHERE contact_id=$1",[j.contact])).rows[0].n,1);
 });
 
+test("review r3: a user removed by a staff rebind cannot return by unlinking and relinking after the new invite lapses",async()=>{
+ const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(req("/v/link",{action:"confirm"},f)));
+ const invitee=randomUUID();
+ await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,$2,now())",[invitee,`b101-lapsed-${invitee}@example.test`]);
+ assert.equal((await rebindVendorAccount(admin,j.contact,invitee)).status,"invited");
+ // The old user unlinks their LINE link and the new invite lapses unclaimed.
+ await db.query("UPDATE public.line_account_links SET status='unlinked',unlinked_at=clock_timestamp() WHERE org_id=$1 AND contact_id=$2",[ORG_ID,j.contact]);
+ await db.query("UPDATE app.b026_vendor_account_invites SET revoked_at=clock_timestamp() WHERE org_id=$1 AND contact_id=$2 AND claimed_at IS NULL",[ORG_ID,j.contact]);
+ const audits=async()=>(await db.query("SELECT count(*)::int n FROM audit_log WHERE event_type='vendor_line_first_binding'")).rows[0].n;
+ const before=await audits();
+ await rejected(await flow(j.token));
+ assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_accounts WHERE contact_id=$1",[j.contact])).rows[0].n,0);
+ assert.equal(await audits(),before);
+});
 test("review finding 1: after a staff rebind the removed LINE user cannot silently re-create the account; the invitee still claims",async()=>{
  const j=await issue(),f=await matched(j.token);await list(f);await parsed(await act(req("/v/link",{action:"confirm"},f)));
  const invitee=randomUUID();
