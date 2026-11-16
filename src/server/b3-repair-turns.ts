@@ -20,6 +20,12 @@ export type StaffRepairTurns = { state: "off" | "unavailable" } | {
 };
 type Deps = { v3?: typeof brandV3ReadForOrg; transaction?: typeof svc };
 /** MGT-125/126, PLT-53. Counts and pages are computed by one admitted SQL snapshot. */
+/** svc/tx rethrow DB errors through mapDbError, which keeps the SQLSTATE in `cause.code`. */
+export function sqlDenied(error: unknown): boolean {
+  const e = error as { code?: unknown; cause?: { code?: unknown } } | null;
+  return e?.code === "42501" || e?.cause?.code === "42501";
+}
+
 export async function staffRepairTurns(session: Session, options: RepairOptions = {}, deps: Deps = {}): Promise<StaffRepairTurns> {
   try {
     if (!(await (deps.v3 ?? brandV3ReadForOrg)(session.orgId))) return { state: "off" };
@@ -48,7 +54,7 @@ export async function staffRepairTurns(session: Session, options: RepairOptions 
     }, { isolation: "repeatable read" });
   } catch (error) {
     if (error instanceof FlowError && ["errors.forbidden", "errors.required"].includes(error.key)) throw error;
-    if ((error as { code?: string })?.code === "42501") throw new FlowError("errors.forbidden");
+    if (sqlDenied(error)) throw new FlowError("errors.forbidden");
     logServerError("b3_staff_repair_turns", error);
     return { state: "unavailable" };
   }

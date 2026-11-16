@@ -113,3 +113,15 @@ test("R5 only counts a concrete re-estimate with current owner, threshold and cu
   assert.match(m2, /region\.minor_unit IS NULL OR region\.minor_unit=/);
   assert.match(m2, /po\.effective_to > \(clock_timestamp\(\) AT TIME ZONE o\.timezone\)::date/);
 });
+
+test("a SQL 42501 denial wrapped by svc/mapDbError is still forbidden, not unavailable (Codex 3b r1)", async () => {
+  const { sqlDenied } = await import("./b3-repair-turns");
+  const { FlowError } = await import("./errors");
+  const wrapped = new FlowError("errors.generic"); (wrapped as { cause?: unknown }).cause = { code: "42501" };
+  assert.equal(sqlDenied(wrapped), true);
+  assert.equal(sqlDenied({ code: "42501" }), true);
+  const other = new FlowError("errors.generic"); (other as { cause?: unknown }).cause = { code: "57014" };
+  assert.equal(sqlDenied(other), false);
+  assert.equal(sqlDenied(new Error("boom")), false);
+  assert.match(readFileSync(new URL("./b3-repair-turns.ts", import.meta.url), "utf8"), /if \(sqlDenied\(error\)\) throw new FlowError\("errors\.forbidden"\);/);
+});
