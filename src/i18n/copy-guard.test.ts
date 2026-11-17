@@ -78,11 +78,19 @@ function withoutOwnStatus(source: string, rel: string) {
   return out;
 }
 
+// GS-32 rec-type1-preview: the approved vendor-frontend-1112 primary (VEN-21-AC4, rec-preview), exact, in its own lane only.
+const VENDOR_DOCS_LANE = "src/i18n/lanes/brand-v3-vendor-docs.ts";
+function withoutVendorDocsIssue(source: string, rel: string) {
+  if (rel !== VENDOR_DOCS_LANE) return source;
+  const exact = /^    issue: "確認已全額收款並開立", close: "關閉",$/gm;
+  return [...source.matchAll(exact)].length === 1 ? source.replace(exact, '    issue: "", close: "關閉",') : source;
+}
+
 function hitsFor(words: string[]) {
   const hits: string[] = [];
   for (const file of sourceFiles()) {
     const rel = relative(root, file);
-    const text = withoutApprovedReportRentNames(withoutOwnStatus(withoutManagerAreaName(decode(read(file)), rel), rel), rel);
+    const text = withoutVendorDocsIssue(withoutApprovedReportRentNames(withoutOwnStatus(withoutManagerAreaName(decode(read(file)), rel), rel), rel), rel);
     if (file.endsWith(".json")) {
       const data = JSON.parse(text) as Record<string, unknown>;
       for (const [key, value] of Object.entries(data)) {
@@ -317,3 +325,10 @@ test("PR-016: the owner/vendor own-status lane holds exactly the approved 「收
   assert.equal(withoutOwnStatus('"代屋主確認收款"', "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
 });
 
+
+test("GS-32 exemption covers exactly one approved line in the vendor-docs lane", () => {
+  const lane = read(join(root, VENDOR_DOCS_LANE));
+  assert.equal(withoutVendorDocsIssue(lane, VENDOR_DOCS_LANE).includes("收款"), false);
+  assert.equal(withoutVendorDocsIssue('    issue: "確認已全額收款並開立", close: "關閉",', "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
+  assert.equal(withoutVendorDocsIssue('    other: "確認已全額收款並開立",', VENDOR_DOCS_LANE).includes("收款"), true);
+});

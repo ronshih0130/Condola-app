@@ -574,3 +574,12 @@ flags:
     global_kill: "platform_settings.vendor_job_v3 requires boolean true enabled and an allowed_org_ids array containing the organization; absent or malformed is OFF"
     org_override: "organizations.feature_flags.vendor_job_v3 must be boolean true; effective brand_v3, vendor_dispatch and the enhanced vendor_link (platform allowlist + org flag) must also be enabled"
     activation: "B-105 / R9-VEN vendor case on /v/[token] (Round 7 batch 3: RV-JOB-ACCEPT, RV-DECLINE, RV-JOB-WAIT, RV-PHOTOS, RV-PHOTOS-CLOSED). Staging only and not turned on for any real organization until every RV stage has its back end (GS-01); OFF keeps the V-TOKEN page byte-for-byte; app.b105_* gateways return NULL / refuse while OFF; 0 outbound; rollback = platform_settings / org override to OFF (rows kept). Owner and expiry are assumptions pending Ron"
+
+  vendor_docs_v3:
+    owner: PE
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.vendor_docs_v3 requires boolean true enabled and an allowed_org_ids array containing the organization; absent or malformed is OFF (no row is seeded)"
+    org_override: "organizations.feature_flags.vendor_docs_v3 must be boolean true; effective brand_v3 and the B-025 vendor_documents admission must also be enabled"
+    activation: "GS-32 Round 7 batch 4 vendor document screens with existing data (rec-type1-preview, rec-paper-upload with its 收據 evidence page, DOC-VOID marks on the manager repair page). Staging only; not turned on for a real organization until the VF-3/VF-4 (B-067/B-068) screens exist. OFF keeps the B-025 vendor document page and the manager repair page unchanged; reads only, every write is an existing B-025 action; 0 outbound; rollback = platform_settings / org override to OFF. Owner and expiry are assumptions pending Ron"
