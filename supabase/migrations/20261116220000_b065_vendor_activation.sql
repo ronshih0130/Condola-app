@@ -65,24 +65,31 @@ REVOKE ALL ON FUNCTION app.b065_enabled(uuid,boolean) FROM PUBLIC,anon,authentic
 -- p_lock (writers): first take, in a fixed order, every row the admission reads or a later write's foreign keys need
 -- (the two platform switches, the organization, the caller's vendor account, its contact and any membership row),
 -- FOR SHARE, then decide admission with all of them held. The session row is share-locked NOWAIT by
--- b026_account_actor during the decision itself, so nothing can wait after the decision. The lock target is found by
--- a plain lookup that grants nothing.
+-- b026_account_actor during the decision itself, and the admitted binding and contact must be ones locked here (a
+-- binding or a switch row that appeared during a wait is refused, not admitted), so nothing can wait after the
+-- decision. The lock target is found by a plain lookup that grants nothing.
 CREATE FUNCTION app.b065_account_contact(p_session_hash text,p_org uuid,p_env_v2 boolean,p_lock boolean,
  OUT actor uuid,OUT contact uuid)
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE target uuid;
+DECLARE target uuid; locked_switches int; locked_org int; locked_accounts uuid[]; locked_contacts uuid[];
 BEGIN
  IF p_session_hash IS NULL OR p_session_hash !~ '^[0-9a-f]{64}$' OR p_org IS NULL
  THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  IF p_lock THEN
   SELECT s.user_id INTO target FROM public.auth_sessions s WHERE s.token_hash=p_session_hash;
   IF target IS NULL THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
-  PERFORM 1 FROM public.platform_settings f WHERE f.key IN ('vendor_account','vendor_activation') ORDER BY f.key FOR SHARE;
-  PERFORM 1 FROM public.organizations o WHERE o.id=p_org FOR SHARE;
-  PERFORM 1 FROM app.b026_vendor_accounts va WHERE va.org_id=p_org AND va.user_id=target ORDER BY va.contact_id FOR SHARE;
-  PERFORM 1 FROM public.contacts c WHERE c.org_id=p_org
-   AND c.id IN (SELECT va.contact_id FROM app.b026_vendor_accounts va WHERE va.org_id=p_org AND va.user_id=target) ORDER BY c.id FOR SHARE;
+  SELECT count(*) INTO locked_switches FROM (SELECT 1 FROM public.platform_settings f
+   WHERE f.key IN ('vendor_account','vendor_activation') ORDER BY f.key FOR SHARE) x;
+  SELECT count(*) INTO locked_org FROM (SELECT 1 FROM public.organizations o WHERE o.id=p_org FOR SHARE) x;
+  SELECT coalesce(array_agg(x.contact_id),'{}') INTO locked_accounts FROM (SELECT va.contact_id FROM app.b026_vendor_accounts va
+   WHERE va.org_id=p_org AND va.user_id=target ORDER BY va.contact_id FOR SHARE) x;
+  -- Only the contacts of the bindings locked above (a binding inserted meanwhile is not a lock target).
+  SELECT coalesce(array_agg(x.id),'{}') INTO locked_contacts FROM (SELECT c.id FROM public.contacts c
+   WHERE c.org_id=p_org AND c.id=ANY(locked_accounts) ORDER BY c.id FOR SHARE) x;
   PERFORM 1 FROM public.org_members m WHERE m.org_id=p_org AND m.user_id=target ORDER BY m.id FOR SHARE;
+  -- Every row the decision may admit on must be one of the rows locked above; otherwise refuse, never wait.
+  IF locked_switches<>2 OR locked_org<>1 OR cardinality(locked_accounts)=0 OR cardinality(locked_contacts)=0
+  THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  END IF;
  -- The decision: identical for readers and writers.
  actor:=app.b026_account_actor(p_session_hash);
@@ -91,8 +98,9 @@ BEGIN
  THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  SELECT va.contact_id INTO contact FROM app.b026_vendor_accounts va
   JOIN public.contacts c ON c.org_id=va.org_id AND c.id=va.contact_id AND c.is_vendor AND c.archived_at IS NULL
-  WHERE va.org_id=p_org AND va.user_id=actor ORDER BY va.contact_id LIMIT 1;
- IF contact IS NULL THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+  WHERE va.org_id=p_org AND va.user_id=actor AND (NOT p_lock OR va.contact_id=ANY(locked_accounts)) ORDER BY va.contact_id LIMIT 1;
+ IF contact IS NULL OR (p_lock AND NOT (contact=ANY(locked_accounts) AND contact=ANY(locked_contacts)))
+ THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
 END $$;
 REVOKE ALL ON FUNCTION app.b065_account_contact(text,uuid,boolean,boolean) FROM PUBLIC,anon,authenticated,service_role;
 

@@ -341,6 +341,12 @@ async function holder() {
   return client;
 }
 type Outcome = { result?: { status: string }; error?: unknown };
+/** A save that is still waiting after `ms` is a failure, never a hang. */
+const settle = (pending: Promise<Outcome>, ms = 15000) => Promise.race([pending, new Promise<Outcome>(resolve => {
+  setTimeout(() => resolve({ error: new Error(`save still waiting after ${ms}ms`) }), ms).unref();
+})]);
+const busy = (error: unknown) => (error as { code?: string }).code === "55P03" || (error as { cause?: { code?: string } }).cause?.code === "55P03";
+const WAIT_TEST = { timeout: 240000 };
 
 test("two vendors sharing one request id in parallel: exactly one recorded, one rejected_conflict, no 23505", async () => {
   const request = randomUUID();
@@ -383,7 +389,7 @@ test("two saves of one vendor in parallel (different request ids): serialized pe
  * read through the holder after every change, i.e. after the admission-invalidating mutation and before release.
  */
 async function blockedSave(label: string, lock: (c: Client) => Promise<unknown>, changes: { db?: () => Promise<unknown>; hold?: (c: Client) => Promise<unknown> },
-  restore: () => Promise<unknown>, cred = credA) {
+  restore: () => Promise<unknown>, cred = credA, expect: "refused" | "recorded" = "refused") {
   const next = other(await vendorIssuerType(credA, ORG_ID));
   const request = randomUUID();
   const client = await holder();
@@ -403,15 +409,23 @@ async function blockedSave(label: string, lock: (c: Client) => Promise<unknown>,
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
   } finally { await client.end(); }
-  const outcome = await pending!;
+  const outcome = await settle(pending!);
   try {
+    if (expect === "recorded") {
+      // Positive control: the same wait with nothing changed is admitted and writes once.
+      assert.deepEqual(outcome.result, { status: "recorded", issuerType: next, replayed: false }, `${label}: ${String(outcome.error)}`);
+      assert.equal((await ledger(request)).length, 1, `${label}: reserved`);
+      return;
+    }
     assert.ok(forbidden(outcome.error), `${label}: ${JSON.stringify(outcome.result ?? String(outcome.error))}`);
     assert.deepEqual(await snapshot(), expected, `${label}: nothing written after the invalidating change`);
     assert.deepEqual(await ledger(request), [], `${label}: request id not reserved`);
   } finally { await restore(); }
 }
+/** Positive control for one holder: nothing changes during the wait. */
+const control = (label: string, lock: (c: Client) => Promise<unknown>) => blockedSave(`${label}: positive control`, lock, {}, async () => {}, credA, "recorded");
 
-test("a save waiting on an advisory lock is refused if the session, the binding or any gate changes during the wait", async () => {
+test("a save waiting on an advisory lock is refused if the session, the binding or any gate changes during the wait", WAIT_TEST, async () => {
   const fresh = async () => {
     const cred = randomUUID();
     const id = (await db.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour') RETURNING id", [vendorA, hash(cred)])).rows[0].id;
@@ -421,6 +435,7 @@ test("a save waiting on an advisory lock is refused if the session, the binding 
   const restoreAccount = () => db.query("INSERT INTO app.b026_vendor_accounts SELECT * FROM jsonb_populate_record(NULL::app.b026_vendor_accounts,$1::jsonb)", [JSON.stringify(account)]);
   // The org declaration key (shared by every save in the org).
   const lock = (c: Client) => c.query("SELECT pg_advisory_xact_lock(hashtextextended('b065/issuer-org/'||$1::text,0))", [ORG_ID]);
+  await control("org key", lock);
   const s0 = await fresh();
   await blockedSave("org key: session revoked", lock, { db: s0.revoke }, async () => {}, s0.cred);
   await blockedSave("org key: vendor_activation off", lock, { db: () => flags({ vendor_activation: false }) }, () => flags({ vendor_activation: true }));
@@ -440,12 +455,12 @@ test("a save waiting on an advisory lock is refused if the session, the binding 
     await waitForBlocked(client, 1);
     await s.revoke();
   } finally { await client.query("ROLLBACK").catch(() => undefined); await client.end(); }
-  assert.ok(forbidden((await pending!).error), "request key: session revoked");
+  assert.ok(forbidden((await settle(pending!)).error), "request key: session revoked");
   assert.equal(await writes(contactA), before);
   assert.equal(typeof (await vendorIssuerType(credA, ORG_ID)), "string", "every gate restored");
 });
 
-test("a save waiting on a row lock (organization, platform switch, vendor account, contact) is refused when admission changes during the wait", async () => {
+test("a save waiting on a row lock (organization, platform switch, vendor account, contact, membership) is refused when admission changes during the wait", WAIT_TEST, async () => {
   const fresh = async () => {
     const cred = randomUUID();
     const id = (await db.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour') RETURNING id", [vendorA, hash(cred)])).rows[0].id;
@@ -470,6 +485,7 @@ test("a save waiting on a row lock (organization, platform switch, vendor accoun
   const unStaff = () => db.query("DELETE FROM org_members WHERE org_id=$1 AND user_id=$2", [ORG_ID, vendorA]);
 
   // Organization row held FOR UPDATE: the holder turns a gate off itself; the other changes land beside it.
+  await control("org row", lockOrg);
   let s = await fresh();
   await blockedSave("org row: session revoked", lockOrg, { db: s.revoke }, async () => {}, s.cred);
   await blockedSave("org row: vendor_activation off by the holder", lockOrg, { hold: c => flags({ vendor_activation: false }, ORG_ID, c) }, () => flags({ vendor_activation: true }));
@@ -480,11 +496,13 @@ test("a save waiting on a row lock (organization, platform switch, vendor accoun
   // (A new membership's FK needs the organization row, so the holder adds it.)
   await blockedSave("org row: made staff by the holder", lockOrg, { hold: c => c.query("INSERT INTO org_members(org_id,user_id,role,status) VALUES($1,$2,'maintenance','active')", [ORG_ID, vendorA]) }, unStaff);
   // Platform switch held FOR UPDATE: the holder turns it off.
+  await control("switch row", lockSwitch);
   s = await fresh();
   await blockedSave("switch row: session revoked", lockSwitch, { db: s.revoke }, async () => {}, s.cred);
   await blockedSave("switch row: platform off by the holder", lockSwitch, { hold: c => activationGate({ ...ACTIVATION_ON, enabled: false }, c) }, () => activationGate(ACTIVATION_ON));
   await blockedSave("switch row: org removed from allowed_org_ids by the holder", lockSwitch, { hold: c => activationGate({ enabled: true, allowed_org_ids: [ORG2_ID] }, c) }, () => activationGate(ACTIVATION_ON));
   // Vendor account row held FOR UPDATE: the holder rebinds or removes it.
+  await control("account row", lockAccount);
   s = await fresh();
   await blockedSave("account row: session revoked", lockAccount, { db: s.revoke }, async () => {}, s.cred);
   await blockedSave("account row: reassigned to another user by the holder", lockAccount, { hold: rebind }, restoreAccount);
@@ -492,13 +510,96 @@ test("a save waiting on a row lock (organization, platform switch, vendor accoun
   await blockedSave("account row: contact archived", lockAccount, { db: () => archive(db) }, unarchive);
   await blockedSave("account row: made staff", lockAccount, { db: makeStaff }, unStaff);
   // Contact row held FOR UPDATE: the holder archives it or makes it a non-vendor.
+  await control("contact row", lockContact);
   s = await fresh();
   await blockedSave("contact row: session revoked", lockContact, { db: s.revoke }, async () => {}, s.cred);
   await blockedSave("contact row: archived by the holder", lockContact, { hold: archive }, unarchive);
   await blockedSave("contact row: no longer a vendor (holder)", lockContact, { hold: c => c.query("UPDATE contacts SET is_vendor=false,is_owner=true WHERE id=$1", [contactA]) }, unarchive);
   await blockedSave("contact row: made staff", lockContact, { db: makeStaff }, unStaff);
+  // Membership row held FOR UPDATE (A has a removed membership, which does not refuse): the holder reactivates it.
+  await db.query("INSERT INTO org_members(org_id,user_id,role,status) VALUES($1,$2,'maintenance','removed')", [ORG_ID, vendorA]);
+  try {
+    const lockMember = (c: Client) => c.query("SELECT 1 FROM org_members WHERE org_id=$1 AND user_id=$2 FOR UPDATE", [ORG_ID, vendorA]);
+    await control("membership row", lockMember);
+    s = await fresh();
+    await blockedSave("membership row: session revoked", lockMember, { db: s.revoke }, async () => {}, s.cred);
+    await blockedSave("membership row: reactivated by the holder", lockMember,
+      { hold: c => c.query("UPDATE org_members SET status='active' WHERE org_id=$1 AND user_id=$2", [ORG_ID, vendorA]) },
+      () => db.query("UPDATE org_members SET status='removed' WHERE org_id=$1 AND user_id=$2", [ORG_ID, vendorA]));
+    // (The binding, contact, organization and switches are already share-locked at this wait, so they cannot change here:
+    // a writer queues behind the save, which is ordered first.)
+    await assert.rejects((async () => {
+      const c = await holder();
+      try {
+        await c.query("SELECT 1 FROM org_members WHERE org_id=$1 AND user_id=$2 FOR UPDATE", [ORG_ID, vendorA]);
+        const p2 = save(credA, ORG_ID, other(await vendorIssuerType(credA, ORG_ID))).then(result => ({ result }), error => ({ error }));
+        await waitForBlocked(c, 1);
+        await db.query("SET lock_timeout='1s'");
+        try { await unbind(db); } finally { await db.query("RESET lock_timeout"); await c.query("COMMIT"); await settle(p2); }
+      } finally { await c.end(); }
+    })(), { code: "55P03" }, "membership wait: the binding is already locked by the save");
+  } finally { await db.query("DELETE FROM org_members WHERE org_id=$1 AND user_id=$2", [ORG_ID, vendorA]); }
   // Every case was restored: A saves again.
   assert.equal((await save(credA, ORG_ID, other(await vendorIssuerType(credA, ORG_ID)))).status, "recorded");
+});
+
+test("regression (r2): a binding inserted while the save waits on the membership lock is not admitted, so a contact lock cannot hold it after admission", WAIT_TEST, async () => {
+  const userC = randomUUID(), credC = randomUUID();
+  await db.query("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES($1,'b065c@example.test',now())", [userC]);
+  await db.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')", [userC, hash(credC)]);
+  const consent = buildStoredConsent("portal");
+  await db.query("INSERT INTO consents(user_id,accepted_at,terms_version,privacy_version,source) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [userC, consent.accepted_at, consent.terms_version, consent.privacy_version, consent.source]);
+  const contactC = await vendorContact(ORG_ID, "B-065 C (bound during the wait)");
+  const invite = await inviteVendorAccount(admin, contactC, userC);
+  assert.equal(invite.status, "invited");
+  // 1. No binding yet; a removed membership row gives the save a membership lock to wait on.
+  await db.query("INSERT INTO org_members(org_id,user_id,role,status) VALUES($1,$2,'maintenance','removed')", [ORG_ID, userC]);
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_accounts WHERE org_id=$1 AND user_id=$2", [ORG_ID, userC])).rows[0].n, 0);
+  const request = randomUUID();
+  const memberLock = await holder(), contactLock = await holder();
+  let pending: Promise<Outcome> | undefined, regressed = false, expected: Record<string, string> | undefined;
+  try {
+    for (const c of [memberLock, contactLock]) await c.query("SET LOCAL lock_timeout='5s'");
+    await db.query("SET lock_timeout='5s'");
+    // 2. Hold the membership lock and start a save.
+    await memberLock.query("SELECT 1 FROM org_members WHERE org_id=$1 AND user_id=$2 FOR UPDATE", [ORG_ID, userC]);
+    pending = save(credC, ORG_ID, "individual", request).then(result => ({ result }), error => ({ error }));
+    await waitForBlocked(memberLock, 1);
+    // 3. A real B-026 claim inserts the binding while the save waits.
+    assert.equal((await claimVendorAccount(credC, invite.invitation!)).status, "claimed");
+    assert.equal((await db.query("SELECT count(*)::int n FROM app.b026_vendor_accounts WHERE org_id=$1 AND user_id=$2", [ORG_ID, userC])).rows[0].n, 1);
+    // 4. Hold FOR UPDATE on that contact, then release the membership lock.
+    await contactLock.query("SELECT 1 FROM contacts WHERE id=$1 FOR UPDATE", [contactC]);
+    await memberLock.query("COMMIT");
+    const contactPid = (await contactLock.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    for (let i = 0; i < 100; i++) {
+      const done = await Promise.race([pending.then(() => true), new Promise<boolean>(r => setTimeout(() => r(false), 50))]);
+      if (done) break;
+      const blocked = (await db.query(`SELECT count(*)::int n FROM pg_stat_activity WHERE datname=current_database()
+        AND $1=ANY(pg_blocking_pids(pid)) AND query LIKE '%b065_save_issuer_type%'`, [contactPid])).rows[0].n;
+      if (blocked) { regressed = true; break; }
+    }
+    // The contact holder archives the contact and commits (in the old code the admitted save then wrote after it).
+    await contactLock.query("UPDATE contacts SET archived_at=now() WHERE id=$1", [contactC]);
+    expected = await snapshot(contactLock);
+    await contactLock.query("COMMIT");
+  } catch (error) {
+    for (const c of [memberLock, contactLock]) await c.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    await db.query("RESET lock_timeout");
+    await memberLock.end(); await contactLock.end();
+  }
+  const outcome = await settle(pending!);
+  // 5. Refused (or busy), never admitted, nothing written.
+  assert.equal(regressed, false, "the save waited on the contact lock after its admission decision");
+  assert.ok(forbidden(outcome.error) || busy(outcome.error), JSON.stringify(outcome.result ?? String(outcome.error)));
+  assert.deepEqual(await snapshot(), expected, "no writes");
+  assert.deepEqual(await ledger(request), []);
+  assert.deepEqual(await declarations(contactC), []);
+  // Positive control: with the contact live again, the same (now bound) account saves.
+  await db.query("UPDATE contacts SET archived_at=NULL WHERE id=$1", [contactC]);
+  assert.deepEqual(await save(credC, ORG_ID, "individual", request), { status: "recorded", issuerType: "individual", replayed: false });
 });
 
 test("route: account cookie and an open workbench only; strict body; 200 recorded/unchanged/replay, 409 conflict", async () => {
