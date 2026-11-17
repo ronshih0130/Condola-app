@@ -65,7 +65,9 @@ export function VendorCaseView(props: VendorCaseViewProps) {
   }
   // GS-62 / GS-63: only an open case with one of the drawn projections gets a relay (RV-RELAY, RV-RELAY-WAIT).
   const relay = props.stage === "open" && vendorRelayDrawn(props.relay ?? null) ? props.relay! : null;
-  const waiting = relay === "confirm_cost" || relay === "dispatch";
+  // No 回報完工 primary while the company holds the case, nor on R7a (completion already reported; its own
+  // 開立費用文件 primary has no job-link destination yet, OQ-097).
+  const noPrimary = relay === "confirm_cost" || relay === "dispatch" || relay === "report_cost";
   const firm = props.company.trim() || brandV3Copy(props.locale).m;
   const lead = props.stage === "accept" ? copy.leadAccept.replace("{company}", props.company)
     : props.stage === "owner_wait" ? copy.leadWait
@@ -75,7 +77,7 @@ export function VendorCaseView(props: VendorCaseViewProps) {
   const badge = props.stage === "accept" ? { text: copy.badgeAccept, tone: "info" }
     : props.stage === "owner_wait" ? { text: copy.badgeWait, tone: "warn" }
     : relay === "dispatch" ? { text: status.awaiting_dispatch, tone: "info" }
-    : relay === "confirm_cost" ? { text: status.in_progress, tone: "info" } : null;
+    : relay === "confirm_cost" || relay === "report_cost" ? { text: status.in_progress, tone: "info" } : null;
   const others: { href: string; label: string }[] = [];
   if (props.stage === "owner_wait" && props.estimates && props.ownerWaitVersion !== null) {
     others.push({ href: `${path}/estimate`, label: copy.viewEstimate.replace("{n}", String(props.ownerWaitVersion)) });
@@ -90,7 +92,7 @@ export function VendorCaseView(props: VendorCaseViewProps) {
       {props.stage === "accept" ? <AcceptDecision {...props} /> : null}
       {relay ? <VendorCaseRelay kind={relay} firm={props.company} locale={props.locale} /> : null}
       {/* RV-RELAY-WAIT: while the company holds the case the vendor has no solid primary. */}
-      {props.stage === "open" && props.report && !waiting ? <a className="v-token-primary v-case-block" href={`${path}/done`}
+      {props.stage === "open" && props.report && !noPrimary ? <a className="v-token-primary v-case-block" href={`${path}/done`}
         data-testid="vendor-case-report">{vendorCloseCopy(props.locale).report}</a> : null}
     </section>
     {others.length ? <section className="v-token-card v-case-other" aria-labelledby={`${id}-other`}>

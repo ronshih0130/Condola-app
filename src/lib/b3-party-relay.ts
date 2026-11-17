@@ -33,7 +33,7 @@ export function ownerEstimateRelay(state: OwnerRelayState, firm: string | null):
   return nodes;
 }
 
-/** The four vendor relays (spec §6.3 canonical rows). R7a is defined but not drawn yet (see vendorRelayDrawn). */
+/** The four vendor relays (spec §6.3 canonical rows). */
 export type VendorRelayKind = "do_repair" | "report_cost" | "confirm_cost" | "dispatch";
 type Turn = { state: "ready" | "restricted"; holder: string | null; step: string | null; viewerCanAct: boolean };
 
@@ -53,12 +53,10 @@ export function vendorRelayKind(turn: Turn | null | undefined): VendorRelayKind 
 }
 
 /**
- * R7a's approved frame pairs the relay with the 「開立費用文件」 primary and its lead, but that document page is
- * reached through its own document grant, not this job link; with no destination the frame cannot be drawn as
- * approved, so R7a shows no relay yet (GS-44; OPEN-QUESTIONS OQ-097).
+ * All four kinds are drawn. R7a (Ron 2026-11-17, OQ-097: 「Draw R7a relay」): the relay only. Its frame's 「開立費用文件」
+ * primary and the lead 「下一步：開立費用文件。」 wait until that document page is reachable from the job link.
  */
-export const vendorRelayDrawn = (kind: VendorRelayKind | null): kind is Exclude<VendorRelayKind, "report_cost"> =>
-  kind !== null && kind !== "report_cost";
+export const vendorRelayDrawn = (kind: VendorRelayKind | null): kind is VendorRelayKind => kind !== null;
 
 export function vendorCaseRelay(kind: VendorRelayKind, firm: string | null): RelayNode[] {
   const m = company(firm);

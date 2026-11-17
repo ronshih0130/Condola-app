@@ -74,9 +74,8 @@ test("PLT-52-AC10: only the four ready projections map; restricted, terminal and
     { state: "restricted" as const, holder: "vendor", step: "do_repair", viewerCanAct: true }]) {
     assert.equal(vendorRelayKind(turn), null, JSON.stringify(turn));
   }
-  // OQ-097: R7a has no destination for its approved primary yet, so it is not drawn.
-  assert.equal(vendorRelayDrawn("report_cost"), false);
-  for (const kind of ["do_repair", "confirm_cost", "dispatch"] as const) assert.equal(vendorRelayDrawn(kind), true);
+  // OQ-097 (Ron 2026-11-17 「Draw R7a relay」): all four kinds are drawn.
+  for (const kind of ["do_repair", "report_cost", "confirm_cost", "dispatch"] as const) assert.equal(vendorRelayDrawn(kind), true);
   assert.equal(vendorRelayDrawn(null), false);
 });
 
@@ -116,6 +115,11 @@ test("PLT-52-AC9 / RV-JOB: relay inside the job card above the stage primary; R2
   const r6 = view({ relay: "dispatch" });
   assert.match(r6, /<h1>這一案等安居物業派工。<\/h1>/); assert.match(r6, />待派工</);
   assert.doesNotMatch(r6, /vendor-case-report|v-token-primary/);
+  // R7a (OQ-097, Ron 「Draw R7a relay」): relay with 廠 回報費用 「你」 and 處理中; no lead, no button yet.
+  const r7a = view({ relay: "report_cost" });
+  assert.match(r7a, /data-relay="report_cost"/); assert.match(r7a, /aria-label="報修進度共四步，現在輪到你回報費用"/);
+  assert.match(r7a, /處理中/);
+  assert.doesNotMatch(r7a, /v-token-lead|開立費用文件|vendor-case-report|v-token-primary/);
   // The company slot never goes blank.
   assert.match(view({ relay: "dispatch", company: "" }), /<h1>這一案等管理方派工。<\/h1>/);
   assert.equal(partyRelayCopy("zh-TW").costSent.replace("{company}", "安居物業"), "費用已送出，等安居物業核對。");
@@ -132,8 +136,8 @@ test("PLT-52-AC10 / RV-RELAY-NONE: no relay outside an open case or without a dr
       assert.equal(html, view({ stage, ownerWaitVersion: stage === "owner_wait" ? 2 : null }), `${stage}/${relay}`);
     }
   }
-  // R7a (OQ-097) and no projection: the open page is exactly the pre-relay page.
-  for (const relay of ["report_cost", null, undefined] as const) assert.equal(view({ relay }), view({}));
+  // No projection: the open page is exactly the pre-relay page.
+  for (const relay of [null, undefined] as const) assert.equal(view({ relay }), view({}));
 });
 
 test("relay CSS: owner/manager rules scoped to html[data-brand-v3]; vendor rules scoped to the bearer shell; 44px untouched", () => {
