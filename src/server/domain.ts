@@ -10,6 +10,7 @@ import { lockFreshLeaseTarget } from "./lease-target";
 import { admitActiveArchiveAncestry, admitFreshLeaseAncestry, admitLeaseArchiveAncestry, admitTicketArchiveAncestry } from "./record-archive-admission";
 import { assertCurrentArchiveCaller } from "./record-archive-caller";
 import { FlowError, isDbTimeout } from "./errors";
+import { assertWithinUnreported, b087Enabled } from "./b087-report-guard";
 import { deliveryPlan, outboundNote, SANDBOX_NOT_SENT } from "./outbound";
 import {
   inclusiveDays,
@@ -1947,6 +1948,8 @@ export async function recordPayment(
       const balance = await openBalance(client, input.leaseId);
       if (balance <= 0) throw new FlowError("errors.noInvoice");
       if (amount > balance) throw new FlowError("errors.amountTooHigh");
+      // B-087 TEN-DUP: under effective brand_v3, only the part pending reports do not cover can be reported.
+      if (await b087Enabled(client, lease.org_id)) await assertWithinUnreported(client, lease.org_id, input.leaseId, amount);
       const contact = await maybe<{ id: string }>(
         client,
         `SELECT c.id FROM lease_parties lp JOIN contacts c ON c.id = lp.contact_id

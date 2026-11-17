@@ -38,6 +38,7 @@ export const ERRORS: Record<string, string> = {
   "errors.matchState": "i_match_state",
   "errors.currency": "i_currency",
   "errors.amountTooHigh": "i_amount_high",
+  "errors.amountOverUnreported": "i_amount_over_unreported", // B-087 TEN-53-AC4 copy (Ron-approved stories, 2026-11-15)
   "errors.email": "i_email",
   "errors.emailTaken": "i_email_taken",
   "errors.teamInvitesSoon": "i_team_invites_soon",

@@ -945,6 +945,7 @@
  "i_page_missing_home": "回到首頁",
  "i_amount": "Enter an amount (a number, 0 is allowed).",
  "i_amount_high": "The amount is above the open balance.",
+ "i_amount_over_unreported": "The amount is more than the part not yet reported.",
  "i_no_invoice": "There is no open invoice to apply this to.",
  "i_occupied": "That room already has a lease for those dates.",
  "i_room_lease_exists": "This room already has a lease for {start}–{end}.",
