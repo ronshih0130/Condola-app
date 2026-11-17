@@ -14,7 +14,7 @@ import { loadVendorJob } from "@/server/vendor-repair";
 import { resolveVendorJobState } from "@/server/vendor-job";
 import { requestPrefs } from "@/server/session";
 import { vendorLineEntryEnabled } from "@/server/line/vendor-entry";
-import { loadVendorCase, vendorCaseStage } from "@/server/b105-vendor-case";
+import { loadVendorCase, vendorCaseReportReady, vendorCaseStage } from "@/server/b105-vendor-case";
 import { VendorCaseView } from "@/components/v3/vendor/vendor-case";
 import { VendorJobControls } from "./vendor-job-controls";
 import { VendorLineEntry } from "./vendor-line-entry";
@@ -53,7 +53,7 @@ export default async function VendorJobPage({
     const caseView = vendorCase.state === "ready" ? <VendorCaseView locale={prefs.locale} token={token} heading={heading}
       company={vendorCase.value.company} stage={vendorCaseStage(vendorCase.value)} presetDate={null}
       scheduledOn={vendorCase.value.scheduledOn} ownerWaitVersion={vendorCase.value.ownerWaitVersion}
-      estimates={vendorCase.value.estimates} /> : <VendorCaseView locale={prefs.locale} token={token} heading={heading}
+      estimates={vendorCase.value.estimates} report={vendorCaseReportReady(vendorCase.value)} /> : <VendorCaseView locale={prefs.locale} token={token} heading={heading}
       company="" stage="unavailable" presetDate={null} scheduledOn={null} ownerWaitVersion={null} estimates={false} />;
     const caseMatch = await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;
     return <VendorTokenShell locale={prefs.locale} context={tokenBrand} notificationHref={notificationEntry?.href ?? null}

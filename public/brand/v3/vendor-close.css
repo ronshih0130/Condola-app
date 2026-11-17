@@ -1,0 +1,4 @@
+/* B-097 RV-DONE (回報完工). Loaded only by the vendor_job_v3 case view, scoped to the V-TOKEN shell; targets at least 44px. */
+.v-token-v3 .v-done .v-done-note { min-height: 88px; resize: vertical; line-height: 1.5; }
+.v-token-v3 .v-done .v-done-cancel { display: flex; align-items: center; justify-content: center; min-height: 44px; text-decoration: none; }
+.v-token-v3 .v-done .v-case-tiles { margin: 0; }

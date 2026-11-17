@@ -108,6 +108,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/payments/request-status/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/pdf/leases/[id]/route.ts:1 | HTTP handler executed above |
 | src/app/api/pdf/statements/[id]/route.ts:1 | HTTP handler executed above |
+| src/app/api/repairs/reopen/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/reset-flash/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/signup/unit-qr/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/tenant-directory/edit/route.ts:1 | Enumerated only; outside representative selection |
@@ -126,6 +127,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/vendor-job-completion/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-job-response/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/[token]/photos/[id]/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-jobs/case-complete/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/case-decision/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/case-photos/confirm/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/case-share/route.ts:1 | Enumerated only; outside representative selection |

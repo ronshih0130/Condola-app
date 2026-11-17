@@ -55,6 +55,8 @@ const openPages: Record<string, Record<string, string>> = {
   "app/v/[token]/page.tsx": { default: "Vendor link token authentication, no user session" },
   "app/v/[token]/notifications/page.tsx": { default: "Exact vendor job token gateway, no human user session" },
   "app/v/[token]/photos/page.tsx": { default: "B-105 vendor job token gateway (vendor_job_v3), no human user session" },
+  "app/v/[token]/done/page.tsx": { default: "B-097 vendor job token gateway (vendor_job_v3, app.b097_vendor_done_view), no human user session" },
+  "app/v/[token]/time/page.tsx": { default: "B-098 vendor job token gateway (vendor_job_v3, app.b098_vendor_tenant_phone), no human user session" },
   "app/v/documents/[token]/page.tsx": { default: "B-025 vendor document grant token, no human user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
@@ -100,6 +102,8 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/vendor-job-response/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-jobs/case-share/route.ts": { POST: "B-110: B-105 vendor case token through app.b110_vendor_share, no user session" },
   "s/[token]/photos/[id]/route.ts": { GET: "B-110 public read-only share link through app.b110_share_photo, no user session" },
+  "api/vendor-jobs/case-complete/route.ts": { POST: "B-097: B-105 vendor case token through app.b097_vendor_complete, no user session" },
+  "api/repairs/reopen/route.ts": { POST: "B-097: staff session with tickets.update and current consent (requireCurrentConsent), then app.b097_staff_reopen; strict same-origin mutation" },
   "api/vendor-jobs/case-decision/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-jobs/case-photos/confirm/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-job-completion/route.ts": { POST: "Vendor link token authentication, no user session" },
