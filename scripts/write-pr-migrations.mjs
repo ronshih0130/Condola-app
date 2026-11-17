@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261117110000_b092_owner_units.sql": {
+    addOnly: true,
+    reason: "B-092 OWN-UNITS (OWN-33-AC1/AC4, RO-UNITS; Ron's owner round 2026-11-15; PR-014 closed into this item; OQ-095). One new service-only read gateway app.b092_owner_units (B-093 admission: env/live tuple, app.b013_actor, PR-015 org-local current-owner predicate per property). No table, policy, grant on existing objects, flag or data change.",
+  },
   "supabase/migrations/20261117100000_b102_room_invites.sql": {
     addOnly: false,
     reason: "B-102 INV-ROOM (MGT-147, Ron 2026-11-15 14:38 PT; FE-ROOMINV strings P52 2026-11-16; design OQ-094). Not add-only: nullable room_id columns with two composite FKs each on app.unit_invite_secrets and app.unit_bindings, the one-live-secret index split into per-unit (room_id IS NULL) and per-room partial unique indexes, and CREATE OR REPLACE of unit_line_issue/rotate/accept/include_on_lease and the seat-cap trigger function (same signatures and ACLs). Every existing row has room_id NULL, so each legacy path behaves exactly as before while no room secret exists. New service-only app.unit_line_issue_room. brand_v3 + unit_line_invite gate the TS side; the gateway re-checks unit_line_invite.",
