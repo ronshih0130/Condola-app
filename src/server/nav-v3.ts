@@ -1,6 +1,7 @@
 import { receiptTitleCopy } from "../i18n/owner-finance-replies";
 import { ownerRepairCopy } from "../i18n/lanes/repair-owner-policy";
 import { brandV3OwnerDecidedCopy } from "../i18n/lanes/brand-v3-owner-decided";
+import { brandV3OwnerRulesCopy } from "../i18n/lanes/brand-v3-owner-rules";
 import { centerCopy } from "../i18n/lanes/notification-center";
 import type { CenterAdmission } from "./notification-center";
 import { archiveCopy } from "../i18n/record-archive";
@@ -119,7 +120,7 @@ export type OwnerEntryV3 = { id: string; href: string; label: string; icon: "tod
 export type OwnerNavigationV3 = { areas: OwnerEntryV3[]; more: OwnerEntryV3[] };
 
 /** OWN-27-AC5: local interim live entries only; do not infer access from property membership alone. */
-export function ownerNavigationV3(session: Session, properties: { id: string; name: string }[], repairPolicyIds: string[], admission: CenterAdmission, receiptTitleAvailable = false, decidedAvailable = false): OwnerNavigationV3 {
+export function ownerNavigationV3(session: Session, properties: { id: string; name: string }[], repairPolicyIds: string[], admission: CenterAdmission, receiptTitleAvailable = false, decidedAvailable = false, rulesAvailable = false): OwnerNavigationV3 {
   if (session.kind !== "owner") return { areas: [], more: [] };
   const copy = brandV3OwnerShellCopy(session.locale);
   const areas: OwnerEntryV3[] = [
@@ -129,10 +130,12 @@ export function ownerNavigationV3(session: Session, properties: { id: string; na
   // Exactly NotificationCenterEntry's admission rule, including its busy/retry destination.
   if (admission !== "disabled" && admission !== "denied") areas.push({ id: "notifications", href: "/o/notifications", label: centerCopy(session.locale).title, icon: "bell" });
   const more: OwnerEntryV3[] = [
-    // RO-MORE: 核准紀錄 sits at the top of 更多 (B-093); hidden until its page is live for the org.
+    // RO-MORE: 授權規則 then 核准紀錄 at the top of 更多 (B-094 / B-093); each hidden until its page is live.
+    ...(rulesAvailable ? [{ id: "rules", href: "/o/rules", label: brandV3OwnerRulesCopy(session.locale).title, icon: "tool" as const }] : []),
     ...(decidedAvailable ? [{ id: "decided", href: "/o/decided", label: brandV3OwnerDecidedCopy(session.locale).title, icon: "doc" as const }] : []),
     ...(receiptTitleAvailable ? [{ id: "receipt-title", href: "/o/receipt-title", label: receiptTitleCopy(session.locale).title, icon: "doc" as const }] : []),
-    ...properties.filter(property => repairPolicyIds.includes(property.id)).map(property => ({
+    // OWN-34-AC1: while 授權規則 is live it replaces the separate per-property 修繕規則 entries (its first section).
+    ...properties.filter(property => !rulesAvailable && repairPolicyIds.includes(property.id)).map(property => ({
       id: `repair-policy-${property.id}`, href: `/o/repair-policy/${property.id}`,
       label: `${property.name} · ${ownerRepairCopy(session.locale).entry}`, icon: "tool" as const,
     })),

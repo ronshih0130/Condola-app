@@ -72,3 +72,28 @@ html[data-brand="v2"][data-brand-v3] .decided-version h3 { margin:0; }
 html[data-brand="v2"][data-brand-v3] .decided-text { white-space:pre-wrap; }
 html[data-brand="v2"][data-brand-v3] .decided-noperm { text-align:center; padding:24px 0; }
 html[data-brand="v2"][data-brand-v3] .decided-noperm svg { width:176px; max-width:100%; }
+/* B-094 RO-RULES (更多 › 授權規則, OWN-34): no solid primary; choices save; 「修改」 is a text link. */
+html[data-brand="v2"][data-brand-v3] .v3-owner-rules { color:var(--c-text); overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-owner-rules .rules-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+html[data-brand="v2"][data-brand-v3] .rules-card { background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); padding:8px 20px; margin:0 0 16px; }
+html[data-brand="v2"][data-brand-v3] .rules-card[role="alert"] { padding:20px; }
+html[data-brand="v2"][data-brand-v3] .rules-section { margin:12px 0 4px; padding:0; font-size:1rem; font-weight:600; }
+html[data-brand="v2"][data-brand-v3] .rules-lines { list-style:none; padding:0; margin:0; }
+html[data-brand="v2"][data-brand-v3] .rules-lines li + li { border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .rules-line { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; padding:10px 0; }
+html[data-brand="v2"][data-brand-v3] .rules-edit { flex:none; color:var(--c-primary); min-height:44px; display:inline-flex; align-items:center; }
+html[data-brand="v2"][data-brand-v3] .rules-edit:focus-visible, html[data-brand="v2"][data-brand-v3] .rules-option:focus-within { outline:2px solid var(--c-focus); outline-offset:2px; border-radius:var(--r-sm); }
+html[data-brand="v2"][data-brand-v3] .rules-choice { border:0; margin:0; padding:0 0 4px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .rules-option { display:flex; align-items:center; gap:12px; min-height:44px; padding:10px 0; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .rules-option + .rules-option { border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .rules-option input { width:20px; height:20px; accent-color:var(--c-primary); flex:none; }
+html[data-brand="v2"][data-brand-v3] .rules-option-on { font-weight:600; }
+html[data-brand="v2"][data-brand-v3] .rules-choice[disabled] .rules-option { cursor:progress; opacity:.7; }
+html[data-brand="v2"][data-brand-v3] .rules-error { margin:8px 0; color:var(--c-danger); }
+html[data-brand="v2"][data-brand-v3] .rules-note { margin:12px 0; color:var(--c-text-2); font-size:.875rem; }
+html[data-brand="v2"][data-brand-v3] .rules-skeleton { display:flex; flex-direction:column; gap:8px; padding:16px 0; }
+html[data-brand="v2"][data-brand-v3] .rules-skeleton + .rules-skeleton { border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .rules-skeleton span { display:block; height:14px; width:60%; border-radius:var(--r-sm); background:var(--c-tint-soft); }
+html[data-brand="v2"][data-brand-v3] .rules-skeleton span + span { width:35%; }
+html[data-brand="v2"][data-brand-v3] .rules-noperm { text-align:center; padding:24px 0; }
+html[data-brand="v2"][data-brand-v3] .rules-noperm svg { width:176px; max-width:100%; }
