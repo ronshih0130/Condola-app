@@ -465,11 +465,11 @@ test("B-076a adds one service-only, migration-owned phone-history reader and no 
   assert.match(sql, /SET LOCAL statement_timeout='60s'/);
 });
 
-test("B-110 adds a revoked private table, five service-only gateways and three internal helpers, migration-owned", () => {
+test("B-110 adds a revoked private table, five service-only gateways and four internal helpers, migration-owned", () => {
   const sql = read("supabase/migrations/20261116210000_b110_case_share.sql");
   assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]),
-    ["b110_enabled", "b110_expires_at", "b110_share_for", "b110_vendor_share", "b110_staff_share", "b110_staff_revoke", "b110_share_view", "b110_share_photo"]);
-  assert.equal((sql.match(/VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 8);
+    ["b110_enabled", "b110_expires_at", "b110_live", "b110_share_for", "b110_vendor_share", "b110_staff_share", "b110_staff_revoke", "b110_share_view", "b110_share_photo"]);
+  assert.equal((sql.match(/VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 9);
   assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|DROP|ALTER FUNCTION|ALTER TABLE public|GRANT[^;]*\bON (?:TABLE )?(?:app|public)\.|READ ONLY|INSERT INTO public\.platform_settings/i);
   assert.match(sql, /ALTER TABLE app\.case_shares ENABLE ROW LEVEL SECURITY;/);
   assert.match(sql, /REVOKE ALL ON app\.case_shares FROM PUBLIC,anon,authenticated,service_role;/);
@@ -480,7 +480,7 @@ test("B-110 adds a revoked private table, five service-only gateways and three i
     assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`), signature);
     assert.ok(read("supabase/rpc-allowlist.txt").includes(`# service-only: app.${signature}`), signature);
   }
-  for (const signature of ["b110_enabled(uuid,boolean)", "b110_expires_at(app.case_shares)", "b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)"]) {
+  for (const signature of ["b110_enabled(uuid,boolean)", "b110_expires_at(app.case_shares)", "b110_live(app.case_shares,timestamptz)", "b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)"]) {
     assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated,service_role;`), signature);
     assert.ok(!compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}`), signature);
   }

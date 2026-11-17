@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
+import { existsSync } from "node:fs";
+import { createServer } from "node:http";
 import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
 import CaseSharePage from "../app/s/[token]/page";
 import { POST as shareRoute } from "../app/api/vendor-jobs/case-share/route";
+import { GET as photoRoute } from "../app/s/[token]/photos/[id]/route";
 import { SharePage } from "../components/v3/share/share-page";
 import { FlowError } from "./errors";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
@@ -38,8 +41,16 @@ async function orgFlags(org: string, patch: Record<string, unknown>) {
   await db.query("UPDATE public.organizations SET feature_flags=feature_flags||$2::jsonb WHERE id=$1", [org, JSON.stringify(patch)]);
 }
 
+// A local stand-in for the photo store, so the real handler can stream bytes; every request is recorded.
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1]);
+const storageHits: string[] = [];
+const storage = createServer((req, res) => { storageHits.push(req.url ?? ""); res.setHeader("content-type", "image/jpeg"); res.end(Buffer.from(JPEG)); });
+const savedEnv = { url: process.env.SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY };
 test.before(async () => {
   (globalThis as Record<string, unknown>).React ??= React;
+  await new Promise<void>(resolve => storage.listen(0, "127.0.0.1", resolve));
+  const address = storage.address(); assert.ok(address && typeof address !== "string");
+  process.env.SUPABASE_URL = `http://127.0.0.1:${address.port}`; process.env.SUPABASE_SERVICE_ROLE_KEY = "local-fixture-only";
   clone = await cloneTestDatabase();
   db = new Client({ connectionString: process.env.DATABASE_URL });
   await db.connect();
@@ -58,7 +69,13 @@ test.before(async () => {
     await db.query("INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [s.sessionId, s.userId, randomUUID().replaceAll("-", "").padEnd(64, "0")]);
   }
 });
-test.after(async () => { try { if (db) await db.end(); } finally { await clone?.cleanup(); } });
+test.after(async () => {
+  await new Promise<void>(resolve => storage.close(() => resolve()));
+  for (const [key, value] of [["SUPABASE_URL", savedEnv.url], ["SUPABASE_SERVICE_ROLE_KEY", savedEnv.key]] as const) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
+  try { if (db) await db.end(); } finally { await clone?.cleanup(); }
+});
 
 /** A closed B-105 case with an enhanced vendor link (the vendor's bearer), and that vendor's B-025 profile. */
 async function fixture(org = ORG_ID, status = "closed"): Promise<Fixture> {
@@ -175,7 +192,17 @@ test("expiry: exactly the latest of copy, issue and void + 2160 hours; refused a
   const copiedAt = "2026-04-01T12:00:00.001Z";
   await db.query("UPDATE app.case_shares SET last_copied_at=$2::timestamptz WHERE ticket_id=$1", [f.ticket, copiedAt]);
   assert.equal(await expiry(), new Date(copiedAt).getTime() + H2160, "a later copy wins");
-  // Cutoff instant: expired exactly at last event + 2160h (<=), live one millisecond before.
+  // Exact boundary with a pinned instant: at expiry itself the share is not live; 1 ms before, it is. A `<=` vs `<`
+  // mistake in either direction fails one of these.
+  const live = async (pinned: string) => (await db.query(`SELECT app.b110_live(s,$2::timestamptz) ok FROM app.case_shares s WHERE s.ticket_id=$1`, [f.ticket, pinned])).rows[0].ok;
+  const cutoff = new Date(new Date(copiedAt).getTime() + H2160);
+  assert.equal(await live(cutoff.toISOString()), false, "at the cutoff instant: expired");
+  assert.equal(await live(new Date(cutoff.getTime() - 1).toISOString()), true, "1 ms before: live");
+  assert.equal(await live(new Date(cutoff.getTime() + 1).toISOString()), false, "1 ms after: expired");
+  await db.query("UPDATE app.case_shares SET revoked_at=clock_timestamp(),revoked_by=$2 WHERE ticket_id=$1", [f.ticket, USERS.admin]);
+  assert.equal(await live(new Date(cutoff.getTime() - 1).toISOString()), false, "revoked is never live");
+  await db.query("UPDATE app.case_shares SET revoked_at=NULL,revoked_by=NULL WHERE ticket_id=$1", [f.ticket]);
+  // The gateways use that same predicate with the clock.
   await db.query("UPDATE app.case_shares SET last_copied_at=clock_timestamp()-interval '2160 hours' WHERE ticket_id=$1", [f.ticket]);
   assert.deepEqual(await rawView(url), { state: "expired", company: await companyOf(ORG_ID) }, "at the cutoff");
   await db.query("UPDATE app.case_shares SET last_copied_at=clock_timestamp()-interval '2160 hours'+interval '5 seconds' WHERE ticket_id=$1", [f.ticket]);
@@ -236,22 +263,43 @@ test("content and files: only explicitly 處理後, approved photos and document
   const untagged = await photo(f, { phase: null, approved: true, name: "untagged.jpg" });
   const before = await photo(f, { phase: "before", approved: true, name: "before.jpg" });
   const unapproved = await photo(f, { phase: "after", approved: false, name: "unapproved.jpg" });
-  const tenant = await photo(f, { vendorJob: null, approved: true, name: "tenant.jpg" });
+  // An approved, 處理後-tagged photo that the tenant (not this vendor job) uploaded: only the vendor-job filter refuses it.
+  const tenant = await photo(f, { vendorJob: null, phase: "after", approved: true, name: "tenant.jpg" });
+  assert.deepEqual((await db.query("SELECT a.phase,a.vendor_job_id,EXISTS(SELECT 1 FROM repair_vendor_job_shared_photos sp WHERE sp.attachment_id=a.id) approved FROM ticket_attachments a WHERE a.id=$1", [tenant])).rows[0],
+    { phase: "after", vendor_job_id: null, approved: true });
   const other = await fixture(); await document(other, ago(1));
   const foreign = await photo(other, { phase: "after", approved: true, name: "foreign.jpg" });
   const { url } = await vendorCaseShare(f.token, "copy", origin) as { url: string };
   const raw = await rawView(url);
   assert.deepEqual(Object.keys(raw).sort(), ["company", "currency", "documents", "photos", "state", "status", "title", "vendor"]);
   assert.deepEqual(raw.photos, [{ id: after, name: "天花板_修好.jpg" }], "untagged, before, unapproved and tenant photos are not shown");
+  const seeded = async (docId: string) => (await db.query("SELECT doc_no FROM vendor_documents WHERE id=$1", [docId])).rows[0].doc_no as string;
   assert.deepEqual(raw.documents, [
-    { id: issued, kind: "completion_statement", docNo: raw.documents[0].docNo, status: "issued", totalMinor: "5200" },
-    { id: voided, kind: "completion_statement", docNo: raw.documents[1].docNo, status: "voided", totalMinor: "5300" }]);
+    { id: issued, kind: "completion_statement", docNo: await seeded(issued), status: "issued", totalMinor: "5200" },
+    { id: voided, kind: "completion_statement", docNo: await seeded(voided), status: "voided", totalMinor: "5300" }]);
   // Only document totals: no estimate, expense, confirmed cost, buyer or tenant data.
   assert.doesNotMatch(JSON.stringify(raw), /林雅婷|0912|內部備註|description|buyer|receipt_title|phone|estimate|expense|cost|items|unit_price/);
   const token = shareToken(url);
   assert.match(String((await loadSharePhoto(token, after))?.storage_path), new RegExp(`^org/${f.org}/tickets/${f.ticket}/`));
   for (const [label, id] of [["untagged", untagged], ["before", before], ["unapproved", unapproved], ["tenant", tenant], ["foreign", foreign],
     ["document id", issued], ["random", randomUUID()]] as const) assert.equal(await loadSharePhoto(token, id), null, label);
+  // The real public photo handler: bytes for the approved photo, 404 for every refused kind, and storage is
+  // asked only for the approved one.
+  storageHits.length = 0;
+  const get = (photoId: string, shareTok = token) => photoRoute(new Request(`${origin}/s/${shareTok}/photos/${photoId}`), { params: Promise.resolve({ token: shareTok, id: photoId }) });
+  const okResponse = await get(after);
+  assert.equal(okResponse.status, 200); assert.equal(okResponse.headers.get("content-type"), "image/jpeg");
+  assert.deepEqual(new Uint8Array(await okResponse.arrayBuffer()), JPEG);
+  for (const [label, photoId] of [["untagged", untagged], ["before", before], ["unapproved", unapproved], ["tenant", tenant], ["foreign", foreign],
+    ["document id", issued], ["random", randomUUID()], ["not a uuid", "x"]] as const) {
+    const refused = await get(photoId);
+    assert.equal(refused.status, 404, label); assert.equal(refused.headers.get("cache-control"), "private, no-store", label);
+  }
+  assert.equal((await get(after, randomBytes(32).toString("base64url"))).status, 404, "unknown share link");
+  assert.equal(storageHits.length, 1, "storage is read only for the approved photo");
+  // The legacy document URL is gone: no route module exists for /s/[token]/documents/[id].
+  assert.equal(existsSync("src/app/s/[token]/documents"), false);
+  await assert.rejects(import("../app/s/[token]/documents/[id]/route" as string));
   // No public PDF anywhere.
   const html = renderToStaticMarkup(await CaseSharePage({ params: Promise.resolve({ token }) }) as React.ReactElement);
   for (const text of ["分享的唯讀頁", "浴室天花板滴水", "已完成", "王師傅水電", "已准許的照片", "天花板_修好.jpg", "完工明細 CMP-", "已作廢", "NT$5,200", "NT$5,300", "<s>"]) assert.ok(html.includes(text), text);
@@ -263,26 +311,31 @@ test("content and files: only explicitly 處理後, approved photos and document
   const before0 = await oracle();
   assert.deepEqual(await rawView(stale.url), { state: "expired", company: await companyOf(ORG_ID) });
   assert.equal(await loadSharePhoto(shareToken(stale.url), old), null, "expired link");
+  assert.equal((await get(old, shareToken(stale.url))).status, 404, "expired link through the handler");
   for (const id of [after, untagged, before, unapproved, tenant, foreign]) await loadSharePhoto(token, id);
   assert.equal(await oracle(), before0, "file reads never write");
   // A revoked link serves nothing.
   await staffRevokeCaseShare(admin, f.ticket);
   assert.equal(await loadSharePhoto(token, after), null, "revoked link");
+  assert.equal((await get(after)).status, 404, "revoked link through the handler");
   assert.deepEqual(await rawView(url), { state: "revoked", company: await companyOf(ORG_ID) });
 });
 
 test("denials with no writes anywhere: bad bearers, revoked or expired job links, other orgs, every gate; vendor_job_v3 off leaves staff and public", async () => {
   const f = await fixture();
   await document(f, ago(1));
-  const { url } = await vendorCaseShare(f.token, "copy", origin) as { url: string };
-  const token = shareToken(url);
+  let { url } = await vendorCaseShare(f.token, "copy", origin) as { url: string };
+  let token = shareToken(url);
   const okPhoto = await photo(f, { phase: "after", approved: true, name: "ok.jpg" });
   const before = await oracle();
   for (const bearer of [f.token, randomBytes(32).toString("base64url")]) {
     assert.equal(await loadShareView(bearer), null);
     await assert.rejects(CaseSharePage({ params: Promise.resolve({ token: bearer }) }), (e: unknown) => String((e as { digest?: string }).digest).includes("404"));
+    assert.equal(await loadSharePhoto(bearer, okPhoto), null);
   }
   await assert.rejects(vendorCaseShare(token, "copy", origin), notFound, "a share link is not a job link");
+  await assert.rejects(vendorCaseShare(token, "check", origin), notFound, "a share link is not a job link (check)");
+  assert.equal(await oracle(), before, "bad bearers and share-as-job write nothing, in any table");
   const revokedJob = await fixture(); await document(revokedJob, ago(1));
   await db.query("UPDATE repair_vendor_jobs SET revoked_at=clock_timestamp() WHERE id=$1", [revokedJob.job]);
   const expiredJob = await fixture(); await document(expiredJob, ago(1));
@@ -304,10 +357,20 @@ test("denials with no writes anywhere: bad bearers, revoked or expired job links
       const mark = await oracle();
       await assert.rejects(vendorCaseShare(f.token, "copy", origin), notFound, `${label}: vendor`);
       if (label.includes("vendor_job_v3")) {
-        // Only the B-105 vendor case is off: staff and the public link still work.
+        // Only the B-105 vendor case is off: the vendor refusal writes nothing; staff and the public link still work.
+        assert.equal(await oracle(), mark, `${label}: the vendor refusal writes nothing`);
         assert.equal((await rawView(url)).state, "ok", `${label}: public`);
         assert.ok(await loadSharePhoto(token, okPhoto), `${label}: photo`);
-        assert.equal((await staffCaseShare(admin, f.ticket, false, origin)).url, url, `${label}: staff`);
+        assert.equal(await oracle(), mark, `${label}: public reads write nothing`);
+        assert.equal((await staffCaseShare(admin, f.ticket, false, origin)).url, url, `${label}: staff open`);
+        const copied = await staffCaseShare(admin, f.ticket, true, origin);
+        assert.equal(copied.url, url, `${label}: staff copy keeps the URL`);
+        assert.ok((await shares(f.ticket)).at(-1)!.last_copied_at, `${label}: staff copy recorded`);
+        assert.equal(await staffRevokeCaseShare(admin, f.ticket), "revoked", `${label}: staff revoke`);
+        assert.deepEqual(await rawView(url), { state: "revoked", company: await companyOf(ORG_ID) }, `${label}: revoked`);
+        // Re-issue a link for the remaining gates (staff copy after revoke makes a new one).
+        url = (await staffCaseShare(admin, f.ticket, true, origin)).url;
+        token = shareToken(url);
       } else {
         assert.equal(await loadShareView(token), null, `${label}: public`);
         assert.equal(await loadSharePhoto(token, okPhoto), null, `${label}: photo`);
@@ -337,6 +400,17 @@ test("vendor route: same origin, small JSON, check / open / copy; rejected reque
   assert.equal(await oracle(), before, "no writes from rejected requests or the check");
   const opened = await (await post({ token: f.token, mode: "open" })).json();
   assert.match(opened.url, /\/s\//);
+  const auditCount = async () => (await db.query("SELECT count(*)::int n FROM audit_log WHERE table_name='case_shares' AND event_type='case_share_copied' AND new_row->>'ticketId'=$1", [f.ticket])).rows[0].n as number;
+  const copies = await auditCount();
+  const copyResponse = await post({ token: f.token, mode: "copy" });
+  assert.equal(copyResponse.status, 200);
+  const copied = await copyResponse.json();
+  assert.equal(copied.url, opened.url, "the copy keeps the same URL");
+  const row = (await shares(f.ticket))[0];
+  assert.ok(row.last_copied_at, "last_copied_at recorded");
+  assert.equal(new Date(copied.expiresAt).getTime(), new Date(row.last_copied_at).getTime() + H2160, "expiry restarted from this copy");
+  assert.ok(new Date(copied.expiresAt).getTime() > new Date(opened.expiresAt).getTime(), "later than the opened expiry");
+  assert.equal(await auditCount(), copies + 1, "one copy audit row");
   const expired = renderToStaticMarkup(await SharePage({ locale: "zh-TW", token: "t".repeat(43), view: { state: "expired", company: "安居物業" } }) as React.ReactElement);
   assert.ok(expired.includes("這個分享已過期") && expired.includes("這個連結已過期，文件內容不會再顯示。需要的話請聯絡安居物業。") && expired.includes('data-v3-illustration="26"'));
   assert.doesNotMatch(expired, /<button|<a /);

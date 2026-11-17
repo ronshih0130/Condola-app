@@ -26,11 +26,13 @@ test("approved and P52 words are verbatim (ven-copy-link, share-expired, share-r
   assert.deepEqual(Object.keys(caseShareCopy("en")).sort(), Object.keys(zh).sort());
 });
 
-test("share view decode is strict: unexpected rows are dropped, never partial PII", () => {
+test("share view decode is all or nothing: any malformed item rejects the view", () => {
   const ok = { state: "ok", company: "安居物業", title: "浴室天花板滴水", status: "closed", vendor: "王師傅水電", currency: "TWD",
     photos: [{ id: id(1), name: "a.jpg" }, { id: "x", name: "bad.jpg" }],
     documents: [{ id: id(2), kind: "completion_statement", docNo: "CMP-1", status: "voided", totalMinor: "5200" }, { id: id(3), kind: "invoice", docNo: "X", status: "issued", totalMinor: "1" }] };
-  const parsed = parseShareView(ok);
+  assert.equal(parseShareView(ok), null, "one malformed photo rejects the whole view");
+  assert.equal(parseShareView({ ...ok, photos: [ok.photos[0]] }), null, "one malformed document rejects the whole view");
+  const parsed = parseShareView({ ...ok, photos: [ok.photos[0]], documents: [ok.documents[0]] });
   assert.equal(parsed?.state, "ok");
   if (parsed?.state !== "ok") return;
   assert.deepEqual(parsed.photos, [{ id: id(1), name: "a.jpg" }]);

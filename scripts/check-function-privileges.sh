@@ -283,12 +283,13 @@ BEGIN
   'app.b110_share_photo(text,boolean,uuid)',
   'app.b110_enabled(uuid,boolean)',
   'app.b110_expires_at(app.case_shares)',
+  'app.b110_live(app.case_shares,timestamptz)',
   'app.b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)'
  ] LOOP
   SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
   IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
    OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
-   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b110_enabled(%' AND signature NOT LIKE 'app.b110_expires_at(%' AND signature NOT LIKE 'app.b110_share_for(%')
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b110_enabled(%' AND signature NOT LIKE 'app.b110_expires_at(%' AND signature NOT LIKE 'app.b110_live(%' AND signature NOT LIKE 'app.b110_share_for(%')
    OR has_function_privilege('anon',fn.oid,'EXECUTE')
    OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a

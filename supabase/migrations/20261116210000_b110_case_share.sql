@@ -61,6 +61,14 @@ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 $$;
 REVOKE ALL ON FUNCTION app.b110_expires_at(app.case_shares) FROM PUBLIC,anon,authenticated,service_role;
 
+-- A share is live at p_now when it is not revoked and p_now is strictly before its expiry: at the cutoff instant
+-- itself it is already expired. Callers pass clock_timestamp(); tests pin p_now to prove the boundary.
+CREATE FUNCTION app.b110_live(p_share app.case_shares,p_now timestamptz) RETURNS boolean
+LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT p_share.revoked_at IS NULL AND p_now IS NOT NULL AND p_now < app.b110_expires_at(p_share)
+$$;
+REVOKE ALL ON FUNCTION app.b110_live(app.case_shares,timestamptz) FROM PUBLIC,anon,authenticated,service_role;
+
 -- Get or create the case's live link, then (p_copy) record a copy. Serialized per case. p_new_token is used only
 -- when a link has to be created (none yet, or the last one was revoked).
 CREATE FUNCTION app.b110_share_for(p_org uuid,p_ticket uuid,p_kind text,p_actor uuid,p_job uuid,p_new_token text,p_copy boolean)
@@ -171,7 +179,7 @@ BEGIN
  IF NOT FOUND OR NOT app.b110_enabled(s.org_id,p_env_v2) THEN RETURN NULL; END IF;
  SELECT o.name INTO company FROM public.organizations o WHERE o.id=s.org_id;
  IF s.revoked_at IS NOT NULL THEN RETURN jsonb_build_object('state','revoked','company',coalesce(company,'')); END IF;
- IF app.b110_expires_at(s)<=clock_timestamp() THEN RETURN jsonb_build_object('state','expired','company',coalesce(company,'')); END IF;
+ IF NOT app.b110_live(s,clock_timestamp()) THEN RETURN jsonb_build_object('state','expired','company',coalesce(company,'')); END IF;
  SELECT * INTO t FROM public.maintenance_tickets x WHERE x.org_id=s.org_id AND x.id=s.ticket_id;
  SELECT btrim(coalesce(t.currency,p.currency)) INTO currency FROM public.properties p WHERE p.org_id=t.org_id AND p.id=t.property_id;
  SELECT j.vendor_name INTO vendor FROM public.repair_vendor_jobs j
@@ -203,7 +211,7 @@ DECLARE s app.case_shares;
 BEGIN
  IF p_share_hash IS NULL OR p_share_hash !~ '^[0-9a-f]{64}$' OR p_id IS NULL THEN RETURN; END IF;
  SELECT * INTO s FROM app.case_shares x WHERE x.token_hash=p_share_hash;
- IF NOT FOUND OR s.revoked_at IS NOT NULL OR NOT app.b110_enabled(s.org_id,p_env_v2) OR app.b110_expires_at(s)<=clock_timestamp() THEN RETURN; END IF;
+ IF NOT FOUND OR NOT app.b110_enabled(s.org_id,p_env_v2) OR NOT app.b110_live(s,clock_timestamp()) THEN RETURN; END IF;
  RETURN QUERY SELECT f.storage_path,f.file_name FROM public.ticket_attachments a
   JOIN public.files f ON f.id=a.file_id AND f.org_id=a.org_id
   WHERE a.id=p_id AND a.org_id=s.org_id AND a.ticket_id=s.ticket_id AND NOT a.is_internal AND f.storage_bucket='ticket-photos-private'

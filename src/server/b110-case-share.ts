@@ -84,16 +84,21 @@ export function parseShareView(raw: unknown): ShareView | null {
   if (typeof v.company !== "string") return null;
   if (v.state === "expired" || v.state === "revoked") return { state: v.state, company: v.company };
   if (v.state !== "ok" || typeof v.title !== "string" || typeof v.status !== "string" || !Array.isArray(v.photos) || !Array.isArray(v.documents)) return null;
-  const photos = v.photos.flatMap((p: unknown) => {
-    const x = p as Record<string, unknown>;
-    return x && typeof x.id === "string" && UUID.test(x.id) && typeof x.name === "string" ? [{ id: x.id, name: x.name }] : [];
-  });
-  const documents = v.documents.flatMap((d: unknown): ShareDocument[] => {
-    const x = d as Record<string, unknown>;
-    return x && typeof x.id === "string" && UUID.test(x.id) && (x.kind === "receipt" || x.kind === "completion_statement")
-      && typeof x.docNo === "string" && (x.status === "issued" || x.status === "voided") && typeof x.totalMinor === "string" && /^\d+$/.test(x.totalMinor)
-      ? [{ id: x.id, kind: x.kind, docNo: x.docNo, status: x.status, totalMinor: x.totalMinor }] : [];
-  });
+  // All or nothing: one malformed photo or document rejects the whole view (404), never a partial page.
+  const photos: { id: string; name: string }[] = [];
+  for (const p of v.photos) {
+    const x = p as Record<string, unknown> | null;
+    if (!x || typeof x.id !== "string" || !UUID.test(x.id) || typeof x.name !== "string") return null;
+    photos.push({ id: x.id, name: x.name });
+  }
+  const documents: ShareDocument[] = [];
+  for (const d of v.documents) {
+    const x = d as Record<string, unknown> | null;
+    if (!x || typeof x.id !== "string" || !UUID.test(x.id) || (x.kind !== "receipt" && x.kind !== "completion_statement")
+      || typeof x.docNo !== "string" || (x.status !== "issued" && x.status !== "voided") || typeof x.totalMinor !== "string"
+      || !/^\d+$/.test(x.totalMinor)) return null;
+    documents.push({ id: x.id, kind: x.kind, docNo: x.docNo, status: x.status, totalMinor: x.totalMinor });
+  }
   return { state: "ok", company: v.company, title: v.title, status: v.status, vendor: typeof v.vendor === "string" ? v.vendor : null,
     currency: typeof v.currency === "string" ? v.currency : "TWD", photos, documents };
 }
