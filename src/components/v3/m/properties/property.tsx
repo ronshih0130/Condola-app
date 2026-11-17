@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { makeT, type Locale } from "../../../../i18n";
 import { propertyCopy } from "../../../../i18n/lanes/brand-v3-property";
+import { brandV3RoomInvitesCopy } from "../../../../i18n/lanes/brand-v3-room-invites";
 import type { PropertyResult } from "../../../../server/b3-property";
 import { displaySampleName } from "../../../../server/sandbox-data";
 import { archiveCopy } from "../../../../i18n/record-archive";
@@ -18,8 +19,8 @@ export function PropertyLoading({locale}:{locale:Locale}) {
     <p role="status">{c.loading}</p><div className="v3-property-skeleton" aria-hidden="true" />
   </section>;
 }
-export function PropertyView({data,locale,id,invites=[],legacy,query={},auditHistory,archiveEntries}:{
-  data:PropertyResult | {state:"forbidden"};locale:Locale;id:string;invites?:{rowId:string;href:string}[];
+export function PropertyView({data,locale,id,invites=[],roomInviteAll=[],legacy,query={},auditHistory,archiveEntries}:{
+  data:PropertyResult | {state:"forbidden"};locale:Locale;id:string;invites?:{rowId:string;href:string}[];roomInviteAll?:{unitId:string;href:string;label:string}[];
   archiveEntries?:Record<string,React.ReactNode>;legacy?:LegacyPropertyControls;query?:PropertyQuery;auditHistory?:React.ReactNode;
 }) {
   const c=propertyCopy(locale);
@@ -46,7 +47,12 @@ export function PropertyView({data,locale,id,invites=[],legacy,query={},auditHis
         {archiveEntries ? archiveEntries[unit.id] : <ArchiveEntry refValue={{kind:"unit",id:unit.id}} locale={locale} />}
       </div>)}
     </div>}
-    {!data.rows.length ? <div className="v3-property-card v3-property-empty"><EmptyState id="UNIT" locale={locale} /></div> :
+    {!data.rows.length ? <div className="v3-property-card v3-property-empty"><EmptyState id="UNIT" locale={locale} /></div> : <>
+      {/* B-102 FE-ROOMINV (MGT-147-AC2): one 「一次邀請全部房間」 per room-by-room unit; nothing is sent. */}
+      {data.canInvite && !data.archived && roomInviteAll.length>0 && <p className="v3-property-room-invites" data-testid="room-invite-all">
+        {roomInviteAll.map(unit=><a key={unit.unitId} className="btn" href={unit.href}>
+          {roomInviteAll.length>1 ? `${displaySampleName(unit.label)} ` : ""}{brandV3RoomInvitesCopy(locale).title}</a>)}
+      </p>}
       <div className="v3-property-card"><table className="v3-property-table">
         <thead><tr><th scope="col">{c.room}</th><th scope="col">{c.type}</th><th scope="col">{c.status}</th><th scope="col">{c.pending}</th>
           {data.canInvite && invites.length>0 && <th scope="col">{c.invite}</th>}</tr></thead>
@@ -71,7 +77,7 @@ export function PropertyView({data,locale,id,invites=[],legacy,query={},auditHis
             {data.canInvite && invites.length>0 && <td>{invite && <a className="btn" href={invite.href} aria-label={`${row.unitLabel} ${row.label || c.whole} ${c.invite}`}>{c.invite}</a>}</td>}
           </tr>;
         })}</tbody>
-      </table></div>}
+      </table></div></>}
     {legacy && <PropertyLegacyControls {...legacy} />}
     {auditHistory ? <div className="v3-property-audit">{auditHistory}</div> : null}
     {/* Legacy controls keep their shipped labels until their v3 homes exist.

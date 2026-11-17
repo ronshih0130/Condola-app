@@ -4,7 +4,7 @@ import { guardEffectiveSession } from "./b017-custom-role-governance";
 import { makeT } from "../i18n";
 import type { Session } from "./types";
 import { staffCanManage } from "./unit-line-invite";
-import { mutateStaffInvite, requireStaffInviteUnit, staffInvitePage, staffInviteLive, staffInvitePath, type StaffInviteCommand } from "./b040-staff-ui";
+import { mutateStaffInvite, requireStaffInviteRoom, requireStaffInviteUnit, staffInvitePage, staffInviteLive, staffInvitePath, staffRoomInvitePath, type StaffInviteCommand } from "./b040-staff-ui";
 import { staffInviteHeaders } from "../lib/staff-invite";
 
 function failure(error: unknown, session: Session) {
@@ -30,11 +30,20 @@ export function staffInviteMutationAllowed(request: Request): boolean {
 
 /** Consent is enforced by the two HTTP adapters before entering this handler. */
 export async function serveStaffInvite(session: Session, unitId: string, view: string[], request: Request): Promise<Response> {
+  return serveInviteTarget(session, async (s) => { await requireStaffInviteUnit(s, unitId); return { unitId, roomId: null, base: staffInvitePath(unitId) }; }, view, request);
+}
+
+/** B-102 INV-ROOM: the same screens and commands for one room's own invite (brand_v3; 404 otherwise). */
+export async function serveStaffRoomInvite(session: Session, roomId: string, view: string[], request: Request): Promise<Response> {
+  return serveInviteTarget(session, async (s) => ({ ...(await requireStaffInviteRoom(s, roomId)), roomId, base: staffRoomInvitePath(roomId) }), view, request);
+}
+
+async function serveInviteTarget(session: Session, admit: (s: Session) => Promise<{ unitId: string; roomId: string | null; base: string }>,
+  view: string[], request: Request): Promise<Response> {
   try {
     if (!staffCanManage(session)) throw new FlowError("errors.forbidden");
     session = await guardEffectiveSession(session, "leases.edit");
-    await requireStaffInviteUnit(session, unitId);
-    const base = staffInvitePath(unitId);
+    const { unitId, roomId, base } = await admit(session);
     if (request.method === "POST") {
       if (view.length || !staffInviteMutationAllowed(request) ||
           !request.headers.get("content-type")?.startsWith("application/x-www-form-urlencoded")) throw new FlowError("errors.forbidden");
@@ -45,17 +54,17 @@ export async function serveStaffInvite(session: Session, unitId: string, view: s
       if (!["issue", "rotate", "remove", "include"].includes(action ?? "")) throw new FlowError("errors.invalid");
       const input: StaffInviteCommand = { action: action as StaffInviteCommand["action"],
         bindingId: form.get("bindingId") ?? undefined, leaseId: form.get("leaseId") ?? undefined, bindingIds: form.getAll("bindingIds") };
-      await mutateStaffInvite(session, unitId, input);
+      await mutateStaffInvite(session, unitId, input, roomId);
       const suffix = action === "rotate" ? "/rotated" : action === "remove" ? "/removed" : action === "include" ? "/saved" : "";
       if (request.headers.get("accept") === "application/json") return Response.json({ location: base + suffix }, { headers: staffInviteHeaders });
       return new Response(null, { status: 303, headers: { ...staffInviteHeaders, Location: base + suffix } });
     }
     if (request.method !== "GET") throw new FlowError("errors.invalid");
     if (view.length === 1 && view[0] === "live") {
-      const live = await staffInviteLive(session, unitId);
+      const live = await staffInviteLive(session, unitId, roomId);
       return Response.json({ ...live, bindings: live.bindings.map(b => ({ id: b.id, displayName: b.displayName, joinedAt: b.joinedAt })) },
         { headers: { ...staffInviteHeaders, "Content-Type": "application/json" } });
     }
-    return Response.json(await staffInvitePage(session, unitId, view), { headers: staffInviteHeaders });
+    return Response.json(await staffInvitePage(session, unitId, view, roomId), { headers: staffInviteHeaders });
   } catch (error) { return failure(error, session); }
 }

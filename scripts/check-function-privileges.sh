@@ -525,6 +525,30 @@ BEGIN
   RAISE EXCEPTION 'B-097 supersede trigger missing or disabled';
  END IF;
 END $b097_gateways$;
+-- B-102 INV-ROOM: the new room-issue gateway and the replaced B2 invite functions stay service-only definers.
+DO $b102_invites$
+DECLARE signature text; fn record;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.unit_line_issue_room(uuid,uuid,uuid,text,uuid)',
+  'app.unit_line_ensure_room(uuid,uuid,uuid,text,uuid)',
+  'app.unit_line_issue(uuid,uuid,text,uuid)',
+  'app.unit_line_rotate(uuid,uuid,text,uuid)',
+  'app.unit_line_accept(uuid,uuid,text,uuid,text,text,text,uuid,text)',
+  'app.unit_line_include_on_lease(uuid,uuid,uuid,uuid[])'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v'
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-102 invite function ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+END $b102_invites$;
 -- B-092 OWN-UNITS: the owner units reader is a service-only VOLATILE definer.
 DO $b092_units$
 DECLARE fn record;
