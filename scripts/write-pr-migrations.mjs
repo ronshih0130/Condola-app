@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116180000_b109_shared_meter.sql": {
+    addOnly: false,
+    reason: "B-109 ADV-METER (GS-53 = A; MGT-90-AC4…AC6). Not add-only by the table rule (a new table with NOT NULL columns and CHECK/UNIQUE/FK constraints; seeds the new shared_meter platform setting OFF with ON CONFLICT DO NOTHING), though old code never touches it: app.b109_shared_meter_configs (versioned per property, effective from the next month; RLS on, no application grants) and three migration-owned VOLATILE service-only SECURITY DEFINER gateways (search_path=pg_catalog,pg_temp; EXECUTE to service_role only): app.b109_shared_meter_save (native admin/manager; env/live tuple, live session, shared_meter org+platform flag; idempotent request_id; audit_log row), app.b109_shared_meter_view and the read-only app.b109_shared_meter_split preview (even / days occupied / one property-scoped meter per space with measured readings bound to it, else ambiguous_meters / missing_readings / estimated_readings; remainder to the first space). Replay is resolved before mutable space checks and compares space-id sets. No price column (stays in 電費規則); no bill, invoice or utility run is written.",
+  },
   "supabase/migrations/20261116170000_b076a_phone_history.sql": {
     addOnly: true,
     reason: "B-076a (narrow first slice of B-076) / mgr-history-direct (Round 7 batch 4, MGT-76-AC3/AC12): one new migration-owned VOLATILE service-only SECURITY DEFINER read gateway app.b076a_phone_history (search_path=pg_catalog,pg_temp; EXECUTE to service_role only). Admission: env/live tuple, live auth session, active native admin/manager of the live org, tenant_directory_edit org+platform flag, non-archived tenant contact of this org. Reads only audit_log contacts updates with the B-015 reason joined to app.b015_edit_commands and profiles; numbers masked in SQL (Taiwan mobile 09xx‑•••‑xxx; otherwise a 3-digit tail only from 8+ digits, else fully masked). No table, grant, policy, flag or data change.",
