@@ -580,6 +580,54 @@ test("B-110 adds a revoked private table, five service-only gateways and four in
   assert.match(read("scripts/check-function-privileges.sh"), /B-110 gateway ACL\/config mismatch/);
 });
 
+test("B-091 adds two RLS tables with no application grants, the owner_rules flag OFF and three service-only gateways; locks before admission", () => {
+  const sql = read("supabase/migrations/20261116240000_b091_owner_rules.sql");
+  const b093 = read("supabase/migrations/20261115200000_b093_owner_decided.sql");
+  const tuple = b093.slice(b093.indexOf("  SELECT 1 FROM public.organizations o\n"), b093.indexOf(" ) THEN RAISE EXCEPTION 'errors.forbidden'"));
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(m => m[1]), ["b091_owner_rule_set", "b091_owner_rule_view", "b091_staff_rule_changes"]);
+  assert.deepEqual([...sql.matchAll(/CREATE TABLE ([\w.]+)/g)].map(m => m[1]), ["app.b091_owner_rule_revisions", "app.b091_owner_rule_commands"]);
+  for (const body of sql.split("CREATE FUNCTION").slice(1)) {
+    assert.ok(body.includes(tuple), "env/live tuple");
+    assert.match(body, /current_setting\('app\.active_org_id',true\) IS DISTINCT FROM p_org::text/);
+    assert.match(body, /VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+    assert.match(body, /o\.feature_flags->'owner_rules'='true'::jsonb/);
+    assert.doesNotMatch(body, /CREATE TEMP|UPDATE public\.|DELETE FROM|notification|outbox/i);
+  }
+  const set = sql.slice(sql.indexOf("CREATE FUNCTION app.b091_owner_rule_set"), sql.indexOf("CREATE FUNCTION app.b091_owner_rule_view"));
+  // Lock order: the request id, then every row lock, then admission; no lock taken after the first admission check.
+  const advisory = set.indexOf("pg_advisory_xact_lock"), firstAdmission = set.indexOf("IF current_setting('app.active_org_id'");
+  assert.ok(advisory > 0 && advisory < set.indexOf("FOR SHARE") && set.lastIndexOf("FOR UPDATE") < firstAdmission && set.lastIndexOf("FOR SHARE") < firstAdmission);
+  for (const lock of [/FROM public\.auth_sessions x WHERE x\.id=p_session FOR SHARE;/, /c\.user_id=target AND c\.is_owner ORDER BY c\.id FOR UPDATE\) z;/,
+    /po\.owner_contact_id=ANY\(locked_contacts\) ORDER BY po\.id FOR SHARE\) z;/, /pr\.id=ANY\(locked_props\) ORDER BY pr\.id FOR SHARE\) z;/,
+    /o\.id IN \(p_org,p_live\) ORDER BY o\.id FOR SHARE\) z;/, /f\.key='owner_rules' FOR SHARE\) z;/])
+    assert.match(set, lock);
+  // B-065 pattern: admission only on the locked rows, and the locked sets must equal what the predicates select now.
+  assert.match(set, /IS DISTINCT FROM locked_contacts/);
+  assert.match(set, /IS DISTINCT FROM locked_po THEN/);
+  assert.match(set, /c\.id=ANY\(locked_contacts\)/);
+  assert.match(set, /po\.id=ANY\(locked_po\) AND pr\.id=ANY\(locked_props\)/);
+  assert.match(set, /IF owners<>1 OR NOT \(owner_id=ANY\(locked_contacts\)\)/);
+  // Locked sets are aggregated in id order (array comparison), never in subquery or planner order.
+  assert.equal((set.match(/array_agg\(z\.id ORDER BY z\.id\)/g) ?? []).length, 3);
+  assert.doesNotMatch(set, /array_agg\(z\.id\)/);
+  // Every reserved id is bound to the raw payload, not only to its lossy normalisation.
+  assert.match(sql, /payload_fingerprint text NOT NULL CHECK \(payload_fingerprint ~ '\^\[0-9a-f\]\{64\}\$'\)/);
+  assert.match(set, /fingerprint:=encode\(sha256\(convert_to\(jsonb_build_array\(p_payload_fingerprint,p_rule,p_expected_revision\)::text,'UTF8'\)\),'hex'\);/);
+  assert.match(set, /OR prior\.payload_fingerprint IS DISTINCT FROM fingerprint THEN/);
+  assert.match(set, /po\.effective_from <= \(clock_timestamp\(\) AT TIME ZONE o\.timezone\)::date/);
+  assert.match(sql, /REVOKE ALL ON app\.b091_owner_rule_revisions, app\.b091_owner_rule_commands FROM PUBLIC, anon, authenticated, service_role;/);
+  assert.match(sql, /VALUES \('owner_rules', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\)\nON CONFLICT \(key\) DO NOTHING;/);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /GRANT[^;]*\bON (?:TABLE )?app\.b091_owner_rule_(?:revisions|commands)|CREATE OR REPLACE|DROP |CREATE POLICY/i);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of ["b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)", "b091_owner_rule_view(uuid,uuid,text,uuid)", "b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  }
+  assert.equal((compact.match(/GRANT[A-Z]*ONFUNCTION/g) ?? []).length, 3);
+  assert.match(read("ops/flags.yaml"), /\n  owner_rules:\n    owner: Ron\n[\s\S]*?default: false/);
+});
+
 test("B-097 adds two revoked private tables and four service-only gateways, migration-owned, behind the existing vendor_job_v3 gate", () => {
   const sql = read("supabase/migrations/20261116250000_b097_vendor_close.sql");
   assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]),

@@ -458,5 +458,8 @@
   "src/server/b093-owner-decided.ts#ownerDecidedList": null,
   "src/server/b093-owner-decided.ts#ownerDecidedTicket": null,
   "src/server/mf3-deposit-topup.ts#depositTopupView": null,
-  "src/server/mf3-deposit-topup.ts#recordDepositTopup": null
+  "src/server/mf3-deposit-topup.ts#recordDepositTopup": null,
+  "src/server/b091-owner-rules.ts#ownerRuleView": null,
+  "src/server/b091-owner-rules.ts#setOwnerRule": null,
+  "src/server/b091-owner-rules.ts#staffRuleChanges": "props.view"
 }
