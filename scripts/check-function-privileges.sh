@@ -464,6 +464,28 @@ BEGIN
   END LOOP;
  END LOOP;
 END $b091_gateways$;
+-- B-109b service-only functions: the pure split helper (IMMUTABLE) and the run config gateway (VOLATILE); the
+-- replaced app.b109_shared_meter_split keeps the B-109 probe above.
+DO $b109b_functions$
+DECLARE signature text; fn record;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b109_split_shares(jsonb,bigint,bigint)',
+  'app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>(CASE WHEN signature LIKE 'app.b109_split_shares%' THEN 'i' ELSE 'v' END)::"char"
+   OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-109b function ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+END $b109b_functions$;
 SQL
 
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"
