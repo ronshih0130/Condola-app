@@ -117,6 +117,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/tickets/photos/sign/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-account-staff/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-account/address/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-account/issuer-type/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-account/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-documents/pdf/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-documents/route.ts:1 | Enumerated only; outside representative selection |

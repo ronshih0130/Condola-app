@@ -456,6 +456,34 @@ test("B-112 adds a revoked private ledger, two service-only gateways and two int
   assert.match(read("scripts/check-function-privileges.sh"), /B-112 gateway ACL\/config mismatch/);
 });
 
+test("B-065 adds a revoked append-only table, two service-only gateways and two internal helpers, migration-owned", () => {
+  const sql = read("supabase/migrations/20261116220000_b065_vendor_activation.sql");
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]),
+    ["b065_enabled", "b065_account_contact", "b065_issuer_view", "b065_save_issuer_type"]);
+  assert.equal((sql.match(/VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 4);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|DROP|ALTER FUNCTION|ALTER TABLE public|GRANT[^;]*\bON (?:TABLE )?(?:app|public)\.|READ ONLY/i);
+  assert.match(sql, /ALTER TABLE app\.b065_issuer_types ENABLE ROW LEVEL SECURITY;/);
+  assert.match(sql, /REVOKE ALL ON app\.b065_issuer_types FROM PUBLIC,anon,authenticated,service_role;/);
+  assert.match(sql, /app\.b026_account_actor\(p_session_hash\)/);
+  assert.match(sql, /\('vendor_activation','\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\) ON CONFLICT DO NOTHING/);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of ["b065_issuer_view(text,uuid,boolean)", "b065_save_issuer_type(text,uuid,boolean,uuid,text)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`), signature);
+    assert.ok(read("supabase/rpc-allowlist.txt").includes(`# service-only: app.${signature}`), signature);
+  }
+  for (const signature of ["b065_enabled(uuid,boolean)", "b065_account_contact(text,uuid,boolean,boolean)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated,service_role;`), signature);
+    assert.ok(!compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`), signature);
+  }
+  assert.equal((compact.match(/GRANT/g) ?? []).length, 2);
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-065 gateway ACL\/config mismatch/);
+  assert.match(read("ops/flags.yaml"), /\n  vendor_activation:\n(?:    .*\n)*?    default: false\n/);
+});
+
 test("B-109 adds one RLS config table with no application grants, the shared_meter flag OFF and three service-only gateways", () => {
   const sql = read("supabase/migrations/20261116180000_b109_shared_meter.sql");
   const b093 = read("supabase/migrations/20261115200000_b093_owner_decided.sql");
