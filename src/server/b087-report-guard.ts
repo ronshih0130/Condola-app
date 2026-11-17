@@ -38,7 +38,8 @@ export async function b087Enabled(client: Client, orgId: string, env: Record<str
  * Must run before the INSERT, in the same transaction.
  */
 export async function assertWithinUnreported(client: Client, orgId: string, leaseId: string, amountMinor: number): Promise<void> {
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`b087:${orgId}:${leaseId}`]);
+  // The key is built from canonical uuid text in SQL, so every spelling of the same lease id takes the same lock.
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('b087:' || $1::uuid::text || ':' || $2::uuid::text, 0))", [orgId, leaseId]);
   const { rows } = await client.query<{ balance: string; pending: string }>(
     `SELECT
        (SELECT coalesce(sum(i.balance_minor), 0) FROM public.invoices i

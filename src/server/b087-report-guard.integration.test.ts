@@ -125,12 +125,13 @@ test("ON: a rejected report frees its part; a confirmed report leaves the balanc
   await refusedWithoutWrites(f.lease, () => report(f.a.s, f.lease, 1), over);
 });
 
-test("ON: two co-tenants racing for the whole balance — the lease lock admits exactly one", async () => {
+for (const spelling of ["canonical", "upper-case"] as const) test(`ON: two co-tenants racing for the whole balance (${spelling} lease id for one) — the lease lock admits exactly one`, async () => {
   await flags(true, true);
   const f = await lease();
+  const other = spelling === "canonical" ? f.lease : f.lease.toUpperCase();
   const h = new Client({ connectionString: process.env.DATABASE_URL }); holders.push(h); await h.connect(); await h.query("BEGIN");
   await h.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`b087:${ORG_ID}:${f.lease}`]);
-  const racing = [report(f.a.s, f.lease, 1000), report(f.b.s, f.lease, 1000)].map((p) => p.then(() => "ok", (e) => (over(e) ? "over" : e)));
+  const racing = [report(f.a.s, f.lease, 1000), report(f.b.s, other, 1000)].map((p) => p.then(() => "ok", (e) => (over(e) ? "over" : e)));
   // Both are parked on the held lease lock, so neither has inserted yet.
   for (let i = 0; i < 50 && Number((await db.query<{ n: string }>("SELECT count(*)::text n FROM pg_locks WHERE locktype='advisory' AND NOT granted")).rows[0].n) < 2; i++)
     await new Promise((r) => setTimeout(r, 50));
