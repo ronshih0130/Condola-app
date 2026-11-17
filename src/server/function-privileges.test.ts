@@ -628,6 +628,58 @@ test("B-091 adds two RLS tables with no application grants, the owner_rules flag
   assert.match(read("ops/flags.yaml"), /\n  owner_rules:\n    owner: Ron\n[\s\S]*?default: false/);
 });
 
+test("B-109b: a pure split helper and a run-config gateway, service-only; the preview is replaced in place, ACL kept; locks before admission", () => {
+  const sql = read("supabase/migrations/20261116230000_b109b_shared_meter_bills.sql");
+  assert.deepEqual([...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)/g)].map(m => m[1]), ["b109_split_shares", "b109_shared_meter_split", "b109b_run_config"]);
+  assert.match(sql, /CREATE FUNCTION app\.b109_split_shares\(p_weights jsonb,p_total bigint,p_amount bigint DEFAULT NULL\)\nRETURNS jsonb LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION app\.b109_shared_meter_split\(/);
+  assert.match(sql, /VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+  const helper = sql.slice(sql.indexOf("CREATE FUNCTION app.b109_split_shares"), sql.indexOf("REVOKE ALL ON FUNCTION app.b109_split_shares"));
+  assert.doesNotMatch(helper, /\b(?:FROM|JOIN)\s+(?:public|app)\./, "pure: no table access");
+  assert.match(helper, /div\(p_total\*b\.w,b\.tw\)/);
+  const preview = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION app.b109_shared_meter_split"), sql.indexOf("CREATE FUNCTION app.b109b_run_config"));
+  assert.match(preview, /app\.b109_split_shares\(/);
+  assert.doesNotMatch(preview, /REVOKE|GRANT/, "OR REPLACE keeps the B-109 ACL");
+  const cfg = sql.slice(sql.indexOf("CREATE FUNCTION app.b109b_run_config"));
+  const firstAdmission = cfg.indexOf("IF current_setting('app.active_org_id'");
+  assert.ok(cfg.lastIndexOf("FOR SHARE") < firstAdmission, "every lock before admission");
+  for (const lock of [/auth_sessions x WHERE x\.id=p_session FOR SHARE;/, /m\.user_id=target AND m\.status::text='active' FOR SHARE;/,
+    /o\.id IN \(p_org,p_live\) ORDER BY o\.id FOR SHARE\) z;/, /f\.key='shared_meter' FOR SHARE\) z;/, /un\.org_id=p_org AND un\.id=p_unit FOR SHARE;/,
+    /pr\.id=u\.property_id FOR SHARE\) z;/, /c\.property_id=u\.property_id ORDER BY c\.id FOR SHARE\) z;/, /r\.unit_id=p_unit ORDER BY r\.id FOR SHARE\) z;/,
+    /mt\.archived_at IS NULL\n  ORDER BY mt\.id FOR SHARE\) z;/, /r\.id=ANY\(named\) ORDER BY r\.id FOR SHARE\) z;/, /un\.id=ANY\(named\) ORDER BY un\.id FOR SHARE\) z;/,
+    /r\.unit_id=p_unit AND r\.status::text<>'void' ORDER BY r\.id FOR SHARE\) z;/]) assert.match(cfg, lock);
+  // B-091 r2 pattern: id-ordered locked sets; the decision reads locked rows only; each set must equal the current one.
+  assert.equal((cfg.match(/array_agg\(z\.id ORDER BY z\.id\)/g) ?? []).length, 6);
+  assert.doesNotMatch(cfg, /array_agg\(z\.id\)/);
+  for (const set of ["locked_cfgs", "locked_rooms", "locked_named_rooms", "locked_named_units", "locked_meters", "locked_runs"]) assert.match(cfg, new RegExp(`IS DISTINCT FROM ${set}`));
+  // Archived or missing selected rooms block (never dropped); the first period ignores no later run.
+  assert.match(cfg, /IF archived>0 THEN RETURN jsonb_build_object\('status','unavailable_rooms'/);
+  assert.match(cfg, /IF missing>0 THEN RETURN jsonb_build_object\('status','unavailable_rooms'/);
+  assert.match(cfg, /r\.id=ANY\(locked_runs\) AND r\.period_start>=cfg\.effective_from\n   AND NOT \(r\.period_start=p_period_start AND r\.period_end=p_period_end\)\);/);
+  assert.match(helper, /jsonb_typeof\(e->'weight'\) IS DISTINCT FROM 'number'/);
+  // A changed locked set is its own SQLSTATE (retry), not a denial; the unit and property are re-checked live on the locked rows.
+  assert.match(cfg, /IS DISTINCT FROM locked_runs THEN\n[^\n]*\n  RAISE EXCEPTION 'shared meter inputs changed while waiting' USING ERRCODE='40001';/);
+  assert.match(cfg, /u\.archived_at IS NOT NULL OR property_archived IS NOT NULL/);
+  // The preview uses only the run for exactly this period; anything else overlapping the month is ambiguous.
+  assert.match(preview, /n_exact/);
+  assert.match(preview, /WHEN t\.n_over>0 AND NOT \(t\.n_over=1 AND t\.n_exact=1\) THEN 'ambiguous_run'/);
+  assert.match(cfg, /c\.id=ANY\(locked_cfgs\) AND c\.effective_from<=p_period_start/);
+  assert.match(cfg, /r\.id=ANY\(locked_rooms\) AND r\.id=ANY\(cfg\.space_ids\)/);
+  assert.match(cfg, /mr\.meter_id=ANY\(locked_meters\)/);
+  assert.match(cfg, /member_role IS DISTINCT FROM locked_role/);
+  assert.match(cfg, /member_role NOT IN \('admin','manager'\)/);
+  assert.match(cfg, /o\.feature_flags->'shared_meter'='true'::jsonb/);
+  assert.match(cfg, /c\.effective_from<=p_period_start/);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE TABLE|ALTER TABLE|DROP |CREATE POLICY|INSERT INTO|UPDATE public\.|DELETE FROM|GRANT[^;]*\bON (?:TABLE )?app\./i);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of ["b109_split_shares(jsonb,bigint,bigint)", "b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  }
+  assert.equal((compact.match(/GRANT[A-Z]*ONFUNCTION/g) ?? []).length, 2);
+});
+
 test("B-097 adds two revoked private tables and four service-only gateways, migration-owned, behind the existing vendor_job_v3 gate", () => {
   const sql = read("supabase/migrations/20261116250000_b097_vendor_close.sql");
   assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]),

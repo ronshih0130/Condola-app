@@ -137,9 +137,10 @@ export async function saveSharedMeter(input: Session, form: SharedMeterInput, de
 export type SplitRow = { id: string; kind: "room" | "whole_unit"; unitLabel: string; label: string | null; weight: string; kwh: string; amountMinor: string | null };
 export type SharedMeterSplit =
   | { state: "off" | "forbidden" | "unavailable" | "none" }
-  | { state: "not_ready"; reason: "ambiguous_meters" | "missing_readings" | "estimated_readings"; problems: SplitProblem[] }
+  | { state: "not_ready"; reason: "ambiguous_meters" | "ambiguous_runs" | "missing_readings" | "estimated_readings"; problems: SplitProblem[] }
   | { state: "ready"; period: string; revision: number; method: SplitMethod; kwh: string; amountMinor: string | null; rows: SplitRow[] };
-export type SplitProblem = { spaceId: string; problem: "ambiguous_meter" | "missing_reading" | "estimated_reading" };
+/** ambiguous_run (B-109b): the unit has a utility run overlapping the month that is not exactly this period, or several. */
+export type SplitProblem = { spaceId: string; problem: "ambiguous_meter" | "ambiguous_run" | "missing_reading" | "estimated_reading" };
 export type SplitInput = { propertyId: string; period: string; kwh: string; amountMinor?: string | null };
 const KWH = /^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$/;
 const MINOR = /^(?:0|[1-9][0-9]{0,15})$/;
@@ -148,11 +149,11 @@ export function parseSharedMeterSplit(value: unknown): Exclude<SharedMeterSplit,
   if (value === null || value === undefined) return null;
   const v = value as Record<string, unknown>;
   if (v.status === "none") return { state: "none" };
-  if (v.status === "ambiguous_meters" || v.status === "missing_readings" || v.status === "estimated_readings") {
-    const kinds = ["ambiguous_meter", "missing_reading", "estimated_reading"];
+  if (v.status === "ambiguous_meters" || v.status === "ambiguous_runs" || v.status === "missing_readings" || v.status === "estimated_readings") {
+    const kinds = ["ambiguous_meter", "ambiguous_run", "missing_reading", "estimated_reading"];
     if (!Array.isArray(v.spaces) || !v.spaces.length || !(v.spaces as Record<string, unknown>[]).every(x => x && uuid(x.id) && kinds.includes(x.problem as string))
       // The status is the highest-precedence kind present.
-      || kinds.find(k => (v.spaces as Record<string, unknown>[]).some(x => x.problem === k)) !== { ambiguous_meters: "ambiguous_meter", missing_readings: "missing_reading", estimated_readings: "estimated_reading" }[v.status])
+      || kinds.find(k => (v.spaces as Record<string, unknown>[]).some(x => x.problem === k)) !== { ambiguous_meters: "ambiguous_meter", ambiguous_runs: "ambiguous_run", missing_readings: "missing_reading", estimated_readings: "estimated_reading" }[v.status])
       throw new Error("Invalid split status");
     return { state: "not_ready", reason: v.status,
       problems: (v.spaces as { id: string; problem: SplitProblem["problem"] }[]).map(x => ({ spaceId: x.id, problem: x.problem })) };
