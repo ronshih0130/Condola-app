@@ -154,7 +154,14 @@ test("denial: anon (no session), revoked session, another org's owner, staff, an
   await query("UPDATE auth_sessions SET revoked_at = now() WHERE id = $1", [revoked.sessionId]);
   assert.equal((await ownerUnits(revoked, { v3 })).state, "forbidden");
   assert.equal((await ownerUnits({ ...o.s, sessionId: randomUUID() }, { v3 })).state, "forbidden", "unknown session");
+  // The other org's owner holds a real current ownership in ORG2 (admitted there), yet sees nothing of ORG_ID.
+  const p2 = (await query<{ id: string }>("INSERT INTO properties(org_id,name,country_code,currency,timezone) VALUES($1,'B092 coast','TW','TWD','Asia/Taipei') RETURNING id::text", [ORG2_ID])).rows[0].id;
+  await query("INSERT INTO units(org_id,property_id,label,rental_mode) VALUES($1,$2,'C1','whole_unit')", [ORG2_ID, p2]);
+  await query("INSERT INTO property_owners(org_id,property_id,owner_contact_id,effective_from) VALUES($1,$2,$3,'2000-01-01')", [ORG2_ID, p2, other.contact]);
+  const own2 = await ownerUnits(other.s, { v3 });
+  assert.equal(own2.state, "ready"); if (own2.state === "ready") assert.deepEqual([...new Set(own2.rows.map(r => r.propertyId))], [p2], "admitted in its own org, only its own property");
   assert.equal((await ownerUnits({ ...other.s, orgId: ORG_ID, liveOrgId: ORG_ID }, { v3 })).state, "forbidden", "another org's owner pointed at this org");
+  assert.equal((await ownerUnits({ ...o.s, sessionId: undefined as unknown as string }, { v3 })).state, "forbidden", "no session");
   const staff = { ...o.s, userId: USERS.admin, sessionId: await withClient(c => insertTestAuthSession(c, USERS.admin)), kind: "staff" as const, role: "admin" as const };
   assert.equal((await ownerUnits(staff, { v3 })).state, "forbidden");
   assert.equal((await ownerUnits(o.s, { v3: async () => false })).state, "off");
