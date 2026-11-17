@@ -342,6 +342,11 @@ test("GS-32 exemption covers exactly one approved line in the vendor-docs lane",
 // Whitespace (incl. U+3000 and line breaks) is removed and there is no distance limit.
 const SUBJECT = /(Condola|租多啦)[\s\S]*(收款|收租|代收)/i;
 const squash = (value: string) => value.replace(/[\s\u3000]+/g, "");
+// JSX text and quoted JSX attributes render character references; ordinary TS/JSON strings keep them literal.
+const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" };
+const jsxDecode = (value: string) => value.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, ref: string) =>
+  ref[0] !== "#" ? NAMED[ref.toLowerCase()] ?? whole
+  : String.fromCodePoint(Number.parseInt(ref.slice(ref[1].toLowerCase() === "x" ? 2 : 1), ref[1].toLowerCase() === "x" ? 16 : 10)));
 function copyValues(source: string, fileName = "copy.tsx"): string[] {
   if (fileName.endsWith(".json")) {
     const out: string[] = [];
@@ -351,7 +356,8 @@ function copyValues(source: string, fileName = "copy.tsx"): string[] {
   const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.TSX);
   const out: string[] = [];
   const visit = (node: ts.Node) => {
-    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)) out.push(node.text);
+    if (ts.isJsxText(node) || (ts.isStringLiteral(node) && ts.isJsxAttribute(node.parent))) out.push(jsxDecode(node.text));
+    else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) out.push(node.text);
     else if (ts.isTemplateExpression(node)) out.push(node.head.text + node.templateSpans.map(span => span.literal.text).join(""));
     ts.forEachChild(node, visit);
   };
@@ -367,12 +373,13 @@ test("terminology: Condola / 租多啦 is never the subject of 收款, 收租 or
   const bad = ['x = "租多啦幫你收款";', 'x = "Condola 代收租金";', 'x = "由 Condola 收租";', 'x = "租多啦　會幫你收款";', 'x = `租多啦\n會幫你收款`;',
     'x = "租多啦\\r\\n會幫你收款";', 'x = "租多啦\\\n會幫你收款";', 'x = "租多啦\\\r\n會幫你收款";', 'x = `租多啦\\\n會幫你收款`;',
     `x = "租多啦${"，每個月固定在月初提醒租客並且".repeat(4)}代收";`, "x = 'condola collects 收款';",
-    'x = `租多啦${name}幫你收款`;', 'x = `租多啦${`會幫你`}收款`;', 'x = <p>租多啦會幫你收款</p>;'];
+    'x = `租多啦\\\r\n會幫你收款`;', 'x = `租多啦${name}幫你收款`;', 'x = `租多啦${`會幫你`}收款`;', 'x = <p>租多啦會幫你收款</p>;',
+    'x = <p>租多啦收&#x6B3E;</p>;', 'x = <p>租多啦收&#27454;</p>;', 'x = <img alt="租多啦會幫你收&#x6b3e;" />;'];
   for (const source of bad) assert.equal(subjectClaims(source).length, 1, source);
   assert.equal(subjectClaims('{ "a": { "b": "租多啦\\n代收" } }', "copy.json").length, 1);
   // Not claims: approved strings, separate values, mutually exclusive branches.
   for (const source of ['x = "租多啦・廠商";', 'x = "收款帳戶是屋主的";', 'x = { brand: "租多啦", money: "收款" };',
-    'x = ["租多啦・屋主", "待收款"];', 'x = `${flag ? "租多啦" : "收款"}`;']) {
+    'x = ["租多啦・屋主", "待收款"];', 'x = `${flag ? "租多啦" : "收款"}`;', 'x = "租多啦收&#x6B3E;";']) {
     assert.deepEqual(subjectClaims(source), [], source);
   }
 });
