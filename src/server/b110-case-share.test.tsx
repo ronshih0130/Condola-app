@@ -47,7 +47,8 @@ test("share page: nature marks, voided last and struck with a hidden 已作廢, 
     documents: [{ id: id(2), kind: "receipt", docNo: "RCP-2026-019", status: "issued", totalMinor: "5200" },
       { id: id(3), kind: "receipt", docNo: "RCP-2026-018", status: "voided", totalMinor: "5200" }] }} />);
   for (const text of ["租多啦", "安居物業分享的唯讀頁", "<h1>浴室天花板滴水</h1>", ">狀態<", ">已完成<", ">廠商<", "王師傅水電", "已准許的照片", "天花板_修好.jpg",
-    ">文件<", "收據 RCP-2026-019", "<b>NT$5,200</b>", "<s><span class=\"v-share-sr\">已作廢 </span>NT$5,200</s>", `href="/s/${"t".repeat(43)}/documents/${id(2)}"`]) assert.ok(html.includes(text), text);
+    ">文件<", "收據 RCP-2026-019", "<b>NT$5,200</b>", "<s><span class=\"v-share-sr\">已作廢 </span>NT$5,200</s>"]) assert.ok(html.includes(text), text);
+  assert.doesNotMatch(html, /\/documents\/|\.pdf/, "no public PDF links");
   assert.ok(html.indexOf("RCP-2026-019") < html.indexOf("RCP-2026-018"));
   assert.doesNotMatch(html, /<button|<form|login/);
   for (const [state, title, body] of [["expired", "這個分享已過期", "這個連結已過期，文件內容不會再顯示。需要的話請聯絡安居物業。"], ["revoked", "這個分享已撤銷", "管理方已停止這個連結，文件內容不會再顯示。"]] as const) {
@@ -84,12 +85,12 @@ test("capped body, 0 outbound and scoped styles", async () => {
   assert.equal(await readSmallBody(make("x".repeat(9)), 8), null);
   assert.equal(await readSmallBody(make("{}", { "content-length": "9" }), 8), null);
   for (const file of ["src/server/b110-case-share.ts", "src/app/api/vendor-jobs/case-share/route.ts", "src/app/s/[token]/page.tsx", "src/app/s/[token]/photos/[id]/route.ts",
-    "src/app/s/[token]/documents/[id]/route.ts", "src/components/v3/vendor/case-share-entry.tsx", "src/components/v3/share/share-page.tsx", "supabase/migrations/20261116210000_b110_case_share.sql"]) {
+"src/components/v3/vendor/case-share-entry.tsx", "src/components/v3/share/share-page.tsx", "supabase/migrations/20261116210000_b110_case_share.sql"]) {
     assert.doesNotMatch(read(file), /line\/(?:push|messaging)|sendSms|sendEmail|twilio|outbox|pushMessage|mailto/, file);
   }
   const css = read("public/brand/v3/case-share.css");
   for (const line of css.split("\n").filter(l => l.includes("{"))) assert.match(line, /^\.v-token-v3\.v-share /, line);
-  assert.match(css, /\.v-share-docs a \{[^}]*min-height: 44px/);
+  assert.match(css, /\.v-share-docs \.v-share-doc \{[^}]*min-height: 44px/);
   assert.match(read("public/brand/v3/vendor-case.css"), /\.v-case-share-entry \{[^}]*min-height: 44px/);
   assert.match(read("src/components/v3/vendor/vendor-case.tsx"), /props\.stage === "closed" \? <li><CaseShareEntry/);
 });

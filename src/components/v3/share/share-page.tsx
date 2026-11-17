@@ -19,8 +19,8 @@ function money(currency: string, minor: string) {
 
 /**
  * B-110 唯讀分享頁 (OWN-32, MGT-124-AC2) and its expired / revoked states (share-expired; OWN-32-AC3). No buttons,
- * no sign-in, no other case. Documents keep their nature mark; voided ones are last, muted and struck. Tapping a
- * document opens its PDF; photos are the staff-approved 處理後 photos only. No buyer, tenant or owner details.
+ * no sign-in, no other case. Documents keep their nature mark and total; voided ones are last, muted and struck. No PDF
+ * link (the stored PDF holds buyer and contact details). Photos are the staff-approved 處理後 photos only.
  */
 export function SharePage({ locale, token, view }: { locale: Locale; token: string; view: ShareView }) {
   const copy = caseShareCopy(locale);
@@ -54,10 +54,11 @@ export function SharePage({ locale, token, view }: { locale: Locale; token: stri
               const title = `${doc.kind === "receipt" ? copy.receiptTitle : copy.statementTitle} ${doc.docNo}`;
               const amount = money(view.currency, doc.totalMinor);
               return <li key={doc.id} className={voided ? "v-share-void" : undefined} data-status={doc.status}>
-                <a href={`${base}/documents/${doc.id}`}>
+                {/* No PDF link: the stored PDF carries buyer and contact details the share frame does not show. */}
+                <div className="v-share-doc">
                   <span><span className="v-share-mark">{voided ? copy.markVoid : doc.kind === "receipt" ? copy.markReceipt : copy.markStatement}</span> {title}</span>
                   {voided ? <s><span className="v-share-sr">{copy.markVoid} </span>{amount}</s> : <b>{amount}</b>}
-                </a>
+                </div>
               </li>;
             })}</ul>
           </> : null}

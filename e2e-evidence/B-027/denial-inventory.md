@@ -134,7 +134,6 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/m/leases/[id]/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/m/leases/[id]/signed/route.ts:1 | HTTP handler executed above |
 | src/app/m/reports/export/route.ts:1 | Enumerated only; outside representative selection |
-| src/app/s/[token]/documents/[id]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/s/[token]/photos/[id]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/signup/unit-qr/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/t/history/[leaseId]/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |

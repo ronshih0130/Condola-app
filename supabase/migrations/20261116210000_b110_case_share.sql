@@ -3,8 +3,8 @@
 -- or staff (admin / manager, closed case) gets or creates it; each 「複製連結」 restarts its 90 days on the same URL.
 -- It expires 90 days after the later of the last copy and the last document issued or voided in the case; a reopen
 -- alone changes nothing (GS-29). Staff revoke it; copying afterwards creates a new link and the old one stays revoked.
--- The public read shows only staff-approved photos and issued / voided documents, never internal notes, costs or
--- tenant / owner details. Gate: vendor_docs_v3 + effective brand_v3 + vendor_dispatch + vendor_link + vendor_documents.
+-- The public read shows only staff-approved 處理後 photos and issued / voided documents with their totals, never internal
+-- notes, estimates, expense or confirmed-cost records, or tenant / owner / buyer details; no PDF is served publicly. Gate: vendor_docs_v3 + effective brand_v3 + vendor_dispatch + vendor_link + vendor_documents.
 -- Every write is audited; nothing here sends or queues a message.
 BEGIN;
 SET LOCAL lock_timeout='5s';
@@ -126,8 +126,10 @@ DECLARE actor uuid;
 BEGIN
  actor:=app.b026_account_staff(p_org,p_live,p_env,p_session);
  IF NOT app.b110_enabled(p_org,p_env_v2) THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ -- Same eligibility as the vendor path: a closed case with an issued or voided document (VEN-25-AC1, MGT-124-AC1).
  PERFORM 1 FROM public.maintenance_tickets t WHERE t.org_id=p_org AND t.id=p_ticket AND t.status::text='closed' FOR SHARE;
- IF NOT FOUND THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM public.vendor_documents d WHERE d.org_id=p_org AND d.ticket_id=p_ticket AND d.status IN ('issued','voided'))
+ THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  RETURN app.b110_share_for(p_org,p_ticket,'staff',actor,NULL,p_new_token,coalesce(p_copy,false));
 END $$;
 REVOKE ALL ON FUNCTION app.b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean) FROM PUBLIC,anon,authenticated;
@@ -141,6 +143,9 @@ DECLARE actor uuid; s app.case_shares;
 BEGIN
  actor:=app.b026_account_staff(p_org,p_live,p_env,p_session);
  IF NOT app.b110_enabled(p_org,p_env_v2) THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ -- The case must exist in this org and be closed; lock it so a reopen cannot interleave (GS-29: a reopen keeps the link).
+ PERFORM 1 FROM public.maintenance_tickets t WHERE t.org_id=p_org AND t.id=p_ticket AND t.status::text='closed' FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('b110/share/'||p_org::text||'/'||p_ticket::text,0));
  UPDATE app.case_shares SET revoked_at=clock_timestamp(),revoked_by=actor
   WHERE org_id=p_org AND ticket_id=p_ticket AND revoked_at IS NULL RETURNING * INTO s;
@@ -154,8 +159,9 @@ GRANT EXECUTE ON FUNCTION app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid
 
 -- Public read by the share link. NULL: unknown link or the gate is off. Expired / revoked: the state and the company
 -- name only. Otherwise the case title and state, the vendor name, staff-approved photos (id, file name) and the
--- issued / voided documents (kind, number, state, amount). Photos: the vendor's 處理後 uploads that staff approved for
--- sharing (repair_vendor_job_shared_photos); never the tenant's report photos or 處理前. No tenant, owner or buyer details, notes or costs.
+-- issued / voided documents (kind, number, state, document total). Photos: the vendor's uploads explicitly tagged
+-- 處理後 that staff approved for sharing (repair_vendor_job_shared_photos); never the tenant's report photos, 處理前
+-- or untagged uploads (approval alone does not establish the phase). No tenant, owner or buyer details, notes or costs.
 CREATE FUNCTION app.b110_share_view(p_share_hash text,p_env_v2 boolean) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE s app.case_shares; t public.maintenance_tickets; company text; vendor text; currency text;
@@ -176,7 +182,7 @@ BEGIN
   'photos',coalesce((SELECT jsonb_agg(jsonb_build_object('id',a.id,'name',f.file_name) ORDER BY a.created_at,a.id)
     FROM public.ticket_attachments a JOIN public.files f ON f.id=a.file_id AND f.org_id=a.org_id
     WHERE a.org_id=s.org_id AND a.ticket_id=s.ticket_id AND NOT a.is_internal
-      AND a.vendor_job_id IS NOT NULL AND (a.phase IS NULL OR a.phase='after')
+      AND a.vendor_job_id IS NOT NULL AND a.phase='after'
       AND EXISTS(SELECT 1 FROM public.repair_vendor_job_shared_photos sp JOIN public.repair_vendor_jobs j ON j.id=sp.job_id AND j.org_id=sp.org_id
         WHERE sp.org_id=a.org_id AND sp.attachment_id=a.id AND j.ticket_id=s.ticket_id)),'[]'::jsonb),
   'documents',coalesce((SELECT jsonb_agg(jsonb_build_object('id',d.id,'kind',d.kind,'docNo',d.doc_no,'status',d.status,
@@ -186,28 +192,25 @@ END $$;
 REVOKE ALL ON FUNCTION app.b110_share_view(text,boolean) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION app.b110_share_view(text,boolean) TO service_role;
 
--- Public file reads through a live share: an approved photo's storage path, or a document's stored PDF bytes.
-CREATE FUNCTION app.b110_share_file(p_share_hash text,p_env_v2 boolean,p_kind text,p_id uuid)
-RETURNS TABLE(storage_path text,pdf bytea,file_name text)
+-- Public photo read through a live share: an approved 處理後 photo's storage path only.
+-- No document PDF is served publicly: the stored B-025 PDFs carry the buyer's receipt title or name, address and 統編,
+-- the work address, line items and unit prices, the vendor's phone and (receipts) 統編, business address and
+-- representative, which the share frame does not show (OWN-32 / MGT-124-AC2). The share page lists documents without links.
+CREATE FUNCTION app.b110_share_photo(p_share_hash text,p_env_v2 boolean,p_id uuid)
+RETURNS TABLE(storage_path text,file_name text)
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE s app.case_shares;
 BEGIN
- IF p_share_hash IS NULL OR p_share_hash !~ '^[0-9a-f]{64}$' OR p_id IS NULL OR p_kind NOT IN ('photo','document') THEN RETURN; END IF;
+ IF p_share_hash IS NULL OR p_share_hash !~ '^[0-9a-f]{64}$' OR p_id IS NULL THEN RETURN; END IF;
  SELECT * INTO s FROM app.case_shares x WHERE x.token_hash=p_share_hash;
  IF NOT FOUND OR s.revoked_at IS NOT NULL OR NOT app.b110_enabled(s.org_id,p_env_v2) OR app.b110_expires_at(s)<=clock_timestamp() THEN RETURN; END IF;
- IF p_kind='photo' THEN
-  RETURN QUERY SELECT f.storage_path,NULL::bytea,f.file_name FROM public.ticket_attachments a
-   JOIN public.files f ON f.id=a.file_id AND f.org_id=a.org_id
-   WHERE a.id=p_id AND a.org_id=s.org_id AND a.ticket_id=s.ticket_id AND NOT a.is_internal AND f.storage_bucket='ticket-photos-private'
-     AND a.vendor_job_id IS NOT NULL AND (a.phase IS NULL OR a.phase='after')
-     AND EXISTS(SELECT 1 FROM public.repair_vendor_job_shared_photos sp JOIN public.repair_vendor_jobs j ON j.id=sp.job_id AND j.org_id=sp.org_id
-       WHERE sp.org_id=a.org_id AND sp.attachment_id=a.id AND j.ticket_id=s.ticket_id);
- ELSE
-  RETURN QUERY SELECT NULL::text,b.bytes,d.doc_no FROM public.vendor_documents d
-   JOIN public.vendor_document_pdf_bytes b ON b.document_id=d.id AND b.org_id=d.org_id
-   WHERE d.id=p_id AND d.org_id=s.org_id AND d.ticket_id=s.ticket_id AND d.status IN ('issued','voided');
- END IF;
+ RETURN QUERY SELECT f.storage_path,f.file_name FROM public.ticket_attachments a
+  JOIN public.files f ON f.id=a.file_id AND f.org_id=a.org_id
+  WHERE a.id=p_id AND a.org_id=s.org_id AND a.ticket_id=s.ticket_id AND NOT a.is_internal AND f.storage_bucket='ticket-photos-private'
+    AND a.vendor_job_id IS NOT NULL AND a.phase='after'
+    AND EXISTS(SELECT 1 FROM public.repair_vendor_job_shared_photos sp JOIN public.repair_vendor_jobs j ON j.id=sp.job_id AND j.org_id=sp.org_id
+      WHERE sp.org_id=a.org_id AND sp.attachment_id=a.id AND j.ticket_id=s.ticket_id);
 END $$;
-REVOKE ALL ON FUNCTION app.b110_share_file(text,boolean,text,uuid) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION app.b110_share_file(text,boolean,text,uuid) TO service_role;
+REVOKE ALL ON FUNCTION app.b110_share_photo(text,boolean,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION app.b110_share_photo(text,boolean,uuid) TO service_role;
 COMMIT;

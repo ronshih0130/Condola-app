@@ -468,13 +468,13 @@ test("B-076a adds one service-only, migration-owned phone-history reader and no 
 test("B-110 adds a revoked private table, five service-only gateways and three internal helpers, migration-owned", () => {
   const sql = read("supabase/migrations/20261116210000_b110_case_share.sql");
   assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]),
-    ["b110_enabled", "b110_expires_at", "b110_share_for", "b110_vendor_share", "b110_staff_share", "b110_staff_revoke", "b110_share_view", "b110_share_file"]);
+    ["b110_enabled", "b110_expires_at", "b110_share_for", "b110_vendor_share", "b110_staff_share", "b110_staff_revoke", "b110_share_view", "b110_share_photo"]);
   assert.equal((sql.match(/VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 8);
   assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|DROP|ALTER FUNCTION|ALTER TABLE public|GRANT[^;]*\bON (?:TABLE )?(?:app|public)\.|READ ONLY|INSERT INTO public\.platform_settings/i);
   assert.match(sql, /ALTER TABLE app\.case_shares ENABLE ROW LEVEL SECURITY;/);
   assert.match(sql, /REVOKE ALL ON app\.case_shares FROM PUBLIC,anon,authenticated,service_role;/);
   const compact = sql.replace(/\s+/g, "");
-  for (const signature of ["b110_vendor_share(text,boolean,text,text)", "b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean)", "b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)", "b110_share_view(text,boolean)", "b110_share_file(text,boolean,text,uuid)"]) {
+  for (const signature of ["b110_vendor_share(text,boolean,text,text)", "b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean)", "b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)", "b110_share_view(text,boolean)", "b110_share_photo(text,boolean,uuid)"]) {
     assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
     assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
     assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`), signature);

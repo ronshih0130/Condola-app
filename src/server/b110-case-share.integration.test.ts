@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -13,7 +13,7 @@ import { resetAndSeed } from "./seed";
 import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
 import type { Session } from "./types";
-import { loadShareFile, loadShareView, staffCaseShare, staffRevokeCaseShare, vendorCaseShare, type ShareView } from "./b110-case-share";
+import { loadSharePhoto, loadShareView, staffCaseShare, staffRevokeCaseShare, vendorCaseShare } from "./b110-case-share";
 import { hashVendorToken } from "./vendor-repair-rules";
 
 // B-110 on a cloned disposable database: real B-105 case admission, real app.b110_* gateways, real routes and page.
@@ -96,17 +96,24 @@ async function photo(f: Fixture, opts: { vendorJob?: string | null; phase?: stri
 }
 const shareToken = (url: string) => decodeURIComponent(new URL(url).pathname.split("/").at(-1)!);
 const shares = async (ticket: string) => (await db.query("SELECT id::text,token_hash,last_copied_at,revoked_at FROM app.case_shares WHERE ticket_id=$1 ORDER BY created_at", [ticket])).rows;
-async function writes(ticket: string) {
-  return JSON.stringify({ shares: await shares(ticket),
-    audit: (await db.query("SELECT count(*)::int n FROM audit_log WHERE table_name='case_shares' AND new_row->>'ticketId'=$1", [ticket])).rows[0].n });
-}
 const notFound = (error: unknown) => error instanceof FlowError && error.key === "errors.notFound";
 const ago = (days: number) => new Date(Date.now() - days * 86400000).toISOString();
-const view = async (url: string) => loadShareView(shareToken(url)) as Promise<ShareView>;
+/** The raw gateway answer (not the decoded view). */
+const rawView = async (url: string) => (await db.query("SELECT app.b110_share_view($1,false) r", [hashVendorToken(shareToken(url))])).rows[0].r;
+/** No-write oracle: every row of every table a B-110 path could touch. */
+async function oracle() {
+  const out: Record<string, string> = {};
+  for (const table of ["app.case_shares", "public.audit_log", "public.files", "public.ticket_attachments"]) {
+    out[table] = (await db.query(`SELECT md5(coalesce(string_agg(row_to_json(r)::text,'' ORDER BY row_to_json(r)::text),'')) h FROM ${table} r`)).rows[0].h;
+  }
+  return JSON.stringify(out);
+}
+const companyOf = async (org: string) => (await db.query("SELECT name FROM organizations WHERE id=$1", [org])).rows[0].name as string;
+const H2160 = 2160 * 3600 * 1000;
 
 test("privileges: gateways service-only, helpers unexecutable, case_shares fully revoked with RLS on", async () => {
   const gateways = ["app.b110_vendor_share(text,boolean,text,text)", "app.b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean)",
-    "app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)", "app.b110_share_view(text,boolean)", "app.b110_share_file(text,boolean,text,uuid)"];
+    "app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)", "app.b110_share_view(text,boolean)", "app.b110_share_photo(text,boolean,uuid)"];
   const helpers = ["app.b110_enabled(uuid,boolean)", "app.b110_expires_at(app.case_shares)", "app.b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)"];
   for (const role of ["anon", "authenticated", "service_role"]) {
     for (const signature of [...gateways, ...helpers]) assert.equal((await db.query("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [role, signature])).rows[0].ok,
@@ -117,153 +124,176 @@ test("privileges: gateways service-only, helpers unexecutable, case_shares fully
     assert.equal((await db.query("SELECT has_any_column_privilege($1,'app.case_shares','SELECT,INSERT,UPDATE,REFERENCES') ok", [role])).rows[0].ok, false);
   }
   assert.equal((await db.query("SELECT relrowsecurity FROM pg_class WHERE oid='app.case_shares'::regclass")).rows[0].relrowsecurity, true);
+  assert.equal((await db.query("SELECT to_regprocedure('app.b110_share_file(text,boolean,text,uuid)') IS NULL AS gone")).rows[0].gone, true, "no public PDF gateway");
 });
 
-test("vendor: eligible only once closed with a document; open makes one link; each copy restarts 90 days on the same URL", async () => {
-  const open = await fixture(ORG_ID, "in_progress");
-  await document(open, ago(1));
-  assert.deepEqual(await vendorCaseShare(open.token, "check", origin), { eligible: false }, "open case");
-  await assert.rejects(vendorCaseShare(open.token, "open", origin), notFound);
+test("vendor and staff eligibility: closed case with an issued or voided document, both paths; one link; copy restarts on the same URL", async () => {
+  const live = await fixture(ORG_ID, "in_progress");
+  await document(live, ago(1));
+  const empty = await fixture();
+  let before = await oracle();
+  assert.deepEqual(await vendorCaseShare(live.token, "check", origin), { eligible: false }, "open case");
+  await assert.rejects(vendorCaseShare(live.token, "open", origin), notFound);
+  assert.deepEqual(await vendorCaseShare(empty.token, "check", origin), { eligible: false }, "closed, no document");
+  await assert.rejects(vendorCaseShare(empty.token, "copy", origin), notFound);
+  await assert.rejects(staffCaseShare(admin, live.ticket, true, origin), notFound, "staff: open case");
+  await assert.rejects(staffCaseShare(admin, empty.ticket, true, origin), notFound, "staff: closed, no document");
+  await assert.rejects(staffCaseShare(admin, empty.ticket, false, origin), notFound, "staff open: closed, no document");
+  assert.equal(await oracle(), before, "no writes on any ineligible path");
   const f = await fixture();
-  assert.deepEqual(await vendorCaseShare(f.token, "check", origin), { eligible: false }, "closed, no document");
-  await assert.rejects(vendorCaseShare(f.token, "copy", origin), notFound);
-  assert.deepEqual(await shares(f.ticket), []);
   await document(f, ago(10));
   assert.deepEqual(await vendorCaseShare(f.token, "check", origin), { eligible: true });
-  assert.deepEqual(await shares(f.ticket), [], "check never writes");
   const opened = await vendorCaseShare(f.token, "open", origin) as { url: string; expiresAt: string };
   assert.match(opened.url, /^http:\/\/127\.0\.0\.1:43123\/s\/[A-Za-z0-9_-]{43}$/);
   let rows = await shares(f.ticket);
   assert.equal(rows.length, 1); assert.equal(rows[0].last_copied_at, null, "opening is not a copy");
-  assert.equal(rows[0].token_hash, hashVendorToken(shareToken(opened.url)));
   const copied = await vendorCaseShare(f.token, "copy", origin) as { url: string; expiresAt: string };
   assert.equal(copied.url, opened.url, "same URL");
   rows = await shares(f.ticket);
-  assert.ok(rows[0].last_copied_at);
-  assert.ok(Math.abs(new Date(copied.expiresAt).getTime() - (new Date(rows[0].last_copied_at).getTime() + 90 * 86400000)) < 1000);
-  const again = await vendorCaseShare(f.token, "copy", origin) as { url: string };
-  assert.equal(again.url, opened.url);
+  assert.equal(new Date(copied.expiresAt).getTime(), new Date(rows[0].last_copied_at).getTime() + H2160, "copy instant + 2160 hours");
+  const staff = await staffCaseShare(manager, f.ticket, true, origin);
+  assert.equal(staff.url, opened.url, "staff and vendor share one link");
   assert.equal((await shares(f.ticket)).length, 1);
   const events = (await db.query("SELECT event_type,actor_role FROM audit_log WHERE table_name='case_shares' AND new_row->>'ticketId'=$1 ORDER BY id", [f.ticket])).rows;
-  assert.deepEqual(events.map(e => [e.event_type, e.actor_role]), [["case_share_created", "vendor"], ["case_share_copied", "vendor"], ["case_share_copied", "vendor"]]);
+  assert.deepEqual(events.map(e => [e.event_type, e.actor_role]), [["case_share_created", "vendor"], ["case_share_copied", "vendor"], ["case_share_copied", "staff"]]);
+  before = await oracle();
 });
 
-test("90 days from the later of the last copy and the last document issued or voided; reopen alone changes nothing", async () => {
+test("expiry: exactly the latest of copy, issue and void + 2160 hours; refused at the cutoff instant; reopen moves nothing", async () => {
   const f = await fixture();
-  const doc = await document(f, ago(100));
-  const { url } = await vendorCaseShare(f.token, "open", origin) as { url: string };
-  assert.equal((await view(url)).state, "expired", "only a 100-day-old document, never copied");
-  await db.query("UPDATE app.case_shares SET last_copied_at=$2::timestamptz WHERE ticket_id=$1", [f.ticket, ago(89.99)]);
-  assert.equal((await view(url)).state, "ok", "copied 89.99 days ago");
-  await db.query("UPDATE app.case_shares SET last_copied_at=$2::timestamptz WHERE ticket_id=$1", [f.ticket, ago(90.001)]);
-  assert.equal((await view(url)).state, "expired", "the 90th day has passed");
-  // A void later than the last copy restarts the clock from the void.
-  await db.query("UPDATE vendor_documents SET status='voided',voided_at=$2::timestamptz,void_reason='x' WHERE id=$1", [doc, ago(5)]);
-  assert.equal((await view(url)).state, "ok", "voided 5 days ago");
-  // A document issued later than everything else also counts.
-  await db.query("UPDATE vendor_documents SET voided_at=$2::timestamptz WHERE id=$1", [doc, ago(95)]);
-  assert.equal((await view(url)).state, "expired");
-  await document(f, ago(3));
-  assert.equal((await view(url)).state, "ok", "issued 3 days ago");
-  const before = (await vendorCaseShare(f.token, "open", origin) as { expiresAt: string }).expiresAt;
-  // GS-29: reopening and closing again moves nothing.
+  const issuedAt = "2026-01-01T00:00:00.123Z";
+  const doc = await document(f, issuedAt);
+  const { url } = await vendorCaseShare(f.token, "open", origin) as { url: string; expiresAt: string };
+  const expiry = async () => new Date((await vendorCaseShare(f.token, "open", origin) as { expiresAt: string }).expiresAt).getTime();
+  assert.equal(await expiry(), new Date(issuedAt).getTime() + H2160, "issued + 2160h (never copied)");
+  const voidedAt = "2026-02-03T04:05:06.789Z";
+  await db.query("UPDATE vendor_documents SET status='voided',voided_at=$2::timestamptz,void_reason='x' WHERE id=$1", [doc, voidedAt]);
+  assert.equal(await expiry(), new Date(voidedAt).getTime() + H2160, "a later void wins");
+  const laterIssue = "2026-03-01T10:00:00.456Z";
+  await document(f, laterIssue);
+  assert.equal(await expiry(), new Date(laterIssue).getTime() + H2160, "a later issue wins");
+  const copiedAt = "2026-04-01T12:00:00.001Z";
+  await db.query("UPDATE app.case_shares SET last_copied_at=$2::timestamptz WHERE ticket_id=$1", [f.ticket, copiedAt]);
+  assert.equal(await expiry(), new Date(copiedAt).getTime() + H2160, "a later copy wins");
+  // Cutoff instant: expired exactly at last event + 2160h (<=), live one millisecond before.
+  await db.query("UPDATE app.case_shares SET last_copied_at=clock_timestamp()-interval '2160 hours' WHERE ticket_id=$1", [f.ticket]);
+  assert.deepEqual(await rawView(url), { state: "expired", company: await companyOf(ORG_ID) }, "at the cutoff");
+  await db.query("UPDATE app.case_shares SET last_copied_at=clock_timestamp()-interval '2160 hours'+interval '5 seconds' WHERE ticket_id=$1", [f.ticket]);
+  assert.equal((await rawView(url)).state, "ok", "just before the cutoff");
+  const kept = await expiry();
+  // GS-29: a reopen and close again change nothing.
   await db.query("UPDATE maintenance_tickets SET status='in_progress' WHERE id=$1", [f.ticket]);
-  assert.equal((await view(url)).state, "ok", "a reopen keeps the link");
+  assert.equal((await rawView(url)).state, "ok", "a reopen keeps the link");
   await db.query("UPDATE maintenance_tickets SET status='closed' WHERE id=$1", [f.ticket]);
-  assert.equal((await vendorCaseShare(f.token, "open", origin) as { expiresAt: string }).expiresAt, before);
-  // Copy again: same URL, now + 90 days.
+  assert.equal(await expiry(), kept);
+  // Re-copy: same URL, now + 2160 hours.
   const copied = await vendorCaseShare(f.token, "copy", origin) as { url: string; expiresAt: string };
   assert.equal(copied.url, url);
-  assert.ok(new Date(copied.expiresAt).getTime() > Date.now() + 89.9 * 86400000);
+  const last = (await shares(f.ticket))[0].last_copied_at;
+  assert.equal(new Date(copied.expiresAt).getTime(), new Date(last).getTime() + H2160);
 });
 
-test("revoke: the old link shows 「這個分享已撤銷」; the next copy makes a new link; staff roles and orgs are checked", async () => {
-  const f = await fixture();
-  await document(f, ago(1));
-  const first = await vendorCaseShare(f.token, "copy", origin) as { url: string };
-  const staffOpen = await staffCaseShare(manager, f.ticket, false, origin);
-  assert.equal(staffOpen.url, first.url, "staff and vendor share one link per case");
-  const before = await writes(f.ticket);
-  await assert.rejects(staffRevokeCaseShare(accountant, f.ticket), (e: unknown) => e instanceof FlowError, "accountant");
-  await assert.rejects(staffRevokeCaseShare(coast, f.ticket), (e: unknown) => e instanceof FlowError, "another org");
-  await assert.rejects(staffCaseShare(coast, f.ticket, true, origin), (e: unknown) => e instanceof FlowError, "another org copy");
-  assert.equal(await writes(f.ticket), before, "no writes on denied staff paths");
-  assert.equal(await staffRevokeCaseShare(admin, f.ticket), "revoked");
-  assert.equal(await staffRevokeCaseShare(admin, f.ticket), "none", "idempotent");
-  assert.deepEqual(await view(first.url), { state: "revoked", company: (await db.query("SELECT name FROM organizations WHERE id=$1", [ORG_ID])).rows[0].name });
-  const second = await vendorCaseShare(f.token, "copy", origin) as { url: string };
-  assert.notEqual(second.url, first.url, "a copy after revoke makes a new link");
-  assert.equal((await view(first.url)).state, "revoked", "the old one stays revoked");
-  assert.equal((await view(second.url)).state, "ok");
-  const staffCopy = await staffCaseShare(admin, f.ticket, true, origin);
-  assert.equal(staffCopy.url, second.url);
-  const events = (await db.query("SELECT event_type,actor_role,actor_user_id::text FROM audit_log WHERE table_name='case_shares' AND event_type='case_share_revoked' AND new_row->>'ticketId'=$1", [f.ticket])).rows;
-  assert.deepEqual(events, [{ event_type: "case_share_revoked", actor_role: "staff", actor_user_id: USERS.admin }]);
-  // Staff need a closed case.
-  const live = await fixture(ORG_ID, "in_progress");
-  await assert.rejects(staffCaseShare(admin, live.ticket, true, origin), notFound);
-  assert.deepEqual(await shares(live.ticket), []);
+test("revoke: staff only, closed case only; the old link reads revoked (company only); the next copy is a new link", async () => {
+  // Isolation with both orgs fully admitted everywhere.
+  for (const k of PLATFORM) await setPlatform(k, [ORG_ID, ORG2_ID]);
+  try {
+    const f = await fixture();
+    await document(f, ago(1));
+    const first = await vendorCaseShare(f.token, "copy", origin) as { url: string };
+    const own = await fixture(ORG2_ID); await document(own, ago(1));
+    assert.ok((await staffCaseShare(coast, own.ticket, true, origin)).url, "positive control: coast in its own org");
+    const before = await oracle();
+    await assert.rejects(staffRevokeCaseShare(accountant, f.ticket), (e: unknown) => e instanceof FlowError, "accountant");
+    await assert.rejects(staffRevokeCaseShare(coast, f.ticket), (e: unknown) => e instanceof FlowError, "another org revoke");
+    await assert.rejects(staffCaseShare(coast, f.ticket, true, origin), (e: unknown) => e instanceof FlowError, "another org copy");
+    await assert.rejects(staffCaseShare(accountant, f.ticket, true, origin), (e: unknown) => e instanceof FlowError, "accountant copy");
+    assert.equal(await oracle(), before, "no writes on denied staff paths");
+    // Revoke on a reopened case is refused, with no write.
+    await db.query("UPDATE maintenance_tickets SET status='in_progress' WHERE id=$1", [f.ticket]);
+    const reopened = await oracle();
+    await assert.rejects(staffRevokeCaseShare(admin, f.ticket), notFound, "reopened case");
+    assert.equal(await oracle(), reopened, "no write on the refused revoke");
+    await db.query("UPDATE maintenance_tickets SET status='closed' WHERE id=$1", [f.ticket]);
+    assert.equal(await staffRevokeCaseShare(admin, f.ticket), "revoked");
+    const afterRevoke = await oracle();
+    assert.equal(await staffRevokeCaseShare(admin, f.ticket), "none", "idempotent");
+    assert.equal(await oracle(), afterRevoke, "a second revoke writes nothing");
+    assert.deepEqual(await rawView(first.url), { state: "revoked", company: await companyOf(ORG_ID) });
+    const second = await vendorCaseShare(f.token, "copy", origin) as { url: string };
+    assert.notEqual(second.url, first.url);
+    assert.deepEqual(await rawView(first.url), { state: "revoked", company: await companyOf(ORG_ID) }, "the old one stays revoked");
+    assert.equal((await rawView(second.url)).state, "ok");
+    const revoked = (await db.query("SELECT event_type,actor_role,actor_user_id::text FROM audit_log WHERE table_name='case_shares' AND event_type='case_share_revoked' AND new_row->>'ticketId'=$1", [f.ticket])).rows;
+    assert.deepEqual(revoked, [{ event_type: "case_share_revoked", actor_role: "staff", actor_user_id: USERS.admin }]);
+  } finally { for (const k of PLATFORM) await setPlatform(k, [ORG_ID]); }
 });
 
-test("content: approved 處理後 photos and issued / voided documents only; no buyer, tenant, note or cost", async () => {
+test("content and files: only explicitly 處理後, approved photos and document totals; every other file refused, incl. via expired / revoked links", async () => {
   const f = await fixture();
   const issued = await document(f, ago(4), { total: 5200 });
   const voided = await document(f, ago(6), { voidedAt: ago(5), total: 5300 });
   const after = await photo(f, { phase: "after", approved: true, name: "天花板_修好.jpg" });
-  const legacy = await photo(f, { phase: null, approved: true, name: "防水層.jpg" });
-  await photo(f, { phase: "before", approved: true, name: "before.jpg" });
-  await photo(f, { phase: "after", approved: false, name: "unapproved.jpg" });
-  await photo(f, { vendorJob: null, approved: true, name: "tenant.jpg" });
+  const untagged = await photo(f, { phase: null, approved: true, name: "untagged.jpg" });
+  const before = await photo(f, { phase: "before", approved: true, name: "before.jpg" });
+  const unapproved = await photo(f, { phase: "after", approved: false, name: "unapproved.jpg" });
+  const tenant = await photo(f, { vendorJob: null, approved: true, name: "tenant.jpg" });
+  const other = await fixture(); await document(other, ago(1));
+  const foreign = await photo(other, { phase: "after", approved: true, name: "foreign.jpg" });
   const { url } = await vendorCaseShare(f.token, "copy", origin) as { url: string };
-  const v = await view(url);
-  assert.equal(v.state, "ok");
-  if (v.state !== "ok") return;
-  assert.deepEqual(v.photos.map(p => p.id), [after, legacy]);
-  assert.deepEqual(v.documents.map(d => [d.id, d.status, d.totalMinor]), [[issued, "issued", "5200"], [voided, "voided", "5300"]]);
-  assert.equal(v.vendor, "王師傅水電"); assert.equal(v.title, "浴室天花板滴水"); assert.equal(v.status, "closed");
-  const raw = (await db.query("SELECT app.b110_share_view($1,false) r", [hashVendorToken(shareToken(url))])).rows[0].r;
+  const raw = await rawView(url);
   assert.deepEqual(Object.keys(raw).sort(), ["company", "currency", "documents", "photos", "state", "status", "title", "vendor"]);
-  for (const doc of raw.documents) assert.deepEqual(Object.keys(doc).sort(), ["docNo", "id", "kind", "status", "totalMinor"]);
-  assert.doesNotMatch(JSON.stringify(raw), /林雅婷|0912|内部|內部備註|description|buyer|receipt_title|phone|before\.jpg|tenant\.jpg|unapproved/);
-  // Files: approved photo path and stored PDF; anything else is not served.
-  assert.match(String((await loadShareFile(shareToken(url), "photo", after))?.storage_path), new RegExp(`^org/${f.org}/tickets/${f.ticket}/`));
-  assert.ok((await loadShareFile(shareToken(url), "document", voided))?.pdf);
-  for (const [kind, id] of [["photo", voided], ["document", after], ["photo", randomUUID()]] as const) assert.equal(await loadShareFile(shareToken(url), kind, id), null);
-  const other = await fixture();
-  const foreignDoc = await document(other, ago(1));
-  assert.equal(await loadShareFile(shareToken(url), "document", foreignDoc), null, "another case's document");
-  // The page renders exactly this, with no button and no buyer.
-  const html = renderToStaticMarkup(await CaseSharePage({ params: Promise.resolve({ token: shareToken(url) }) }) as React.ReactElement);
-  for (const text of ["分享的唯讀頁", "浴室天花板滴水", "已完成", "王師傅水電", "已准許的照片", "天花板_修好.jpg", "完工明細 CMP-", "已作廢", "NT$5,200", "<s>"]) assert.ok(html.includes(text), text);
-  assert.doesNotMatch(html, /<button|林雅婷|before\.jpg|tenant\.jpg|unapproved|href="\/login/);
-  assert.ok(html.indexOf(issued) < html.indexOf(voided), "voided last");
+  assert.deepEqual(raw.photos, [{ id: after, name: "天花板_修好.jpg" }], "untagged, before, unapproved and tenant photos are not shown");
+  assert.deepEqual(raw.documents, [
+    { id: issued, kind: "completion_statement", docNo: raw.documents[0].docNo, status: "issued", totalMinor: "5200" },
+    { id: voided, kind: "completion_statement", docNo: raw.documents[1].docNo, status: "voided", totalMinor: "5300" }]);
+  // Only document totals: no estimate, expense, confirmed cost, buyer or tenant data.
+  assert.doesNotMatch(JSON.stringify(raw), /林雅婷|0912|內部備註|description|buyer|receipt_title|phone|estimate|expense|cost|items|unit_price/);
+  const token = shareToken(url);
+  assert.match(String((await loadSharePhoto(token, after))?.storage_path), new RegExp(`^org/${f.org}/tickets/${f.ticket}/`));
+  for (const [label, id] of [["untagged", untagged], ["before", before], ["unapproved", unapproved], ["tenant", tenant], ["foreign", foreign],
+    ["document id", issued], ["random", randomUUID()]] as const) assert.equal(await loadSharePhoto(token, id), null, label);
+  // No public PDF anywhere.
+  const html = renderToStaticMarkup(await CaseSharePage({ params: Promise.resolve({ token }) }) as React.ReactElement);
+  for (const text of ["分享的唯讀頁", "浴室天花板滴水", "已完成", "王師傅水電", "已准許的照片", "天花板_修好.jpg", "完工明細 CMP-", "已作廢", "NT$5,200", "NT$5,300", "<s>"]) assert.ok(html.includes(text), text);
+  assert.doesNotMatch(html, /<button|林雅婷|untagged|before\.jpg|tenant\.jpg|unapproved|\/documents\/|\.pdf|href="\/login/);
+  // An expired link serves nothing: a case whose only document is far older than 2160 hours, never copied.
+  const g = await fixture(); await document(g, "2025-01-01T00:00:00Z");
+  const old = await photo(g, { phase: "after", approved: true, name: "old.jpg" });
+  const stale = await vendorCaseShare(g.token, "open", origin) as { url: string };
+  const before0 = await oracle();
+  assert.deepEqual(await rawView(stale.url), { state: "expired", company: await companyOf(ORG_ID) });
+  assert.equal(await loadSharePhoto(shareToken(stale.url), old), null, "expired link");
+  for (const id of [after, untagged, before, unapproved, tenant, foreign]) await loadSharePhoto(token, id);
+  assert.equal(await oracle(), before0, "file reads never write");
+  // A revoked link serves nothing.
+  await staffRevokeCaseShare(admin, f.ticket);
+  assert.equal(await loadSharePhoto(token, after), null, "revoked link");
+  assert.deepEqual(await rawView(url), { state: "revoked", company: await companyOf(ORG_ID) });
 });
 
-test("denials with no writes: link revoked or expired, foreign or job tokens as share links, other orgs, every gate off", async () => {
+test("denials with no writes anywhere: bad bearers, revoked or expired job links, other orgs, every gate; vendor_job_v3 off leaves staff and public", async () => {
   const f = await fixture();
   await document(f, ago(1));
   const { url } = await vendorCaseShare(f.token, "copy", origin) as { url: string };
-  const before = await writes(f.ticket);
-  // A job link or a random bearer is not a share link.
+  const token = shareToken(url);
+  const okPhoto = await photo(f, { phase: "after", approved: true, name: "ok.jpg" });
+  const before = await oracle();
   for (const bearer of [f.token, randomBytes(32).toString("base64url")]) {
     assert.equal(await loadShareView(bearer), null);
     await assert.rejects(CaseSharePage({ params: Promise.resolve({ token: bearer }) }), (e: unknown) => String((e as { digest?: string }).digest).includes("404"));
   }
-  // The share link is not a job link.
-  await assert.rejects(vendorCaseShare(shareToken(url), "copy", origin), notFound);
-  // Revoked / expired job link: no vendor share.
+  await assert.rejects(vendorCaseShare(token, "copy", origin), notFound, "a share link is not a job link");
   const revokedJob = await fixture(); await document(revokedJob, ago(1));
   await db.query("UPDATE repair_vendor_jobs SET revoked_at=clock_timestamp() WHERE id=$1", [revokedJob.job]);
-  await assert.rejects(vendorCaseShare(revokedJob.token, "copy", origin), notFound);
   const expiredJob = await fixture(); await document(expiredJob, ago(1));
   await db.query("UPDATE repair_vendor_jobs SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [expiredJob.job]);
-  await assert.rejects(vendorCaseShare(expiredJob.token, "check", origin), notFound);
-  assert.deepEqual([...await shares(revokedJob.ticket), ...await shares(expiredJob.ticket)], []);
-  // Another org (not allowlisted): nothing.
   const foreign = await fixture(ORG2_ID); await document(foreign, ago(1));
-  await assert.rejects(vendorCaseShare(foreign.token, "copy", origin), notFound);
-  assert.deepEqual(await shares(foreign.ticket), []);
-  // Each gate alone off: the vendor is refused and the existing link reads as no share at all.
+  const snapshot = await oracle();
+  await assert.rejects(vendorCaseShare(revokedJob.token, "copy", origin), notFound, "revoked job link");
+  await assert.rejects(vendorCaseShare(expiredJob.token, "check", origin), notFound, "expired job link");
+  await assert.rejects(vendorCaseShare(foreign.token, "copy", origin), notFound, "another org");
+  await assert.rejects(staffCaseShare(coast, foreign.ticket, true, origin), notFound, "another org's staff, org off the allowlists");
+  assert.equal(await oracle(), snapshot, "no writes");
   const gates: [string, () => Promise<unknown>, () => Promise<unknown>][] = [
     ...PLATFORM.map(k => [`platform ${k} off`, () => setPlatform(k, [ORG_ID], false), () => setPlatform(k, [ORG_ID])] as [string, () => Promise<unknown>, () => Promise<unknown>]),
     ...Object.keys(ORG_FLAGS).filter(k => k !== "brand_v2").map(k => [`org ${k} off`, () => orgFlags(ORG_ID, { [k]: false }), () => orgFlags(ORG_ID, { [k]: true })] as [string, () => Promise<unknown>, () => Promise<unknown>]),
@@ -271,31 +301,43 @@ test("denials with no writes: link revoked or expired, foreign or job tokens as 
   for (const [label, off, on] of gates) {
     await off();
     try {
-      await assert.rejects(vendorCaseShare(f.token, "copy", origin), notFound, label);
-      if (!label.includes("vendor_job_v3")) assert.equal(await loadShareView(shareToken(url)), null, label);
-      if (!label.includes("vendor_job_v3")) assert.equal(await loadShareFile(shareToken(url), "document", (await db.query("SELECT id::text FROM vendor_documents WHERE ticket_id=$1 LIMIT 1", [f.ticket])).rows[0].id), null, label);
-      if (!label.includes("vendor_job_v3")) await assert.rejects(staffCaseShare(admin, f.ticket, true, origin), notFound, label);
+      const mark = await oracle();
+      await assert.rejects(vendorCaseShare(f.token, "copy", origin), notFound, `${label}: vendor`);
+      if (label.includes("vendor_job_v3")) {
+        // Only the B-105 vendor case is off: staff and the public link still work.
+        assert.equal((await rawView(url)).state, "ok", `${label}: public`);
+        assert.ok(await loadSharePhoto(token, okPhoto), `${label}: photo`);
+        assert.equal((await staffCaseShare(admin, f.ticket, false, origin)).url, url, `${label}: staff`);
+      } else {
+        assert.equal(await loadShareView(token), null, `${label}: public`);
+        assert.equal(await loadSharePhoto(token, okPhoto), null, `${label}: photo`);
+        await assert.rejects(staffCaseShare(admin, f.ticket, true, origin), notFound, `${label}: staff copy`);
+        await assert.rejects(staffRevokeCaseShare(admin, f.ticket), notFound, `${label}: staff revoke`);
+        assert.equal(await oracle(), mark, `${label}: no writes`);
+      }
     } finally { await on(); }
   }
-  assert.equal(await writes(f.ticket), before, "no writes on any denied path");
-  assert.equal((await view(url)).state, "ok", "restored");
+  assert.equal((await rawView(url)).state, "ok", "restored");
+  assert.equal(JSON.parse(await oracle())["public.files"], JSON.parse(before)["public.files"], "no file rows written by any denial");
 });
 
-test("vendor route: same origin, small JSON, check / open / copy; other modes and bodies refused", async () => {
+test("vendor route: same origin, small JSON, check / open / copy; rejected requests write nothing", async () => {
   const f = await fixture();
   await document(f, ago(1));
   const post = (body: unknown, headers: Record<string, string> = {}) => shareRoute(new Request(`${origin}/api/vendor-jobs/case-share`, {
     method: "POST", body: typeof body === "string" ? body : JSON.stringify(body), headers: { origin, "content-type": "application/json", ...headers } }));
-  assert.deepEqual(await (await post({ token: f.token, mode: "check" })).json(), { eligible: true });
-  const opened = await (await post({ token: f.token, mode: "open" })).json();
-  assert.match(opened.url, /\/s\//);
+  const before = await oracle();
   assert.equal((await post({ token: f.token, mode: "revoke" })).status, 400);
   assert.equal((await post({ token: f.token, mode: "copy" }, { origin: "https://evil.test" })).status, 403);
+  assert.equal((await post({ token: f.token, mode: "copy" }, { "content-type": "text/plain" })).status, 415);
   assert.equal((await post({ token: f.token, mode: "copy", pad: "x".repeat(2000) })).status, 413);
+  assert.equal((await post("{not json")).status, 400);
   assert.equal((await post({ token: randomBytes(32).toString("base64url"), mode: "copy" })).status, 404);
-  const view = await SharePage({ locale: "zh-TW", token: "t".repeat(43), view: { state: "expired", company: "安居物業" } }) as React.ReactElement;
-  const expired = renderToStaticMarkup(view);
+  assert.deepEqual(await (await post({ token: f.token, mode: "check" })).json(), { eligible: true });
+  assert.equal(await oracle(), before, "no writes from rejected requests or the check");
+  const opened = await (await post({ token: f.token, mode: "open" })).json();
+  assert.match(opened.url, /\/s\//);
+  const expired = renderToStaticMarkup(await SharePage({ locale: "zh-TW", token: "t".repeat(43), view: { state: "expired", company: "安居物業" } }) as React.ReactElement);
   assert.ok(expired.includes("這個分享已過期") && expired.includes("這個連結已過期，文件內容不會再顯示。需要的話請聯絡安居物業。") && expired.includes('data-v3-illustration="26"'));
   assert.doesNotMatch(expired, /<button|<a /);
-  assert.equal(createHash("sha256").update("x").digest("hex").length, 64);
 });

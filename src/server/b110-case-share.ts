@@ -106,9 +106,12 @@ export async function loadShareView(token: string): Promise<ShareView | null> {
   return raw === null ? null : parseShareView(raw);
 }
 
-/** A live share's approved photo (storage path) or a document's stored PDF; null when not served. */
-export async function loadShareFile(token: string, kind: "photo" | "document", id: string) {
+/**
+ * A live share's approved 處理後 photo (storage path); null when not served. Document PDFs are never served publicly:
+ * the stored B-025 PDF carries the buyer's details, the work address, line items and the vendor's contact details.
+ */
+export async function loadSharePhoto(token: string, id: string) {
   if (!vendorTokenAcceptable(token) || !UUID.test(id)) return null;
-  return svc(null, async client => (await client.query<{ storage_path: string | null; pdf: Buffer | null; file_name: string | null }>(
-    "SELECT * FROM app.b110_share_file($1,$2,$3,$4::uuid)", [hashVendorToken(token), brandV2Enabled(), kind, id])).rows[0] ?? null);
+  return svc(null, async client => (await client.query<{ storage_path: string; file_name: string }>(
+    "SELECT * FROM app.b110_share_photo($1,$2,$3::uuid)", [hashVendorToken(token), brandV2Enabled(), id])).rows[0] ?? null);
 }

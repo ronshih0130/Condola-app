@@ -280,7 +280,7 @@ BEGIN
   'app.b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean)',
   'app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)',
   'app.b110_share_view(text,boolean)',
-  'app.b110_share_file(text,boolean,text,uuid)',
+  'app.b110_share_photo(text,boolean,uuid)',
   'app.b110_enabled(uuid,boolean)',
   'app.b110_expires_at(app.case_shares)',
   'app.b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)'
