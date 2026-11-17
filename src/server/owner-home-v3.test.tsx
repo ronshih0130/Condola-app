@@ -41,7 +41,7 @@ const uiMocks = { "../../../i18n": i18n, "../../../i18n/lanes/brand-v3": copy, "
   "next/link": { __esModule: true, default: ({ children, ...props }: React.PropsWithChildren<{ href: string }>) => <a {...props}>{children}</a> } };
 const ui = compile(source("src/components/v3/owner/home.tsx"), uiMocks);
 const Home = ui.OwnerHomeV3 as React.ComponentType<{ name: string; locale: i18n.Locale; state: OwnerHomeState; estimate?: string; summary?: React.ReactNode; overviewHref?: string }>;
-const Panel = ui.EstimatePanel as React.ComponentType<{ row: EstimateRow; locale: i18n.Locale; onClose: () => void }>;
+const Panel = ui.EstimatePanel as React.ComponentType<{ row: EstimateRow; locale: i18n.Locale; onClose: () => void; firm?: string | null }>;
 
 test("O-HOME / O-ROW / OWN-26-AC1…4: uncapped rows, NONAME, no summary or other task types", () => {
   const rows = Array.from({ length: 57 }, (_, n) => ({ ...row, versionId: String(n) }));

@@ -157,3 +157,12 @@ test("GS-43 / 0 outbound: no personal names or outbound calls in the relay modul
   assert.match(loader, /loadVendorCase\(token, async \(sql, params\) =>\s*\(await client\.query/);
   assert.match(loader, /catch \(error\) \{\s*logServerError\("b3_vendor_case_relay", error\);\s*return null;/);
 });
+
+test("relayForPage: the relay is drawn only when its snapshot's 回報完工 readiness matches the page's", async () => {
+  const { relayForPage } = await import("./b3-vendor-case-relay");
+  assert.equal(relayForPage({ kind: "do_repair", reportReady: true }, true), "do_repair");
+  assert.equal(relayForPage({ kind: "do_repair", reportReady: false }, false), "do_repair");
+  assert.equal(relayForPage({ kind: "do_repair", reportReady: false }, true), null);
+  assert.equal(relayForPage({ kind: "confirm_cost", reportReady: true }, false), null);
+  assert.equal(relayForPage(null, true), null);
+});

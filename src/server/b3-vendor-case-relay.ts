@@ -1,6 +1,6 @@
 import { brandV3ReadForOrg } from "./brand-v3";
 import { loadVendorRepairTurnsOn } from "./b3-vendor-repair-turn";
-import { loadVendorCase, vendorCaseStage } from "./b105-vendor-case";
+import { loadVendorCase, vendorCaseReportReady, vendorCaseStage } from "./b105-vendor-case";
 import { svc } from "./db";
 import { logServerError } from "./errors";
 import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
@@ -12,7 +12,17 @@ import { vendorRelayKind, type VendorRelayKind } from "../lib/b3-party-relay";
  * the same client. Only an `open` case with one of the four exact projections draws; anything else — OFF, not
  * admitted, restricted, terminal, a read failure or a snapshot disagreement — returns null and no relay is drawn.
  */
-export async function loadVendorCaseRelay(token: string): Promise<VendorRelayKind | null> {
+export type VendorCaseRelayRead = { kind: VendorRelayKind; reportReady: boolean };
+
+/**
+ * `reportReady` is the B-097 回報完工 readiness from the same snapshot: the page draws the relay only when it agrees
+ * with the readiness it renders the stage primary from (a disagreement means the case moved between reads).
+ */
+export function relayForPage(read: VendorCaseRelayRead | null, reportReady: boolean): VendorRelayKind | null {
+  return read && read.reportReady === reportReady ? read.kind : null;
+}
+
+export async function loadVendorCaseRelay(token: string): Promise<VendorCaseRelayRead | null> {
   if (!vendorTokenAcceptable(token)) return null;
   try {
     return await svc(null, async client => {
@@ -27,7 +37,8 @@ export async function loadVendorCaseRelay(token: string): Promise<VendorRelayKin
       const read = await loadVendorCase(token, async (sql, params) =>
         (await client.query<{ r: unknown }>(sql, params)).rows[0]?.r ?? null);
       if (read?.state !== "ready" || vendorCaseStage(read.value) !== "open") return null;
-      return vendorRelayKind(loaded.turn);
+      const kind = vendorRelayKind(loaded.turn);
+      return kind ? { kind, reportReady: vendorCaseReportReady(read.value) } : null;
     }, { isolation: "repeatable read" });
   } catch (error) {
     logServerError("b3_vendor_case_relay", error);

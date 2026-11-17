@@ -566,9 +566,12 @@ test("PLT-52-AC9/AC10: loadVendorCaseRelay — R7b, legacy-cost R2, and no relay
     const f = await fixture();
     assert.equal(await loadVendorCaseRelay(f.token), null, "accept stage: RV-JOB-ACCEPT has no relay");
     assert.equal((await accept(f.token)).status, "recorded");
-    assert.equal(await loadVendorCaseRelay(f.token), "do_repair", "R7b: 廠 到場維修, 你");
+    assert.deepEqual(await loadVendorCaseRelay(f.token), { kind: "do_repair", reportReady: false }, "R7b: 廠 到場維修, 你");
+    // The 回報完工 readiness comes from the same snapshot as the relay kind.
+    await attachSql(f.token, f, "before");
+    assert.deepEqual(await loadVendorCaseRelay(f.token), { kind: "do_repair", reportReady: true });
     await db.query("UPDATE public.repair_vendor_jobs SET reported_at=clock_timestamp(),reported_cost_minor=1000 WHERE id=$1", [f.job]);
-    assert.equal(await loadVendorCaseRelay(f.token), "confirm_cost", "R2: 管 核對費用");
+    assert.deepEqual(await loadVendorCaseRelay(f.token), { kind: "confirm_cost", reportReady: true }, "R2: 管 核對費用");
     await db.query("UPDATE public.maintenance_tickets SET status='closed' WHERE id=$1", [f.ticket]);
     assert.equal(await loadVendorCaseRelay(f.token), null, "terminal: status only");
 
@@ -577,7 +580,7 @@ test("PLT-52-AC9/AC10: loadVendorCaseRelay — R7b, legacy-cost R2, and no relay
     await orgFlags(ORG_ID, { brand_v3: false });
     try { assert.equal(await loadVendorCaseRelay(off.token), null, "brand_v3 OFF"); }
     finally { await orgFlags(ORG_ID, { brand_v3: true }); }
-    assert.equal(await loadVendorCaseRelay(off.token), "do_repair");
+    assert.deepEqual(await loadVendorCaseRelay(off.token), { kind: "do_repair", reportReady: false });
     await db.query("UPDATE public.repair_vendor_jobs SET revoked_at=clock_timestamp() WHERE id=$1", [off.job]);
     assert.equal(await loadVendorCaseRelay(off.token), null, "revoked link: no turn");
   } finally { await orgFlags(ORG_ID, { repair_approvals: true }); }
