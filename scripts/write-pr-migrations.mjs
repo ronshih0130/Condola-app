@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116230000_b109b_shared_meter_bills.sql": {
+    addOnly: false,
+    reason: "B-109b (PR-036 = a, Ron 2026-11-16 「Agree on rec」; GS-53 = A). Not add-only: it replaces the existing app.b109_shared_meter_split body in place (same signature and ACL) so its shares come from the new pure app.b109_split_shares (exact div(), remainder to the first) and 依分表度數 prefers a utility run's typed reading. Adds app.b109_split_shares (IMMUTABLE, pure) and app.b109b_run_config (VOLATILE; every row lock first, then full admission; native admin/manager; shared_meter flag), both service-only SECURITY DEFINER with search_path=pg_catalog,pg_temp and EXECUTE to service_role only. No table, grant, policy, flag or data change. Posting applies the split only for one by-room unit with the flag ON; OFF is unchanged.",
+  },
   "supabase/migrations/20261116240000_b091_owner_rules.sql": {
     addOnly: false,
     reason: "B-091 OWN-RULE (OWN-34-AC3/AC4, OWN-36; Ron's owner round 2026-11-15). Not add-only by the table rule (two new tables with NOT NULL columns and CHECK/UNIQUE/FK constraints; seeds the new owner_rules platform setting OFF with ON CONFLICT DO NOTHING), though old code never touches them: app.b091_owner_rule_revisions (append-only renewal-rule revisions = the activity log) and app.b091_owner_rule_commands (every request id reserved with its outcome), RLS on, no application grants; three migration-owned VOLATILE service-only SECURITY DEFINER gateways (search_path=pg_catalog,pg_temp; EXECUTE to service_role only): app.b091_owner_rule_set (request id, then every row lock, then full admission; PR-015 current owner; owner_rules flag; audit_log row), app.b091_owner_rule_view and app.b091_staff_rule_changes. No outbound.",
