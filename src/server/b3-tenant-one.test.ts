@@ -41,7 +41,7 @@ test("admin/manager read admitted org in one read-only snapshot; no adapter invo
       const result=await brandTenantOne({...session,role},id(4),{...on,transaction:mock((sql,args)=>{
         assert.deepEqual(args,[session.orgId,id(4),true]);return sql===CONTACT?[contact]:[lease];
       },role)});
-      assert.deepEqual(result,{state:"ready",...contact,canViewContact:true,mobileRequired:true,legacyPhoneNotice:true,leases:[lease]});
+      assert.deepEqual(result,{state:"ready",...contact,canViewContact:true,mobileRequired:true,legacyPhoneNotice:true,phoneHistory:true,leases:[lease]});
     }
     assert.equal(fetchMock.mock.callCount(),0);
   } finally { fetchMock.mock.restore(); }
@@ -51,7 +51,13 @@ test("actual accountant membership omits all contact fields even if session clai
     if(sql===CONTACT){assert.equal(args[2],false);return [contact];}return [];
   },"accountant")});
   if(result.state!=="ready")assert.fail();assert.equal(result.canViewContact,false);
-  for(const key of ["phone","email","legacyPhoneNotice","verified","source","pendingChange"])assert.equal(key in result,false);
+  for(const key of ["phone","email","legacyPhoneNotice","verified","source","pendingChange","phoneHistory"])assert.equal(key in result,false);
+});
+test("B-076a: 「查看改號紀錄」 only for native admin/manager with contact access while tenant_directory_edit is on",async()=>{
+  const read=(role:string,directory:boolean)=>brandTenantOne({...session,role:"manager"},id(4),{...on,transaction:mock(sql=>sql===CONTACT?[contact]:[],role,true,directory)});
+  for(const role of ["admin","manager"]){const on1=await read(role,true);if(on1.state!=="ready")assert.fail();assert.equal(on1.phoneHistory,true);
+    const off=await read(role,false);if(off.state!=="ready")assert.fail();assert.equal("phoneHistory" in off,false);}
+  const acc=await read("accountant",true);if(acc.state!=="ready")assert.fail();assert.equal("phoneHistory" in acc,false);
 });
 test("maintenance, portals, anon role and sandbox-required sessions cannot read",async()=>{
   for(const s of [{...session,role:"maintenance" as const},{...session,role:null},{...session,kind:"tenant" as const},

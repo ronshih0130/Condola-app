@@ -31,7 +31,7 @@ function validMoney(value: number): boolean {
 }
 
 // Keep the checksum policy aligned with onboarding.
-function validTaxId(value: string): boolean {
+export function validTaxId(value: string): boolean {
   if (!/^\d{8}$/.test(value)) return false;
   const weights = [1, 2, 1, 2, 1, 2, 4, 1];
   let sum = 0;

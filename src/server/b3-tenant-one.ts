@@ -15,6 +15,8 @@ export type TenantOneReady = {
   phone?: string | null; email?: string | null;
   // OQ-066 fallback, not per-number verification or provenance facts.
   legacyPhoneNotice?: true;
+  /** B-076a: 「查看改號紀錄」 for a native admin/manager with contact access while tenant_directory_edit is on. */
+  phoneHistory?: true;
   leases: TenantOneLease[];
 };
 export type TenantOneResult = { state: "off" | "unavailable" | "not_found" } | TenantOneReady;
@@ -64,7 +66,9 @@ export async function brandTenantOne(session: Session, id: string, deps: Deps = 
         // Do not return private fields at all to accountant or contact-denied custom roles.
         // No verified-at/source/change-request schema or MGT-76 action exists here.
         // B-015 immediate contact editing is not a substitute for an OTP change.
+        const phoneHistory = canViewContact && context.directory === true && ["admin","manager"].includes(context.role);
         return { state:"ready" as const,id,name,lineLinked,canViewContact,mobileRequired,leases,
+          ...(phoneHistory ? { phoneHistory:true as const } : {}),
           ...(canViewContact ? { phone:contact.phone,email:contact.email,
             ...(mobileRequired && contact.phone ? { legacyPhoneNotice:true as const } : {}) } : {}) };
       });
