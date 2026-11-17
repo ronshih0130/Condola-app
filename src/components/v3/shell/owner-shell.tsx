@@ -17,7 +17,9 @@ export function OwnerShellV3({ children, locale, name, firm, navigation, canSwit
   const areas = [...navigation.areas, ...navigation.more];
   // B-093: under brand_v3 /o/approvals/[ticketId] is the 核准紀錄 read-only view.
   const current = areas.find(area => area.href === "/o" ? path === "/o" : pathWithin(path, area.href))
-    ?? (pathWithin(path, "/o/approvals") ? areas.find(area => area.id === "decided") : undefined);
+    ?? (pathWithin(path, "/o/approvals") ? areas.find(area => area.id === "decided") : undefined)
+    // B-094: with 授權規則 live, a property's /o/repair-policy page sits under it (OWN-34-AC1).
+    ?? (pathWithin(path, "/o/repair-policy") ? areas.find(area => area.id === "rules") : undefined);
   const tabs: ShellEntry[] = [...navigation.areas];
   if (navigation.more.length) tabs.push({ id: "more", href: "", label: navCopy.more, icon: "more" });
   return <ShellV3 areas={areas} tabs={tabs} path={path} currentId={current?.id}
