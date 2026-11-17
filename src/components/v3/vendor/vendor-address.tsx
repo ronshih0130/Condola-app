@@ -79,7 +79,7 @@ export function createAddressFlow(deps: { saver: ReturnType<typeof createAddress
   };
 }
 
-export function VendorAddressCard({ locale, version, address }: { locale: Locale; version: number; address: string | null }) {
+export function VendorAddressCard({ locale, version, address, children }: { locale: Locale; version: number; address: string | null; children?: React.ReactNode }) {
   const copy = vendorAddressCopy(locale);
   const id = useId();
   const sheet = useRef<HTMLDialogElement>(null);
@@ -145,5 +145,7 @@ export function VendorAddressCard({ locale, version, address }: { locale: Locale
         <button type="button" className="v-addr-text" onClick={() => { flow.cancel(); sheet.current?.close(); refresh(); }}>{copy.cancel}</button>
       </form>
     </dialog>
+    {/* B-065: the 開立類型 row and 管理印章 sit in the same 固定資料 card (ven-account). */}
+    {children}
   </section>;
 }
