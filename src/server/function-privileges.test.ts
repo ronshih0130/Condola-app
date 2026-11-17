@@ -431,6 +431,31 @@ test("B-063 adds one vendor workbench gateway reusing the B-026 history job read
   assert.match(sql, /SET LOCAL statement_timeout='60s'/);
 });
 
+test("B-112 adds a revoked private ledger, two service-only gateways and two internal helpers, migration-owned", () => {
+  const sql = read("supabase/migrations/20261116190000_b112_vendor_address.sql");
+  assert.deepEqual([...sql.matchAll(/CREATE FUNCTION app\.(\w+)/g)].map(match => match[1]),
+    ["b112_enabled", "b112_account_profile", "b112_vendor_address", "b112_save_vendor_address"]);
+  assert.equal((sql.match(/VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 4);
+  assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|DROP|ALTER FUNCTION|ALTER TABLE public|GRANT[^;]*\bON (?:TABLE )?(?:app|public)\.|READ ONLY/i);
+  assert.match(sql, /ALTER TABLE app\.b112_address_saves ENABLE ROW LEVEL SECURITY;/);
+  assert.match(sql, /REVOKE ALL ON app\.b112_address_saves FROM PUBLIC,anon,authenticated,service_role;/);
+  assert.match(sql, /app\.b026_account_actor\(p_session_hash\)/);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of ["b112_vendor_address(text,uuid,boolean)", "b112_save_vendor_address(text,uuid,boolean,uuid,integer,text)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`), signature);
+    assert.ok(read("supabase/rpc-allowlist.txt").includes(`# service-only: app.${signature}`), signature);
+  }
+  for (const signature of ["b112_enabled(uuid,boolean)", "b112_account_profile(text,uuid,boolean,boolean)"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated,service_role;`), signature);
+    assert.ok(!compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}`), signature);
+  }
+  assert.equal((compact.match(/GRANT/g) ?? []).length, 2);
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-112 gateway ACL\/config mismatch/);
+});
+
 test("B-109 adds one RLS config table with no application grants, the shared_meter flag OFF and three service-only gateways", () => {
   const sql = read("supabase/migrations/20261116180000_b109_shared_meter.sql");
   const b093 = read("supabase/migrations/20261115200000_b093_owner_decided.sql");
