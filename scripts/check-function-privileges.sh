@@ -407,12 +407,14 @@ BEGIN
   'app.b097_vendor_done_view(text,boolean)',
   'app.b097_vendor_complete(text,boolean,uuid,text)',
   'app.b097_staff_reopen(uuid,uuid,text,uuid,boolean,uuid,uuid,text)',
-  'app.b098_vendor_tenant_phone(text,boolean)'
+  'app.b098_vendor_tenant_phone(text,boolean)',
+  'app.b097_reopen_open(app.b097_completions,timestamp with time zone)',
+  'app.b097_supersede_completion()'
  ] LOOP
   SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
   IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
    OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
-   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b097_reopen_open%' AND signature NOT LIKE 'app.b097_supersede_completion%')
    OR has_function_privilege('anon',fn.oid,'EXECUTE')
    OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
@@ -431,6 +433,10 @@ BEGIN
    END IF;
   END LOOP;
  END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='b097_supersede_completion' AND tgrelid='public.maintenance_tickets'::regclass
+  AND tgfoid='app.b097_supersede_completion()'::regprocedure AND tgenabled='O') THEN
+  RAISE EXCEPTION 'B-097 supersede trigger missing or disabled';
+ END IF;
 END $b097_gateways$;
 SQL
 

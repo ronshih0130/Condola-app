@@ -1,6 +1,7 @@
 import "next/dist/server/node-environment-baseline";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import test, { mock } from "node:test";
 import nextHeaders from "next/headers";
 import { Client } from "pg";
@@ -25,13 +26,14 @@ import { POST as reopenRoute } from "../app/api/repairs/reopen/route";
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 const origin = "http://127.0.0.1:43123";
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
+const read = (path: string) => readFileSync(path, "utf8");
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
 let db: Client;
 const ORG_FLAGS = { vendor_dispatch: true, vendor_link: true, brand_v2: true, brand_v3: true, vendor_job_v3: true };
 const staffCred = randomUUID();
 const admin: Session = { userId: USERS.admin, sessionId: randomUUID(), orgId: ORG_ID, liveOrgId: ORG_ID, role: "admin", kind: "staff",
   name: "Staff", email: "staff@example.test", environment: "live", locale: "zh-TW", calendar: "gregorian", leaseId: null };
-let property = "";
+let property = "", currency = "", minorUnit = 0;
 let lease: { id: string; property: string; unit: string | null; room: string | null; tenant: string; phone: string };
 const brandEnv = process.env.BRAND_V2;
 type Q = Pick<Client, "query">;
@@ -63,7 +65,22 @@ test.before(async () => {
   await db.query("UPDATE public.organizations SET plan_tier='beta' WHERE id=ANY($1::uuid[])", [[ORG_ID, ORG2_ID]]);
   for (const org of [ORG_ID, ORG2_ID]) await orgFlags(org, ORG_FLAGS);
   for (const k of ["vendor_job_v3", "vendor_link"]) await setPlatform(k, ON);
-  property = (await db.query("SELECT id FROM public.properties WHERE org_id=$1 AND archived_at IS NULL ORDER BY id LIMIT 1", [ORG_ID])).rows[0].id;
+  // A property with one current owner and an approval threshold (as in the B-105 test), so estimates can be submitted.
+  const owned = (await db.query(`SELECT po.id,po.property_id,p.currency::text currency,r.minor_unit
+    FROM public.property_owners po
+    JOIN public.contacts c ON c.org_id=po.org_id AND c.id=po.owner_contact_id
+    JOIN public.properties p ON p.org_id=po.org_id AND p.id=po.property_id
+    JOIN public.organizations o ON o.id=po.org_id
+    JOIN app.b013_regional_defaults r ON r.country_code=o.country_code::text AND r.currency=p.currency
+    WHERE po.org_id=$1 AND c.user_id=$2 AND c.is_owner AND c.archived_at IS NULL
+      AND p.archived_at IS NULL ORDER BY po.id LIMIT 1`, [ORG_ID, USERS.owner])).rows[0];
+  assert.ok(owned);
+  property = owned.property_id; currency = owned.currency.trim(); minorUnit = owned.minor_unit;
+  await db.query(`UPDATE public.property_owners SET effective_from=CURRENT_DATE-1,effective_to=CURRENT_DATE
+    WHERE org_id=$1 AND property_id=$2 AND id<>$3`, [ORG_ID, property, owned.id]);
+  await db.query(`UPDATE public.property_owners SET repair_approval_threshold_minor=500000,
+    effective_from=CURRENT_DATE-1,effective_to=NULL WHERE id=$1`, [owned.id]);
+  await orgFlags(ORG_ID, { repair_approvals: true }); await setPlatform("repair_approvals", ON);
   const row = (await db.query(`SELECT l.id,l.property_id,l.unit_id,l.target_room_id,c.id contact,c.phone_e164
     FROM public.leases l JOIN public.lease_parties lp ON lp.org_id=l.org_id AND lp.lease_id=l.id AND lp.role='primary'
     JOIN public.contacts c ON c.org_id=lp.org_id AND c.id=lp.contact_id AND c.is_tenant AND c.archived_at IS NULL AND c.phone_e164 IS NOT NULL
@@ -135,6 +152,30 @@ const notFound = (error: unknown) => error instanceof FlowError && error.key ===
 /** A gateway refusal as seen through svc(): the 42501 survives as the code or the cause's code. */
 const sqlRefused = (error: unknown) => ((error as { cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code) === "42501";
 const forbidden = (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden";
+/** A staff estimate on the ticket (B-013): amount over 500000 minor units needs the owner. Returns the version id. */
+async function estimate(f: Fixture, amount: number) {
+  const r = await svc(USERS.admin, async client => (await client.query(`SELECT app.b013_submit_estimate(
+      $1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,NULL,$7::bigint,$5::text,$6::smallint,'Repair ceiling','[]'::jsonb,$8::bytea) r`,
+  [ORG_ID, admin.sessionId, randomUUID(), f.ticket, currency, minorUnit, amount, createHash("sha256").update(f.ticket + amount).digest()])).rows[0].r)
+    .catch((error: { cause?: unknown }) => {
+      const cause = error.cause as Record<string, unknown> | undefined;
+      throw new Error(`b013_submit_estimate: ${cause ? JSON.stringify(cause, Object.getOwnPropertyNames(cause)) : String(error)}`);
+    });
+  assert.equal(r.status, "recorded");
+  return String(r.version_id);
+}
+/** Every outbound queue: notifications, deliveries and attempts, push reservations and claims, LINE and mail logs. */
+const OUTBOUND = ["app.b013_repair_event_outbox", "app.b014_report_delivery_events", "app.b028_delivery_attempt_events", "app.b028_delivery_attempts",
+  "app.b028_delivery_on_transitions", "app.b028_notification_event_recipients", "app.b028_notification_events", "app.b033_push_fallbacks",
+  "app.b033_push_reservations", "app.b033_org_push_budgets", "app.b037_rent_push_claims", "app.b038_repair_pushes", "public.deliveries",
+  "public.email_log", "public.line_push_usage", "public.messages", "public.notifications"];
+async function outbound() {
+  const out: Record<string, string> = {};
+  for (const table of OUTBOUND) {
+    out[table] = (await db.query(`SELECT count(*)::text||':'||md5(coalesce(string_agg(row_to_json(r)::text,'' ORDER BY row_to_json(r)::text),'')) h FROM ${table} r`)).rows[0].h;
+  }
+  return out;
+}
 const status = async (ticket: string) => (await db.query("SELECT status::text s FROM public.maintenance_tickets WHERE id=$1", [ticket])).rows[0].s as string;
 const SNAPSHOT = ["app.b097_completions", "app.b097_requests", "public.maintenance_tickets", "public.ticket_comments", "public.audit_log",
   "app.b105_vendor_job_decisions", "public.ticket_attachments", "public.repair_vendor_jobs"];
@@ -167,7 +208,14 @@ test("privileges: four service-only gateways, both private tables revoked with R
   }
   const fns = (await db.query(`SELECT proname,prosecdef,provolatile,proconfig FROM pg_proc
     WHERE pronamespace='app'::regnamespace AND proname ~ '^b09[78]_' ORDER BY 1`)).rows;
-  assert.deepEqual(fns.map(f => f.proname), ["b097_staff_reopen", "b097_vendor_complete", "b097_vendor_done_view", "b098_vendor_tenant_phone"]);
+  assert.deepEqual(fns.map(f => f.proname), ["b097_reopen_open", "b097_staff_reopen", "b097_supersede_completion", "b097_vendor_complete", "b097_vendor_done_view", "b098_vendor_tenant_phone"]);
+  for (const role of ["anon", "authenticated", "service_role"]) {
+    for (const helper of ["app.b097_reopen_open(app.b097_completions,timestamptz)", "app.b097_supersede_completion()"]) {
+      assert.equal((await db.query("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [role, helper])).rows[0].ok, false, `${role} ${helper}`);
+    }
+  }
+  assert.equal((await db.query(`SELECT count(*)::int n FROM pg_trigger WHERE tgname='b097_supersede_completion'
+    AND tgrelid='public.maintenance_tickets'::regclass AND tgenabled='O'`)).rows[0].n, 1);
   for (const fn of fns) assert.deepEqual([fn.prosecdef, fn.provolatile, fn.proconfig], [true, "v", ["search_path=pg_catalog, pg_temp"]], fn.proname);
 });
 
@@ -175,6 +223,7 @@ test("送出完工: one explicit after-photo closes the repair; completion, stat
   const f = await fixture();
   await photo(f, "before");
   const after = await photo(f, "after", { name: "天花板_修好.jpg" });
+  const queues = await outbound();
   const view = await loadVendorDone(f.token);
   assert.deepEqual(view?.afterPhotos.map(p => p.name), ["天花板_修好.jpg"]);
   assert.equal(view?.closed, false); assert.equal(view?.accepted, true);
@@ -197,12 +246,13 @@ test("送出完工: one explicit after-photo closes the repair; completion, stat
   const read = await loadVendorCase(f.token);
   assert.equal(read?.state === "ready" && read.value.closed, true, "B-105 sees the case closed (GS-51 read only)");
   assert.equal((await loadVendorDone(f.token))?.closed, true);
-  // No outbound: nothing queued for LINE, SMS or mail by this close.
-  for (const table of ["public.notification_events", "app.b028_notification_events"]) {
-    const exists = (await db.query("SELECT to_regclass($1) r", [table])).rows[0].r;
-    if (exists) assert.equal((await db.query(`SELECT count(*)::int n FROM ${table} WHERE created_at > now() - interval '1 minute'
-      AND (to_jsonb(${table.split(".")[1]}) ->> 'ticket_id' = $1 OR to_jsonb(${table.split(".")[1]})::text LIKE '%' || $1 || '%')`, [f.ticket])).rows[0].n, 0, table);
-  }
+  // No outbound of any kind: every queue is unchanged by the close and by a reopen (in-app only; PR-022 keeps LINE OFF).
+  assert.equal((await reopen(f.ticket)).status, "reopened");
+  assert.deepEqual(await outbound(), queues);
+  // A NUL in the note is invalid input, never a server error (it can never reach a PostgreSQL text value).
+  assert.deepEqual(await completeVendorCase(f.token, { requestId: randomUUID(), note: "a\u0000b" }), { status: "rejected_invalid" });
+  assert.deepEqual(await staffReopenRepair(admin, { ticketId: f.ticket, requestId: randomUUID(), reason: "a\u0000b" }), { status: "rejected_invalid" });
+  assert.equal((await post({ token: f.token, requestId: randomUUID(), note: "a\u0000b" })).status, 400);
 });
 
 test("LPQ-25 item 3: only the explicit 處理後 set of this job counts; a legacy NULL-phase, before, internal or other job's photo does not", async () => {
@@ -274,9 +324,18 @@ test("denials write nothing: pending or declined case, revoked, expired, reassig
   // A B-025 document token and a B-110 share token are never case bearers.
   const f = await fixture({ tenant: true }); await photo(f, "after");
   const documentToken = newVendorToken(), shareToken = newVendorToken();
+  // A real, valid B-025 document bearer for this very job and the vendor's profile: a different token domain.
+  const profile = (await db.query(`INSERT INTO public.vendor_profiles(org_id,contact_id,vendor_code,kind,display_name,phone_e164,address,qualification_attested_at)
+    VALUES($1,$2,'B097','individual','B-097 vendor','+886900000097','台北市信義區信義路二段 97 號',now()) RETURNING id::text`, [ORG_ID, f.contact])).rows[0].id;
+  await db.query(`INSERT INTO public.vendor_document_grants(org_id,ticket_id,job_id,vendor_profile_id,token_hash,buyer_selection,expires_at,created_by)
+    VALUES($1,$2,$3,$4,$5,'{"kind":"company","name":"B-097"}'::jsonb,clock_timestamp()+interval '1 day',$6)`,
+  [ORG_ID, f.ticket, f.job, profile, hashVendorToken(documentToken), USERS.admin]);
+  assert.equal((await db.query("SELECT count(*)::int n FROM public.vendor_document_grants WHERE token_hash=$1 AND expires_at>now()", [hashVendorToken(documentToken)])).rows[0].n, 1);
+  assert.equal((await db.query("SELECT count(*)::int n FROM public.repair_vendor_jobs WHERE token_hash=$1", [hashVendorToken(documentToken)])).rows[0].n, 0,
+    "the document token is not a job token");
   await db.query(`INSERT INTO app.case_shares(org_id,ticket_id,vendor_job_id,token_hash,token,created_by_kind,created_by)
     VALUES($1,$2,$3,$4,$5,'vendor',NULL)`, [ORG_ID, f.ticket, f.job, createHash("sha256").update(shareToken, "utf8").digest("hex"), shareToken]);
-  await deny("a document-link-shaped token", documentToken);
+  await deny("a live B-025 document token for this job", documentToken);
   await deny("a share-link token", shareToken);
   const gates: [string, () => Promise<unknown>, () => Promise<unknown>][] = [
     ["vendor_job_v3 org off", () => orgFlags(ORG_ID, { vendor_job_v3: false }), () => orgFlags(ORG_ID, { vendor_job_v3: true })],
@@ -321,18 +380,26 @@ test("7-day rule: staff reopen within 168 hours with a reason; after that refuse
   assert.equal((await complete(f)).status, "recorded");
   assert.equal((await db.query("SELECT count(*)::int n FROM app.b097_completions WHERE ticket_id=$1", [f.ticket])).rows[0].n, 2);
   // The 168-hour boundary: one minute left reopens; at or past it is refused with no write.
-  const shift = (minutes: number) => db.query(`UPDATE app.b097_completions c SET closed_at=x.t-interval '168 hours',reopen_until=x.t
-    FROM (SELECT clock_timestamp()+make_interval(mins=>$2) t) x WHERE c.ticket_id=$1 AND c.reopened_at IS NULL`, [f.ticket, minutes]);
+  // Moves the current close (the completion and the ticket's own close time together) so its window ends `minutes` from now.
+  const shift = async (minutes: number) => {
+    const until = (await db.query("SELECT clock_timestamp()+make_interval(mins=>$1) t", [minutes])).rows[0].t;
+    await db.query(`UPDATE app.b097_completions SET closed_at=$2::timestamptz-interval '168 hours',reopen_until=$2
+      WHERE ticket_id=$1 AND reopened_at IS NULL AND superseded_at IS NULL`, [f.ticket, until]);
+    await db.query("UPDATE public.maintenance_tickets SET closed_at=$2::timestamptz-interval '168 hours' WHERE id=$1", [f.ticket, until]);
+    assert.equal((await db.query("SELECT count(*)::int n FROM app.b097_completions WHERE ticket_id=$1 AND reopened_at IS NULL AND superseded_at IS NULL", [f.ticket])).rows[0].n, 1);
+  };
   await shift(-1);
   const expired = await snapshot();
   assert.deepEqual(await reopen(f.ticket), { status: "rejected_expired" });
   assert.deepEqual(await snapshot(), expired);
   await shift(1);
   assert.equal((await reopen(f.ticket)).status, "reopened");
-  // A staff close (no vendor completion) and a cancelled repair are not reopenable here.
+  // A staff close (no vendor completion) is not reopenable here, and the refusal writes nothing.
   const staffClosed = await fixture();
   await db.query("UPDATE public.maintenance_tickets SET status='closed',closed_at=now() WHERE id=$1", [staffClosed.ticket]);
+  const staffSnap = await snapshot();
   assert.deepEqual(await reopen(staffClosed.ticket), { status: "rejected_state" });
+  assert.deepEqual(await snapshot(), staffSnap, "staff close: no write");
   const g = await fixture(); await photo(g, "after"); await complete(g);
   const closed = await snapshot();
   for (const bad of ["", "   ", "x".repeat(501), "a\u0007b", null]) {
@@ -349,7 +416,7 @@ test("reopen denials write nothing: no tickets.update seat, revoked staff sessio
   const revokedSession: Session = { ...admin, sessionId: randomUUID() };
   await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at,revoked_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour',clock_timestamp())",
     [revokedSession.sessionId, USERS.admin, hash(randomUUID())]);
-  await assert.rejects(reopen(f.ticket, "r", randomUUID(), revokedSession), (e: unknown) => forbidden(e) || e instanceof Error, "revoked staff session");
+  await assert.rejects(reopen(f.ticket, "r", randomUUID(), revokedSession), forbidden, "revoked staff session: errors.forbidden");
   const foreign: Session = { ...admin, userId: USERS.coastAdmin, sessionId: randomUUID(), orgId: ORG2_ID, liveOrgId: ORG2_ID };
   await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')",
     [foreign.sessionId, USERS.coastAdmin, hash(randomUUID())]);
@@ -376,6 +443,164 @@ test("reopen denials write nothing: no tickets.update seat, revoked staff sessio
   assert.equal((await reopen(f.ticket)).status, "reopened", "the real admin still can");
 });
 
+test("current close only: a later staff close, cancel or reopen another way supersedes the vendor completion; a cancelled repair with a live completion is refused", async () => {
+  // Reopened another way (status back to in_progress), then closed again by staff: the old completion is superseded.
+  const f = await fixture(); await photo(f, "after"); await complete(f);
+  await db.query("UPDATE public.maintenance_tickets SET status='in_progress',closed_at=NULL WHERE id=$1", [f.ticket]);
+  await db.query("UPDATE public.maintenance_tickets SET status='closed',closed_at=clock_timestamp() WHERE id=$1", [f.ticket]);
+  assert.ok((await db.query("SELECT superseded_at FROM app.b097_completions WHERE ticket_id=$1", [f.ticket])).rows[0].superseded_at);
+  let before = await snapshot();
+  assert.deepEqual(await reopen(f.ticket), { status: "rejected_state" }, "a later staff close cannot reuse the old vendor completion");
+  assert.deepEqual(await snapshot(), before);
+  // Closed again by a path that keeps closed_at (coalesce) after a status round trip: still superseded on the way out.
+  const k = await fixture(); await photo(k, "after"); await complete(k);
+  await db.query("UPDATE public.maintenance_tickets SET status='in_progress' WHERE id=$1", [k.ticket]);
+  await db.query("UPDATE public.maintenance_tickets SET status='closed',closed_at=coalesce(closed_at,now()) WHERE id=$1", [k.ticket]);
+  before = await snapshot();
+  assert.deepEqual(await reopen(k.ticket), { status: "rejected_state" }, "same closed_at, but the close was left and re-entered");
+  assert.deepEqual(await snapshot(), before);
+  // Cancelled after the vendor close: superseded, refused, no write.
+  const g = await fixture(); await photo(g, "after"); await complete(g);
+  await db.query("UPDATE public.maintenance_tickets SET status='cancelled' WHERE id=$1", [g.ticket]);
+  before = await snapshot();
+  assert.deepEqual(await reopen(g.ticket), { status: "rejected_state" }, "cancelled");
+  assert.deepEqual(await snapshot(), before, "cancelled: no write");
+  // A cancelled repair that still has a live (not superseded) completion row: the gateway's own status check refuses it.
+  const h = await fixture(); await photo(h, "after");
+  await db.query("UPDATE public.maintenance_tickets SET status='cancelled',closed_at=clock_timestamp() WHERE id=$1", [h.ticket]);
+  await db.query(`INSERT INTO app.b097_completions(org_id,ticket_id,vendor_job_id,request_id,after_photo_ids,from_status,closed_at,reopen_until)
+    SELECT $1,$2,$3,$4,ARRAY[a.id],'assigned',t.closed_at,t.closed_at+interval '168 hours'
+    FROM public.ticket_attachments a JOIN public.maintenance_tickets t ON t.id=a.ticket_id WHERE a.ticket_id=$2 LIMIT 1`, [ORG_ID, h.ticket, h.job, randomUUID()]);
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b097_completions WHERE ticket_id=$1 AND reopened_at IS NULL AND superseded_at IS NULL", [h.ticket])).rows[0].n, 1);
+  before = await snapshot();
+  assert.deepEqual(await reopen(h.ticket), { status: "rejected_state" }, "cancelled with a live completion");
+  assert.deepEqual(await snapshot(), before, "cancelled with a live completion: no write");
+  // b097's own close and reopen never supersede their own completion.
+  const v = await fixture(); await photo(v, "after"); await complete(v);
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b097_completions WHERE ticket_id=$1 AND superseded_at IS NULL", [v.ticket])).rows[0].n, 1);
+  assert.equal((await reopen(v.ticket)).status, "reopened");
+});
+
+test("the 168-hour cutoff is exclusive, proven at a pinned instant: 1 ms before is open, exactly at and 1 ms after are not", async () => {
+  const f = await fixture(); await photo(f, "after"); await complete(f);
+  const c = (await db.query("SELECT * FROM app.b097_completions WHERE ticket_id=$1", [f.ticket])).rows[0];
+  const open = async (offset: string) => (await db.query(`SELECT app.b097_reopen_open(c, c.closed_at + interval '168 hours' + $2::interval) ok
+    FROM app.b097_completions c WHERE c.id=$1`, [c.id, offset])).rows[0].ok as boolean;
+  assert.equal(await open("-1 millisecond"), true, "1 ms before");
+  assert.equal(await open("0"), false, "exactly at closed_at + 168 hours");
+  assert.equal(await open("1 millisecond"), false, "1 ms after");
+  assert.equal(await open("-168 hours"), true, "right at the close");
+  assert.equal((await db.query("SELECT app.b097_reopen_open(c, NULL) ok FROM app.b097_completions c WHERE c.id=$1", [c.id])).rows[0].ok, false);
+  // The gateway decides with that helper on one clock reading: the boundary crossing mid-statement is rejected_expired, never 23514.
+  assert.match(read("supabase/migrations/20261116250000_b097_vendor_close.sql"), /now_at:=clock_timestamp\(\);\n IF NOT app\.b097_reopen_open\(c,now_at\) THEN RETURN '\{"status":"rejected_expired"\}'::jsonb; END IF;/);
+  assert.match(read("supabase/migrations/20261116250000_b097_vendor_close.sql"), /SET reopened_at=now_at,/);
+});
+
+test("authority: a native admin / manager whose custom role lacks tickets.update is refused by the SQL gateway itself; replays after losing authority are refused", async () => {
+  const f = await fixture(); await photo(f, "after"); await complete(f);
+  const managerSession = randomUUID();
+  await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [managerSession, USERS.manager, hash(randomUUID())]);
+  const call = (user: string, session: string, request = randomUUID(), ticket = f.ticket, reason = "r") => svc(user, async client =>
+    (await client.query("SELECT app.b097_staff_reopen($1,$2,'live',$3,false,$4,$5::uuid,$6) r", [ORG_ID, ORG_ID, session, ticket, request, reason])).rows[0].r);
+  const allow = process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
+  const role = randomUUID();
+  try {
+    process.env.CUSTOM_ROLES_ORG_ALLOWLIST = JSON.stringify([ORG_ID]);
+    await orgFlags(ORG_ID, { custom_roles: true });
+    await setPlatform("custom_roles", ON);
+    await db.query("BEGIN");
+    try {
+      await db.query("INSERT INTO app.b017_roles(org_id,id,current_revision) VALUES($1,$2,1)", [ORG_ID, role]);
+      await db.query("INSERT INTO app.b017_role_revisions(org_id,role_id,revision,grants,created_by) VALUES($1,$2,1,$3::text[],$4)", [ORG_ID, role, ["props.view", "tenants.contact"], USERS.admin]);
+      await db.query(`INSERT INTO app.b017_assignments(org_id,user_id,role_id,revision) VALUES($1,$2,$3,1)
+        ON CONFLICT(org_id,user_id) DO UPDATE SET role_id=excluded.role_id,revision=excluded.revision`, [ORG_ID, USERS.manager, role]);
+      await db.query("COMMIT");
+    } catch (e) { await db.query("ROLLBACK"); throw e; }
+    const before = await snapshot();
+    await assert.rejects(call(USERS.manager, managerSession), sqlRefused, "native manager, custom role without tickets.update");
+    assert.deepEqual(await snapshot(), before);
+  } finally {
+    if (allow === undefined) delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST; else process.env.CUSTOM_ROLES_ORG_ALLOWLIST = allow;
+    await db.query("UPDATE app.b017_assignments SET role_id=NULL,revision=NULL WHERE org_id=$1 AND role_id=$2", [ORG_ID, role]);
+    await db.query("UPDATE app.b017_roles SET retired=true WHERE org_id=$1 AND id=$2", [ORG_ID, role]);
+    await db.query("UPDATE public.organizations SET feature_flags=feature_flags-'custom_roles' WHERE id=$1", [ORG_ID]);
+    await setPlatform("custom_roles", { enabled: false, allowed_org_ids: [] });
+  }
+  // Native manager (custom roles off): admitted. Then the same request id is replayed after authority is lost.
+  const request = randomUUID();
+  assert.deepEqual(await call(USERS.manager, managerSession, request), { status: "reopened", replayed: false });
+  assert.deepEqual(await call(USERS.manager, managerSession, request), { status: "reopened", replayed: true });
+  const losses: [string, () => Promise<unknown>, () => Promise<unknown>][] = [
+    ["seat changed to accountant", () => db.query("UPDATE public.org_members SET role='accountant' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]),
+      () => db.query("UPDATE public.org_members SET role='manager' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager])],
+    ["membership suspended", () => db.query("UPDATE public.org_members SET status='suspended' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]),
+      () => db.query("UPDATE public.org_members SET status='active' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager])],
+    ["session revoked", () => db.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [managerSession]),
+      () => db.query("UPDATE public.auth_sessions SET revoked_at=NULL WHERE id=$1", [managerSession])],
+    ["vendor_job_v3 off", () => orgFlags(ORG_ID, { vendor_job_v3: false }), () => orgFlags(ORG_ID, { vendor_job_v3: true })],
+  ];
+  for (const [label, lose, restore] of losses) {
+    await lose();
+    try {
+      const before = await snapshot();
+      await assert.rejects(call(USERS.manager, managerSession, request), sqlRefused, `replay after: ${label}`);
+      assert.deepEqual(await snapshot(), before, label);
+    } finally { await restore(); }
+  }
+  assert.deepEqual(await call(USERS.manager, managerSession, request), { status: "reopened", replayed: true }, "authority restored");
+});
+
+test("vendor replays of recorded request ids are refused after revocation, reassignment, expiry and gate changes; concurrent reservation", { timeout: 120000 }, async () => {
+  const losses: [string, (f: Fixture) => Promise<unknown>][] = [
+    ["link revoked", f => db.query("UPDATE public.repair_vendor_jobs SET revoked_at=clock_timestamp(),active=false WHERE id=$1", [f.job])],
+    ["link expired", f => db.query("UPDATE public.repair_vendor_jobs SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [f.job])],
+    ["vendor reassigned", async f => db.query("UPDATE public.maintenance_tickets SET assigned_vendor_contact_id=$2 WHERE id=$1", [f.ticket, await vendorContact(ORG_ID)])],
+    ["decision withdrawn", f => db.query("DELETE FROM app.b105_vendor_job_decisions WHERE vendor_job_id=$1", [f.job])],
+  ];
+  for (const [label, lose] of losses) {
+    const f = await fixture(); await photo(f, "after");
+    const request = randomUUID();
+    assert.equal((await complete(f, "ok", request)).status, "recorded");
+    await lose(f);
+    const before = await snapshot();
+    await assert.rejects(complete(f, "ok", request), notFound, `replay after: ${label}`);
+    assert.deepEqual(await snapshot(), before, label);
+  }
+  const gates: [string, () => Promise<unknown>, () => Promise<unknown>][] = [
+    ["vendor_job_v3 off", () => orgFlags(ORG_ID, { vendor_job_v3: false }), () => orgFlags(ORG_ID, { vendor_job_v3: true })],
+    ["vendor_link platform off", () => setPlatform("vendor_link", { ...ON, enabled: false }), () => setPlatform("vendor_link", ON)],
+    ["brand_v3 off", () => orgFlags(ORG_ID, { brand_v3: false }), () => orgFlags(ORG_ID, { brand_v3: true })],
+  ];
+  const f = await fixture(); await photo(f, "after");
+  const request = randomUUID();
+  assert.equal((await complete(f, "ok", request)).status, "recorded");
+  for (const [label, off, on] of gates) {
+    await off();
+    try {
+      const before = await snapshot();
+      await assert.rejects(complete(f, "ok", request), notFound, `replay with ${label}`);
+      assert.deepEqual(await snapshot(), before, label);
+    } finally { await on(); }
+  }
+  assert.equal((await complete(f, "ok", request) as { replayed?: boolean }).replayed, true, "gates restored: the replay answers");
+  // Two vendors' cases race for one request id: exactly one recorded, one rejected_conflict, no 23505.
+  const a = await fixture(), b = await fixture(); await photo(a, "after"); await photo(b, "after");
+  const shared = randomUUID();
+  const lock = await holder();
+  let runs: Promise<Outcome>[] = [];
+  try {
+    await lock.query("SELECT pg_advisory_xact_lock(hashtextextended('b097/request/'||$1::text||'/'||$2::text,0))", [ORG_ID, shared]);
+    runs = [complete(a, null, shared), complete(b, null, shared)].map(p => p.then(result => ({ result }), error => ({ error })));
+    await waitForBlocked(lock, "b097_vendor_complete", 2);
+  } finally { await lock.query("COMMIT").catch(() => undefined); await lock.end(); }
+  const outcomes = await Promise.all(runs.map(r => settle(r)));
+  assert.ok(outcomes.every(o => !o.error), JSON.stringify(outcomes.map(o => String(o.error))));
+  assert.deepEqual(outcomes.map(o => o.result!.status).sort(), ["recorded", "rejected_conflict"]);
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b097_requests WHERE org_id=$1 AND request_id=$2", [ORG_ID, shared])).rows[0].n, 1);
+  const loser = outcomes[0].result!.status === "rejected_conflict" ? a : b;
+  assert.equal(await status(loser.ticket), "assigned", "the loser's repair stays open");
+});
+
 test("B-098 phone: assigned vendor on an open accepted case only; not before accepting, after a decline or close, for another vendor, or on a share link", async () => {
   const f = await fixture({ tenant: true, accept: false });
   assert.equal(await vendorTenantPhone(f.token), null, "before 接單");
@@ -389,7 +614,40 @@ test("B-098 phone: assigned vendor on an open accepted case only; not before acc
   // The reporter must be a tenant party of the ticket's lease.
   const stranger = await fixture({ tenant: true });
   await db.query("UPDATE public.maintenance_tickets SET reported_by_contact_id=$2 WHERE id=$1", [stranger.ticket, await vendorContact(ORG_ID)]);
-  assert.deepEqual(await vendorTenantPhone(stranger.token), { phone: null });
+  assert.deepEqual(await vendorTenantPhone(stranger.token), { phone: null }, "a vendor contact as reporter");
+  const tenantContact = async (phone: string) => (await db.query(`INSERT INTO public.contacts(org_id,is_tenant,display_name,phone_e164)
+    VALUES($1,true,$2,$3) RETURNING id::text`, [ORG_ID, `B-098 tenant ${randomUUID().slice(0, 6)}`, phone])).rows[0].id as string;
+  const otherLease = (await db.query("SELECT id FROM public.leases WHERE org_id=$1 AND id<>$2 ORDER BY id LIMIT 1", [ORG_ID, lease.id])).rows[0]?.id as string;
+  assert.ok(otherLease, "a second seeded lease");
+  const elsewhere = await tenantContact("+886911000981");
+  await db.query("INSERT INTO public.lease_parties(org_id,lease_id,contact_id,role) VALUES($1,$2,$3,'co_tenant')", [ORG_ID, otherLease, elsewhere]);
+  const onOther = await fixture({ tenant: true });
+  await db.query("UPDATE public.maintenance_tickets SET reported_by_contact_id=$2 WHERE id=$1", [onOther.ticket, elsewhere]);
+  assert.deepEqual(await vendorTenantPhone(onOther.token), { phone: null }, "a tenant of a different lease");
+  const guarantor = await tenantContact("+886911000982");
+  await db.query("INSERT INTO public.lease_parties(org_id,lease_id,contact_id,role) VALUES($1,$2,$3,'guarantor')", [ORG_ID, lease.id, guarantor]);
+  const byGuarantor = await fixture({ tenant: true });
+  await db.query("UPDATE public.maintenance_tickets SET reported_by_contact_id=$2 WHERE id=$1", [byGuarantor.ticket, guarantor]);
+  assert.deepEqual(await vendorTenantPhone(byGuarantor.token), { phone: null }, "a guarantor of the ticket's lease");
+  // A live share of an OPEN, accepted case whose assigned vendor does get the phone: the share page never shows it.
+  const live = await fixture({ tenant: true });
+  assert.deepEqual(await vendorTenantPhone(live.token), { phone: lease.phone });
+  const openShare = newVendorToken(), openHash = createHash("sha256").update(openShare, "utf8").digest("hex");
+  await db.query(`INSERT INTO app.case_shares(org_id,ticket_id,vendor_job_id,token_hash,token,created_by_kind,created_by)
+    VALUES($1,$2,$3,$4,$5,'vendor',NULL)`, [ORG_ID, live.ticket, live.job, openHash, openShare]);
+  await orgFlags(ORG_ID, { vendor_docs_v3: true, vendor_documents: true });
+  await setPlatform("vendor_docs_v3", ON); await setPlatform("vendor_documents", ON);
+  try {
+    const view = await svc(null, async client => (await client.query("SELECT app.b110_share_view($1,false) r", [openHash])).rows[0].r);
+    assert.ok(view, "the share page renders for this open case");
+    const text = JSON.stringify(view);
+    assert.ok(!text.includes(lease.phone) && !text.includes(lease.phone.slice(4)), "open-case share view has no tenant phone");
+    const { loadShareView } = await import("./b110-case-share");
+    assert.doesNotMatch(JSON.stringify(await loadShareView(openShare)), new RegExp(lease.phone.slice(4)), "share page data has no phone");
+  } finally {
+    await orgFlags(ORG_ID, { vendor_docs_v3: false, vendor_documents: false });
+    for (const k of ["vendor_docs_v3", "vendor_documents"]) await setPlatform(k, { enabled: false, allowed_org_ids: [] });
+  }
   // Close: gone for the vendor; a B-110 share view never carries it.
   await photo(f, "after");
   assert.equal((await complete(f)).status, "recorded");
@@ -446,8 +704,9 @@ const settle = (pending: Promise<Outcome>, ms = 15000) => Promise.race([pending,
  * (nothing for the positive control) and commits. The expected state is read through the holder after the change.
  */
 async function blockedComplete(label: string, lock: (c: Client, f: Fixture) => Promise<unknown>,
-  change: ((c: Client, f: Fixture) => Promise<unknown>) | null, expect: string, setup?: (f: Fixture) => Promise<unknown>) {
-  const f = await fixture({ tenant: true });
+  change: ((c: Client, f: Fixture) => Promise<unknown>) | null, expect: string, setup?: (f: Fixture) => Promise<unknown>, tenant = true) {
+  // Estimate cases need the owner-held property (a lease's property may have no signed-in owner to decide).
+  const f = await fixture({ tenant });
   if (setup) await setup(f); else await photo(f, "after");
   const client = await holder();
   let pending: Promise<Outcome> | undefined, expected: Record<string, string> | undefined;
@@ -525,8 +784,10 @@ test("lock races for 重開: a staff session revoked or a gate turned off while 
   const lockOrg = (c: Client) => c.query("SELECT 1 FROM public.organizations WHERE id=$1 FOR UPDATE", [ORG_ID]);
   const lockDone = (c: Client, f: Fixture) => c.query("SELECT 1 FROM app.b097_completions WHERE ticket_id=$1 FOR UPDATE", [f.ticket]);
   const run = async (label: string, lock: (c: Client, f: Fixture) => Promise<unknown>,
-    change: ((c: Client, f: Fixture, session: string) => Promise<unknown>) | null, expect: "reopened" | "refused" | "rejected_expired") => {
+    change: ((c: Client, f: Fixture, session: string) => Promise<unknown>) | null, expect: "reopened" | "refused" | "rejected_expired",
+    prepare?: (f: Fixture) => Promise<unknown>) => {
     const f = await fixture(); await photo(f, "after"); await complete(f);
+    if (prepare) await prepare(f);
     const sessionId = randomUUID();
     await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [sessionId, USERS.admin, hash(randomUUID())]);
     const client = await holder();
@@ -554,8 +815,107 @@ test("lock races for 重開: a staff session revoked or a gate turned off while 
     await run("org row: vendor_job_v3 off by the holder", lockOrg, c => orgFlags(ORG_ID, { vendor_job_v3: false }, c), "refused");
   } finally { await orgFlags(ORG_ID, { vendor_job_v3: true }); }
   await run("completion row: positive control", lockDone, null, "reopened");
-  await run("completion row: the 7 days run out during the wait", lockDone, (c, f) => c.query(`UPDATE app.b097_completions c
-    SET closed_at=x.t-interval '168 hours',reopen_until=x.t FROM (SELECT clock_timestamp() t) x WHERE c.ticket_id=$1`, [f.ticket]), "rejected_expired");
+  // The window closes while the reopen waits: set it to end 1.5 s from now (completion and ticket together), hold, and
+  // release after it has passed. One clock reading after the locks decides: rejected_expired, never a 23514.
+  await run("completion row: the 7 days run out during the wait", lockDone, async () => {
+    await new Promise(resolve => setTimeout(resolve, 1700));
+  }, "rejected_expired", async f => {
+    const until = (await db.query("SELECT clock_timestamp()+interval '1500 milliseconds' t")).rows[0].t;
+    await db.query(`UPDATE app.b097_completions SET closed_at=$2::timestamptz-interval '168 hours',reopen_until=$2
+      WHERE ticket_id=$1 AND reopened_at IS NULL AND superseded_at IS NULL`, [f.ticket, until]);
+    await db.query("UPDATE public.maintenance_tickets SET closed_at=$2::timestamptz-interval '168 hours' WHERE id=$1", [f.ticket, until]);
+  });
+});
+
+test("phone under locks: a reassignment and reporter change committed while the read waits never shows the new reporter's phone to the former vendor", { timeout: 120000 }, async () => {
+  const newReporter = (await db.query(`INSERT INTO public.contacts(org_id,is_tenant,display_name,phone_e164) VALUES($1,true,'B-098 new reporter','+886911000983') RETURNING id::text`, [ORG_ID])).rows[0].id;
+  await db.query("INSERT INTO public.lease_parties(org_id,lease_id,contact_id,role) VALUES($1,$2,$3,'co_tenant')", [ORG_ID, lease.id, newReporter]);
+  const run = async (label: string, lock: (c: Client, f: Fixture) => Promise<unknown>, change: ((c: Client, f: Fixture) => Promise<unknown>) | null) => {
+    const f = await fixture({ tenant: true });
+    const client = await holder();
+    let pending: Promise<{ result?: { phone: string | null } | null; error?: unknown }> | undefined;
+    try {
+      await lock(client, f);
+      pending = vendorTenantPhone(f.token).then(result => ({ result }), error => ({ error }));
+      await waitForBlocked(client, "b098_vendor_tenant_phone");
+      if (change) await change(client, f);
+      await client.query("COMMIT");
+    } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; } finally { await client.end(); }
+    const outcome = await Promise.race([pending!, new Promise<{ error: Error }>(r => setTimeout(() => r({ error: new Error("still waiting") }), 15000).unref())]);
+    assert.ok(!("error" in outcome && outcome.error), `${label}: ${String((outcome as { error?: unknown }).error)}`);
+    return (outcome as { result: { phone: string | null } | null }).result;
+  };
+  const lockTicket = (c: Client, f: Fixture) => c.query("SELECT 1 FROM public.maintenance_tickets WHERE id=$1 FOR UPDATE", [f.ticket]);
+  const lockReporter = (c: Client) => c.query("SELECT 1 FROM public.contacts WHERE id=$1 FOR UPDATE", [lease.tenant]);
+  const lockDecision = (c: Client, f: Fixture) => c.query("SELECT 1 FROM app.b105_vendor_job_decisions WHERE vendor_job_id=$1 FOR UPDATE", [f.job]);
+  const lockParty = (c: Client) => c.query("SELECT 1 FROM public.lease_parties WHERE lease_id=$1 AND contact_id=$2 FOR UPDATE", [lease.id, lease.tenant]);
+  assert.deepEqual(await run("ticket row: positive control", lockTicket, null), { phone: lease.phone });
+  assert.equal(await run("ticket row: reassigned and reporter changed together", lockTicket, async (c, f) => c.query(
+    "UPDATE public.maintenance_tickets SET assigned_vendor_contact_id=$2,reported_by_contact_id=$3 WHERE id=$1", [f.ticket, await vendorContact(ORG_ID), newReporter])), null);
+  assert.deepEqual(await run("ticket row: reporter changed only (still this vendor's job)", lockTicket, (c, f) => c.query(
+    "UPDATE public.maintenance_tickets SET reported_by_contact_id=$2 WHERE id=$1", [f.ticket, newReporter])), { phone: "+886911000983" });
+  assert.deepEqual(await run("decision row: positive control", lockDecision, null), { phone: lease.phone });
+  assert.equal(await run("decision row: decision withdrawn", lockDecision, (c, f) => c.query("DELETE FROM app.b105_vendor_job_decisions WHERE vendor_job_id=$1", [f.job])), null);
+  assert.deepEqual(await run("reporter row: positive control", lockReporter, null), { phone: lease.phone });
+  const original = lease.phone;
+  try {
+    assert.deepEqual(await run("reporter row: phone changed", lockReporter, c => c.query("UPDATE public.contacts SET phone_e164='+886911000984' WHERE id=$1", [lease.tenant])),
+      { phone: "+886911000984" }, "the reporter's own new number, never a stale pairing");
+  } finally { await db.query("UPDATE public.contacts SET phone_e164=$2 WHERE id=$1", [lease.tenant, original]); }
+  assert.deepEqual(await run("lease-party row: positive control", lockParty, null), { phone: lease.phone });
+  try {
+    assert.deepEqual(await run("lease-party row: made a guarantor", lockParty, c => c.query(
+      "UPDATE public.lease_parties SET role='guarantor' WHERE lease_id=$1 AND contact_id=$2", [lease.id, lease.tenant])), { phone: null });
+  } finally { await db.query("UPDATE public.lease_parties SET role='primary' WHERE lease_id=$1 AND contact_id=$2", [lease.id, lease.tenant]); }
+});
+
+test("lock races on the estimate head (送出完工) and the caller's user row (重開), each with a positive control", { timeout: 120000 }, async () => {
+  // Estimate head: a recorded small estimate is current; while the save waits on the head, the head is pointed at an
+  // over-threshold version still waiting for the owner, so the decision sees the work is not allowed.
+  const lockHead = (c: Client, f: Fixture) => c.query("SELECT 1 FROM app.b013_estimate_heads WHERE ticket_id=$1 FOR UPDATE", [f.ticket]);
+  // Two real B-013 versions: v1 small (allowed), v2 over the threshold (waiting for the owner). The head is set back to v1
+  // before the race; while the save waits on the head, the holder points it at v2, so the decision sees the work is not
+  // allowed. (A full estimate revision would also need the ticket, which the waiting save already holds: that
+  // interleaving cannot happen, it is serialized after the save.)
+  type WithVersions = Fixture & { v1?: string; v2?: string };
+  const withVersions = async (f: WithVersions) => {
+    await photo(f, "after");
+    f.v1 = await estimate(f, 100);
+    const r = await svc(USERS.admin, async client => (await client.query(`SELECT app.b013_submit_estimate(
+        $1::uuid,$1::uuid,'live',$2::uuid,$3::uuid,$4::uuid,$7::uuid,600000::bigint,$5::text,$6::smallint,'Bigger repair','[]'::jsonb,$8::bytea) r`,
+    [ORG_ID, admin.sessionId, randomUUID(), f.ticket, currency, minorUnit, f.v1, createHash("sha256").update(f.ticket + "big").digest()])).rows[0].r);
+    assert.equal(r.status, "recorded"); assert.equal(r.requires_owner_decision, true);
+    f.v2 = String(r.version_id);
+    await db.query("UPDATE app.b013_estimate_heads SET current_version_id=$2 WHERE ticket_id=$1", [f.ticket, f.v1]);
+  };
+  await blockedComplete("estimate head: positive control", lockHead, null, "recorded", withVersions, false);
+  await blockedComplete("estimate head: pointed at the version waiting for the owner", lockHead, (c, f) => c.query(
+    "UPDATE app.b013_estimate_heads SET current_version_id=$2 WHERE ticket_id=$1", [f.ticket, (f as WithVersions).v2]), "rejected_state", withVersions, false);
+  // The caller's auth.users row (the status note's author FK): a membership suspended during that wait is refused.
+  const run = async (label: string, change: ((c: Client) => Promise<unknown>) | null) => {
+    const f = await fixture(); await photo(f, "after"); await complete(f);
+    const sessionId = randomUUID();
+    await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [sessionId, USERS.manager, hash(randomUUID())]);
+    const manager: Session = { ...admin, userId: USERS.manager, sessionId, role: "manager" };
+    const client = await holder();
+    let pending: Promise<Outcome> | undefined, expected: Record<string, string> | undefined;
+    try {
+      await client.query("SELECT 1 FROM auth.users WHERE id=$1 FOR UPDATE", [USERS.manager]);
+      pending = reopen(f.ticket, "r", randomUUID(), manager).then(result => ({ result }), error => ({ error }));
+      await waitForBlocked(client, "b097_staff_reopen");
+      if (change) await change(client);
+      expected = await snapshot(client);
+      await client.query("COMMIT");
+    } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; } finally { await client.end(); }
+    const outcome = await settle(pending!);
+    if (!change) { assert.equal(outcome.result?.status, "reopened", `${label}: ${String(outcome.error)}`); return; }
+    assert.ok(forbidden(outcome.error), `${label}: ${JSON.stringify(outcome.result ?? String(outcome.error))}`);
+    assert.deepEqual(await snapshot(), expected, label);
+  };
+  await run("user row: positive control", null);
+  try {
+    await run("user row: membership suspended", c => c.query("UPDATE public.org_members SET status='suspended' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]));
+  } finally { await db.query("UPDATE public.org_members SET status='active' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]); }
 });
 
 test("route: token body only; 400 invalid, 404 not admitted, 422 no photo, 200 recorded and replay, 409 conflict; reopen route needs a staff session", async () => {
@@ -596,7 +956,7 @@ test("route: token body only; 400 invalid, 404 not admitted, 422 no photo, 200 r
         [user, consent.accepted_at, consent.terms_version, consent.privacy_version, consent.source]);
       jar.set("condola_session", cred); jar.set("condola_org", ORG_ID);
       const denied = await reopenPost({ ...payload, requestId: randomUUID() });
-      assert.ok([401, 403].includes(denied.status), `${label}: ${denied.status}`);
+      assert.equal(denied.status, 403, `${label}: an authenticated caller without the seat gets 403`);
     }
     assert.deepEqual(await snapshot(), before, "denied reopen posts wrote nothing");
     jar.set("condola_session", staffCred); jar.set("condola_org", ORG_ID);

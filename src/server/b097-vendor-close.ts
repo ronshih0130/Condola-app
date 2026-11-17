@@ -14,8 +14,8 @@ import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z)$/;
-/** C0 controls except newline, DEL, C1 controls and the line / paragraph separators. */
-const CONTROL = /[\u0001-\u0009\u000b-\u001f\u007f-\u009f\u2028\u2029]/;
+/** NUL and the other C0 controls except newline, DEL, C1 controls and the line / paragraph separators. */
+const CONTROL = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u2028\u2029]/;
 
 export type DonePhoto = { id: string; name: string };
 export type VendorDone = {
@@ -46,6 +46,8 @@ export function parseVendorDone(raw: unknown): VendorDone {
 function sqlState(error: unknown) {
   return (error as { code?: string }).code ?? (error as { cause?: { code?: string } }).cause?.code;
 }
+/** A NUL can never reach a PostgreSQL text value (22021 / 22P05); such input is invalid, never a server error. */
+const hasNul = (value: string | null) => value !== null && value.includes("\u0000");
 
 /** null: OFF or not admitted (the page 404s, as for an unknown link). Throws on a read failure. */
 export async function loadVendorDone(token: string): Promise<VendorDone | null> {
@@ -74,12 +76,14 @@ export function parseCompleteInput(value: unknown): CompleteInput | null {
 /** 送出完工. Throws FlowError("errors.notFound") when the bearer is not admitted (nothing written). */
 export async function completeVendorCase(token: string, input: CompleteInput): Promise<CompleteResult> {
   if (!vendorTokenAcceptable(token)) throw new FlowError("errors.notFound");
+  if (hasNul(input.note)) return { status: "rejected_invalid" };
   try {
     return await svc(null, async client => (await client.query<{ r: CompleteResult }>(
       "SELECT app.b097_vendor_complete($1,$2,$3::uuid,$4) AS r",
       [hashVendorToken(token), brandV2Enabled(), input.requestId, input.note])).rows[0].r);
   } catch (error) {
     if (sqlState(error) === "42501") throw new FlowError("errors.notFound");
+    if (sqlState(error) === "22021" || sqlState(error) === "22P05") return { status: "rejected_invalid" };
     throw error;
   }
 }
@@ -106,6 +110,7 @@ export async function staffReopenRepair(session: Session, input: ReopenInput): P
   if (![input.ticketId, input.requestId, session.sessionId, session.liveOrgId].every(id => typeof id === "string" && UUID.test(id))) {
     throw new FlowError("errors.forbidden");
   }
+  if (hasNul(input.reason)) return { status: "rejected_invalid" };
   try {
     return await svc(session.userId, client => withEffectiveAuthority(client, session, "tickets.update", async () =>
       (await client.query<{ r: ReopenResult }>("SELECT app.b097_staff_reopen($1,$2,$3,$4,$5,$6,$7::uuid,$8) AS r",
@@ -113,6 +118,7 @@ export async function staffReopenRepair(session: Session, input: ReopenInput): P
           input.requestId, input.reason])).rows[0].r));
   } catch (error) {
     if (sqlState(error) === "42501") throw new FlowError("errors.forbidden");
+    if (sqlState(error) === "22021" || sqlState(error) === "22P05") return { status: "rejected_invalid" };
     throw error;
   }
 }

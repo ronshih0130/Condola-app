@@ -29,13 +29,13 @@ test("request shapes: complete takes a uuid and an optional note (≤500, newlin
   assert.deepEqual(parseCompleteInput({ requestId: UUID, note: "  a\r\nb  " }), { requestId: UUID, note: "a\nb" });
   assert.deepEqual(parseCompleteInput({ requestId: UUID, note: "   " }), { requestId: UUID, note: null });
   for (const bad of [null, [], {}, { requestId: "x" }, { requestId: UUID, note: 5 }, { requestId: UUID, note: "x".repeat(501) },
-    { requestId: UUID, note: "a\u0007" }, { requestId: UUID, note: "a b" }, { requestId: UUID, note: "a\tb" }, { requestId: UUID, extra: 1 }]) {
+    { requestId: UUID, note: "a\u0007" }, { requestId: UUID, note: "a\u0000b" }, { requestId: UUID, note: "\u0000" }, { requestId: UUID, note: "a\u2028b" }, { requestId: UUID, note: "a\tb" }, { requestId: UUID, extra: 1 }]) {
     assert.equal(parseCompleteInput(bad), null, JSON.stringify(bad));
   }
   const ok = { ticketId: UUID, requestId: UUID, reason: " 還在滴水 " };
   assert.deepEqual(parseReopenInput(ok), { ...ok, reason: "還在滴水" });
   for (const bad of [{ ...ok, reason: "" }, { ...ok, reason: "  " }, { ...ok, reason: "x".repeat(501) }, { ...ok, ticketId: "x" },
-    { ...ok, requestId: 1 }, { ...ok, reason: null }, { ...ok, extra: true }, { ...ok, reason: "\u0085" }]) {
+    { ...ok, requestId: 1 }, { ...ok, reason: null }, { ...ok, extra: true }, { ...ok, reason: "\u0085" }, { ...ok, reason: "a\u0000b" }]) {
     assert.equal(parseReopenInput(bad), null, JSON.stringify(bad));
   }
 });
@@ -126,5 +126,7 @@ test("styles scoped with 44px targets; no outbound and no LINE in B-097/B-098 fi
   assert.match(sql, /a\.phase='after' AND NOT a\.is_internal/, "LPQ-25 item 3: explicit 處理後 only");
   assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /phase IS NULL/, "a NULL-phase upload never counts");
   assert.match(sql, /interval '168 hours'/);
+  assert.match(read("src/server/b097-vendor-close.ts"), /const CONTROL = \/\[\\u0000-/, "NUL is refused in TS");
+  assert.match(read("src/server/b097-vendor-close.ts"), /"22021" \|\| sqlState\(error\) === "22P05"/, "a NUL that reaches SQL is invalid input, not a 500");
   assert.doesNotMatch(read("src/app/api/vendor-jobs/case-complete/route.ts"), /request\.(?:text|json)\(\)/);
 });
