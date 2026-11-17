@@ -40,19 +40,3 @@ html[data-brand="v2"][data-brand-v3] .v3-money-paging { display: flex; flex-wrap
   html[data-brand="v2"][data-brand-v3] .v3-money-table td { padding: 6px 0; border: 0; }
   html[data-brand="v2"][data-brand-v3] .v3-money-table td[data-label]::before { content: attr(data-label); display: block; margin-block-end: 4px; color: var(--c-text-3); font-size: .75rem; }
 }
-
-/* M-PROXY: native modal, same phone-sheet / desktop-panel pattern as O-EST. */
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet { position: fixed; inset: auto 0 0; box-sizing: border-box; margin: 0; width: 100%; max-width: 100%; max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-6) max(var(--sp-5), env(safe-area-inset-right, 0px)) max(var(--sp-6), env(safe-area-inset-bottom, 0px)) max(var(--sp-5), env(safe-area-inset-left, 0px)); border: 1px solid var(--c-border); border-radius: var(--r-lg) var(--r-lg) 0 0; background: var(--c-surface); color: var(--c-text); box-shadow: var(--shadow-1); overflow-wrap: anywhere; font-family: var(--font-sans); }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet::backdrop { background: var(--c-primary); opacity: .45; }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet h2 { margin: 0 0 var(--sp-4); font-family: var(--font-display); }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet dl { display: grid; grid-template-columns: minmax(4em, auto) minmax(0, 1fr); gap: var(--sp-3) var(--sp-4); }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet dt { color: var(--c-text-2); }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet dd { margin: 0; white-space: pre-wrap; }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet button { min-height: 44px; min-width: 44px; }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-text { background: none; border: 0; color: var(--c-primary); padding: var(--sp-2) var(--sp-3); font: inherit; cursor: pointer; }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet :is(button, h2):focus-visible { outline: 2px solid var(--c-focus); outline-offset: 3px; }
-html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet button:disabled { cursor: default; opacity: .6; }
-@media (min-width: 64em) {
-  html[data-brand="v2"][data-brand-v3] .v3-proxy-sheet { inset: 0 0 0 auto; width: 520px; height: 100dvh; max-height: 100dvh; border-radius: var(--r-lg) 0 0 var(--r-lg); padding: var(--sp-8); }
-}

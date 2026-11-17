@@ -14,7 +14,6 @@ import type { Session } from "../../../../server/types";
 import { ErrorBanner } from "../../../ui";
 import { RoleAvatar } from "../../role-avatar";
 import { CompletionCheck } from "../../completion-check";
-import { ProxyConfirmation } from "./proxy-confirmation";
 
 const tabs = ["all", "yours", "overdue", "future", "paid"] as const;
 export function MoneyPage({ session, month, tab, bills, reports, error, cursor }: {
@@ -44,15 +43,11 @@ export function MoneyPage({ session, month, tab, bills, reports, error, cursor }
   const reportDetails = (report: MoneyMonthReport) => <div className="v3-money-report" key={report.id} data-report-id={report.id}>
     <span>{moneyLabel(report.amountMinor, report.currency, locale)}・{copy.tenantReport} {bills.state === "ready" ? date(new Intl.DateTimeFormat("en-CA", { timeZone: bills.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(report.submittedAt))) : ""}</span>
     <span className="v3-money-turn"><RoleAvatar role="m" locale={locale} decorative /><span>{copy.yours}</span>
-      {session.kind === "staff" && can(session, "pay.record") && (report.ownerPayee
-        ? <ProxyConfirmation paymentId={report.id} ownerContactId={report.ownerPayee.contactId} ownerName={displaySampleName(report.ownerPayee.displayName ?? "") || copy.proxyOwner}
-          target={[displaySampleName(report.place), displaySampleName(report.tenantName ?? "")].filter(Boolean).join("・")}
-          amount={moneyLabel(report.amountMinor, report.currency, locale)} date={date(report.paidOn)} locale={locale} returnTo={returnTo} />
-        : <form action={actionConfirmPayment}>
+      <form action={actionConfirmPayment}>
         <input type="hidden" name="paymentId" value={report.id} />
         <input type="hidden" name="returnTo" value={returnTo} />
         <button type="submit" className="btn o" data-testid="confirm-payment">{copy.confirm}</button>
-      </form>)}
+      </form>
     </span>
   </div>;
   const reportRow = (report: MoneyMonthReport, other: boolean) => <tr key={report.id} data-testid={other ? "money-other" : "money-report-only"}>
@@ -72,7 +67,7 @@ export function MoneyPage({ session, month, tab, bills, reports, error, cursor }
     <ErrorBanner t={t} error={error} />
     {error && <Link href={returnTo}>{brandV3TodayCopy(locale).retry}</Link>}
     {can(session, "pay.record") && <Link href="/m/payments/list">{t("i_nav_inbox")}</Link>}
-    <header className="v3-money-lead"><h1 id="money-month-heading" tabIndex={-1}>{bills.state === "ready"
+    <header className="v3-money-lead"><h1>{bills.state === "ready"
       ? text("headline", { month: Number(month.slice(5)), total: bills.counts.all, paid: bills.counts.paid })
       : brandV3NavigationCopy(locale).money}</h1>{supporting && <p data-testid="money-supporting">{supporting}</p>}</header>
     {notice("bills", bills.state)}{reports.state !== "forbidden" && notice("reports", reports.state)}
