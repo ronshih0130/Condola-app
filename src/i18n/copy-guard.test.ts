@@ -335,11 +335,23 @@ test("GS-32 exemption covers exactly one approved line in the vendor-docs lane",
   assert.equal(withoutVendorDocsIssue('    other: "確認已全額收款並開立",', VENDOR_DOCS_LANE).includes("收款"), true);
 });
 
+// One copy value at a time (a string, template or JSON literal), decoded and with every whitespace and escaped line
+// break removed, so neither a line break nor a long sentence lets the claim through; separate values never combine.
+const LITERAL = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g;
+const SUBJECT = /(Condola|租多啦)[\s\S]*(收款|收租|代收)/i;
+const normalize = (value: string) => decode(value).replace(/\\[nrt]/g, "").replace(/[\s\u3000]+/g, "");
+const subjectClaims = (source: string) => [...source.matchAll(LITERAL)].map(m => normalize(m[1] ?? m[2] ?? m[3] ?? "")).filter(v => SUBJECT.test(v));
+
 test("terminology: Condola / 租多啦 is never the subject of 收款, 收租 or 代收 — in any source file, allowlisted lanes included", () => {
-  const subject = /(Condola|租多啦)[^"'`\n]{0,40}(收款|收租|代收)/;
-  const hits = sourceFiles().filter(file => subject.test(decode(read(file)))).map(file => relative(root, file));
+  const hits = sourceFiles().flatMap(file => subjectClaims(read(file)).map(value => `${relative(root, file)}: ${value}`));
   assert.deepEqual(hits, []);
-  // The rule catches the phrasing it exists for.
-  for (const bad of ["租多啦幫你收款", "Condola 代收租金", "由 Condola 收租"]) assert.match(bad, subject);
-  for (const ok of ["租多啦・廠商", "收款帳戶是屋主的"]) assert.doesNotMatch(ok, subject);
+  // The rule catches the phrasing it exists for: plain, full-width space, line breaks (real and escaped), long sentences.
+  for (const bad of ['"租多啦幫你收款"', '"Condola 代收租金"', '"由 Condola 收租"', '"租多啦　會幫你收款"', '`租多啦\n會幫你收款`',
+    '"租多啦\\r\\n會幫你收款"', `"租多啦${"，每個月固定在月初提醒租客並且".repeat(4)}代收"`, "'condola collects 收款'"]) {
+    assert.equal(subjectClaims(bad).length, 1, bad);
+  }
+  // Approved strings and separate values do not combine into a claim.
+  for (const ok of ['"租多啦・廠商"', '"收款帳戶是屋主的"', '{ brand: "租多啦", money: "收款" }', '"租多啦・屋主", "待收款"']) {
+    assert.deepEqual(subjectClaims(ok), [], ok);
+  }
 });
