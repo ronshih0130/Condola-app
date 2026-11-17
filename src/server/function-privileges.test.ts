@@ -565,9 +565,19 @@ test("B-091 adds two RLS tables with no application grants, the owner_rules flag
   // Lock order: the request id, then every row lock, then admission; no lock taken after the first admission check.
   const advisory = set.indexOf("pg_advisory_xact_lock"), firstAdmission = set.indexOf("IF current_setting('app.active_org_id'");
   assert.ok(advisory > 0 && advisory < set.indexOf("FOR SHARE") && set.lastIndexOf("FOR UPDATE") < firstAdmission && set.lastIndexOf("FOR SHARE") < firstAdmission);
-  for (const lock of [/FROM public\.auth_sessions x WHERE x\.id=p_session FOR SHARE;/, /FROM public\.organizations o WHERE o\.id IN \(p_org,p_live\) ORDER BY o\.id FOR SHARE;/,
-    /FROM public\.platform_settings f WHERE f\.key='owner_rules' FOR SHARE;/, /c\.user_id=actor AND c\.is_owner ORDER BY c\.id FOR UPDATE;/, /FOR SHARE OF po;/])
+  for (const lock of [/FROM public\.auth_sessions x WHERE x\.id=p_session FOR SHARE;/, /c\.user_id=target AND c\.is_owner ORDER BY c\.id FOR UPDATE\) z;/,
+    /po\.owner_contact_id=ANY\(locked_contacts\) ORDER BY po\.id FOR SHARE\) z;/, /pr\.id=ANY\(locked_props\) ORDER BY pr\.id FOR SHARE\) z;/,
+    /o\.id IN \(p_org,p_live\) ORDER BY o\.id FOR SHARE\) z;/, /f\.key='owner_rules' FOR SHARE\) z;/])
     assert.match(set, lock);
+  // B-065 pattern: admission only on the locked rows, and the locked sets must equal what the predicates select now.
+  assert.match(set, /IS DISTINCT FROM locked_contacts/);
+  assert.match(set, /IS DISTINCT FROM locked_po THEN/);
+  assert.match(set, /c\.id=ANY\(locked_contacts\)/);
+  assert.match(set, /po\.id=ANY\(locked_po\) AND pr\.id=ANY\(locked_props\)/);
+  assert.match(set, /IF owners<>1 OR NOT \(owner_id=ANY\(locked_contacts\)\)/);
+  // Locked sets are aggregated in id order (array comparison), never in subquery or planner order.
+  assert.equal((set.match(/array_agg\(z\.id ORDER BY z\.id\)/g) ?? []).length, 3);
+  assert.doesNotMatch(set, /array_agg\(z\.id\)/);
   assert.match(set, /po\.effective_from <= \(clock_timestamp\(\) AT TIME ZONE o\.timezone\)::date/);
   assert.match(sql, /REVOKE ALL ON app\.b091_owner_rule_revisions, app\.b091_owner_rule_commands FROM PUBLIC, anon, authenticated, service_role;/);
   assert.match(sql, /VALUES \('owner_rules', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\)\nON CONFLICT \(key\) DO NOTHING;/);

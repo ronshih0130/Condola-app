@@ -62,7 +62,16 @@ async function waitForBlocked(holder: Client) {
   }
   assert.fail("no waiter appeared");
 }
-async function holder() { const c = new Client({ connectionString: process.env.DATABASE_URL }); await c.connect(); await c.query("BEGIN"); return c; }
+const holders: Client[] = [];
+/** A real lock holder in its own transaction; every holder is closed in test.after, so a failed step cannot hang the file. */
+async function holder() { const c = new Client({ connectionString: process.env.DATABASE_URL }); holders.push(c); await c.connect(); await c.query("BEGIN"); return c; }
+/** A login with no contact anywhere: an actor that owns nothing until a fixture gives it a contact. */
+async function freshUser(who: string) {
+  const user = randomUUID();
+  await db.query("INSERT INTO auth.users(id) VALUES ($1)", [user]);
+  await session(who, user);
+  return user;
+}
 async function session(who: string, user: string) {
   sid[who] = randomUUID();
   await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '2 hours')", [sid[who], user, randomUUID()]);
@@ -91,7 +100,7 @@ test.before(async () => {
 });
 
 test.after(async () => {
-  try { if (db) await db.end(); } finally { await clone?.cleanup(); }
+  try { for (const h of holders) await h.end().catch(() => undefined); if (db) await db.end(); } finally { await clone?.cleanup(); }
 });
 
 test("privileges: gateways EXECUTE for service_role only; the tables and the sequence have no application privilege; seeded OFF", async () => {
@@ -173,43 +182,132 @@ test("OWN-34-AC3/AC4: default rule; the owner changes it; audited; staff see it 
   assert.equal((await view("owner"))!.rule, "delegate_unless_lower", "owner2's change never touched owner's rule");
 });
 
-test("idempotency: every request id is reserved with its outcome; replay; conflict; stale; unchanged; invalid", async () => {
+test("idempotency: every request id is reserved with its outcome; replay; conflict; stale; unchanged; invalid; no writes", async () => {
   await flag(true);
   const r = await current(ownerContact);
   const request = randomUUID();
   const saved = await set("owner", "ask_every_time", r, request);
   assert.deepEqual(saved, { status: "saved", rule: "ask_every_time", revision: r + 1, replayed: false });
-  await unchanged("replay and conflicts", async () => {
+  const command = async (id: string) => (await db.query("SELECT md5(row_to_json(c)::text) h FROM app.b091_owner_rule_commands c WHERE request_id=$1", [id])).rows[0]?.h as string;
+  const savedCommand = await command(request);
+  await unchanged("replay and payload conflicts", async () => {
     assert.deepEqual(await set("owner", "ask_every_time", r, request), { ...saved, replayed: true });
     assert.deepEqual(await set("owner", "delegate_notify", r, request), { status: "conflict" });
     assert.deepEqual(await set("owner", "ask_every_time", r + 1, request), { status: "conflict" });
-    assert.deepEqual(await set("owner2", "ask_every_time", r, request), { status: "conflict" }, "another owner under the same id");
   });
-  // Stale (expected revision behind): reserved; the replay returns the same stale answer even after later changes.
-  const staleId = randomUUID();
+  // Stale (expected revision behind) and unchanged (same rule): reserved, no revision and no audit written.
+  const staleId = randomUUID(), unchangedId = randomUUID(), invalidId = randomUUID();
+  let before = await snapshot();
   assert.deepEqual(await set("owner", "delegate_notify", r, staleId), { status: "stale", rule: "ask_every_time", revision: r + 1, replayed: false });
-  // Unchanged: the same rule again writes no revision and no audit.
-  const before = await snapshot();
-  const unchangedId = randomUUID();
   assert.deepEqual(await set("owner", "ask_every_time", r + 1, unchangedId), { status: "unchanged", rule: "ask_every_time", revision: r + 1, replayed: false });
-  const after = await snapshot();
-  assert.deepEqual([after.revisions, after.audit], [before.revisions, before.audit]);
-  assert.notEqual(after.commands, before.commands, "the id is reserved");
-  // Invalid: reserved too; a different payload under it conflicts.
-  const invalidId = randomUUID();
+  // Invalid payload (a request id is usable): reserved with outcome invalid; corrected input under it is a conflict.
   assert.deepEqual(await set("owner", "sometimes", r + 1, invalidId), { status: "invalid", replayed: false });
-  assert.deepEqual(await set("owner", "delegate_notify", r + 1, invalidId), { status: "conflict" });
-  // Later changes don't alter what a reserved id answers.
-  await set("owner", "delegate_notify", r + 1);
+  assert.deepEqual(await set("owner", null, r + 1, randomUUID()), { status: "invalid", replayed: false });
+  let after = await snapshot();
+  assert.deepEqual([after.revisions, after.audit], [before.revisions, before.audit], "stale, unchanged and invalid write no revision or audit");
+  assert.notEqual(after.commands, before.commands, "but their ids are reserved");
+  const reserved = { stale: await command(staleId), unchanged: await command(unchangedId), invalid: await command(invalidId) };
+  await unchanged("corrected input under a reserved invalid id", async () => {
+    assert.deepEqual(await set("owner", "delegate_notify", r + 1, invalidId), { status: "conflict" });
+    assert.deepEqual(await set("owner", "sometimes", r + 1, invalidId), { status: "invalid", replayed: true });
+  });
+  // A later change really saves (outcome and new revision) ...
+  const later = await set("owner", "delegate_notify", r + 1);
+  assert.deepEqual(later, { status: "saved", rule: "delegate_notify", revision: r + 2, replayed: false });
+  // ... and afterwards every reserved id still answers exactly what it answered first, writing nothing.
+  before = await snapshot();
+  assert.deepEqual(await set("owner", "ask_every_time", r, request), { ...saved, replayed: true });
   assert.deepEqual(await set("owner", "delegate_notify", r, staleId), { status: "stale", rule: "ask_every_time", revision: r + 1, replayed: true });
   assert.deepEqual(await set("owner", "ask_every_time", r + 1, unchangedId), { status: "unchanged", rule: "ask_every_time", revision: r + 1, replayed: true });
-  const commands = (await db.query("SELECT outcome FROM app.b091_owner_rule_commands WHERE request_id = ANY($1::uuid[]) ORDER BY outcome", [[request, staleId, unchangedId, invalidId]])).rows.map(x => x.outcome);
-  assert.deepEqual(commands, ["invalid", "saved", "stale", "unchanged"]);
-  for (const bad of [{ rule: "x" }, { expectedRevision: -1 }, { requestId: "x" }])
-    assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: randomUUID(), rule: "ask_every_time", expectedRevision: 0, ...bad }, { v3 }), { ok: false, reason: "invalid" });
-  const stale = await setOwnerRule(owner("owner"), { requestId: randomUUID(), rule: "ask_every_time", expectedRevision: 0 }, { v3 });
-  assert.equal(stale.ok, false);
-  if (!stale.ok) assert.equal(stale.reason, "stale");
+  assert.deepEqual(await set("owner", "sometimes", r + 1, invalidId), { status: "invalid", replayed: true });
+  after = await snapshot();
+  assert.deepEqual(after, before, "replays write nothing");
+  assert.deepEqual({ saved: await command(request), stale: await command(staleId), unchanged: await command(unchangedId), invalid: await command(invalidId) },
+    { saved: savedCommand, ...reserved }, "reserved commands are immutable");
+  const outcomes = (await db.query("SELECT outcome FROM app.b091_owner_rule_commands WHERE request_id = ANY($1::uuid[]) ORDER BY outcome", [[request, staleId, unchangedId, invalidId]])).rows.map(x => x.outcome);
+  assert.deepEqual(outcomes, ["invalid", "saved", "stale", "unchanged"]);
+  // TS: a valid id with an invalid rule reaches the gateway and is reserved too.
+  const tsId = randomUUID();
+  assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: tsId, rule: "x", expectedRevision: r + 2 }, { v3 }), { ok: false, reason: "invalid" });
+  assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: tsId, rule: "ask_every_time", expectedRevision: r + 2 }, { v3 }), { ok: false, reason: "conflict" });
+});
+
+test("conflict on the actor alone and on the owner contact alone", async () => {
+  await flag(true);
+  const r = await current(ownerContact);
+  const request = randomUUID();
+  assert.equal((await set("owner", r % 2 ? "ask_every_time" : "delegate_unless_lower", r, request)).status, "saved");
+  const payload = (await db.query("SELECT requested_rule,expected_revision FROM app.b091_owner_rule_commands WHERE request_id=$1", [request])).rows[0];
+  // Only the actor changes: the same owner contact now belongs to another user.
+  const other = await freshUser("other");
+  await db.query("UPDATE public.contacts SET user_id=$2 WHERE id=$1", [ownerContact, other]);
+  try {
+    await unchanged("actor only", async () => assert.deepEqual(await set("other", payload.requested_rule, payload.expected_revision, request), { status: "conflict" }));
+  } finally { await db.query("UPDATE public.contacts SET user_id=$2 WHERE id=$1", [ownerContact, USERS.owner]); }
+  // Only the owner contact changes: the same user now owns through another contact (the old one archived, so it is
+  // no longer a current owner; one active owner contact per user per company is a schema rule).
+  const property = (await db.query("SELECT property_id,effective_from FROM public.property_owners WHERE owner_contact_id=$1 ORDER BY id LIMIT 1", [ownerContact])).rows[0];
+  await db.query("UPDATE public.contacts SET archived_at=clock_timestamp() WHERE id=$1", [ownerContact]);
+  const replacement = (await db.query(`INSERT INTO public.contacts(org_id,user_id,is_owner,display_name) VALUES($1,$2,true,'陳建宏（新）') RETURNING id`, [ORG_ID, USERS.owner])).rows[0].id;
+  await db.query(`INSERT INTO public.property_owners(org_id,property_id,owner_contact_id,is_primary,effective_from) VALUES($1,$2,$3,false,$4)`,
+    [ORG_ID, property.property_id, replacement, property.effective_from]);
+  try {
+    assert.ok(await view("owner"), "the same actor is admitted through the replacement contact");
+    await unchanged("owner contact only", async () => assert.deepEqual(await set("owner", payload.requested_rule, payload.expected_revision, request), { status: "conflict" }));
+  } finally {
+    await db.query("DELETE FROM public.property_owners WHERE owner_contact_id=$1", [replacement]);
+    await db.query("DELETE FROM public.contacts WHERE id=$1", [replacement]);
+    await db.query("UPDATE public.contacts SET archived_at=NULL WHERE id=$1", [ownerContact]);
+  }
+  assert.deepEqual(await set("owner", payload.requested_rule, payload.expected_revision, request), { status: "saved", rule: payload.requested_rule, revision: r + 1, replayed: true }, "positive control");
+});
+
+test("two current-owner contacts for one user in one company: set and view are refused, nothing written", async () => {
+  await flag(true);
+  // The schema already refuses a second active owner contact for one login in one company ...
+  await assert.rejects(db.query(`INSERT INTO public.contacts(org_id,user_id,is_owner,display_name) VALUES($1,$2,true,'第二個屋主身分')`, [ORG_ID, USERS.owner2]), code("23505"));
+  // ... so, in this disposable clone only, lift that index to prove the gateways refuse the ambiguity on their own.
+  const index = (await db.query("SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='contacts_org_user_owner_uniq'")).rows[0].indexdef as string;
+  await db.query("DROP INDEX public.contacts_org_user_owner_uniq");
+  let second: string | undefined;
+  try {
+    second = (await db.query(`INSERT INTO public.contacts(org_id,user_id,is_owner,display_name) VALUES($1,$2,true,'第二個屋主身分') RETURNING id`, [ORG_ID, USERS.owner2])).rows[0].id;
+    const property = (await db.query("SELECT property_id,effective_from FROM public.property_owners WHERE owner_contact_id=$1 ORDER BY id LIMIT 1", [owner2Contact])).rows[0];
+    await db.query(`INSERT INTO public.property_owners(org_id,property_id,owner_contact_id,is_primary,effective_from) VALUES($1,$2,$3,false,$4)`, [ORG_ID, property.property_id, second, property.effective_from]);
+    await unchanged("ambiguous owner", async () => {
+      await assert.rejects(set("owner2", "delegate_unless_lower", await current(owner2Contact)), code("42501"));
+      await assert.rejects(view("owner2"), code("42501"));
+      assert.deepEqual(await setOwnerRule(owner("owner2"), { requestId: randomUUID(), rule: "delegate_unless_lower", expectedRevision: 0 }, { v3 }), { ok: false, reason: "forbidden" });
+    });
+  } finally {
+    if (second) {
+      await db.query("DELETE FROM public.property_owners WHERE owner_contact_id=$1", [second]);
+      await db.query("DELETE FROM public.contacts WHERE id=$1", [second]);
+    }
+    await db.query(index);
+  }
+  assert.ok(await view("owner2"), "positive control");
+});
+
+test("staff change logs are isolated between companies in both directions; a revoked staff session alone is refused", async () => {
+  await flag(true);
+  // A revision in the other company (its own owner contact), written directly as a fixture.
+  await db.query(`INSERT INTO app.b091_owner_rule_revisions(org_id,owner_contact_id,revision,renewal_rule,previous_rule,request_id,created_by)
+    VALUES($1,$2,1,'ask_every_time','delegate_notify',$3,$4)`, [ORG2_ID, foreignOwner, randomUUID(), USERS.coastAdmin]);
+  assert.ok((await current(ownerContact)) > 0, "this company has revisions too");
+  const mine = await staff("admin"), theirs = await staff("coastAdmin", null, { org: ORG2_ID });
+  const ids = (page: Record<string, unknown> | null) => (page!.changes as { ownerContactId: string }[]).map(c => c.ownerContactId);
+  assert.ok(ids(mine).length > 0 && !ids(mine).includes(foreignOwner));
+  assert.deepEqual(ids(theirs), [foreignOwner]);
+  assert.ok(!ids(theirs).includes(ownerContact) && !ids(theirs).includes(owner2Contact));
+  await assert.rejects(staff("coastAdmin", foreignOwner), code("42501"), "the other company's owner via this company");
+  await assert.rejects(staff("admin", foreignOwner, { org: ORG2_ID }), code("42501"), "this company's admin via the other company");
+  // An otherwise admitted staff session: works, then refused after revocation alone.
+  await session("admin2", USERS.admin);
+  assert.ok(await staff("admin2", ownerContact));
+  await db.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sid.admin2]);
+  await assert.rejects(staff("admin2", ownerContact), code("42501"));
+  assert.deepEqual(await staffRuleChanges({ ...staffSession("admin", "admin"), sessionId: sid.admin2 }, {}, { v3 }), { state: "forbidden" });
 });
 
 test("denials: anon (ACL), cross-org, non-owners, revoked session, former owner, tuple and app.env; staff role and contact gates; no writes", async () => {
@@ -258,7 +356,7 @@ test("lock-wait races: a session revoked, an ownership ended or the flag turned 
   await h.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sid.raceA]);
   let before = await snapshot();
   let pending: Promise<unknown> = set("raceA", "ask_every_time", await current(ownerContact)).then(r => r, e => e);
-  await waitForBlocked(h); await h.query("COMMIT"); await h.end();
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
   assert.ok(code("42501")(await pending), "revoked while waiting");
   assert.deepEqual(await snapshot(), before);
   // 2. Ownership ended while the writer waits on property_owners.
@@ -267,7 +365,7 @@ test("lock-wait races: a session revoked, an ownership ended or the flag turned 
   await h.query("UPDATE public.property_owners SET effective_to=effective_from WHERE owner_contact_id=$1", [ownerContact]);
   before = await snapshot();
   pending = set("owner", "ask_every_time", await current(ownerContact)).then(r => r, e => e);
-  await waitForBlocked(h); await h.query("COMMIT"); await h.end();
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
   assert.ok(code("42501")(await pending), "ownership ended while waiting");
   assert.deepEqual(await snapshot(), before);
   for (const row of po) await db.query("UPDATE public.property_owners SET effective_to=$2 WHERE id=$1", [row.id, row.effective_to]);
@@ -276,7 +374,7 @@ test("lock-wait races: a session revoked, an ownership ended or the flag turned 
   await h.query("UPDATE public.platform_settings SET value=jsonb_set(value,'{enabled}','false') WHERE key='owner_rules'");
   before = await snapshot();
   pending = set("owner", "ask_every_time", await current(ownerContact)).then(r => r, e => e);
-  await waitForBlocked(h); await h.query("COMMIT"); await h.end();
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
   assert.deepEqual(await pending, { status: "disabled" });
   assert.deepEqual(await snapshot(), before);
   await flag(true);
@@ -296,6 +394,90 @@ test("lock-wait races: a session revoked, an ownership ended or the flag turned 
   h = await holder();
   await h.query("SELECT 1 FROM public.contacts WHERE id=$1 FOR UPDATE", [ownerContact]);
   pending = set("owner", firstResult.rule === "ask_every_time" ? "delegate_notify" : "ask_every_time", r + 1).then(x => x, e => e);
-  await waitForBlocked(h); await h.query("COMMIT"); await h.end();
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
   assert.equal((await pending as Result).status, "saved");
+});
+
+test("contact-row races: a holder on the owner contact (FOR UPDATE) archives it, a contact moved to an actor with none, an ownership added to the locked contact, or a contact joining the locked set during the wait → refused, no writes; positive controls", async () => {
+  await flag(true);
+  // 1. The holder sits on the contact row itself (not the session or org rows) and archives the contact.
+  let h = await holder();
+  await h.query("UPDATE public.contacts SET archived_at=clock_timestamp() WHERE id=$1", [ownerContact]);
+  let before = await snapshot();
+  let pending: Promise<unknown> = set("owner", "ask_every_time", await current(ownerContact), randomUUID(), { lockTimeout: "5s" }).then(r => r, e => e);
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
+  assert.ok(code("42501")(await pending), "the archived contact is no longer an owner");
+  assert.deepEqual(await snapshot(), before);
+  await db.query("UPDATE public.contacts SET archived_at=NULL WHERE id=$1", [ownerContact]);
+  // Positive control: the same holder that commits without a change → the waiting writer saves (serialised).
+  h = await holder();
+  await h.query("UPDATE public.contacts SET display_name=display_name WHERE id=$1", [ownerContact]);
+  const r = await current(ownerContact), current0 = (await view("owner"))!.rule;
+  pending = set("owner", current0 === "ask_every_time" ? "delegate_notify" : "ask_every_time", r, randomUUID(), { lockTimeout: "5s" }).then(x => x, e => e);
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
+  assert.equal((await pending as Result).status, "saved");
+  // 2. No locked contact at first: an actor who owns nothing; during its wait (on the flag row, after the contact
+  //    locks), a holder moves a current-owner contact to this actor. The locked set ({}) no longer equals the current
+  //    set → refused, nothing written.
+  const newOwner = await freshUser("newOwner");
+  h = await holder();
+  await h.query("UPDATE public.contacts SET user_id=$2 WHERE id=$1", [owner2Contact, newOwner]);
+  await h.query("UPDATE public.platform_settings SET value=value WHERE key='owner_rules'");
+  before = await snapshot();
+  pending = set("newOwner", "ask_every_time", await current(owner2Contact), randomUUID(), { lockTimeout: "5s" }).then(x => x, e => e);
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
+  assert.ok(code("42501")(await pending), "a contact moved to the actor during the wait is not admitted");
+  assert.deepEqual(await snapshot(), before);
+  // Positive control: once committed (no wait), the same actor is admitted on the contact it now locks.
+  const after = await set("newOwner", "ask_every_time", await current(owner2Contact), randomUUID(), { lockTimeout: "5s" });
+  assert.ok(["saved", "unchanged"].includes(after.status));
+  await db.query("UPDATE public.contacts SET user_id=$2 WHERE id=$1", [owner2Contact, USERS.owner2]);
+  // 3. Any change to a locked contact's ownership set takes a key-share lock on that contact row (the foreign key),
+  //    which conflicts with the writer's FOR UPDATE. A holder adding an ownership therefore serialises the writer
+  //    behind it: after the wait the writer is admitted on the committed set (two ownerships) and saves once.
+  const mine = (await db.query("SELECT property_id,effective_from FROM public.property_owners WHERE owner_contact_id=$1 ORDER BY id LIMIT 1", [ownerContact])).rows[0];
+  const otherProperty = (await db.query("SELECT id FROM public.properties WHERE org_id=$1 AND archived_at IS NULL AND id NOT IN (SELECT property_id FROM public.property_owners WHERE owner_contact_id=$2) ORDER BY id LIMIT 1", [ORG_ID, ownerContact])).rows[0].id;
+  h = await holder();
+  await h.query(`INSERT INTO public.property_owners(org_id,property_id,owner_contact_id,is_primary,effective_from) VALUES($1,$2,$3,false,$4)`, [ORG_ID, otherProperty, ownerContact, mine.effective_from]);
+  const rev = await current(ownerContact), rule = (await view("owner"))!.rule === "ask_every_time" ? "delegate_notify" : "ask_every_time";
+  pending = set("owner", rule, rev, randomUUID(), { lockTimeout: "5s" }).then(x => x, e => e);
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
+  assert.deepEqual(await pending, { status: "saved", rule, revision: rev + 1, replayed: false }, "serialised behind the new ownership");
+  assert.equal((await db.query("SELECT count(*)::int n FROM public.property_owners WHERE owner_contact_id=$1", [ownerContact])).rows[0].n, 2);
+  await db.query("DELETE FROM public.property_owners WHERE owner_contact_id=$1 AND property_id=$2", [ownerContact, otherProperty]);
+  assert.ok(await view("owner"), "positive control after cleanup");
+  // 4. The locked contact set itself must still be current: during the wait (holder also on the flag row) an
+  //    archived owner contact of someone else is moved to the actor. It confers no ownership, but the set the
+  //    writer locked is no longer what the same predicate selects → refused, nothing written.
+  const stranger = await freshUser("stranger");
+  const archived = (await db.query(`INSERT INTO public.contacts(org_id,user_id,is_owner,display_name,archived_at) VALUES($1,$2,true,'已封存屋主',clock_timestamp()) RETURNING id`, [ORG_ID, stranger])).rows[0].id;
+  h = await holder();
+  await h.query("UPDATE public.contacts SET user_id=$2 WHERE id=$1", [archived, USERS.owner]);
+  await h.query("UPDATE public.platform_settings SET value=value WHERE key='owner_rules'");
+  before = await snapshot();
+  pending = set("owner", "ask_every_time", await current(ownerContact), randomUUID(), { lockTimeout: "5s" }).then(x => x, e => e);
+  try { await waitForBlocked(h); await h.query("COMMIT"); } finally { await h.end(); }
+  assert.ok(code("42501")(await pending), "a contact that joined the actor's set mid-wait is refused");
+  assert.deepEqual(await snapshot(), before);
+  // Positive control: with that archived contact already the actor's before the call, the writer locks it and is admitted.
+  const ok = await set("owner", (await view("owner"))!.rule === "ask_every_time" ? "delegate_notify" : "ask_every_time", await current(ownerContact), randomUUID(), { lockTimeout: "5s" });
+  assert.equal(ok.status, "saved");
+  await db.query("DELETE FROM public.contacts WHERE id=$1", [archived]);
+});
+
+test("an owner with several ownerships whose id order differs from their property order is admitted (locked sets compared in id order)", async () => {
+  await flag(true);
+  const mine = (await db.query("SELECT id,property_id,effective_from FROM public.property_owners WHERE owner_contact_id=$1 ORDER BY id", [ownerContact])).rows;
+  assert.equal(mine.length, 1, "fixture: one ownership to start");
+  // A second ownership whose id sorts on the other side of the first from its property id.
+  const other = (await db.query("SELECT id FROM public.properties WHERE org_id=$1 AND archived_at IS NULL AND id NOT IN (SELECT property_id FROM public.property_owners WHERE owner_contact_id=$2) ORDER BY id", [ORG_ID, ownerContact])).rows.map(r => r.id as string);
+  const propertyBelow = other.find(id => id < mine[0].property_id), propertyAbove = other.find(id => id > mine[0].property_id);
+  const property = propertyBelow ?? propertyAbove!;
+  const id = propertyBelow ? "ffffffff-ffff-4fff-bfff-ffffffffffff" : "00000000-0000-4000-8000-000000000000";
+  assert.ok((property < mine[0].property_id) === (id > mine[0].id), "fixture: id order and property order disagree");
+  await db.query(`INSERT INTO public.property_owners(id,org_id,property_id,owner_contact_id,is_primary,effective_from) VALUES($1,$2,$3,$4,false,$5)`, [id, ORG_ID, property, ownerContact, mine[0].effective_from]);
+  try {
+    const rev = await current(ownerContact), rule = (await view("owner"))!.rule === "ask_every_time" ? "delegate_notify" : "ask_every_time";
+    assert.deepEqual(await set("owner", rule, rev), { status: "saved", rule, revision: rev + 1, replayed: false });
+  } finally { await db.query("DELETE FROM public.property_owners WHERE id=$1", [id]); }
 });

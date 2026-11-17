@@ -59,29 +59,35 @@ ON CONFLICT (key) DO NOTHING;
 
 -- OWN-34-AC3/AC4 writer (owner app). Statuses: saved | unchanged | stale | invalid | conflict | disabled.
 -- Denials raise 42501 and write nothing.
--- Lock order: the request id first (reserved), then every row the admission and the insert depend on (the session,
--- the company and the flag row, the actor's owner contacts, their property_owners and properties), and only then
--- the full admission check. Every wait happens before admission; nothing after it waits (the inserts' FK target,
--- the owner contact, is already locked FOR UPDATE, which also serialises writers for one owner).
+-- Lock order (B-065 pattern, c026dbc): the request id first (reserved), then the session row, the actor's owner contacts
+-- (FOR UPDATE: also the inserts' FK target and the per-owner writer queue), the property_owners rows of exactly those
+-- locked contacts, the properties of exactly those rows, both orgs and the flag row; only then the full admission.
+-- The admission decides on locked rows only: the admitted owner contact must be one of the locked contacts, and the
+-- locked contact set and property_owners set must still equal what the same predicates select now. A contact or an
+-- ownership row that appeared, moved to this actor or changed during a wait is refused, never waited on afterwards.
 CREATE FUNCTION app.b091_owner_rule_set(p_org uuid,p_live uuid,p_env text,p_session uuid,p_request uuid,
  p_rule text,p_expected_revision integer)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE actor uuid; owner_id uuid; owners integer; prior app.b091_owner_rule_commands; cur record; result jsonb;
- outcome text; new_rev integer; rev_id uuid;
+DECLARE target uuid; actor uuid; owner_id uuid; owners integer; prior app.b091_owner_rule_commands; cur record; result jsonb;
+ outcome text; new_rev integer; rev_id uuid; locked_contacts uuid[]; locked_po uuid[]; locked_props uuid[];
+ locked_orgs integer; locked_flag integer; req_rule text;
 BEGIN
  IF p_org IS NULL OR p_request IS NULL THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('b091/owner-rule/'||p_org::text||'/'||p_request::text,0));
- -- Row locks (waits happen here, before any admission decision).
- SELECT x.user_id INTO actor FROM public.auth_sessions x WHERE x.id=p_session FOR SHARE;
- PERFORM 1 FROM public.organizations o WHERE o.id IN (p_org,p_live) ORDER BY o.id FOR SHARE;
- PERFORM 1 FROM public.platform_settings f WHERE f.key='owner_rules' FOR SHARE;
- PERFORM 1 FROM public.contacts c WHERE c.org_id=p_org AND c.user_id=actor AND c.is_owner ORDER BY c.id FOR UPDATE;
- PERFORM 1 FROM public.property_owners po JOIN public.contacts c ON c.org_id=po.org_id AND c.id=po.owner_contact_id
-  WHERE po.org_id=p_org AND c.user_id=actor AND c.is_owner ORDER BY po.id FOR SHARE OF po;
- PERFORM 1 FROM public.properties pr WHERE pr.org_id=p_org AND pr.id IN (SELECT po.property_id FROM public.property_owners po
-   JOIN public.contacts c ON c.org_id=po.org_id AND c.id=po.owner_contact_id WHERE po.org_id=p_org AND c.user_id=actor AND c.is_owner)
-  ORDER BY pr.id FOR SHARE;
- -- Full admission, after every wait.
+ -- Row locks (every wait happens here, before any admission decision). Each locked set is aggregated with its own
+ -- ORDER BY id: the sets are later compared as arrays, and the input order of a subquery is not kept by array_agg
+ -- (beside the DISTINCT property aggregate the planner may feed it in property order).
+ SELECT x.user_id INTO target FROM public.auth_sessions x WHERE x.id=p_session FOR SHARE;
+ SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_contacts FROM (SELECT c.id FROM public.contacts c
+  WHERE c.org_id=p_org AND c.user_id=target AND c.is_owner ORDER BY c.id FOR UPDATE) z;
+ SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}'),coalesce(array_agg(DISTINCT z.property_id),'{}') INTO locked_po,locked_props
+ FROM (SELECT po.id,po.property_id FROM public.property_owners po
+  WHERE po.org_id=p_org AND po.owner_contact_id=ANY(locked_contacts) ORDER BY po.id FOR SHARE) z;
+ SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_props FROM (SELECT pr.id FROM public.properties pr
+  WHERE pr.org_id=p_org AND pr.id=ANY(locked_props) ORDER BY pr.id FOR SHARE) z;
+ SELECT count(*) INTO locked_orgs FROM (SELECT 1 FROM public.organizations o WHERE o.id IN (p_org,p_live) ORDER BY o.id FOR SHARE) z;
+ SELECT count(*) INTO locked_flag FROM (SELECT 1 FROM public.platform_settings f WHERE f.key='owner_rules' FOR SHARE) z;
+ -- Full admission, after every wait, on the locked rows only.
  IF current_setting('app.active_org_id',true) IS DISTINCT FROM p_org::text
    OR current_setting('app.env',true) IS DISTINCT FROM p_env
    OR NOT EXISTS (
@@ -91,8 +97,9 @@ BEGIN
    ((p_env='live' AND o.id=p_live AND o.live_org_id IS NULL)
     OR (p_env='sandbox' AND o.live_org_id=p_live))
  ) THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
- IF actor IS NULL OR NOT EXISTS (SELECT 1 FROM public.auth_sessions x
-   WHERE x.id=p_session AND x.user_id=actor AND x.revoked_at IS NULL AND x.expires_at>clock_timestamp()) THEN
+ SELECT x.user_id INTO actor FROM public.auth_sessions x
+ WHERE x.id=p_session AND x.revoked_at IS NULL AND x.expires_at>clock_timestamp();
+ IF actor IS NULL OR actor IS DISTINCT FROM target OR locked_flag<>1 OR locked_orgs<1 THEN
   RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  IF NOT EXISTS (SELECT 1 FROM public.organizations o JOIN public.platform_settings f ON f.key='owner_rules'
   WHERE o.id=p_org AND o.feature_flags->'owner_rules'='true'::jsonb
@@ -100,20 +107,30 @@ BEGIN
    AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)) THEN
   RETURN jsonb_build_object('status','disabled');
  END IF;
+ -- The locked sets must still be exactly what the same predicates select now (nothing appeared or moved meanwhile).
+ IF (SELECT coalesce(array_agg(c.id ORDER BY c.id),'{}') FROM public.contacts c
+     WHERE c.org_id=p_org AND c.user_id=actor AND c.is_owner) IS DISTINCT FROM locked_contacts
+   OR (SELECT coalesce(array_agg(po.id ORDER BY po.id),'{}') FROM public.property_owners po
+     WHERE po.org_id=p_org AND po.owner_contact_id=ANY(locked_contacts)) IS DISTINCT FROM locked_po THEN
+  RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ -- PR-015: exactly one current-owner contact, decided on the locked contacts, ownership rows and properties.
  SELECT count(DISTINCT c.id),min(c.id::text)::uuid INTO owners,owner_id FROM public.contacts c
- WHERE c.org_id=p_org AND c.user_id=actor AND c.is_owner AND c.archived_at IS NULL
+ WHERE c.org_id=p_org AND c.id=ANY(locked_contacts) AND c.user_id=actor AND c.is_owner AND c.archived_at IS NULL
   AND EXISTS (SELECT 1 FROM public.property_owners po
    JOIN public.properties pr ON pr.org_id=po.org_id AND pr.id=po.property_id
    JOIN public.organizations o ON o.id=po.org_id
-   WHERE po.org_id=c.org_id AND po.owner_contact_id=c.id AND pr.archived_at IS NULL
+   WHERE po.org_id=c.org_id AND po.owner_contact_id=c.id AND po.id=ANY(locked_po) AND pr.id=ANY(locked_props)
+    AND pr.archived_at IS NULL
     AND po.effective_from <= (clock_timestamp() AT TIME ZONE o.timezone)::date
     AND (po.effective_to IS NULL OR po.effective_to > (clock_timestamp() AT TIME ZONE o.timezone)::date));
- IF owners<>1 THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ IF owners<>1 OR NOT (owner_id=ANY(locked_contacts)) THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ -- The payload as reserved: an over-long rule text is stored as NULL (it is invalid either way).
+ req_rule:=CASE WHEN char_length(p_rule)<=64 THEN p_rule END;
  -- Reserved request ids replay their stored result; another actor, owner or payload is a conflict.
  SELECT * INTO prior FROM app.b091_owner_rule_commands c WHERE c.org_id=p_org AND c.request_id=p_request;
  IF FOUND THEN
   IF prior.actor_id IS DISTINCT FROM actor OR prior.owner_contact_id IS DISTINCT FROM owner_id
-    OR prior.requested_rule IS DISTINCT FROM p_rule OR prior.expected_revision IS DISTINCT FROM p_expected_revision THEN
+    OR prior.requested_rule IS DISTINCT FROM req_rule OR prior.expected_revision IS DISTINCT FROM p_expected_revision THEN
    RETURN jsonb_build_object('status','conflict');
   END IF;
   RETURN prior.result || jsonb_build_object('replayed',true);
@@ -122,7 +139,7 @@ BEGIN
   coalesce((SELECT r2.renewal_rule FROM app.b091_owner_rule_revisions r2
     WHERE r2.org_id=p_org AND r2.owner_contact_id=owner_id ORDER BY r2.revision DESC LIMIT 1),'delegate_notify') rule
  INTO cur FROM app.b091_owner_rule_revisions r WHERE r.org_id=p_org AND r.owner_contact_id=owner_id;
- IF p_rule IS NULL OR p_rule NOT IN ('delegate_notify','delegate_unless_lower','ask_every_time')
+ IF req_rule IS NULL OR req_rule NOT IN ('delegate_notify','delegate_unless_lower','ask_every_time')
    OR p_expected_revision IS NULL OR p_expected_revision<0 THEN
   outcome:='invalid'; result:=jsonb_build_object('status','invalid');
  ELSIF p_expected_revision<>cur.revision THEN
@@ -141,7 +158,7 @@ BEGIN
   outcome:='saved'; result:=jsonb_build_object('status','saved','rule',p_rule,'revision',new_rev);
  END IF;
  INSERT INTO app.b091_owner_rule_commands(org_id,request_id,actor_id,owner_contact_id,requested_rule,expected_revision,outcome,result)
- VALUES (p_org,p_request,actor,owner_id,p_rule,p_expected_revision,outcome,result);
+ VALUES (p_org,p_request,actor,owner_id,req_rule,p_expected_revision,outcome,result);
  RETURN result || jsonb_build_object('replayed',false);
 END $$;
 REVOKE ALL ON FUNCTION app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer) FROM PUBLIC,anon,authenticated;

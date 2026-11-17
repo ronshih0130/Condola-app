@@ -49,8 +49,16 @@ test("owner reader/writer: OFF never opens a transaction; only owner sessions; p
     [{ status: "disabled" }, { ok: false, reason: "off" }], [{ status: "invalid" }, { ok: false, reason: "invalid" }],
     [{ status: "conflict" }, { ok: false, reason: "conflict" }], [{ status: "weird" }, { ok: false, reason: "failed" }]] as const)
     assert.deepEqual(await setOwnerRule(owner, { requestId: C, rule: "ask_every_time", expectedRevision: 2 }, { v3: async () => true, transaction: client(result, []) }), expected);
-  for (const bad of [{ requestId: "x" }, { rule: "sometimes" }, { expectedRevision: -1 }, { expectedRevision: 1.5 }, { expectedRevision: 2147483648 }])
-    assert.deepEqual(await setOwnerRule(owner, { requestId: C, rule: "ask_every_time", expectedRevision: 0, ...bad }, { v3: async () => true, transaction: never }), { ok: false, reason: "invalid" });
+  // Only an unusable request id is refused before the gateway; any other bad payload is sent (as NULL where it cannot be
+  // represented) so the gateway reserves the id with outcome invalid.
+  assert.deepEqual(await setOwnerRule(owner, { requestId: "x", rule: "ask_every_time", expectedRevision: 0 }, { v3: async () => true, transaction: never }), { ok: false, reason: "invalid" });
+  for (const [bad, rule, expected] of [[{ rule: "sometimes" }, "sometimes", 0], [{ rule: "x".repeat(65) }, null, 0], [{ expectedRevision: -1 }, "ask_every_time", null],
+    [{ expectedRevision: 1.5 }, "ask_every_time", null], [{ expectedRevision: 2147483648 }, "ask_every_time", null]] as const) {
+    const sent: { sql: string; args?: unknown[] }[] = [];
+    assert.deepEqual(await setOwnerRule(owner, { ...({ requestId: C, rule: "ask_every_time", expectedRevision: 0 } as Record<string, unknown>), ...bad } as never, { v3: async () => true, transaction: client({ status: "invalid", replayed: false }, sent) }),
+      { ok: false, reason: "invalid" }, JSON.stringify(bad));
+    assert.deepEqual(sent[3].args?.slice(5), [rule, expected]);
+  }
   const deny = (async () => { throw Object.assign(new Error("denied"), { cause: { code: "42501" } }); }) as never;
   assert.deepEqual(await setOwnerRule(owner, { requestId: C, rule: "ask_every_time", expectedRevision: 0 }, { v3: async () => true, transaction: deny }), { ok: false, reason: "forbidden" });
 });

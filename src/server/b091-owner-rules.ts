@@ -94,8 +94,11 @@ export async function setOwnerRule(input: Session, form: SetOwnerRuleInput, deps
   try {
     const session = await admitOwner(input, deps);
     if ("state" in session) return { ok: false, reason: session.state };
-    if (!form || !uuid(form.requestId) || !rule(form.rule) || !revision(form.expectedRevision) || form.expectedRevision > 2147483647)
-      return { ok: false, reason: "invalid" };
+    // Only an unusable request id is refused here. Any other invalid payload goes to the gateway, which reserves the
+    // id with outcome invalid, so a retry of that id with corrected input is a conflict, never a second save.
+    if (!form || !uuid(form.requestId)) return { ok: false, reason: "invalid" };
+    const requested = typeof form.rule === "string" && form.rule.length <= 64 ? form.rule : null;
+    const expected = revision(form.expectedRevision) && form.expectedRevision <= 2147483647 ? form.expectedRevision : null;
     // READ COMMITTED: the gateway waits on row locks first and re-admits afterwards in a fresh snapshot.
     const result = await (deps.transaction ?? svc)(session.userId, async client => {
       await client.query("SET LOCAL statement_timeout = '5s'");
@@ -103,7 +106,7 @@ export async function setOwnerRule(input: Session, form: SetOwnerRuleInput, deps
       await client.query(PIN, [session.orgId, session.environment]);
       return (await client.query<{ result: Record<string, unknown> | null }>(
         "SELECT app.b091_owner_rule_set($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::text,$7::integer) AS result",
-        [session.orgId, session.liveOrgId, session.environment, session.sessionId, form.requestId, form.rule, form.expectedRevision])).rows[0]?.result ?? null;
+        [session.orgId, session.liveOrgId, session.environment, session.sessionId, form.requestId, requested, expected])).rows[0]?.result ?? null;
     }, { isolation: "read committed" });
     const status = result?.status, replayed = result?.replayed === true;
     if ((status === "saved" || status === "unchanged") && rule(result?.rule) && revision(result?.revision) && typeof result?.replayed === "boolean")
