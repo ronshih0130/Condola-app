@@ -51,6 +51,13 @@ export function createIssuerSaver(deps: { fetch: Fetch; done: () => void; newId?
   };
 }
 
+/** GS-02: the save failed; the choice stays and 再試一次 resends it under the same request id. */
+export function IssuerSaveError({ locale, onRetry }: { locale: Locale; onRetry: () => void }) {
+  const copy = vendorActivationCopy(locale);
+  return <div className="v-act-error" role="alert"><p>{copy.saveError}</p>
+    <button type="button" className="v-act-secondary" onClick={onRetry}>{copy.retry}</button></div>;
+}
+
 /** 我的帳號 › 開立類型: tapping a card only changes the choice; only 儲存 writes; 取消 leaves without writing (VEN-17-AC6). */
 export function IssuerTypeForm({ locale, current }: { locale: Locale; current: IssuerType | null }) {
   const copy = vendorActivationCopy(locale);
@@ -74,8 +81,7 @@ export function IssuerTypeForm({ locale, current }: { locale: Locale; current: I
     </div>
     <p className="v-act-info">{copy.selfDeclared}</p>
     <p className="v-act-help">{copy.rowNote}</p>
-    {state === "failed" ? <div className="v-act-error" role="alert"><p>{copy.saveError}</p>
-      <button type="button" className="v-act-secondary" onClick={() => void save()}>{copy.retry}</button></div> : null}
+    {state === "failed" ? <IssuerSaveError locale={locale} onRetry={() => void save()} /> : null}
     <button type="button" className="v-act-primary" disabled={!choice || state === "pending"} aria-busy={state === "pending"} onClick={() => void save()}>{copy.save}</button>
     <a className="v-act-text" href={VENDOR_WORKBENCH.account}>{copy.cancel}</a>
   </section>;

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { IssuerTypeForm, IssuerTypeRow, StampNotYet, createIssuerSaver } from "../components/v3/vendor/vendor-activation";
+import { IssuerSaveError, IssuerTypeForm, IssuerTypeRow, StampNotYet, createIssuerSaver } from "../components/v3/vendor/vendor-activation";
 import { vendorActivationCopy } from "../i18n/lanes/brand-v3-vendor-activation";
 import { VENDOR_ACCOUNT_PAGES } from "../lib/vendor-workbench-paths";
 import { ISSUER_TYPES, isIssuerType, parseIssuerInput } from "./b065-vendor-activation";
@@ -94,12 +94,37 @@ test("type page: three cards, the current one checked, one solid 儲存, 取消 
   assert.equal((html.match(/class="v-act-primary"/g) ?? []).length, 1);
   assert.match(html, /<a class="v-act-text" href="\/vendor-account\/account">取消<\/a>/);
   assert.doesNotMatch(html, /type="text"|身分證字號|稅號|統一編號|沒有存成功/);
+  // The three cards are one labelled radio group: role="radiogroup" named by the question heading.
+  const group = html.match(/<div class="v-act-options" role="radiogroup" aria-labelledby="([^"]+)">/);
+  assert.ok(group, "radiogroup");
+  assert.match(html, new RegExp(`<h2 id="${group![1]}">你要開哪一種文件？</h2>`));
+  assert.equal((html.match(/name="issuerType"/g) ?? []).length, 3, "one group name");
+  assert.doesNotMatch(html, /role="alert"|再試一次/, "no error before a failed save");
   const empty = renderToStaticMarkup(<IssuerTypeForm locale="zh-TW" current={null} />);
   assert.doesNotMatch(empty, /checked/);
   assert.match(empty, /<button type="button" class="v-act-primary" disabled=""/, "nothing chosen: 儲存 is disabled");
   const source = read("src/components/v3/vendor/vendor-activation.tsx");
   assert.match(source, /disabled=\{!choice \|\| state === "pending"\} aria-busy=\{state === "pending"\}/);
   assert.match(source, /if \(!choice \|\| state === "pending"\) return;/);
+});
+
+test("after a failed save (GS-02): the alert keeps the page and offers 再試一次, which resends the same choice", async () => {
+  let retried = 0;
+  const html = renderToStaticMarkup(<IssuerSaveError locale="zh-TW" onRetry={() => { retried++; }} />);
+  assert.equal(html, '<div class="v-act-error" role="alert"><p>沒有存成功，請再試一次。</p><button type="button" class="v-act-secondary">再試一次</button></div>');
+  const element = IssuerSaveError({ locale: "zh-TW", onRetry: () => { retried++; } }) as React.ReactElement<{ children: React.ReactElement<{ onClick: () => void }>[] }>;
+  element.props.children[1].props.onClick();
+  assert.equal(retried, 1);
+  // The form shows it only in the failed state, and the retry goes back through the same saver (same request id).
+  const source = read("src/components/v3/vendor/vendor-activation.tsx");
+  assert.match(source, /\{state === "failed" \? <IssuerSaveError locale=\{locale\} onRetry=\{\(\) => void save\(\)\} \/> : null\}/);
+  assert.match(source, /setState\(outcome === "failed" \? "failed" : "idle"\)/);
+  let n = 0; const bodies: string[] = [];
+  const saver = createIssuerSaver({ fetch: async (_u, init) => { bodies.push(String(init.body)); return n++ ? new Response(JSON.stringify({ status: "recorded" })) : Promise.reject(new Error("offline")); },
+    done: () => {}, newId: () => "id-retry" });
+  assert.equal(await saver.save("individual"), "failed");
+  assert.equal(await saver.save("individual"), "saved");
+  assert.deepEqual(bodies, [bodies[0], bodies[0]], "the retry is the identical request");
 });
 
 test("stamp page (a): the 'not yet' card only; 產生印章 and the preview/consent are not part of this slice", () => {
@@ -111,10 +136,13 @@ test("stamp page (a): the 'not yet' card only; 產生印章 and the preview/cons
 test("styles are scoped and keep 44px targets; no outbound or token admission in B-065 files", () => {
   const css = read("public/brand/v3/vendor-activation.css");
   for (const rule of [/\.v-act-row \.v-act-link \{[^}]*min-height: 44px/, /\.v-act-card \.v-act-option \{[^}]*min-height: 44px/,
-    /\.v-act-card \.v-act-primary \{[^}]*min-height: 44px/, /\.v-act-card \.v-act-text \{[^}]*min-height: 44px/, /\.v-act-secondary[^{]*\{[^}]*min-height: 44px/]) {
+    /\.v-act-card \.v-act-primary \{[^}]*min-height: 44px/, /\.v-act-card \.v-act-text \{[^}]*min-height: 44px; min-width: 44px; padding: 0 16px/, /\.v-act-secondary[^{]*\{[^}]*min-height: 44px/]) {
     assert.match(css, rule);
   }
   for (const line of css.split("\n").filter(line => line.includes("{"))) assert.match(line, /^\.v-act-/, line);
+  // The v3 theme defines no --fs-* tokens (only v2 page sheets do), so B-065 and B-112 sheets use explicit sizes.
+  for (const sheet of ["public/brand/v3/vendor-activation.css", "public/brand/v3/vendor-address.css"]) assert.doesNotMatch(read(sheet), /var\(--fs-/, sheet);
+  assert.doesNotMatch(read("public/brand/v3/theme.css"), /--fs-/);
   for (const file of ["src/server/b065-vendor-activation.ts", "src/app/api/vendor-account/issuer-type/route.ts", "src/components/v3/vendor/vendor-activation.tsx",
     "src/app/vendor-account/account/issuer-type/page.tsx", "src/app/vendor-account/account/stamp/page.tsx", "supabase/migrations/20261116220000_b065_vendor_activation.sql"]) {
     assert.doesNotMatch(read(file), /line\/(?:push|messaging)|sendSms|sendEmail|twilio|outbox|pushMessage|vendorTokenAcceptable|open_vendor_job|net\.http/, file);

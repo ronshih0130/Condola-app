@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const code = (error as { code?: string }).code ?? (error as { cause?: { code?: string } }).cause?.code;
     if (error instanceof FlowError || code === "42501") return new Response(null, { status: 403, headers });
-    if (code === "55P03" || code === "57014") return Response.json({ status: "busy" }, { status: 503, headers });
+    if (code === "55P03" || code === "57014" || code === "40P01") return Response.json({ status: "busy" }, { status: 503, headers });
     throw error;
   }
 }

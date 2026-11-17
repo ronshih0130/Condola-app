@@ -464,6 +464,10 @@ test("B-065 adds a revoked append-only table, two service-only gateways and two 
   assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /CREATE OR REPLACE|DROP|ALTER FUNCTION|ALTER TABLE public|GRANT[^;]*\bON (?:TABLE )?(?:app|public)\.|READ ONLY/i);
   assert.match(sql, /ALTER TABLE app\.b065_issuer_types ENABLE ROW LEVEL SECURITY;/);
   assert.match(sql, /REVOKE ALL ON app\.b065_issuer_types FROM PUBLIC,anon,authenticated,service_role;/);
+  assert.match(sql, /ALTER TABLE app\.b065_issuer_requests ENABLE ROW LEVEL SECURITY;/);
+  assert.match(sql, /REVOKE ALL ON app\.b065_issuer_requests FROM PUBLIC,anon,authenticated,service_role;/);
+  assert.equal((sql.match(/CREATE TABLE app\./g) ?? []).length, 2);
+  assert.match(read("scripts/check-function-privileges.sh"), /'app\.b065_issuer_types','app\.b065_issuer_requests'/);
   assert.match(sql, /app\.b026_account_actor\(p_session_hash\)/);
   assert.match(sql, /\('vendor_activation','\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\) ON CONFLICT DO NOTHING/);
   const compact = sql.replace(/\s+/g, "");

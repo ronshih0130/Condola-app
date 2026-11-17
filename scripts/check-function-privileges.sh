@@ -401,7 +401,7 @@ BEGIN
 END $b112_gateways$;
 -- B-065 service-only gateways and internal helpers, migration-owned VOLATILE definers; private table revoked.
 DO $b065_gateways$
-DECLARE signature text; fn record; role_name text;
+DECLARE signature text; fn record; role_name text; table_name text;
 BEGIN
  FOREACH signature IN ARRAY ARRAY[
   'app.b065_issuer_view(text,uuid,boolean)',
@@ -420,14 +420,16 @@ BEGIN
    RAISE EXCEPTION 'B-065 gateway ACL/config mismatch: %',signature;
   END IF;
  END LOOP;
- IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.b065_issuer_types'::regclass) THEN
-  RAISE EXCEPTION 'B-065 table RLS is off';
- END IF;
- FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
-  IF has_table_privilege(role_name,'app.b065_issuer_types','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-   OR has_any_column_privilege(role_name,'app.b065_issuer_types','SELECT,INSERT,UPDATE,REFERENCES') THEN
-   RAISE EXCEPTION 'B-065 table privilege leaked to %',role_name;
+ FOREACH table_name IN ARRAY ARRAY['app.b065_issuer_types','app.b065_issuer_requests'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=table_name::regclass) THEN
+   RAISE EXCEPTION 'B-065 table RLS is off: %',table_name;
   END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'B-065 table privilege leaked to % on %',role_name,table_name;
+   END IF;
+  END LOOP;
  END LOOP;
 END $b065_gateways$;
 SQL

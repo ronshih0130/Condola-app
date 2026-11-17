@@ -29,8 +29,9 @@ export async function vendorIssuerType(credential: string, orgId: string): Promi
   }
 }
 
-export type SaveIssuerResult = { status: "recorded"; issuerType: IssuerType; replayed: boolean }
-  | { status: "unchanged"; issuerType: IssuerType } | { status: "rejected_invalid" | "rejected_conflict" };
+/** recorded and unchanged both reserve the request id; a replay returns the stored first answer with replayed: true. */
+export type SaveIssuerResult = { status: "recorded" | "unchanged"; issuerType: IssuerType; replayed: boolean }
+  | { status: "rejected_invalid" | "rejected_conflict" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function parseIssuerInput(value: unknown): { requestId: string; issuerType: IssuerType } | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
