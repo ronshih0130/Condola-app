@@ -341,11 +341,15 @@ test("GS-32 exemption covers exactly one approved line in the vendor-docs lane",
 // `${a ? "租多啦" : "收款"}` is two separate values; nested literals are checked on their own. JSON values likewise.
 // Whitespace (incl. U+3000 and line breaks) is removed and there is no distance limit.
 const SUBJECT = /(Condola|租多啦)[\s\S]*(收款|收租|代收)/i;
-const squash = (value: string) => value.replace(/[\s\u3000]+/g, "");
+// Invisible format characters (soft hyphen, zero-width, bidi marks, word joiner, BOM) are removed with the whitespace.
+const squash = (value: string) => value.replace(/[\s\u3000\u00ad\u200b-\u200f\u2060\ufeff]+/g, "");
 // JSX text and quoted JSX attributes render character references; ordinary TS/JSON strings keep them literal.
-const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" };
-const jsxDecode = (value: string) => value.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, ref: string) =>
-  ref[0] !== "#" ? NAMED[ref.toLowerCase()] ?? whole
+// Named references are case-sensitive (unknown names stay literal). The XHTML set has no CJK letters, so the only
+// named references that could hide a claim are the punctuation, whitespace and invisible ones listed here.
+const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0", ensp: "\u2002",
+  emsp: "\u2003", thinsp: "\u2009", shy: "\u00ad", zwnj: "\u200c", zwj: "\u200d", lrm: "\u200e", rlm: "\u200f" };
+const jsxDecode = (value: string) => value.replace(/&(#[xX][0-9a-fA-F]+|#[0-9]+|[A-Za-z][A-Za-z0-9]*);/g, (whole, ref: string) =>
+  ref[0] !== "#" ? (Object.hasOwn(NAMED, ref) ? NAMED[ref] : whole)
   : String.fromCodePoint(Number.parseInt(ref.slice(ref[1].toLowerCase() === "x" ? 2 : 1), ref[1].toLowerCase() === "x" ? 16 : 10)));
 function copyValues(source: string, fileName = "copy.tsx"): string[] {
   if (fileName.endsWith(".json")) {
@@ -374,12 +378,15 @@ test("terminology: Condola / 租多啦 is never the subject of 收款, 收租 or
     'x = "租多啦\\r\\n會幫你收款";', 'x = "租多啦\\\n會幫你收款";', 'x = "租多啦\\\r\n會幫你收款";', 'x = `租多啦\\\n會幫你收款`;',
     `x = "租多啦${"，每個月固定在月初提醒租客並且".repeat(4)}代收";`, "x = 'condola collects 收款';",
     'x = `租多啦\\\r\n會幫你收款`;', 'x = `租多啦${name}幫你收款`;', 'x = `租多啦${`會幫你`}收款`;', 'x = <p>租多啦會幫你收款</p>;',
-    'x = <p>租多啦收&#x6B3E;</p>;', 'x = <p>租多啦收&#27454;</p>;', 'x = <img alt="租多啦會幫你收&#x6b3e;" />;'];
+    'x = <p>租多啦收&#x6B3E;</p>;', 'x = <p>租多啦收&#27454;</p>;', 'x = <img alt="租多啦會幫你收&#x6b3e;" />;',
+    'x = <p>租多啦收&ensp;款</p>;', 'x = <img alt="租多啦收&ensp;款" />;', 'x = <p>租多啦收&thinsp;款</p>;',
+    'x = <p>租多啦收&zwj;款</p>;', 'x = <img alt="租多啦收&shy;款" />;', 'x = <p>租多啦收&#X6B3E;</p>;', 'x = "租多啦收\\u200B款";'];
   for (const source of bad) assert.equal(subjectClaims(source).length, 1, source);
   assert.equal(subjectClaims('{ "a": { "b": "租多啦\\n代收" } }', "copy.json").length, 1);
   // Not claims: approved strings, separate values, mutually exclusive branches.
   for (const source of ['x = "租多啦・廠商";', 'x = "收款帳戶是屋主的";', 'x = { brand: "租多啦", money: "收款" };',
-    'x = ["租多啦・屋主", "待收款"];', 'x = `${flag ? "租多啦" : "收款"}`;', 'x = "租多啦收&#x6B3E;";']) {
+    'x = ["租多啦・屋主", "待收款"];', 'x = `${flag ? "租多啦" : "收款"}`;', 'x = "租多啦收&#x6B3E;";',
+    'x = <p>租多啦收&nBsP;款</p>;', 'x = <img alt="租多啦收&toString;款" />;']) {
     assert.deepEqual(subjectClaims(source), [], source);
   }
 });
