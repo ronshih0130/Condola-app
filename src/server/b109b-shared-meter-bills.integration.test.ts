@@ -71,6 +71,13 @@ const billing = async () => (await db.query(`SELECT
   (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.invoice_lines x) invoice_lines,
   (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.expenses x) expenses,
   (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM app.b109_shared_meter_configs x) configs`)).rows[0] as Record<string, string>;
+/** What an issued bill is: utility bills, run lines, invoice headers and lines, owner expenses (run headers excluded). */
+const issuedSnapshot = async () => (await db.query(`SELECT
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.utility_bills x) utility_bills,
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.utility_allocation_lines x) run_lines,
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.invoices x) invoices,
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.invoice_lines x) invoice_lines,
+  (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.expenses x) expenses`)).rows[0] as Record<string, string>;
 /** The billing rows only (the revisions excluded): what a refused posting must leave unchanged. */
 async function billingRows() { const all: Record<string, string | undefined> = { ...await billing() }; delete all.configs; return all; }
 const runInput = (readings: [string, number][], totalKwh: number | null, period = next, extra: Partial<UtilityRunInput> = {}): UtilityRunInput => ({
@@ -278,6 +285,16 @@ test("ON, each method, a typed rate unlike the configured one: shares (remainder
     assert.equal(Number(usage), TOTAL, "billed usage: room meters + shared kWh");
     const preview = await call<{ status: string; rows: { id: string; kwh: string }[] }>("app.b109_shared_meter_split", "admin", [property, next.start, String(SHARED / 1000), null]);
     assert.deepEqual(preview.rows.map(r => [r.id, Math.round(Number(r.kwh) * 1000)]), [[roomA, shares[0]], [roomB, shares[1]]], `${method} preview aligned`);
+    // Confirmed: each tenant is invoiced its own + shared kWh at the typed rate; the owner gets no 公共用電 (all of it
+    // went to the selected rooms); the unselected vacant room C keeps its own owner expense.
+    await confirmUtilityRun(staff("admin", "admin"), run.runId);
+    const expected = expectedLines(shares[0], shares[1], 44);
+    const invoiced = (await db.query(`SELECT l.lease_id::text lease, il.amount_minor::text amount FROM public.utility_allocation_lines l
+      JOIN public.invoice_lines il ON il.id=l.posted_invoice_line_id WHERE l.run_id=$1 ORDER BY l.lease_id`, [run.runId])).rows.map(r => [r.lease, r.amount]);
+    assert.deepEqual(invoiced, expected.filter(l => l[2] === "tenant").map(l => [l[1], l[4]]).sort((a, b) => String(a[0]) < String(b[0]) ? -1 : 1), `${method} tenant invoices`);
+    const expenses = Object.fromEntries((await db.query(`SELECT description, sum(amount_minor)::text amount FROM public.expenses
+      WHERE property_id=$1 AND status::text<>'void' GROUP BY description`, [property])).rows.map(r => [r.description, r.amount]));
+    assert.deepEqual(expenses, { [VACANT_ELECTRICITY_DESCRIPTION]: expected.find(l => l[0] === "C")![4] }, `${method}: no 公共用電; C's own owner expense`);
   }
   // These numbers make pricing once matter: own and shared priced separately would differ for room A.
   const even = expectShares(SHARED, [1, 1]);
@@ -323,11 +340,12 @@ test("a negative shared kWh (room meters above the total) stays an owner credit;
   assert.deepEqual((await lines(run.runId)).map(r => Number(r.milli)), [100000, ...[leaseB0, leaseB].sort().map(l => byDays(50000, [{ key: leaseB0, days: 5 }, { key: leaseB, days: days - 10 }]).get(l)!), 10000]);
 });
 
-test("issued bills never change: a new revision, the flag toggled, and refused postings leave the issued run, its utility bill, invoices, invoice lines and expenses untouched", async () => {
+test("issued bills never change. A same-period re-prepare of an issued run is a correction that keeps the split it was issued with: after a revision change (and with the flag off), the same inputs reproduce the issued bill, run lines, invoices, invoice lines and expenses exactly; refused postings write nothing", async () => {
   await fresh();
   await mainReading(next.end, 500);
-  await save([roomA, roomB], "even");
-  const issued = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { billTotalMajor: 810 }));
+  const issuedRevision = await save([roomA, roomB], "even");
+  const input = { ...runInput(readings(), TOTAL, next, { billTotalMajor: 810 }) };
+  const issued = await prepareUtilityRun(staff("admin", "admin"), input);
   await confirmUtilityRun(staff("admin", "admin"), issued.runId);
   const counts = (await db.query(`SELECT (SELECT count(*)::int FROM public.utility_allocation_lines WHERE run_id=$1) lines,
       (SELECT count(*)::int FROM public.utility_bills b JOIN public.utility_allocation_runs r ON r.utility_bill_id=b.id WHERE r.id=$1) bills,
@@ -336,19 +354,34 @@ test("issued bills never change: a new revision, the flag toggled, and refused p
       (SELECT count(*)::int FROM public.expenses WHERE property_id=$2 AND status::text<>'void') expenses`, [issued.runId, property])).rows[0];
   assert.deepEqual([counts.lines, counts.bills, counts.invoice_lines], [4, 1, 3], "a non-empty issued fixture: 4 lines, its utility bill, 3 tenant invoice lines");
   assert.ok(counts.invoices > 0 && counts.expenses > 0, "invoice headers and owner expenses exist");
-  const issuedRows = billingRows;
-  const before = await issuedRows();
+  const before = await issuedSnapshot();
+  // A valid revision change (other rooms, other method) and flag toggles write nothing.
   await save([roomA, roomC], "sub_meter");
   await flag(false); await flag(true);
-  assert.deepEqual(await issuedRows(), before, "revision and flag changes write no billing row");
-  // Refused postings for the issued period: a revision spanning units; an accountant; a revoked session.
+  assert.deepEqual(await issuedSnapshot(), before, "revision and flag changes");
+  // An authorized same-period re-prepare (admin, the issued run as source, the same inputs): a correction draft that
+  // keeps the issued split (revision, method, rooms), so every issued row is reproduced exactly.
+  const again = await prepareUtilityRun(staff("admin", "admin"), { ...input, sourceRunId: issued.runId });
+  assert.equal(again.runId, issued.runId);
+  assert.deepEqual(((await inputsOf(issued.runId)).sharedMeter as { revision: number; method: string; roomIds: string[] }), {
+    ...((await inputsOf(issued.runId)).sharedMeter as object), revision: issuedRevision, method: "even", roomIds: [roomA, roomB] });
+  assert.deepEqual(await issuedSnapshot(), before, "authorized re-prepare after a revision change");
+  // The same with the flag off and a revision that would now block a new run.
   await save([roomA, otherRoom], "even");
-  await assert.rejects(prepareUtilityRun(staff("admin", "admin"), { ...runInput(readings(), TOTAL, next, { billTotalMajor: 810 }), sourceRunId: issued.runId }), flowKey("errors.sharedMeterUnits"));
-  await assert.rejects(prepareUtilityRun(staff("accountant", "accountant"), { ...runInput(readings(), TOTAL), sourceRunId: issued.runId }));
+  await flag(false);
+  await prepareUtilityRun(staff("admin", "admin"), { ...input, sourceRunId: issued.runId });
+  assert.deepEqual(await issuedSnapshot(), before, "authorized re-prepare, flag off, spanning revision");
+  // Confirming that unchanged correction changes no issued row either.
+  await confirmUtilityRun(staff("admin", "admin"), issued.runId);
+  assert.deepEqual(await issuedSnapshot(), before, "confirming an unchanged correction");
+  await flag(true);
+  // Refused postings for the issued period write nothing at all: an accountant; a revoked session.
+  const all = await billingRows();
+  await assert.rejects(prepareUtilityRun(staff("accountant", "accountant"), { ...input, sourceRunId: issued.runId }));
   await session("gone", USERS.admin);
   await db.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sid.gone]);
-  await assert.rejects(prepareUtilityRun({ ...staff("admin", "admin"), sessionId: sid.gone }, { ...runInput(readings(), TOTAL), sourceRunId: issued.runId }));
-  assert.deepEqual(await issuedRows(), before, "refused postings write nothing");
+  await assert.rejects(prepareUtilityRun({ ...staff("admin", "admin"), sessionId: sid.gone }, { ...input, sourceRunId: issued.runId }));
+  assert.deepEqual(await billingRows(), all, "refused postings write nothing");
   // The period before the revision's effective date is not governed by it.
   await save([roomA, roomB], "even");
   const current = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, thisMonth));
@@ -369,6 +402,11 @@ test("admission by period start, and corrections keep their method: a straddling
   assert.equal((await runConfig("admin", unitId, later))!.status, "applies");
   const s2 = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, later));
   assert.equal(((await inputsOf(s2.runId)).sharedMeter as { kwhMilli: number }).kwhMilli, SHARED);
+  // The B-109 preview for the month: the unit's runs only overlap it (neither is exactly this month), so 依分表度數
+  // reports the ambiguity instead of picking one.
+  await save([roomA, roomB], "sub_meter");
+  const preview = await call<{ status: string; spaces: { id: string; problem: string }[] }>("app.b109_shared_meter_split", "admin", [property, next.start, "1", null]);
+  assert.deepEqual([preview.status, preview.spaces], ["ambiguous_runs", [{ id: roomA, problem: "ambiguous_run" }, { id: roomB, problem: "ambiguous_run" }]]);
   // A run of an eligible period computed with the flag OFF, issued, then corrected with the flag ON: the correction
   // keeps the method its issued bill used (no split).
   await resetRuns(); await clearMainReadings(); await mainReading(next.end, 500);
@@ -379,8 +417,28 @@ test("admission by period start, and corrections keep their method: a straddling
   assert.equal((await runConfig("admin"))!.status, "applies", "the period is eligible");
   const corrected = await prepareUtilityRun(staff("admin", "admin"), { ...runInput([[roomA, 100.1], [roomB, 50.1], [roomC, 11]], 162.201, next, { billTotalMajor: 810 }), sourceRunId: offRun.runId });
   assert.equal(corrected.runId, offRun.runId);
-  const inputs = await inputsOf(corrected.runId);
+  let inputs = await inputsOf(corrected.runId);
   assert.deepEqual([("sharedMeter" in inputs), inputs.publicKwhMilli], [false, SHARED]);
+  // Symmetric: a run issued WITH the split, corrected after the revision changed and the flag went off (and again
+  // with a revision that would block a new run), keeps the split it was issued with.
+  await resetRuns();
+  const issuedRevision = await save([roomA, roomB], "even");
+  const shared = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { billTotalMajor: 810 }));
+  await confirmUtilityRun(staff("admin", "admin"), shared.runId);
+  await save([roomA, roomC], "sub_meter");
+  await flag(false);
+  const kept = await prepareUtilityRun(staff("admin", "admin"), { ...runInput([[roomA, 100.1], [roomB, 50.1], [roomC, 11]], 162.201, next, { billTotalMajor: 810 }), sourceRunId: shared.runId });
+  inputs = await inputsOf(kept.runId);
+  const shares = expectShares(SHARED, [1, 1]);
+  assert.deepEqual(inputs.sharedMeter, { revision: issuedRevision, method: "even", roomIds: [roomA, roomB], weights: ["1", "1"], sharesMilli: shares, kwhMilli: SHARED, seededTotalMilli: null });
+  assert.equal(inputs.publicKwhMilli, 0);
+  const rows = await lineRows(kept.runId);
+  assert.deepEqual(rows.filter(r => r[0] !== "C"), expectedLines(shares[0], shares[1], 50).filter(r => r[0] !== "C"));
+  assert.deepEqual(rows.find(r => r[0] === "C"), ["C", null, "owner", "11000", String(price(11000))], "C corrected, still unselected");
+  await flag(true);
+  await save([roomA, otherRoom], "even");
+  await prepareUtilityRun(staff("admin", "admin"), { ...runInput([[roomA, 100.1], [roomB, 50.1], [roomC, 11]], 162.201, next, { billTotalMajor: 810 }), sourceRunId: shared.runId });
+  assert.equal(((await inputsOf(kept.runId)).sharedMeter as { revision: number }).revision, issuedRevision, "a spanning revision does not block or change a correction");
 });
 
 test("blocked shapes, each through prepareUtilityRun with nothing written: spans units; names a whole unit; the whole unit's own run; an archived or missing selected room (even all of them); 平均分攤 under a revision", async () => {
@@ -460,8 +518,13 @@ test("readings: an actual main reading is required in every period (typed total 
   assert.deepEqual((inputs.sharedMeter as Record<string, unknown>).sharesMilli, expectShares(162000 - 160200, [OWN.A, OWN.B]));
   assert.equal((inputs.sharedMeter as Record<string, unknown>).seededTotalMilli, 162000);
   await confirmUtilityRun(staff("admin", "admin"), seeded.runId);
-  // The period after, with a VALID main reading: not the first period, so only the missing typed total blocks.
-  await mainReading(after.end, 1330.5);
+  // The period after: a typed total does not excuse a missing or an estimated main reading.
+  assert.deepEqual([(await runConfig("admin", unitId, after))!.firstPeriod, (await runConfig("admin", unitId, after))!.mainReading], [false, null]);
+  await blocked(runInput(readings(), 163, after), "later period, typed total, no main reading");
+  const laterEst = (await mainReading(after.end, 1330.5, true)).rows[0].id;
+  await blocked(runInput(readings(), 163, after), "later period, typed total, estimated main reading");
+  // With a VALID main reading: not the first period, so only the missing typed total blocks.
+  await db.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value,is_estimate,supersedes_id) VALUES($1,$2,$3,1330.5,false,$4)", [ORG_ID, mainMeter, after.end, laterEst]);
   const later = await runConfig("admin", unitId, after);
   assert.deepEqual([later!.firstPeriod, (later!.mainReading as { estimated: boolean }).estimated], [false, false]);
   await blocked(runInput(readings(), null, after), "later period needs a typed total");
@@ -500,6 +563,13 @@ test("privileges and denials: service-only functions; staff admin/manager only; 
   await assert.rejects(runConfig("admin", unitId, next, { pinEnv: "sandbox" }), code("42501"), "app.env");
   await assert.rejects(runConfig("admin", randomUUID()), code("42501"), "unknown unit");
   await assert.rejects(runConfig("admin", unitId, { start: next.end, end: next.start }), code("22023"), "bad period");
+  // The unit and its property are re-checked live on the locked rows.
+  for (const [table, id] of [["units", unitId], ["properties", property]] as const) {
+    await db.query(`UPDATE public.${table} SET archived_at=clock_timestamp() WHERE id=$1`, [id]);
+    try { await assert.rejects(runConfig("admin"), code("42501"), `archived ${table}`); }
+    finally { await db.query(`UPDATE public.${table} SET archived_at=NULL WHERE id=$1`, [id]); }
+  }
+  assert.equal((await runConfig("admin"))!.status, "applies", "positive control after restoring");
   await assert.rejects(prepareUtilityRun(staff("accountant", "accountant"), runInput(readings(), TOTAL)));
   await flag(false, true);
   assert.equal(await runConfig("admin"), null, "flag off: null");
@@ -530,22 +600,23 @@ test("lock races, each through prepareUtilityRun with real holders, pid-matched 
       return await pending;
     } finally { await h.end(); }
   };
-  const refused = async (label: string, setup: (h: Client) => Promise<unknown>, who?: Session) => {
+  /** sqlstate: 42501 for a denial (session, membership); 40001 for the locked-set check (inputs changed mid-wait). */
+  const refused = async (label: string, sqlstate: "42501" | "40001", setup: (h: Client) => Promise<unknown>, who?: Session) => {
     const before = await billingRows();
     const result = await race(setup, who);
-    assert.ok(result instanceof Error, `${label}: refused (${JSON.stringify(result)})`);
+    assert.ok(code(sqlstate)(result), `${label}: refused with ${sqlstate} (${JSON.stringify(result)}; cause ${JSON.stringify((result as { cause?: unknown })?.cause)})`);
     assert.deepEqual(await billingRows(), before, `${label}: nothing written`);
   };
   // 1. The session revoked while posting waits on it.
   await session("racer", USERS.admin);
-  await refused("revoked", h => h.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sid.racer]), { ...staff("admin", "admin"), sessionId: sid.racer });
+  await refused("revoked", "42501", h => h.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sid.racer]), { ...staff("admin", "admin"), sessionId: sid.racer });
   // 2. The member demoted to accountant while posting waits on the membership row.
   await session("racer2", USERS.manager);
-  await refused("demoted", h => h.query("UPDATE public.org_members SET role='accountant' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]), { ...staff("manager", "manager"), sessionId: sid.racer2 });
+  await refused("demoted", "42501", h => h.query("UPDATE public.org_members SET role='accountant' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]), { ...staff("manager", "manager"), sessionId: sid.racer2 });
   await db.query("UPDATE public.org_members SET role='manager' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]);
   // 3. A new revision saved while posting waits (holder also on a room row the gateway locks after the revisions).
   const latest = (await runConfig("admin"))!.revision as number;
-  await refused("new revision", async h => {
+  await refused("new revision", "40001", async h => {
     await h.query("UPDATE public.rooms SET label=label WHERE id=$1", [roomC]);
     await h.query(`INSERT INTO app.b109_shared_meter_configs(org_id,property_id,revision,space_ids,split_method,start_reading,effective_from,request_id,created_by)
       VALUES($1,$2,$3,$4,'days_occupied',0,$5,$6,$7)`, [ORG_ID, property, latest + 1, [roomA, roomB], next.start, randomUUID(), USERS.admin]);
@@ -554,13 +625,16 @@ test("lock races, each through prepareUtilityRun with real holders, pid-matched 
   // 4. The main meter swapped while posting waits on it.
   const newMeter = randomUUID();
   try {
-    await refused("main meter swapped", async h => {
+    // The replacement meter has a valid in-period reading, so the locked-set check is the only reason to refuse.
+    await refused("main meter swapped", "40001", async h => {
       await h.query("UPDATE public.meters SET archived_at=clock_timestamp() WHERE id=$1", [mainMeter]);
       await h.query(`INSERT INTO public.meters(id,org_id,property_id,unit_id,utility,usage_unit,payer,split_method,rate_source,rate_minor_per_unit)
         VALUES($1,$2,$3,$4,'electricity','kWh','owner','none','fixed_rate',500)`, [newMeter, ORG_ID, property, unitId]);
+      await h.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value,is_estimate) VALUES($1,$2,$3,600,false)", [ORG_ID, newMeter, next.end]);
     });
   } finally {
-    await db.query("DELETE FROM public.meters WHERE id=$1", [newMeter]);
+    // meter_readings is append-only: the replacement (and its reading) stays, archived; the original comes back.
+    await db.query("UPDATE public.meters SET archived_at=clock_timestamp() WHERE id=$1 AND archived_at IS NULL", [newMeter]);
     await db.query("UPDATE public.meters SET archived_at=NULL WHERE id=$1", [mainMeter]);
   }
   // 5. A real change that serialises: the flag turned off while posting waits on the flag row. Posting then runs

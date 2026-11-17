@@ -32,7 +32,7 @@ import {
   utilityLineDescription,
 } from "./utility-post";
 import { requireOrgScope } from "./org-guard";
-import { readRunSharedConfig, seededTotalMilli, sharedWeights, splitSharesMilli, type SharedRecord } from "./b109b-run-split";
+import { correctionSeededMilli, parseSharedRecord, readRunSharedConfig, seededTotalMilli, sharedWeights, splitSharesMilli, type SharedRecord } from "./b109b-run-split";
 
 /**
  * One request, one transaction, one unit. The worker only rounds the rooms in front of it
@@ -413,23 +413,30 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
     const roomSum = meterRows.reduce((total, row) => total + rawOf(row.space), 0);
-    // B-109b: the shared-meter decision, in EVERY mode (even split included). null whenever the flag is OFF (nothing
-    // below changes then); also null for archived corrections and for corrections of runs computed without it (a
-    // correction keeps the method its issued bill used).
-    const priorShared = prior
-      ? (await maybe<{ shared: boolean }>(client, `SELECT (inputs ? 'sharedMeter') AS shared FROM utility_allocation_runs WHERE org_id=$1 AND id=$2`, [session.orgId, prior.id]))?.shared === true
-      : false;
-    const sharedConfig = archivedCorrection || (prior && !priorShared)
-      ? null : await readRunSharedConfig(client, session, unit.id, input.periodStart, input.periodEnd);
+    // B-109b: the shared-meter decision.
+    // * A correction (a posted run of this period exists, archived or not) keeps exactly the split its issued run
+    //   was computed with, whatever the flag or the revisions say now: a run issued with the split is recomputed
+    //   with that same revision, method and rooms (and its seeded total when no total is typed); a run issued
+    //   without it stays without it. No gateway call: the issued run is the source.
+    // * Any other run, in EVERY mode (even split included), goes through app.b109b_run_config and its blocks. null
+    //   when the flag is OFF (nothing below changes then).
+    const priorRecord = prior
+      ? parseSharedRecord((await maybe<{ shared: unknown }>(client, `SELECT inputs->'sharedMeter' AS shared FROM utility_allocation_runs WHERE org_id=$1 AND id=$2`, [session.orgId, prior.id]))?.shared ?? null)
+      : null;
+    const sharedConfig = prior ? null : await readRunSharedConfig(client, session, unit.id, input.periodStart, input.periodEnd);
     // Blocks, never a silent PUBLIC_POWER_RULE fallback: a revision spanning units or naming a whole unit; one naming
     // an archived or missing room; and 平均分攤 (a bill split evenly over every room) under a revision that gives
     // the shared kWh to selected rooms only.
     if (sharedConfig && (sharedConfig.status === "multi_unit" || sharedConfig.status === "whole_unit")) throw new FlowError("errors.sharedMeterUnits");
     if (sharedConfig?.status === "unavailable_rooms") throw new FlowError("errors.sharedMeterRooms");
-    if (sharedConfig?.status === "applies" && evenMode) throw new FlowError("errors.sharedMeterMode");
-    const sharedApplies = sharedConfig?.status === "applies" ? sharedConfig : null;
-    // The first period of a revision may take its total from the main meter minus the revision's starting reading.
-    const seededMilli = sharedApplies ? seededTotalMilli(sharedApplies, input.totalKwh) : null;
+    const sharedApplies: { revision: number; method: "even" | "days_occupied" | "sub_meter"; spaceIds: string[] } | null =
+      sharedConfig?.status === "applies" ? sharedConfig
+        : priorRecord ? { revision: priorRecord.revision, method: priorRecord.method, spaceIds: priorRecord.roomIds } : null;
+    if (sharedApplies && evenMode) throw new FlowError("errors.sharedMeterMode");
+    // The total: a new run checks the required readings (and the first period may seed); a correction of a split run
+    // takes the typed total, else the total its issued run was seeded with.
+    const seededMilli = sharedConfig?.status === "applies" ? seededTotalMilli(sharedConfig, input.totalKwh)
+      : priorRecord ? correctionSeededMilli(priorRecord, input.totalKwh) : null;
     const typedTotalKwh = seededMilli == null ? input.totalKwh : seededMilli / 1000;
     const totalMilli = seededMilli ?? (input.totalKwh == null ? roomSum : kwhMilli(input.totalKwh));
     if (Number.isNaN(totalMilli)) throw new FlowError("errors.amount", { field: "i_usage" });

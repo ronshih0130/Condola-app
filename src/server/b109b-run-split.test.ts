@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ERRORS } from "../i18n/errors";
-import { parseRunSharedConfig, readRunSharedConfig, seededTotalMilli, sharedWeights, splitSharesMilli, type RunSharedConfig } from "./b109b-run-split";
+import { correctionSeededMilli, parseRunSharedConfig, parseSharedRecord, readRunSharedConfig, seededTotalMilli, sharedWeights, splitSharesMilli, type RunSharedConfig } from "./b109b-run-split";
 
 // B-109b pure pieces and the gateway calls, with a recording fake client (the real gateways run in the DB test).
 const A = "11111111-1111-4111-8111-111111111111", B = "22222222-2222-4222-8222-222222222222";
@@ -78,10 +78,11 @@ test("splitSharesMilli calls the one split rule as service_role, checks the answ
   await assert.rejects(splitSharesMilli(client(() => ({ r: [{ id: B, milli: "1001" }] })) as never, [{ id: A, weight: 1 }], 1001), /Invalid split shares/);
   await assert.rejects(splitSharesMilli(client(() => ({ r: [{ id: A, milli: "-1" }] })) as never, [{ id: A, weight: 1 }], 1001), /Invalid split shares/);
   await assert.rejects(splitSharesMilli(client(() => ({})) as never, [{ id: A, weight: 1 }], -1), (e: { key?: string }) => e.key === "errors.amount");
-  // The caller's role is restored even when the call fails; a service_role caller stays service_role.
-  const failing = client(() => { throw new Error("db"); });
-  await assert.rejects(splitSharesMilli(failing as never, [{ id: A, weight: 1 }], 1), /db/);
-  assert.equal(failing.sent.at(-1)?.sql, "SET LOCAL ROLE authenticated");
+  // A failed call propagates its own error and sends nothing after it (the transaction is aborted; a role reset
+  // there would fail with 25P02 and mask the real SQLSTATE). A service_role caller stays service_role.
+  const failing = client(() => { throw Object.assign(new Error("db"), { code: "42501" }); });
+  await assert.rejects(splitSharesMilli(failing as never, [{ id: A, weight: 1 }], 1), (e: { code?: string }) => e.code === "42501");
+  assert.match(failing.sent.at(-1)!.sql, /^SELECT app\.b109_split_shares/);
   const svcCaller = client(() => ({ r: [{ id: A, milli: "1" }] }), "service_role");
   await splitSharesMilli(svcCaller as never, [{ id: A, weight: 1 }], 1);
   assert.ok(!svcCaller.sent.some(q => q.sql === "SET LOCAL ROLE authenticated" || q.sql === "RESET ROLE"));
@@ -107,4 +108,18 @@ test("the posting blocks have message keys (generic text until approved copy exi
   assert.equal(ERRORS["errors.sharedMeterReadings"], "i_generic");
   assert.equal(ERRORS["errors.sharedMeterRooms"], "i_generic");
   assert.equal(ERRORS["errors.sharedMeterMode"], "i_generic");
+});
+
+test("a correction keeps its issued split: parseSharedRecord validates inputs.sharedMeter; correctionSeededMilli prefers a typed total, else the issued seed", () => {
+  const record = { revision: 2, method: "even", roomIds: [A, B], weights: ["1", "1"], sharesMilli: [501, 500], kwhMilli: 1001, seededTotalMilli: 162000 };
+  assert.equal(parseSharedRecord(null), null);
+  assert.equal(parseSharedRecord(undefined), null);
+  assert.deepEqual(parseSharedRecord(record), record);
+  for (const bad of [{ ...record, method: "weird" }, { ...record, roomIds: [] }, { ...record, roomIds: ["x"] }, { ...record, sharesMilli: [1] },
+    { ...record, sharesMilli: [-1, 2] }, { ...record, revision: 1.5 }, { ...record, kwhMilli: "1" }, { ...record, seededTotalMilli: -1 }, { ...record, weights: "1" }])
+    assert.throws(() => parseSharedRecord(bad), /Invalid shared meter record/, JSON.stringify(bad));
+  const parsed = parseSharedRecord(record)!;
+  assert.equal(correctionSeededMilli(parsed, 161), null);
+  assert.equal(correctionSeededMilli(parsed, null), 162000);
+  assert.throws(() => correctionSeededMilli({ ...parsed, seededTotalMilli: null }, null), (e: { key?: string }) => e.key === "errors.sharedMeterReadings");
 });

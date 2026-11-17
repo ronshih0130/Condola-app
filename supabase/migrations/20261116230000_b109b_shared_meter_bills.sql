@@ -3,8 +3,9 @@
 --  * app.b109_split_shares: the ONE split rule (exact div(), remainder to the first, all-zero weights split evenly),
 --    pure (no table access), shared by the preview and posting.
 --  * app.b109_shared_meter_split is replaced in place (same signature, ACL kept): its shares come from
---    app.b109_split_shares, and 依分表度數 prefers the typed reading of a utility run of the space's unit in that
---    period (what posting uses); without a run it keeps the meter_readings rule.
+--    app.b109_split_shares, and 依分表度數 prefers the typed reading of the utility run of the space's unit for
+--    exactly that period (what posting uses); a run that only overlaps the month, or several, is reported as
+--    ambiguous_runs; without a run it keeps the meter_readings rule.
 --  * app.b109b_run_config: for a utility run (unit + period), the revision in effect at the period start and whether
 --    it applies (only live rooms of this one by-room unit), names an archived or missing room, spans units, or names
 --    a whole unit; whether this is the revision's first period for the unit (no live run of any other period on or
@@ -102,12 +103,15 @@ BEGIN
  FROM (SELECT v.ord,v.id,v.kind,v.unit_label,v.room_label,
    CASE WHEN cfg.split_method='even' THEN 1::numeric
     WHEN cfg.split_method='days_occupied' THEN v.days
-    -- B-109b: a utility run of the space's unit in this period wins: its typed reading is what posting uses.
-    WHEN t.run_id IS NOT NULL THEN CASE WHEN t.kwh>=0 THEN t.kwh END
+    -- B-109b: a utility run of the space's unit for EXACTLY this period wins: its typed reading is what posting
+    -- uses. A run that only overlaps the month (another period shape), or more than one, is ambiguous: no weight.
+    WHEN t.n_over>0 AND NOT (t.n_over=1 AND t.n_exact=1) THEN NULL
+    WHEN t.n_exact=1 THEN CASE WHEN tk.kwh>=0 THEN tk.kwh END
     WHEN v.meters=1 AND e.value IS NOT NULL AND s.value IS NOT NULL AND NOT e.is_estimate AND NOT s.is_estimate
      AND e.value>=s.value THEN e.value-s.value END AS weight,
    CASE WHEN cfg.split_method<>'sub_meter' THEN NULL
-    WHEN t.run_id IS NOT NULL THEN CASE WHEN t.kwh IS NULL OR t.kwh<0 THEN 'missing_reading' END
+    WHEN t.n_over>0 AND NOT (t.n_over=1 AND t.n_exact=1) THEN 'ambiguous_run'
+    WHEN t.n_exact=1 THEN CASE WHEN tk.kwh IS NULL OR tk.kwh<0 THEN 'missing_reading' END
     WHEN v.meters>1 THEN 'ambiguous_meter'
     WHEN v.meters=0 OR e.value IS NULL OR s.value IS NULL OR e.value<s.value THEN 'missing_reading'
     WHEN e.is_estimate OR s.is_estimate THEN 'estimated_reading' END AS problem
@@ -141,20 +145,23 @@ BEGIN
     WHERE mr.org_id=p_org AND mr.meter_id=v.meter_id AND v.meters=1 AND mr.read_on<p_period
      AND NOT EXISTS (SELECT 1 FROM public.meter_readings sup WHERE sup.org_id=mr.org_id AND sup.supersedes_id=mr.id)
     ORDER BY mr.read_on DESC,mr.created_at DESC,mr.id DESC LIMIT 1) s ON true
-  LEFT JOIN LATERAL (SELECT r.id run_id,
-     (SELECT (x->>'kwh')::numeric FROM jsonb_array_elements(coalesce(r.inputs->'readings','[]'::jsonb)) x
-       WHERE x->>'spaceId'=v.id::text AND x->>'method' IN ('submeter','by_reading') LIMIT 1) kwh
+  LEFT JOIN LATERAL (SELECT count(*) n_over,
+     count(*) FILTER (WHERE r.period_start=p_period AND r.period_end=month_end) n_exact,
+     (array_agg(r.id ORDER BY r.id) FILTER (WHERE r.period_start=p_period AND r.period_end=month_end))[1] run_id
     FROM public.utility_allocation_runs r
     -- month_end, not period_end: utility_allocation_runs has its own period_end column.
-    WHERE r.org_id=p_org AND r.status::text<>'void' AND r.period_start BETWEEN p_period AND month_end
-     AND r.unit_id=(CASE WHEN v.kind='room' THEN (SELECT rm.unit_id FROM public.rooms rm WHERE rm.org_id=p_org AND rm.id=v.id) ELSE v.id END)
-    ORDER BY r.computed_at DESC,r.id DESC LIMIT 1) t ON cfg.split_method='sub_meter') w;
+    WHERE r.org_id=p_org AND r.status::text<>'void' AND r.period_start<=month_end AND r.period_end>=p_period
+     AND r.unit_id=(CASE WHEN v.kind='room' THEN (SELECT rm.unit_id FROM public.rooms rm WHERE rm.org_id=p_org AND rm.id=v.id) ELSE v.id END)) t
+   ON cfg.split_method='sub_meter'
+  LEFT JOIN LATERAL (SELECT (x->>'kwh')::numeric kwh FROM public.utility_allocation_runs r,
+     jsonb_array_elements(coalesce(r.inputs->'readings','[]'::jsonb)) x
+    WHERE r.org_id=p_org AND r.id=t.run_id AND x->>'spaceId'=v.id::text AND x->>'method' IN ('submeter','by_reading') LIMIT 1) tk ON true) w;
  IF jsonb_array_length(spaces)=0 THEN RETURN jsonb_build_object('status','none','period',p_period::text); END IF;
- -- Not ready: one status by precedence (ambiguous > missing > estimated), and EVERY space with any problem,
+ -- Not ready: one status by precedence (ambiguous meter > ambiguous run > missing > estimated), and EVERY space with any problem,
  -- each with its own kind, in display order.
- FOR problem IN SELECT unnest(ARRAY['ambiguous_meter','missing_reading','estimated_reading']) LOOP
+ FOR problem IN SELECT unnest(ARRAY['ambiguous_meter','ambiguous_run','missing_reading','estimated_reading']) LOOP
   IF EXISTS (SELECT 1 FROM jsonb_array_elements(spaces) e WHERE e->>'problem'=problem) THEN
-   RETURN jsonb_build_object('status',CASE problem WHEN 'ambiguous_meter' THEN 'ambiguous_meters'
+   RETURN jsonb_build_object('status',CASE problem WHEN 'ambiguous_meter' THEN 'ambiguous_meters' WHEN 'ambiguous_run' THEN 'ambiguous_runs'
      WHEN 'missing_reading' THEN 'missing_readings' ELSE 'estimated_readings' END,
     'period',p_period::text,'revision',cfg.revision,
     'spaces',(SELECT jsonb_agg(jsonb_build_object('id',e->'id','problem',e->'problem') ORDER BY (e->>'ord')::integer)
@@ -192,7 +199,7 @@ RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_cata
 DECLARE target uuid; actor uuid; member_role text; locked_role text; u record; cfg record; inside uuid[]; outside integer;
  missing integer; archived integer; whole boolean; first_period boolean; main jsonb; locked_orgs integer; locked_flag integer;
  locked_props integer; locked_cfgs uuid[]; locked_rooms uuid[]; locked_meters uuid[]; named uuid[]; locked_named_rooms uuid[];
- locked_named_units uuid[]; locked_runs uuid[];
+ locked_named_units uuid[]; locked_runs uuid[]; property_archived timestamptz;
 BEGIN
  IF p_unit IS NULL OR p_period_start IS NULL OR p_period_end IS NULL OR p_period_end<p_period_start THEN
   RAISE EXCEPTION 'Invalid shared meter run' USING ERRCODE='22023'; END IF;
@@ -205,8 +212,9 @@ BEGIN
   WHERE m.org_id=p_org AND m.user_id=target AND m.status::text='active' FOR SHARE;
  SELECT count(*) INTO locked_orgs FROM (SELECT 1 FROM public.organizations o WHERE o.id IN (p_org,p_live) ORDER BY o.id FOR SHARE) z;
  SELECT count(*) INTO locked_flag FROM (SELECT 1 FROM public.platform_settings f WHERE f.key='shared_meter' FOR SHARE) z;
- SELECT un.id,un.property_id,un.rental_mode::text mode INTO u FROM public.units un WHERE un.org_id=p_org AND un.id=p_unit FOR SHARE;
- SELECT count(*) INTO locked_props FROM (SELECT 1 FROM public.properties pr WHERE pr.org_id=p_org AND pr.id=u.property_id FOR SHARE) z;
+ SELECT un.id,un.property_id,un.rental_mode::text mode,un.archived_at INTO u FROM public.units un WHERE un.org_id=p_org AND un.id=p_unit FOR SHARE;
+ SELECT count(*),max(z.archived_at) INTO locked_props,property_archived FROM (SELECT pr.archived_at FROM public.properties pr
+  WHERE pr.org_id=p_org AND pr.id=u.property_id FOR SHARE) z;
  SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_cfgs FROM (SELECT c.id FROM app.b109_shared_meter_configs c
   WHERE c.org_id=p_org AND c.property_id=u.property_id ORDER BY c.id FOR SHARE) z;
  SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_rooms FROM (SELECT r.id FROM public.rooms r
@@ -240,8 +248,9 @@ BEGIN
  WHERE m.org_id=p_org AND m.user_id=actor AND m.status::text='active';
  IF member_role IS NULL OR member_role IS DISTINCT FROM locked_role OR member_role NOT IN ('admin','manager') THEN
   RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
- IF u.id IS NULL OR locked_props<>1 OR NOT EXISTS (SELECT 1 FROM public.units un
-   WHERE un.org_id=p_org AND un.id=p_unit AND un.property_id=u.property_id AND un.rental_mode::text=u.mode) THEN
+ -- The unit and its property, as locked (the values after any wait): both live, unchanged.
+ IF u.id IS NULL OR locked_props<>1 OR u.archived_at IS NOT NULL OR property_archived IS NOT NULL OR NOT EXISTS (SELECT 1 FROM public.units un
+   WHERE un.org_id=p_org AND un.id=p_unit AND un.property_id=u.property_id AND un.rental_mode::text=u.mode AND un.archived_at IS NULL) THEN
   RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  IF NOT EXISTS (SELECT 1 FROM public.organizations o JOIN public.platform_settings f ON f.key='shared_meter'
   WHERE o.id=p_org AND o.feature_flags->'shared_meter'='true'::jsonb
@@ -250,8 +259,8 @@ BEGIN
   RETURN NULL;
  END IF;
  -- The locked sets must still be exactly what the same predicates select now: a revision saved, a room added or
- -- moved, a main meter swapped or a run created/voided while this run waited refuses it (retry), never a decision on
- -- rows it did not lock.
+ -- moved, a main meter swapped or a run created/voided while this run waited refuses it with 40001 (retry), never a
+ -- decision on rows it did not lock.
  IF (SELECT coalesce(array_agg(c.id ORDER BY c.id),'{}') FROM app.b109_shared_meter_configs c
      WHERE c.org_id=p_org AND c.property_id=u.property_id) IS DISTINCT FROM locked_cfgs
    OR (SELECT coalesce(array_agg(r.id ORDER BY r.id),'{}') FROM public.rooms r
@@ -265,7 +274,8 @@ BEGIN
      IS DISTINCT FROM locked_meters
    OR (SELECT coalesce(array_agg(r.id ORDER BY r.id),'{}') FROM public.utility_allocation_runs r
      WHERE r.org_id=p_org AND r.unit_id=p_unit AND r.status::text<>'void') IS DISTINCT FROM locked_runs THEN
-  RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+  -- Its own SQLSTATE (serialization_failure): inputs changed concurrently; the caller retries. Not a denial.
+  RAISE EXCEPTION 'shared meter inputs changed while waiting' USING ERRCODE='40001'; END IF;
  -- The revision in effect at the period start (locked rows only).
  SELECT * INTO cfg FROM app.b109_shared_meter_configs c
  WHERE c.org_id=p_org AND c.id=ANY(locked_cfgs) AND c.effective_from<=p_period_start

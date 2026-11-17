@@ -577,6 +577,12 @@ test("B-109b: a pure split helper and a run-config gateway, service-only; the pr
   assert.match(cfg, /IF missing>0 THEN RETURN jsonb_build_object\('status','unavailable_rooms'/);
   assert.match(cfg, /r\.id=ANY\(locked_runs\) AND r\.period_start>=cfg\.effective_from\n   AND NOT \(r\.period_start=p_period_start AND r\.period_end=p_period_end\)\);/);
   assert.match(helper, /jsonb_typeof\(e->'weight'\) IS DISTINCT FROM 'number'/);
+  // A changed locked set is its own SQLSTATE (retry), not a denial; the unit and property are re-checked live on the locked rows.
+  assert.match(cfg, /IS DISTINCT FROM locked_runs THEN\n[^\n]*\n  RAISE EXCEPTION 'shared meter inputs changed while waiting' USING ERRCODE='40001';/);
+  assert.match(cfg, /u\.archived_at IS NOT NULL OR property_archived IS NOT NULL/);
+  // The preview uses only the run for exactly this period; anything else overlapping the month is ambiguous.
+  assert.match(preview, /n_exact/);
+  assert.match(preview, /WHEN t\.n_over>0 AND NOT \(t\.n_over=1 AND t\.n_exact=1\) THEN 'ambiguous_run'/);
   assert.match(cfg, /c\.id=ANY\(locked_cfgs\) AND c\.effective_from<=p_period_start/);
   assert.match(cfg, /r\.id=ANY\(locked_rooms\) AND r\.id=ANY\(cfg\.space_ids\)/);
   assert.match(cfg, /mr\.meter_id=ANY\(locked_meters\)/);

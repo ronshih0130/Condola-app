@@ -17,19 +17,23 @@ export type RunSharedConfig =
   | { status: "applies"; revision: number; method: "even" | "days_occupied" | "sub_meter"; effectiveFrom: string; spaceIds: string[];
       startReading: string; firstPeriod: boolean; mainReading: { value: string; estimated: boolean; readOn: string } | null };
 export type SharedRecord = {
-  revision: number; method: string; roomIds: string[]; weights: string[]; sharesMilli: number[]; kwhMilli: number;
+  revision: number; method: "even" | "days_occupied" | "sub_meter"; roomIds: string[]; weights: string[]; sharesMilli: number[]; kwhMilli: number;
   seededTotalMilli: number | null;
 };
 
-/** Run `fn` as service_role inside the caller's transaction, then return to the caller's role. */
+/**
+ * Run `fn` as service_role inside the caller's transaction, then return to the caller's role. When `fn` fails the
+ * error propagates untouched and nothing else is sent: the transaction is aborted (any further statement would fail
+ * with 25P02 and mask the real SQLSTATE), and SET LOCAL ends with it.
+ */
 async function asService<T>(client: Pick<Client, "query">, fn: () => Promise<T>): Promise<T> {
   const role = (await client.query<{ role: string }>("SELECT current_user AS role")).rows[0].role;
   await client.query("SET LOCAL ROLE service_role");
-  try { return await fn(); } finally {
-    // Both roles are fixed identifiers, never derived from request data.
-    if (role === "authenticated") await client.query("SET LOCAL ROLE authenticated");
-    else if (role !== "service_role") await client.query("RESET ROLE");
-  }
+  const result = await fn();
+  // Both roles are fixed identifiers, never derived from request data.
+  if (role === "authenticated") await client.query("SET LOCAL ROLE authenticated");
+  else if (role !== "service_role") await client.query("RESET ROLE");
+  return result;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -95,6 +99,26 @@ export function seededTotalMilli(config: Extract<RunSharedConfig, { status: "app
   if (typedTotalKwh != null) return null;
   if (!config.firstPeriod) throw new FlowError("errors.sharedMeterReadings");
   return milli;
+}
+
+/** The split a run was computed with (inputs.sharedMeter), validated; null when the run had none. */
+export function parseSharedRecord(value: unknown): SharedRecord | null {
+  if (value === null || value === undefined) return null;
+  const v = value as Record<string, unknown>;
+  const ints = (x: unknown) => Array.isArray(x) && x.every(n => Number.isSafeInteger(n) && (n as number) >= 0);
+  if (!Number.isInteger(v.revision) || !["even", "days_occupied", "sub_meter"].includes(v.method as string)
+    || !Array.isArray(v.roomIds) || !v.roomIds.length || !v.roomIds.every(x => typeof x === "string" && UUID.test(x))
+    || !ints(v.sharesMilli) || (v.sharesMilli as number[]).length !== v.roomIds.length || !Array.isArray(v.weights)
+    || !Number.isSafeInteger(v.kwhMilli) || !(v.seededTotalMilli === null || (Number.isSafeInteger(v.seededTotalMilli) && (v.seededTotalMilli as number) >= 0)))
+    throw new Error("Invalid shared meter record");
+  return v as SharedRecord & { method: "even" | "days_occupied" | "sub_meter" };
+}
+
+/** A correction of a split run: a typed total wins; otherwise the total its issued run was seeded with; else stop. */
+export function correctionSeededMilli(record: SharedRecord, typedTotalKwh: number | null): number | null {
+  if (typedTotalKwh != null) return null;
+  if (record.seededTotalMilli == null) throw new FlowError("errors.sharedMeterReadings");
+  return record.seededTotalMilli;
 }
 
 /** Weights per selected room, in the revision's order. 依分表度數 uses the run's typed room readings. */
