@@ -12,6 +12,9 @@ import { postOwnerDecision, type DecisionRequest } from "../../../app/o/approval
 import { Emergency } from "../../../app/o/approvals/emergency";
 import { Illustration } from "../illustrations";
 import { WaitMark } from "../wait-mark";
+import { OwnerEstimateRelay } from "../party-relay";
+import { ticketRelayCopy } from "../../../i18n/lanes/brand-v3-ticket-relay";
+import { partyRelayCopy } from "../../../i18n/lanes/brand-v3-party-relay";
 
 export type EstimateRow = {
   ticketId: string; versionId: string; version: string; requestId: string;
@@ -24,14 +27,15 @@ export type OwnerHomeState = { status: "ready"; rows: EstimateRow[] } | { status
  * FE-OWNEMPTY: `summary` (the O-HOME summary row) renders only when its reader supplies data, and the
  * O-EMPTY 「看總覽」 link renders only when 總覽 is live (`overviewHref`); neither is invented here.
  */
-export function OwnerHomeV3({ name, locale, state, estimate, summary, overviewHref }: {
+export function OwnerHomeV3({ name, locale, state, estimate, summary, overviewHref, firm = null }: {
   name: string; locale: Locale; state: OwnerHomeState; estimate?: string; summary?: React.ReactNode; overviewHref?: string;
+  /** The management company's name for the O-EST relay subs (GS-43: company, never a person). */
+  firm?: string | null;
 }) {
   const router = useRouter();
   const copy = brandV3OwnerHomeCopy(locale);
   const [removed, setRemoved] = useState<string[]>([]);
   const [selected, setSelected] = useState<EstimateRow | null>(null);
-  const [notice, setNotice] = useState("");
   const trigger = useRef<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const handledLink = useRef<string | undefined>(undefined);
@@ -69,24 +73,23 @@ export function OwnerHomeV3({ name, locale, state, estimate, summary, overviewHr
         <button className="owner-action owner-primary" onClick={() => router.refresh()}>{brandV3TodayCopy(locale).retry}</button>
       </div> : rows.length ? <ul className="owner-estimates">{rows.map(row => <li key={row.versionId} data-testid="owner-estimate-row">
         <div><b>{row.property}{row.item}</b><div className="owner-badges"><span>{copy.estimate} {row.amount}</span><span>{row.emergency ? copy.emergencyNote : copy.pending}</span></div></div>
-        <button className="owner-action" onClick={event => { trigger.current = event.currentTarget; setSelected(row); setNotice(""); }}>{copy.approve}</button>
+        <button className="owner-action" onClick={event => { trigger.current = event.currentTarget; setSelected(row); }}>{copy.approve}</button>
       </li>)}</ul> : <div className="owner-empty" data-testid="owner-empty"><Illustration name="20" /><h3>{copy.empty}</h3><p>{copy.emptyDetail}</p>
         {overviewHref ? <Link className="owner-text-link" href={overviewHref}>{copy.overview}</Link> : null}</div>}
-      {notice ? <p role="status">{notice}</p> : null}
     </section>
-    {selected ? <EstimatePanel key={selected.versionId} row={selected} locale={locale} onClose={close}
-      onReturned={() => { setNotice(repairApprovalCopy(locale).recorded); close(true); }} /> : null}
+    {selected ? <EstimatePanel key={selected.versionId} row={selected} locale={locale} onClose={close} firm={firm} /> : null}
   </section>;
 }
 
-export function EstimatePanel({ row, locale, onClose, onReturned }: {
-  row: EstimateRow; locale: Locale; onClose: (decided?: boolean) => void; onReturned: () => void;
+export function EstimatePanel({ row, locale, onClose, firm = null }: {
+  row: EstimateRow; locale: Locale; onClose: (decided?: boolean) => void; firm?: string | null;
 }) {
   const copy = brandV3OwnerHomeCopy(locale);
   const existing = repairApprovalCopy(locale);
   const closeCopy = brandV3ShellCopy(locale).close;
   const retry = brandV3TodayCopy(locale).retry;
-  const [step, setStep] = useState<"estimate" | "back" | "done">("estimate");
+  // back_done: GS-61 / O-EST-BACK-DONE keeps the panel open with the recorded decision until 關閉.
+  const [step, setStep] = useState<"estimate" | "back" | "done" | "back_done">("estimate");
   const [decision, setDecision] = useState<"rejected" | "more_information">("rejected");
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
@@ -122,7 +125,7 @@ export function EstimatePanel({ row, locale, onClose, onReturned }: {
     try {
       const status = await postOwnerDecision(request.current);
       if (status === "recorded") {
-        if (outcome === "approved") setStep("done"); else onReturned();
+        setStep(outcome === "approved" ? "done" : "back_done");
       } else {
         setMessage(status === "rejected_conflict" ? existing.rejected_conflict
           : status === "rejected_invalid" ? existing.rejected_invalid
@@ -135,11 +138,21 @@ export function EstimatePanel({ row, locale, onClose, onReturned }: {
   }
   const version = copy.versionNumber.replace("{n}", row.version);
   return <dialog className="owner-estimate-panel" ref={dialog} aria-labelledby={id}
-    onCancel={event => { event.preventDefault(); if (!inFlight.current) onClose(step === "done"); }}>
+    onCancel={event => { event.preventDefault(); if (!inFlight.current) onClose(step === "done" || step === "back_done"); }}>
     <h2 id={id} ref={title} tabIndex={-1}>{step === "done" ? copy.done : step === "back" ? copy.back : copy.title}</h2>
     {step === "done" ? <><WaitMark /><dl>
       <dt>{copy.approvedVersion}</dt><dd>{version}</dd><dt>{copy.amount}</dt><dd>{row.amount}</dd>
-      <dt>{copy.status}</dt><dd>{existing.approved}</dd></dl><p>{copy.handoff}</p>
+      <dt>{copy.status}</dt><dd>{existing.approved}</dd></dl>
+      <OwnerEstimateRelay state={{ kind: "decided", decision: "approved" }} firm={firm} locale={locale} />
+      <p>{copy.handoff}</p>
+      <button className="owner-action owner-text" onClick={() => onClose(true)}>{closeCopy}</button>
+    </> : step === "back_done" ? <>
+      {/* O-EST-BACK-DONE (PLT-52-AC8): 「決定已記錄。」, 你的決定, 原因 and the relay until the panel is closed. */}
+      <p role="status" className="owner-recorded">{existing.recorded}</p>
+      <dl><dt>{partyRelayCopy(locale).yourDecision}</dt>
+        <dd>{decision === "rejected" ? ticketRelayCopy(locale).sentBack : ticketRelayCopy(locale).moreInfo}</dd>
+        <dt>{copy.reason}</dt><dd>{reason.trim()}</dd></dl>
+      <OwnerEstimateRelay state={{ kind: "decided", decision }} firm={firm} locale={locale} />
       <button className="owner-action owner-text" onClick={() => onClose(true)}>{closeCopy}</button>
     </> : <form noValidate onSubmit={event => { event.preventDefault(); void submit(); }}>
       {step === "estimate" ? <>
@@ -148,6 +161,9 @@ export function EstimatePanel({ row, locale, onClose, onReturned }: {
           <dt>{copy.estimate}</dt><dd>{row.amount}</dd><dt>{copy.vendor}</dt><dd>{row.vendor || "—"}</dd>
           <dt>{copy.description}</dt><dd><p>{row.scope}</p>{row.managementExplanation ? <p>{row.managementExplanation}</p> : null}</dd>
           {BigInt(row.version) > BigInt(1) ? <><dt>{copy.version}</dt><dd>{version}</dd></> : null}</dl>
+        {/* PLT-52-AC6 / AC7 (GS-59, GS-60): after the rows, before the note and buttons. 「你」 rests on the 核准
+            admission of this panel (spec §6.2 amended); a conflict answer withdraws that claim, so no relay then. */}
+        {!conflict ? <OwnerEstimateRelay state={{ kind: row.emergency ? "emergency" : "pending" }} firm={firm} locale={locale} /> : null}
         {row.emergency ? <Emergency row={row.emergency} copy={existing} /> : null}
         <p>{row.emergency ? copy.emergencyNote : copy.note}</p>
       </> : <>

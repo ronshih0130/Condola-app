@@ -7,6 +7,7 @@ import type { RelayEnd, RelayNode, RelaySub } from "../../../../lib/b3-ticket-re
 import type { TicketRelay } from "../../../../server/b3-ticket-relay";
 import { RoleAvatar } from "../../role-avatar";
 import { TurnTag } from "../../turn-tag";
+import { WaitMark } from "../../wait-mark";
 
 function subText(sub: RelaySub, locale: Locale): string {
   const c = ticketRelayCopy(locale);
@@ -14,6 +15,10 @@ function subText(sub: RelaySub, locale: Locale): string {
   if (sub.kind === "you") return c.you;
   if (sub.kind === "sent_back") return c.sentBack;
   if (sub.kind === "more_info") return c.moreInfo;
+  if (sub.kind === "approved") return c.approved;
+  if (sub.kind === "sent") return c.sent;
+  if (sub.kind === "tenant") return brandV3Copy(locale).t;
+  if (sub.kind === "vendor") return brandV3Copy(locale).v;
   return brandV3Copy(locale).m;
 }
 
@@ -23,10 +28,14 @@ function subText(sub: RelaySub, locale: Locale): string {
 export function RelayRail({ nodes, end, label, locale }: { nodes: RelayNode[]; end?: RelayEnd | null; label: string; locale: Locale }) {
   const c = ticketRelayCopy(locale);
   return <ol className="v3-rail" aria-label={label} data-testid="ticket-relay">
-    {nodes.map((node, i) => <li key={`${i}:${node.party}:${node.step}`} className={`v3-st ${node.state}`} data-state={node.state} data-party={node.party}>
+    {nodes.map((node, i) => <li key={`${i}:${node.party}:${node.step}`}
+      className={`v3-st ${node.state}${node.wait ? " wt" : ""}${node.plain ? " plain" : ""}`} data-state={node.state} data-party={node.party}
+      data-wait={node.wait ? "true" : undefined}>
       <RoleAvatar role={node.party} locale={locale} />
       <span className="v3-st-l">{node.state === "now" ? <TurnTag>{c.steps[node.step]}</TurnTag> : c.steps[node.step]}</span>
-      {node.subs.map((sub, j) => <span className="v3-st-s" key={j}>{subText(sub, locale)}</span>)}
+      {/* GS-61 / GS-62: a handed-over step shows the clock beside its first sub; never a tick. */}
+      {node.subs.map((sub, j) => <span className={`v3-st-s${node.wait && j === 0 ? " v3-st-wait" : ""}`} key={j}>
+        {node.wait && j === 0 ? <WaitMark /> : null}{subText(sub, locale)}</span>)}
     </li>)}
     {end && <li className="v3-st end" data-state="end"><span className="v3-end-pill">{c.end[end]}</span></li>}
   </ol>;
