@@ -113,6 +113,7 @@ export function mapSqlError(err: unknown): never {
     "staff_conflict",
     "identity_conflict",
     "multi_unit",
+    "room_mismatch",
   ];
   for (const code of codes) {
     if (msg.includes(code)) throw new FlowError("errors." + code);
@@ -249,7 +250,7 @@ export async function currentInvite(
       `SELECT d.token, s.expires_at
          FROM app.unit_invite_secrets s
          JOIN app.unit_invite_display d ON d.secret_id = s.id
-        WHERE s.org_id = $1 AND s.unit_id = $2
+        WHERE s.org_id = $1 AND s.unit_id = $2 AND s.room_id IS NULL
           AND s.revoked_at IS NULL AND s.expires_at > now()
         ORDER BY s.created_at DESC
         LIMIT 1`,
@@ -260,7 +261,7 @@ export async function currentInvite(
     const { rows: bindRows } = await client.query<{ bound: number }>(
       `SELECT count(*)::int AS bound
          FROM app.unit_bindings
-        WHERE org_id = $1 AND unit_id = $2
+        WHERE org_id = $1 AND unit_id = $2 AND room_id IS NULL
           AND status IN ('pending', 'lease_linked')`,
       [session.orgId, unitId],
     );
@@ -510,5 +511,58 @@ export async function listInvites(session: Session, unitId: string): Promise<Rec
       [session.orgId, unitId],
     );
     return res.rows as Record<string, unknown>[];
+  }));
+}
+
+/**
+ * B-102 INV-ROOM (MGT-147): one invite per room of a by_room unit. Same staff admission and audit as the unit
+ * invite; the SQL gateway re-checks the flag, the unit (by_room, live) and the room (live, in that unit).
+ * Issue and rotate are the same operation for a room (the gateway revokes the room's live secret first).
+ */
+export async function issueRoomInvite(session: Session, unitId: string, roomId: string): Promise<{ token: string; path: string }> {
+  session = await requireInviteStaff(session);
+  if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
+  const token = newInviteToken();
+  const hash = hashInviteToken(token);
+  try {
+    await withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
+      const { rows } = await client.query<{ id: string }>("SELECT app.unit_line_issue_room($1, $2, $3, $4, $5) AS id", [session.orgId, unitId, roomId, hash, session.userId]);
+      await client.query("SELECT app.unit_line_store_display($1, $2)", [rows[0].id, token]);
+      await audit(client, session.orgId, session.userId, session.role, "unit_invite_secrets", roomId, "insert", "unit_line_issue_room", maskToken(token));
+    }));
+  } catch (err) {
+    mapSqlError(err);
+  }
+  return { token, path: `/join/${token}` };
+}
+
+/** B-102: the room's live invite and its own seat count (4 per room). Null when the room has no live invite. */
+export async function currentRoomInvite(
+  session: Session,
+  unitId: string,
+  roomId: string,
+): Promise<{ token: string; path: string; expires_at: Date; bound: number; cap: number } | null> {
+  session = await requireInviteStaff(session);
+  if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
+  return withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
+    const { rows } = await client.query<{ token: string; expires_at: Date }>(
+      `SELECT d.token, s.expires_at
+         FROM app.unit_invite_secrets s
+         JOIN app.unit_invite_display d ON d.secret_id = s.id
+         JOIN public.rooms r ON r.org_id = s.org_id AND r.unit_id = s.unit_id AND r.id = s.room_id AND r.archived_at IS NULL
+         JOIN public.units u ON u.org_id = s.org_id AND u.id = s.unit_id AND u.rental_mode = 'by_room' AND u.archived_at IS NULL
+        WHERE s.org_id = $1 AND s.unit_id = $2 AND s.room_id = $3
+          AND s.revoked_at IS NULL AND s.expires_at > now()
+        ORDER BY s.created_at DESC
+        LIMIT 1`,
+      [session.orgId, unitId, roomId],
+    );
+    if (rows.length === 0) return null;
+    const { rows: bindRows } = await client.query<{ bound: number }>(
+      `SELECT count(*)::int AS bound FROM app.unit_bindings
+        WHERE org_id = $1 AND unit_id = $2 AND room_id = $3 AND status IN ('pending', 'lease_linked')`,
+      [session.orgId, unitId, roomId],
+    );
+    return { token: rows[0].token, path: joinUrl(rows[0].token), expires_at: rows[0].expires_at, bound: bindRows[0].bound, cap: 4 };
   }));
 }

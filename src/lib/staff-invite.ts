@@ -2,6 +2,9 @@ export type InviteScreen = "panel" | "qr" | "print" | "rotate" | "tenants" | "re
 export type InviteOptions = { bindingId?: string; leaseId?: string; notice?: "rotated" | "removed" | "saved" };
 export const staffInvitePath = (unitId: string) => `/m/units/${encodeURIComponent(unitId)}/invite`;
 export const staffInviteApiPath = (unitId: string) => `/api/m/units/${encodeURIComponent(unitId)}/staff-invite`;
+/** B-102 INV-ROOM: a room's own invite (brand_v3 only). The screens are the unit invite's screens. */
+export const staffRoomInvitePath = (roomId: string) => `/m/rooms/${encodeURIComponent(roomId)}/invite`;
+export const staffRoomInviteApiPath = (roomId: string) => `/api/m/rooms/${encodeURIComponent(roomId)}/staff-invite`;
 export const inviteDate = (value: string) => {
   const date = new Date(value);
   return `${String(date.getUTCMonth() + 1).padStart(2, "0")}/${String(date.getUTCDate()).padStart(2, "0")}`;

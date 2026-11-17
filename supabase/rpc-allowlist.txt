@@ -128,3 +128,6 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # ACL/config asserted by the B-109b probe in scripts/check-function-privileges.sh.
 # service-only: app.b109_split_shares(jsonb,bigint,bigint)
 # service-only: app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)
+# B-102 service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-102 probe in scripts/check-function-privileges.sh.
+# service-only: app.unit_line_issue_room(uuid,uuid,uuid,text,uuid)
