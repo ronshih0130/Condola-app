@@ -1,0 +1,25 @@
+/* B-065 我的帳號 開立類型 row, the type page and the stamp page (workbench). Scoped; targets at least 44x44.
+   Sizes are explicit: the v3 theme defines no --fs-* tokens (those live in v2 page sheets only). */
+.v-act-row { display: grid; gap: 8px; margin-top: 12px; }
+.v-act-row .v-act-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding-block: 8px; border-bottom: 1px solid var(--c-border); color: var(--c-text); text-decoration: none; }
+.v-act-row .v-act-link > span:first-child { display: grid; gap: 2px; }
+.v-act-row .v-act-link small { color: var(--c-text-2); }
+.v-act-row .v-act-help, .v-act-card .v-act-help { margin: 0; color: var(--c-text-2); font-size: .875rem; }
+.v-act-row .v-act-secondary, .v-act-card .v-act-secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 24px; border: 1px solid var(--c-primary); border-radius: var(--r-btn); background: var(--c-surface); color: var(--c-primary); font: inherit; text-decoration: none; cursor: pointer; }
+.v-act-h1 { margin: 0 0 4px; font-size: 1.5rem; }
+.v-act-crumb { margin: 0 0 16px; color: var(--c-text-2); font-size: .875rem; }
+.v-act-card { display: grid; gap: 12px; margin: 0 0 24px; padding: 20px; border: 1px solid var(--c-border); border-radius: var(--r-lg); background: var(--c-surface); }
+.v-act-card h2 { margin: 0; font-size: 1.125rem; }
+.v-act-card .v-act-options { display: grid; gap: 12px; }
+.v-act-card .v-act-option { display: flex; gap: 12px; align-items: flex-start; min-height: 44px; padding: 14px 16px; border: 1px solid var(--c-border-strong); border-radius: var(--r-md); cursor: pointer; }
+.v-act-card .v-act-option.v-act-on { border-color: var(--c-primary); box-shadow: 0 0 0 1px var(--c-primary); }
+.v-act-card .v-act-option input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--c-primary); }
+.v-act-card .v-act-option > span { display: grid; gap: 4px; }
+.v-act-card .v-act-option > span > span { color: var(--c-text-2); font-size: .875rem; }
+.v-act-card .v-act-info { margin: 0; padding: 12px 16px; border-radius: var(--r-md); background: var(--c-tint-soft); }
+.v-act-card .v-act-error { padding: 12px 16px; border-radius: var(--r-md); background: var(--c-warning-soft); color: var(--c-warning); }
+.v-act-card .v-act-error p { margin: 0 0 8px; }
+.v-act-card .v-act-primary { min-height: 44px; padding: 10px 24px; border: 1px solid var(--c-primary); border-radius: var(--r-btn); background: var(--c-primary); color: var(--c-on-primary); font: inherit; cursor: pointer; }
+.v-act-card .v-act-text { display: inline-flex; align-items: center; justify-content: center; justify-self: start; min-height: 44px; min-width: 44px; padding: 0 16px; color: var(--c-primary); text-decoration: none; }
+.v-act-card .v-act-blank { margin: 0; color: var(--c-text-2); }
+.v-act-card :is(a, button, input):focus-visible, .v-act-row :is(a):focus-visible { outline: 2px solid var(--c-focus); outline-offset: 3px; }

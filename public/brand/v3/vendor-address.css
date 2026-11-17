@@ -1,10 +1,10 @@
 /* B-112 ven-addr-confirm in the vendor workbench 我的帳號. Scoped; every control at least 44px tall. */
 .v-addr-card { margin: 0 0 24px; padding: 20px; border: 1px solid var(--c-border); border-radius: var(--r-lg); background: var(--c-surface); }
-.v-addr-card h2 { margin: 0 0 12px; font-size: var(--fs-h2); }
+.v-addr-card h2 { margin: 0 0 12px; font-size: 1.125rem; }
 .v-addr-card .v-addr-form, .v-addr-card .v-addr-sheet form { display: grid; gap: 12px; }
 .v-addr-card label { font-weight: 600; }
 .v-addr-card .v-addr-input { width: 100%; min-height: 44px; padding: 10px 12px; font: inherit; font-size: 16px; color: var(--c-text); background: var(--c-surface); border: 1px solid var(--c-border-strong); border-radius: var(--r-sm); }
-.v-addr-card .v-addr-help { margin: 0; color: var(--c-text-2); font-size: var(--fs-caption); }
+.v-addr-card .v-addr-help { margin: 0; color: var(--c-text-2); font-size: .875rem; }
 .v-addr-card .v-addr-field { display: grid; gap: 6px; }
 .v-addr-card .v-addr-error { margin: 0; color: var(--c-danger); }
 .v-addr-card .v-addr-primary { min-height: 44px; padding: 10px 24px; border: 1px solid var(--c-primary); border-radius: var(--r-btn); background: var(--c-primary); color: var(--c-on-primary); font: inherit; cursor: pointer; }

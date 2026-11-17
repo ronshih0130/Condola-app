@@ -592,3 +592,12 @@ flags:
     global_kill: "platform_settings.vendor_docs_v3 requires boolean true enabled and an allowed_org_ids array containing the organization; absent or malformed is OFF (no row is seeded)"
     org_override: "organizations.feature_flags.vendor_docs_v3 must be boolean true; effective brand_v3 and the B-025 vendor_documents admission must also be enabled"
     activation: "GS-32 Round 7 batch 4 vendor document screens with existing data (rec-type1-preview, rec-paper-upload with its 收據 evidence page, DOC-VOID marks on the manager repair page). Staging only; not turned on for a real organization until the VF-3/VF-4 (B-067/B-068) screens exist. OFF keeps the B-025 vendor document page and the manager repair page unchanged; reads only, every write is an existing B-025 action; 0 outbound; rollback = platform_settings / org override to OFF. Owner and expiry are assumptions pending Ron"
+
+  vendor_activation:
+    owner: PE
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.vendor_activation requires boolean true enabled and an allowed_org_ids array containing the organization; missing or malformed is OFF (seeded OFF by 20261116220000_b065_vendor_activation.sql)"
+    org_override: "organizations.feature_flags.vendor_activation must be boolean true; vendor_workbench, the B-026 account gate and effective brand_v3 must also be on"
+    activation: "B-065 VF-1 phase A: the signed-in vendor's 開立類型 row in 我的帳號, the type page (self-declared, audited, idempotent) and the 印章 'not yet' page for type 2. The direction-1 stamp generator and its consent are phase B. OFF hides the row and 404s both pages; 0 outbound; rollback = platform_settings / org override to OFF. Owner and expiry are assumptions pending Ron"
