@@ -31,8 +31,10 @@ export async function preparePhoto(original: File, messages: CasePhotoMessages):
   return { file, mime };
 }
 
-export function VendorCasePhotoUpload({ token, phase, label, messages }: {
+export function VendorCasePhotoUpload({ token, phase, label, messages, tone = "primary" }: {
   token: string; phase: "before" | "after"; label: string; messages: CasePhotoMessages;
+  /** B-097 RV-DONE: 送出完工 is that page's one solid button, so its upload is drawn as an outline. */
+  tone?: "primary" | "secondary";
 }) {
   const id = useId();
   const [busy, setBusy] = useState(false);
@@ -67,6 +69,6 @@ export function VendorCasePhotoUpload({ token, phase, label, messages }: {
     </div> : null}
     <input id={`${id}-file`} className="v-case-file" type="file" disabled={busy} data-testid="vendor-case-photo"
       accept={`${PHOTO_MIMES.join(",")},.heic,.heif,image/heic,image/heif`} onChange={onChange} />
-    <label className="v-token-primary v-case-block" htmlFor={`${id}-file`} aria-disabled={busy}>{label}</label>
+    <label className={`${tone === "primary" ? "v-token-primary" : "v-token-secondary"} v-case-block`} htmlFor={`${id}-file`} aria-disabled={busy}>{label}</label>
   </div>;
 }

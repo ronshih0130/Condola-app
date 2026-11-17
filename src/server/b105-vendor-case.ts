@@ -67,6 +67,14 @@ export function vendorCaseStage(value: Pick<VendorCase, "closed" | "decision" | 
   return value.ownerWaitVersion !== null ? "owner_wait" : "open";
 }
 
+/**
+ * B-097: the 回報完工 stage. The stages before it (約時間 B-095, 拍處理前照片 B-066) have no back end yet, so an open,
+ * accepted case reaches it once a 處理前 photo exists (the 拍處理前照片 step's output); until then no solid primary.
+ */
+export function vendorCaseReportReady(value: Pick<VendorCase, "closed" | "decision" | "ownerWaitVersion" | "photos">): boolean {
+  return vendorCaseStage(value) === "open" && value.photos.some(photo => photo.phase === "before");
+}
+
 type Run = (sql: string, params: unknown[]) => Promise<unknown>;
 const runSvc: Run = (sql, params) => svc(null, async client => (await client.query<{ r: unknown }>(sql, params)).rows[0]?.r ?? null);
 
