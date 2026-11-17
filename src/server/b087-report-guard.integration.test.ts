@@ -129,6 +129,7 @@ for (const spelling of ["canonical", "upper-case"] as const) test(`ON: two co-te
   await flags(true, true);
   const f = await lease();
   const other = spelling === "canonical" ? f.lease : f.lease.toUpperCase();
+  if (spelling === "upper-case") assert.notEqual(other, f.lease, "the upper-case spelling must differ, or the case is vacuous");
   const h = new Client({ connectionString: process.env.DATABASE_URL }); holders.push(h); await h.connect(); await h.query("BEGIN");
   await h.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`b087:${ORG_ID}:${f.lease}`]);
   const racing = [report(f.a.s, f.lease, 1000), report(f.b.s, other, 1000)].map((p) => p.then(() => "ok", (e) => (over(e) ? "over" : e)));
