@@ -7,6 +7,11 @@ import type { VendorCaseStage } from "../../../server/b105-vendor-case";
 import { createDecisionController } from "./vendor-case-controller";
 import { CaseShareEntry } from "./case-share-entry";
 import { vendorCloseCopy } from "../../../i18n/lanes/brand-v3-vendor-close";
+import { brandV3Copy } from "../../../i18n/lanes/brand-v3";
+import { partyRelayCopy } from "../../../i18n/lanes/brand-v3-party-relay";
+import { ticketRelayCopy } from "../../../i18n/lanes/brand-v3-ticket-relay";
+import { vendorRelayDrawn, type VendorRelayKind } from "../../../lib/b3-party-relay";
+import { VendorCaseRelay } from "../party-relay";
 
 /**
  * B-105 Round 7 batch 3 job content inside the V-TOKEN shell (VEN-26-AC1 amended; GS-25, GS-26, GS-49).
@@ -29,6 +34,8 @@ export type VendorCaseViewProps = {
   estimates: boolean;
   /** B-097: the 回報完工 stage (accepted, open, a 處理前 photo exists) gets its solid primary to RV-DONE. */
   report?: boolean;
+  /** PLT-52-AC9/AC10: the admitted one-snapshot projection for an open case; null draws no relay. */
+  relay?: VendorRelayKind | null;
 };
 
 type Pending = "accepted" | "declined" | null;
@@ -56,10 +63,19 @@ export function VendorCaseView(props: VendorCaseViewProps) {
       <div className="v-token-lead" role="status"><h1>{copy.declined.replace("{company}", props.company)}</h1></div>
     </>;
   }
+  // GS-62 / GS-63: only an open case with one of the drawn projections gets a relay (RV-RELAY, RV-RELAY-WAIT).
+  const relay = props.stage === "open" && vendorRelayDrawn(props.relay ?? null) ? props.relay! : null;
+  const waiting = relay === "confirm_cost" || relay === "dispatch";
+  const firm = props.company.trim() || brandV3Copy(props.locale).m;
   const lead = props.stage === "accept" ? copy.leadAccept.replace("{company}", props.company)
-    : props.stage === "owner_wait" ? copy.leadWait : null;
+    : props.stage === "owner_wait" ? copy.leadWait
+    : relay === "confirm_cost" ? partyRelayCopy(props.locale).costSent.replace("{company}", firm)
+    : relay === "dispatch" ? partyRelayCopy(props.locale).awaitDispatch.replace("{company}", firm) : null;
+  const status = ticketRelayCopy(props.locale).mntStatus;
   const badge = props.stage === "accept" ? { text: copy.badgeAccept, tone: "info" }
-    : props.stage === "owner_wait" ? { text: copy.badgeWait, tone: "warn" } : null;
+    : props.stage === "owner_wait" ? { text: copy.badgeWait, tone: "warn" }
+    : relay === "dispatch" ? { text: status.awaiting_dispatch, tone: "info" }
+    : relay === "confirm_cost" ? { text: status.in_progress, tone: "info" } : null;
   const others: { href: string; label: string }[] = [];
   if (props.stage === "owner_wait" && props.estimates && props.ownerWaitVersion !== null) {
     others.push({ href: `${path}/estimate`, label: copy.viewEstimate.replace("{n}", String(props.ownerWaitVersion)) });
@@ -72,7 +88,9 @@ export function VendorCaseView(props: VendorCaseViewProps) {
       <h2 id={`${id}-job`}>{props.heading}</h2>
       {badge ? <dl><div><dt>{copy.status}</dt><dd><span className={`v-case-badge v-case-badge-${badge.tone}`}>{badge.text}</span></dd></div></dl> : null}
       {props.stage === "accept" ? <AcceptDecision {...props} /> : null}
-      {props.stage === "open" && props.report ? <a className="v-token-primary v-case-block" href={`${path}/done`}
+      {relay ? <VendorCaseRelay kind={relay} firm={props.company} locale={props.locale} /> : null}
+      {/* RV-RELAY-WAIT: while the company holds the case the vendor has no solid primary. */}
+      {props.stage === "open" && props.report && !waiting ? <a className="v-token-primary v-case-block" href={`${path}/done`}
         data-testid="vendor-case-report">{vendorCloseCopy(props.locale).report}</a> : null}
     </section>
     {others.length ? <section className="v-token-card v-case-other" aria-labelledby={`${id}-other`}>

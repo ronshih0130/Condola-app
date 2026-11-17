@@ -35,3 +35,11 @@ html[data-brand="v2"][data-brand-v3] .v3-why { margin-top:12px; padding:10px 14p
  html[data-brand="v2"][data-brand-v3] .v3-st { font-size:.75em; }
  html[data-brand="v2"][data-brand-v3] .v3-st .turn-tag { padding:.05em .3em; }
 }
+/* GS-59…GS-63 (O-EST and RV-JOB relays): a handed-over step keeps its dimmed colour and shows the clock beside its
+   first sub (no navy pill, no tick); an emergency relay (plain) has no current marker and no dimmed avatars. */
+html[data-brand="v2"][data-brand-v3] .v3-st.wt .v3-st-l { color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-st-s.v3-st-wait { display:inline-flex; align-items:center; justify-content:center; gap:.15em; }
+html[data-brand="v2"][data-brand-v3] .v3-st-s.v3-st-wait .v3-wait { width:1em; height:1em; margin-right:0; vertical-align:middle; }
+html[data-brand="v2"][data-brand-v3] .v3-st.plain { color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-st.plain .party { opacity:1; }
+html[data-brand="v2"][data-brand-v3] .v3-party-relay { min-width:0; margin:16px 0; }
