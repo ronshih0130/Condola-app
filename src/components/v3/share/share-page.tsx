@@ -39,14 +39,13 @@ export function SharePage({ locale, token, view }: { locale: Locale; token: stri
             {view.status !== "cancelled" ? <div><dt>{copy.status}</dt><dd>{view.status === "closed" ? copy.done : copy.working}</dd></div> : null}
             {view.vendor ? <div><dt>{copy.vendor}</dt><dd>{view.vendor}</dd></div> : null}
           </dl>
-          {view.photos.length ? <>
-            <h2 className="v-share-h">{copy.photos}</h2>
-            <ul className="v-share-tiles">{view.photos.map(photo => <li key={photo.id}>
-              {/* Private photo bytes, re-admitted by the share route on every request. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`${base}/photos/${photo.id}`} alt={photo.name} /><span>{photo.name}</span>
-            </li>)}</ul>
-          </> : null}
+          {/* The heading stays; with nothing approved it says so (approved share-view frame). */}
+          <h2 className="v-share-h">{copy.photos}</h2>
+          {view.photos.length ? <ul className="v-share-tiles">{view.photos.map(photo => <li key={photo.id}>
+            {/* Private photo bytes, re-admitted by the share route on every request. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`${base}/photos/${photo.id}`} alt={photo.name} /><span>{photo.name}</span>
+          </li>)}</ul> : <p className="v-share-empty">{copy.noPhotos}</p>}
           {view.documents.length ? <>
             <h2 className="v-share-h">{copy.documents}</h2>
             <ul className="v-share-docs">{view.documents.map(doc => {

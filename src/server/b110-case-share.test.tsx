@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createShareClient } from "../components/v3/vendor/case-share-entry";
+import { createShareClient, placeOnClipboard } from "../components/v3/vendor/case-share-entry";
 import { SharePage } from "../components/v3/share/share-page";
 import { caseShareCopy } from "../i18n/lanes/brand-v3-case-share";
 import { parseShareView } from "./b110-case-share";
@@ -17,7 +17,7 @@ test("approved and P52 words are verbatim (ven-copy-link, share-expired, share-r
   const expected: Record<string, string> = {
     entry: "複製唯讀連結", title: "這一案的唯讀連結", noSend: "系統不會代你寄出連結。請複製後，自己傳給需要的人。", link: "連結",
     scope: "對方只會看到已准許的照片，以及已開立或已作廢的文件。內部備註不會出現。", copy: "複製連結", close: "關閉", copied: "已複製連結",
-    sharedBy: "{company}分享的唯讀頁", status: "狀態", done: "已完成", vendor: "廠商", photos: "已准許的照片", documents: "文件",
+    sharedBy: "{company}分享的唯讀頁", status: "狀態", done: "已完成", vendor: "廠商", photos: "已准許的照片", noPhotos: "這一案沒有分享照片。", documents: "文件",
     markReceipt: "收據", markStatement: "完工明細（非稅務憑證）", markVoid: "已作廢",
     expiredTitle: "這個分享已過期", expiredBody: "這個連結已過期，文件內容不會再顯示。需要的話請聯絡{company}。",
     revokedTitle: "這個分享已撤銷", revokedBody: "管理方已停止這個連結，文件內容不會再顯示。",
@@ -43,7 +43,7 @@ test("share view decode is all or nothing: any malformed item rejects the view",
   }
 });
 
-test("share page: nature marks, voided last and struck with a hidden 已作廢, PDF links, no buttons; gone states show only the text", () => {
+test("share page: nature marks and totals, voided last and struck with a hidden 已作廢, no PDF links, no buttons; gone states show only the text", () => {
   const html = renderToStaticMarkup(<SharePage locale="zh-TW" token={"t".repeat(43)} view={{ state: "ok", company: "安居物業", title: "浴室天花板滴水",
     status: "closed", vendor: "王師傅水電", currency: "TWD", photos: [{ id: id(1), name: "天花板_修好.jpg" }],
     documents: [{ id: id(2), kind: "receipt", docNo: "RCP-2026-019", status: "issued", totalMinor: "5200" },
@@ -95,4 +95,32 @@ test("capped body, 0 outbound and scoped styles", async () => {
   assert.match(css, /\.v-share-docs \.v-share-doc \{[^}]*min-height: 44px/);
   assert.match(read("public/brand/v3/vendor-case.css"), /\.v-case-share-entry \{[^}]*min-height: 44px/);
   assert.match(read("src/components/v3/vendor/vendor-case.tsx"), /props\.stage === "closed" \? <li><CaseShareEntry/);
+});
+
+test("clipboard missing or refused: still a success, no server retry, the 連結 field is focused and selected", async () => {
+  let posts = 0;
+  const client = createShareClient({ fetch: async () => { posts++; return new Response(JSON.stringify({ url: "http://x/s/abc", expiresAt: "z" })); }, token: "t" });
+  const result = await client.link("copy");
+  assert.deepEqual(result, { ok: true, url: "http://x/s/abc" });
+  const calls: string[] = [];
+  const field = { focus: () => calls.push("focus"), select: () => calls.push("select") };
+  assert.equal(await placeOnClipboard("http://x/s/abc", { clipboard: undefined, field }), "manual");
+  assert.equal(await placeOnClipboard("http://x/s/abc", { clipboard: { writeText: async () => { throw new Error("denied"); } }, field }), "manual");
+  assert.deepEqual(calls, ["focus", "select", "focus", "select"]);
+  const written: string[] = [];
+  assert.equal(await placeOnClipboard("http://x/s/abc", { clipboard: { writeText: async (t: string) => { written.push(t); } }, field }), "copied");
+  assert.deepEqual(written, ["http://x/s/abc"]); assert.equal(calls.length, 4, "no focus on success");
+  assert.equal(posts, 1, "the server is called once; a failed clipboard never records another copy");
+  const source = read("src/components/v3/vendor/case-share-entry.tsx");
+  assert.match(source, /setState\(await placeOnClipboard\(/);
+  assert.doesNotMatch(source, /setState\("copyError"\); \}\s*\n?\s*\} catch/);
+  assert.match(source, /if \(sheet\.current && !sheet\.current\.open\) sheet\.current\.showModal\(\);/, "never showModal() an open dialog");
+  assert.match(source, /<p className="v-case-toast" role="status" aria-live="polite">\{state === "copied" \? copy\.copied : ""\}<\/p>/, "one live region, always mounted");
+});
+
+test("share page with no approved photos keeps the heading and says so", () => {
+  const html = renderToStaticMarkup(<SharePage locale="zh-TW" token={"t".repeat(43)} view={{ state: "ok", company: "安居物業", title: "浴室天花板滴水",
+    status: "closed", vendor: "王師傅水電", currency: "TWD", photos: [], documents: [] }} />);
+  assert.ok(html.includes(">已准許的照片<") && html.includes(">這一案沒有分享照片。<"));
+  assert.doesNotMatch(html, /<img|v-share-tiles/);
 });

@@ -131,7 +131,8 @@ const H2160 = 2160 * 3600 * 1000;
 test("privileges: gateways service-only, helpers unexecutable, case_shares fully revoked with RLS on", async () => {
   const gateways = ["app.b110_vendor_share(text,boolean,text,text)", "app.b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean)",
     "app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)", "app.b110_share_view(text,boolean)", "app.b110_share_photo(text,boolean,uuid)"];
-  const helpers = ["app.b110_enabled(uuid,boolean)", "app.b110_expires_at(app.case_shares)", "app.b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)"];
+  const helpers = ["app.b110_enabled(uuid,boolean)", "app.b110_expires_at(app.case_shares)", "app.b110_live(app.case_shares,timestamptz)",
+    "app.b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)"];
   for (const role of ["anon", "authenticated", "service_role"]) {
     for (const signature of [...gateways, ...helpers]) assert.equal((await db.query("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [role, signature])).rows[0].ok,
       role === "service_role" && gateways.includes(signature), `${role} ${signature}`);

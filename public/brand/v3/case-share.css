@@ -12,3 +12,4 @@
 .v-token-v3.v-share .v-share-gone { margin-top: 16px; display: grid; justify-items: center; gap: 8px; text-align: center; }
 .v-token-v3.v-share .v-share-gone h1 { font-size: var(--fs-h2); }
 .v-token-v3.v-share .v-share-gone p { margin: 0; color: var(--c-text-2); }
+.v-token-v3.v-share .v-share-empty { margin: 0; color: var(--c-text-2); }

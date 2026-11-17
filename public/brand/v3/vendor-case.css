@@ -29,3 +29,4 @@
 .v-token-v3 .v-case-share-entry { display: flex; align-items: center; width: 100%; min-height: 44px; padding-block: 8px; border: 0; background: transparent; color: var(--c-text); font: inherit; text-align: start; cursor: pointer; }
 .v-token-v3 .v-case-share { display: grid; gap: 12px; }
 .v-token-v3 .v-case-toast { margin: 0; padding: 12px 16px; border-radius: var(--r-md); background: var(--c-tint-soft); }
+.v-token-v3 .v-case-toast:empty { padding: 0; background: none; }

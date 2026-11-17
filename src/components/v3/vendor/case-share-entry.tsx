@@ -38,19 +38,40 @@ export function createShareClient(deps: { fetch: Fetch; token: string }) {
   };
 }
 
+/**
+ * After the server has recorded the copy: put the link on the clipboard, or, when the clipboard is missing or refuses,
+ * focus and select the read-only 「連結」 field so it can be copied by hand. Never calls the server again: the copy
+ * is already recorded, so a failed clipboard is not a failed save.
+ */
+export async function placeOnClipboard(url: string, deps: {
+  clipboard: { writeText(text: string): Promise<void> } | undefined;
+  field: { focus(): void; select(): void } | null;
+}): Promise<"copied" | "manual"> {
+  try {
+    if (!deps.clipboard) throw new Error("no clipboard");
+    await deps.clipboard.writeText(url);
+    return "copied";
+  } catch {
+    deps.field?.focus(); deps.field?.select();
+    return "manual";
+  }
+}
+
 export function CaseShareEntry({ locale, token }: { locale: Locale; token: string }) {
   const copy = caseShareCopy(locale);
   const id = useId();
   const sheet = useRef<HTMLDialogElement>(null);
+  const field = useRef<HTMLInputElement>(null);
   const [client] = useState(() => createShareClient({ fetch: (input, init) => fetch(input, init), token }));
   const [eligible, setEligible] = useState(false);
   const [url, setUrl] = useState("");
-  const [state, setState] = useState<"idle" | "loading" | "pending" | "copied" | "readError" | "copyError">("idle");
+  const [state, setState] = useState<"idle" | "loading" | "pending" | "copied" | "manual" | "readError" | "copyError">("idle");
 
   useEffect(() => { let live = true; void client.eligible().then(ok => { if (live) setEligible(ok); }); return () => { live = false; }; }, [client]);
 
   async function open() {
-    sheet.current?.showModal();
+    // The read-error 「再試一次」 runs inside the open sheet: never showModal() an open dialog.
+    if (sheet.current && !sheet.current.open) sheet.current.showModal();
     setState("loading");
     const result = await client.link("open");
     if (result === "busy") return;
@@ -63,7 +84,8 @@ export function CaseShareEntry({ locale, token }: { locale: Locale; token: strin
     if (result === "busy") return;
     if (!result.ok) { setState("copyError"); return; }
     setUrl(result.url);
-    try { await navigator.clipboard.writeText(result.url); setState("copied"); } catch { setState("copyError"); }
+    if (field.current) field.current.value = result.url;
+    setState(await placeOnClipboard(result.url, { clipboard: globalThis.navigator?.clipboard, field: field.current }));
   }
   if (!eligible) return null;
   return <>
@@ -75,9 +97,10 @@ export function CaseShareEntry({ locale, token }: { locale: Locale; token: strin
           <button type="button" className="v-token-secondary" onClick={() => void open()}>{copy.retry}</button></div> : <>
           <p>{copy.noSend}</p>
           <label className="v-case-field" htmlFor={`${id}-url`}>{copy.link}</label>
-          <input id={`${id}-url`} className="v-case-input" value={url} readOnly aria-describedby={`${id}-scope`} />
+          <input ref={field} id={`${id}-url`} className="v-case-input" value={url} readOnly aria-describedby={`${id}-scope`} />
           <p className="v-case-help" id={`${id}-scope`}>{copy.scope}</p>
-          {state === "copied" ? <p className="v-case-toast" role="status">{copy.copied}</p> : null}
+          {/* One live region, always mounted; only its text changes. */}
+          <p className="v-case-toast" role="status" aria-live="polite">{state === "copied" ? copy.copied : ""}</p>
           {state === "copyError" ? <div className="v-case-error" role="alert"><p>{copy.saveError}</p>
             <button type="button" className="v-token-secondary" onClick={() => void copyLink()}>{copy.retry}</button></div> : null}
           <button type="button" className="v-token-primary v-case-block" disabled={state === "pending" || state === "loading" || !url}
