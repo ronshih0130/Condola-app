@@ -87,7 +87,9 @@ function page(text: string, scenario: Scenario) {
     "@/server/actions": { actionVendorReport: "/existing-vendor-report" },
     // B-105: the case loader answers null (vendor_job_v3 OFF) unless a scenario supplies a case.
     "@/server/b105-vendor-case": { loadVendorCase: async (value: string) => { assert.equal(value, token); calls.push("case"); return scenario.vendorCase ?? null; },
-      vendorCaseStage: (value: { decision: string | null }) => value.decision === "accepted" ? "open" : "accept" },
+      vendorCaseStage: (value: { decision: string | null }) => value.decision === "accepted" ? "open" : "accept",
+      // B-097: the 回報完工 stage flag; these scenarios have no 處理前 photo.
+      vendorCaseReportReady: () => false },
     "@/components/v3/vendor/vendor-case": { VendorCaseView: (props: { stage: string; heading: string; company: string }) => <section data-testid="vendor-case" data-stage={props.stage}>{props.heading}|{props.company}</section> },
     "./vendor-job-controls": { VendorJobControls: ({ children }: { children: React.ReactNode }) => <section data-testid="appointment-controls">{children}</section> },
     "./vendor-line-entry": { VendorLineEntry: () => <aside data-testid="line-entry" /> },

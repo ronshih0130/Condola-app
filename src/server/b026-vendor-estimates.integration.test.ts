@@ -147,7 +147,12 @@ test("B-026 vendor estimate submission and manager comparison", async t => {
       // Strip only its exact reviewed imports, reads, wrapper and call-site changes before B-035.
       // B-101 (VEN-31 vendor LINE sign-in) adds a gated entry to the V-TOKEN shell; strip exactly those lines too.
       // B-105 (vendor_job_v3 RV case) adds two imports, one gated case read and one early case return; strip exactly those.
+      // B-097 (vendor close / RV report) adds one import name and one report prop on the ready case view; strip exactly those.
       const withoutReviewedAdditions = (source: string) => source
+        .replace('import { loadVendorCase, vendorCaseReportReady, vendorCaseStage } from "@/server/b105-vendor-case";\n',
+          'import { loadVendorCase, vendorCaseStage } from "@/server/b105-vendor-case";\n')
+        .replace('estimates={vendorCase.value.estimates} report={vendorCaseReportReady(vendorCase.value)} /> :',
+          'estimates={vendorCase.value.estimates} /> :')
         .replace('import { loadVendorCase, vendorCaseStage } from "@/server/b105-vendor-case";\n', "")
         .replace('import { VendorCaseView } from "@/components/v3/vendor/vendor-case";\n', "")
         .replace(`  // B-105: the RV case replaces the V-TOKEN job content only when vendor_job_v3 admits this shared link.
