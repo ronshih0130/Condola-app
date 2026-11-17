@@ -81,6 +81,7 @@ test("OV-SH-PHONE / PLT-46-AC1: owner OFF preserves old readers, order, markup a
       "@/server/owner-finance-replies": { ownerReceiptTitleView: () => assert.fail("OFF must not read receipt title") },
       "@/server/notification-center": { centerSessionAdmission: () => assert.fail("OFF must not read notification admission") },
       "@/server/repair-approval": { repairApprovalsEnabled: () => assert.fail("OFF must not read the 核准紀錄 rollout") },
+      "@/server/b094-owner-rules": { ownerRulesAvailable: () => assert.fail("OFF must not read the 授權規則 rule") },
       "@/server/nav-v3": nav, "@/components/owner-nav": ui.OwnerNav, "@/components/v3/shell/owner-shell": ui.OwnerShell,
     };
     const render = async (text: string) => {
@@ -97,7 +98,7 @@ test("OV-SH-PHONE / PLT-46-AC1: owner OFF preserves old readers, order, markup a
 });
 
 test("OV-SH-ORG / OV-SH-NOTI: ON uses session firm and actual admission; read failures propagate", async () => {
-  for (const admission of ["enabled", "busy", "disabled", "denied"] as const) for (const receiptTitleAvailable of [false, true]) for (const decided of [true, false, "throws"] as const) for (const portals of [undefined, { owner: false, tenant: false }, { owner: true, tenant: false }, { owner: false, tenant: true }, { owner: true, tenant: true }]) {
+  for (const admission of ["enabled", "busy", "disabled", "denied"] as const) for (const receiptTitleAvailable of [false, true]) for (const decided of [true, false, "throws"] as const) for (const rules of [true, false]) for (const portals of [undefined, { owner: false, tenant: false }, { owner: true, tenant: false }, { owner: false, tenant: true }, { owner: true, tenant: true }]) {
     const actor = { ...owner, portals };
     const ui = components("zh-TW", "/o", "avatar");
     const calls: string[] = []; let fail = false;
@@ -110,11 +111,16 @@ test("OV-SH-ORG / OV-SH-NOTI: ON uses session firm and actual admission; read fa
       "@/server/notification-center": { centerSessionAdmission: async (s: Session) => { assert.equal(s, actor); calls.push("admission"); if (fail) throw new Error("reader unavailable"); return admission; } },
       "@/server/owner-finance-replies": { ownerReceiptTitleView: async (s: Session) => { assert.equal(s, actor); calls.push("receipt-title"); return receiptTitleAvailable ? { title: null, revisions: [] } : null; } },
       "@/server/repair-approval": { repairApprovalsEnabled: async (id: string) => { assert.equal(id, owner.orgId); calls.push("decided"); if (decided === "throws") throw new Error("flag read failed"); return decided; } },
+      // B-094: ownerRulesAvailable itself never throws (a failed read is false; b094-owner-rules.test.tsx).
+      "@/server/b094-owner-rules": { ownerRulesAvailable: async (s: Session) => { assert.equal(s, actor); calls.push("rules"); return rules; } },
       "@/server/nav-v3": nav, "@/components/owner-nav": ui.OwnerNav, "@/components/v3/shell/owner-shell": ui.OwnerShell,
     };
     const Layout = compile(source("src/app/o/layout.tsx"), mocks).default as (p: { children: React.ReactNode }) => Promise<React.ReactNode>;
     const html = renderToStaticMarkup(await Layout({ children: <p>retained</p> }));
-    assert.deepEqual(calls, ["firm", "admission", "receipt-title", "decided"]);
+    assert.deepEqual(calls, ["firm", "admission", "receipt-title", "decided", "rules"]);
+    // RO-MORE / OWN-34-AC1 (B-094): 授權規則 only while live, and then it replaces the per-property 修繕規則 entries.
+    assert.equal(html.includes('href="/o/rules"'), rules);
+    assert.equal(html.includes('href="/o/repair-policy/allowed"'), !rules);
     // RO-MORE / OV-SH-MORE (B-093): 核准紀錄 only while its page is live; a failed read hides it.
     assert.equal(html.includes('href="/o/decided"'), decided === true);
     assert.equal(html.includes('href="/o/receipt-title"'), receiptTitleAvailable);
