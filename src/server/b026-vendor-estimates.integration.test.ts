@@ -149,6 +149,13 @@ test("B-026 vendor estimate submission and manager comparison", async t => {
       // B-105 (vendor_job_v3 RV case) adds two imports, one gated case read and one early case return; strip exactly those.
       // B-097 (vendor close / RV report) adds one import name and one report prop on the ready case view; strip exactly those.
       const withoutReviewedAdditions = (source: string) => source
+        // PLT-52-AC9/AC10 (GS-62, GS-63): the ON-only relay read and prop.
+        .replace('import { loadVendorCaseRelay, relayForPage } from "@/server/b3-vendor-case-relay";\n', "")
+        .replace(`    // PLT-52-AC9/AC10: relay only for an open case, read again with the turn in one snapshot (null draws none).
+    const relay = vendorCase.state === "ready" && vendorCaseStage(vendorCase.value) === "open"
+      ? relayForPage(await loadVendorCaseRelay(token), vendorCaseReportReady(vendorCase.value)) : null;
+`, "")
+        .replace(' report={vendorCaseReportReady(vendorCase.value)} relay={relay} /> :', ' report={vendorCaseReportReady(vendorCase.value)} /> :')
         .replace('import { loadVendorCase, vendorCaseReportReady, vendorCaseStage } from "@/server/b105-vendor-case";\n',
           'import { loadVendorCase, vendorCaseStage } from "@/server/b105-vendor-case";\n')
         .replace('estimates={vendorCase.value.estimates} report={vendorCaseReportReady(vendorCase.value)} /> :',
