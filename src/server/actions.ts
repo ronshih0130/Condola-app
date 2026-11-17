@@ -337,7 +337,6 @@ export async function actionRecordPayment(formData: FormData) {
   }
 }
 
-import { moneyProxyConfirmationState } from "./b3-money-month";
 import { readProxyOwnerConfirmed } from "./b010-proxy-confirm-rules";
 
 export async function actionConfirmPayment(formData: FormData) {
@@ -353,28 +352,6 @@ export async function actionConfirmPayment(formData: FormData) {
     redirect(returnTo);
   } catch (error) {
     bounce(returnTo, error);
-  }
-}
-
-export async function actionConfirmPaymentOwnerProxy(formData: FormData) {
-  await requireCurrentConsent();
-  const session = await guardEffectiveSession(await getSession(), "pay.record");
-  const id = text(formData.get("paymentId"));
-  const proxyOwnerConfirmed = readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed"));
-  const expectedOwnerContactId = text(formData.get("expectedOwnerContactId"));
-  if (!proxyOwnerConfirmed || !expectedOwnerContactId) return "proxy_unavailable" as const;
-  try {
-    const state = await moneyProxyConfirmationState(session, id);
-    if (state !== "available") return state;
-    const result = await confirmPayment(session, id, {
-      proxyOwnerConfirmed,
-      expectedOwnerContactId,
-      source: "staff_ui",
-    });
-    return result.outcome;
-  } catch (error) {
-    if (error instanceof FlowError && error.key === "errors.proxyOwnerMismatch") return "proxy_unavailable" as const;
-    throw error;
   }
 }
 

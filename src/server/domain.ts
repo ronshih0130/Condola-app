@@ -2059,7 +2059,7 @@ export async function recordPayment(
   return { paymentId:result.paymentId, status: "confirmed" as const };
 }
 
-export async function confirmPayment(session: Session, paymentId: string, options: {proxyOwnerConfirmed?: boolean; expectedOwnerContactId?: string; source?: string} = {}) {
+export async function confirmPayment(session: Session, paymentId: string, options: {proxyOwnerConfirmed?: boolean; source?: string} = {}) {
   session = await guardEffectiveSession(session, "pay.record");
   assertStaff(session, ["admin", "manager", "accountant"], "pay.record");
   const result = await tx(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => {
@@ -2072,7 +2072,7 @@ export async function confirmPayment(session: Session, paymentId: string, option
       `SELECT id,org_id::text,property_id::text,lease_id::text,currency,amount_minor::text,payer_contact_id::text,status::text FROM payments WHERE id=$1 AND org_id=$2 FOR UPDATE`,[paymentId,session.orgId]);
     if (!payment || payment.lease_id !== initial.lease_id) throw new FlowError("errors.notFound");
     if (enabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
-    if (payment.status === "confirmed") return {leaseId:payment.lease_id,enabled,outcome:"already_confirmed" as const};
+    if (payment.status === "confirmed") return {leaseId:payment.lease_id,enabled};
     if (payment.status !== "submitted") throw new FlowError("errors.paymentState");
     const invoices=await lockAllocationInvoices(client,session.orgId,payment.lease_id);
     if (enabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
@@ -2083,7 +2083,7 @@ export async function confirmPayment(session: Session, paymentId: string, option
         `SELECT collector,owner_contact_id FROM app.b010_payment_collector($1)`,
         [payment.id],
       );
-      if (!collector) throw new FlowError(options.proxyOwnerConfirmed === true && options.expectedOwnerContactId ? "errors.proxyOwnerMismatch" : "errors.forbidden");
+      if (!collector) throw new FlowError("errors.forbidden");
       decision = decideConfirmation({
         collector: collector.collector,
         ownerContactId: collector.owner_contact_id,
@@ -2091,14 +2091,9 @@ export async function confirmPayment(session: Session, paymentId: string, option
         proxyOwnerConfirmed: options.proxyOwnerConfirmed === true,
         paymentStatus: payment.status,
       });
-    }
-    if (options.proxyOwnerConfirmed === true && options.expectedOwnerContactId &&
-        !(enabled && decision?.ok && decision.confirmedVia === "staff_proxy" &&
-          decision.onBehalfOfOwnerContactId === options.expectedOwnerContactId)) {
-      throw new FlowError("errors.proxyOwnerMismatch");
-    }
-    if (decision && !decision.ok) {
-      throw new FlowError(decision.code === "proxy_confirmation_required" ? "errors.proxyOwnerConfirmRequired" : "errors.forbidden");
+      if (!decision.ok) {
+        throw new FlowError(decision.code === "proxy_confirmation_required" ? "errors.proxyOwnerConfirmRequired" : "errors.forbidden");
+      }
     }
     const balance=invoices.reduce((sum,invoice)=>sum+Number(invoice.balance_minor),0);
     if (Number(payment.amount_minor)>balance) throw new FlowError("errors.amountTooHigh");
@@ -2113,10 +2108,10 @@ export async function confirmPayment(session: Session, paymentId: string, option
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);
     await producePaymentResultEvent(client,session,payment.id);
-    return {leaseId:payment.lease_id,enabled,outcome:"confirmed" as const};
+    return {leaseId:payment.lease_id,enabled};
   }), requireOrgScope(session));
   if (!result.enabled) await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "pay.record", async () => queueDemoNotice(client,result.leaseId,"payment_confirmed")));
-  return {paymentId,status:"confirmed" as const,outcome:result.outcome};
+  return {paymentId,status:"confirmed" as const};
 }
 
 export async function rejectPayment(session: Session, paymentId: string, reason: string) {
