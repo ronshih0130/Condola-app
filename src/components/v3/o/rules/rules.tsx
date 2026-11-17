@@ -4,7 +4,7 @@ import type { Locale } from "../../../../i18n";
 import { brandV3OwnerStateCopy } from "../../../../i18n/lanes/brand-v3";
 import { brandV3OwnerDecidedCopy } from "../../../../i18n/lanes/brand-v3-owner-decided";
 import { brandV3OwnerRulesCopy } from "../../../../i18n/lanes/brand-v3-owner-rules";
-import type { RenewalRule } from "../../../../server/b091-owner-rules";
+import type { RenewalRule } from "../../../../server/b091-owner-rules-values";
 import type { RepairLimitLine } from "../../../../server/b094-owner-rules";
 import { ownerEstimateAmount } from "../../../../server/owner-home-v3";
 import { Illustration } from "../../illustrations";
@@ -54,7 +54,8 @@ export function RulesView({ locale, company, repairs, rule, revision }: {
       </li>)}</ul>
     </div>}
     <div className="rules-card">
-      <RenewalRuleChoice locale={locale} rule={rule} revision={revision} />
+      {/* key: a new stored revision (after refresh) remounts the choice with the server's rule. */}
+      <RenewalRuleChoice key={revision} locale={locale} rule={rule} revision={revision} />
       <p className="rules-note">{copy.note(company)}</p>
     </div>
   </section>;

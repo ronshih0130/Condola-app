@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -8,6 +9,7 @@ import { ownerRulesAvailable, ownerRulesPage } from "./b094-owner-rules";
 import { ownerNavigationV3 } from "./nav-v3";
 import { RulesError, RulesLoading, RulesNoPerm, RulesView, repairPolicyHref } from "../components/v3/o/rules/rules";
 import { brandV3OwnerRulesCopy } from "../i18n/lanes/brand-v3-owner-rules";
+import { afterSave, startsSave } from "../components/v3/o/rules/rule-choice-state";
 import type { OwnerRuleView } from "./b091-owner-rules";
 import type { Session } from "./types";
 Object.assign(globalThis, { React });
@@ -49,18 +51,21 @@ test("OWN-34-AC2/AC3: per-property repair limits with 「修改」, three renewa
   assert.equal((html.match(/>修改</g) ?? []).length, 2);
   assert.ok(html.includes(`href="${repairPolicyHref(P1)}"`) && html.includes(`href="${repairPolicyHref(P2)}"`));
   assert.match(t, /交給管理方，只要通知我.*租金不降就交給管理方，要降價才問我.*每次都問我/);
-  assert.equal((html.match(/type="radio"/g) ?? []).length, 3);
-  assert.match(html, /<input type="radio" name="renewal-rule" checked="" value="delegate_unless_lower"\/>/);
-  assert.equal((html.match(/checked=""/g) ?? []).length, 1);
+  assert.equal((html.match(/<button type="button"/g) ?? []).length, 3);
+  assert.match(html, /aria-pressed="true" data-rule="delegate_unless_lower"/);
+  assert.equal((html.match(/aria-pressed="true"/g) ?? []).length, 1);
+  assert.equal((html.match(/aria-pressed="false"/g) ?? []).length, 2);
+  assert.match(html, /role="group" aria-labelledby="([^"]+)"[^>]*>.*<h3 class="rules-section" id="\1">續租<\/h3>/);
+  assert.doesNotMatch(html, /aria-disabled/);
   assert.match(t, /改了會通知安居物業，也會留下紀錄。/);
-  assert.doesNotMatch(html, /owner-primary|btn pri|<button/);
+  assert.doesNotMatch(html, /owner-primary|btn pri/);
   assert.doesNotMatch(t, /沒有存成功/);
 });
 
 test("OWN-34: no repair policy entries → only the renewal section", () => {
   const html = render(<RulesView locale="zh-TW" company="安居物業" rule="delegate_notify" revision={0} repairs={[]} />);
   assert.doesNotMatch(html, /owner-rules-repairs|修繕/);
-  assert.match(html, /<input type="radio" name="renewal-rule" checked="" value="delegate_notify"\/>/);
+  assert.match(html, /aria-pressed="true" data-rule="delegate_notify"/);
 });
 
 test("OWN-34-AC5 / states: loading has skeletons and no control or amount; read error and B1-NOPERM in place", () => {
@@ -111,7 +116,7 @@ test("RO-MORE / OWN-34-AC1: 授權規則 first in 更多; it replaces the per-pr
 test("wiring: the route 404s only when off; the layout passes the live flag; the action repeats consent and the effective-session guard", () => {
   const route = read("src/app/o/rules/page.tsx");
   assert.match(route, /if \(!\(await brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\);/);
-  assert.match(route, /if \(\(await ownerRuleView\(session\)\)\.state === "off"\) notFound\(\);/);
+  assert.match(route, /if \(\(await ownerRuleViewOnce\(session\)\)\.state === "off"\) notFound\(\);/);
   assert.match(route, /<Suspense fallback=\{<RulesLoading/);
   const layout = read("src/app/o/layout.tsx");
   assert.match(layout, /const rules = await ownerRulesAvailable\(session\);/);
@@ -120,6 +125,45 @@ test("wiring: the route 404s only when off; the layout passes the live flag; the
   assert.match(action, /^"use server";/);
   assert.match(action, /await requireCurrentConsent\(\);\n  return setOwnerRule\(await guardEffectiveSession\(await getSession\(\), null\), input\);/);
   const choice = read("src/components/v3/o/rules/rule-choice.tsx");
-  assert.match(choice, /disabled=\{pending\}/);
+  assert.match(choice, /if \(!startsSave\(busy\.current \|\| pending, state\.saved\.rule, next\)\) return;/);
   assert.match(choice, /expectedRevision: previous\.revision/);
+  assert.match(choice, /catch \{ outcome = "threw"; \}/);
+  assert.match(read("src/components/v3/o/rules/rules.tsx"), /<RenewalRuleChoice key=\{revision\}/);
+});
+
+test("OWN-34-AC5 save outcomes: success stores; stale shows the stored rule; any other failure or a throw keeps the previous rule; all failures show the error", () => {
+  const prev = { rule: "delegate_notify" as const, revision: 2 };
+  assert.deepEqual(afterSave(prev, { ok: true, rule: "ask_every_time", revision: 3 }), { saved: { rule: "ask_every_time", revision: 3 }, selected: "ask_every_time", error: false, refresh: true });
+  assert.deepEqual(afterSave(prev, { ok: false, reason: "stale", rule: "delegate_unless_lower", revision: 5 }), { saved: { rule: "delegate_unless_lower", revision: 5 }, selected: "delegate_unless_lower", error: true, refresh: false });
+  for (const reason of ["off", "forbidden", "invalid", "conflict", "failed"])
+    assert.deepEqual(afterSave(prev, { ok: false, reason }), { saved: prev, selected: "delegate_notify", error: true, refresh: false }, reason);
+  assert.deepEqual(afterSave(prev, "threw"), { saved: prev, selected: "delegate_notify", error: true, refresh: false });
+  assert.equal(startsSave(false, "delegate_notify", "ask_every_time"), true);
+  assert.equal(startsSave(true, "delegate_notify", "ask_every_time"), false, "a second choice while saving is ignored");
+  assert.equal(startsSave(false, "delegate_notify", "delegate_notify"), false, "choosing the stored rule saves nothing");
+});
+
+test("client bundle: rule-choice reaches no server module (db, pg, node:*) through its relative imports", () => {
+  const seen = new Set<string>(), bad: string[] = [];
+  const resolve = (from: string, spec: string) => {
+    const base = path.resolve(path.dirname(from), spec);
+    for (const candidate of [base, `${base}.ts`, `${base}.tsx`, path.join(base, "index.ts")]) if (existsSync(candidate) && !candidate.endsWith("/")) try { if (readFileSync(candidate)) return candidate; } catch { /* directory */ }
+    throw new Error(`unresolved ${spec} from ${from}`);
+  };
+  const walk = (file: string) => {
+    if (seen.has(file)) return; seen.add(file);
+    const src = read(file);
+    // A "use server" module is an action reference in the client bundle, not its code.
+    if (file !== path.resolve("src/components/v3/o/rules/rule-choice.tsx") && /^["']use server["'];/.test(src)) return;
+    for (const m of src.matchAll(/^import\s+(type\s+)?[^;]*?from\s+["']([^"']+)["'];?/gm)) {
+      const [, typeOnly, spec] = m;
+      if (typeOnly) continue;
+      if (spec === "pg" || spec.startsWith("node:") || /(^|\/)db$/.test(spec)) { bad.push(`${path.relative(process.cwd(), file)} → ${spec}`); continue; }
+      if (spec.startsWith(".")) walk(resolve(file, spec));
+    }
+  };
+  walk(path.resolve("src/components/v3/o/rules/rule-choice.tsx"));
+  assert.deepEqual(bad, []);
+  assert.ok([...seen].some(f => f.endsWith("b091-owner-rules-values.ts")));
+  assert.ok(![...seen].some(f => f.endsWith("b091-owner-rules.ts")), "the server module must not be in the client graph");
 });
