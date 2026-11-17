@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -335,23 +336,43 @@ test("GS-32 exemption covers exactly one approved line in the vendor-docs lane",
   assert.equal(withoutVendorDocsIssue('    other: "確認已全額收款並開立",', VENDOR_DOCS_LANE).includes("收款"), true);
 });
 
-// One copy value at a time (a string, template or JSON literal), decoded and with every whitespace and escaped line
-// break removed, so neither a line break nor a long sentence lets the claim through; separate values never combine.
-const LITERAL = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g;
+// One copy value at a time, read by the TypeScript parser (cooked values: escapes and line continuations resolved).
+// A template's literal parts are joined with its expressions left out, so `租多啦${x}收款` is one claim while
+// `${a ? "租多啦" : "收款"}` is two separate values; nested literals are checked on their own. JSON values likewise.
+// Whitespace (incl. U+3000 and line breaks) is removed and there is no distance limit.
 const SUBJECT = /(Condola|租多啦)[\s\S]*(收款|收租|代收)/i;
-const normalize = (value: string) => decode(value).replace(/\\[nrt]/g, "").replace(/[\s\u3000]+/g, "");
-const subjectClaims = (source: string) => [...source.matchAll(LITERAL)].map(m => normalize(m[1] ?? m[2] ?? m[3] ?? "")).filter(v => SUBJECT.test(v));
+const squash = (value: string) => value.replace(/[\s\u3000]+/g, "");
+function copyValues(source: string, fileName = "copy.tsx"): string[] {
+  if (fileName.endsWith(".json")) {
+    const out: string[] = [];
+    const walk = (v: unknown) => { if (typeof v === "string") out.push(v); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+    walk(JSON.parse(source)); return out;
+  }
+  const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.TSX);
+  const out: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)) out.push(node.text);
+    else if (ts.isTemplateExpression(node)) out.push(node.head.text + node.templateSpans.map(span => span.literal.text).join(""));
+    ts.forEachChild(node, visit);
+  };
+  visit(file); return out;
+}
+const subjectClaims = (source: string, fileName?: string) => copyValues(source, fileName).map(squash).filter(v => SUBJECT.test(v));
 
 test("terminology: Condola / 租多啦 is never the subject of 收款, 收租 or 代收 — in any source file, allowlisted lanes included", () => {
-  const hits = sourceFiles().flatMap(file => subjectClaims(read(file)).map(value => `${relative(root, file)}: ${value}`));
+  const hits = sourceFiles().flatMap(file => subjectClaims(read(file), file).map(value => `${relative(root, file)}: ${value}`));
   assert.deepEqual(hits, []);
-  // The rule catches the phrasing it exists for: plain, full-width space, line breaks (real and escaped), long sentences.
-  for (const bad of ['"租多啦幫你收款"', '"Condola 代收租金"', '"由 Condola 收租"', '"租多啦　會幫你收款"', '`租多啦\n會幫你收款`',
-    '"租多啦\\r\\n會幫你收款"', `"租多啦${"，每個月固定在月初提醒租客並且".repeat(4)}代收"`, "'condola collects 收款'"]) {
-    assert.equal(subjectClaims(bad).length, 1, bad);
-  }
-  // Approved strings and separate values do not combine into a claim.
-  for (const ok of ['"租多啦・廠商"', '"收款帳戶是屋主的"', '{ brand: "租多啦", money: "收款" }', '"租多啦・屋主", "待收款"']) {
-    assert.deepEqual(subjectClaims(ok), [], ok);
+  // Caught: plain, full-width space, a real line break in a template, escaped CRLF, LF and CRLF line continuations in
+  // quoted strings and templates, a long sentence, case, a split template, nested templates, JSX text and JSON.
+  const bad = ['x = "租多啦幫你收款";', 'x = "Condola 代收租金";', 'x = "由 Condola 收租";', 'x = "租多啦　會幫你收款";', 'x = `租多啦\n會幫你收款`;',
+    'x = "租多啦\\r\\n會幫你收款";', 'x = "租多啦\\\n會幫你收款";', 'x = "租多啦\\\r\n會幫你收款";', 'x = `租多啦\\\n會幫你收款`;',
+    `x = "租多啦${"，每個月固定在月初提醒租客並且".repeat(4)}代收";`, "x = 'condola collects 收款';",
+    'x = `租多啦${name}幫你收款`;', 'x = `租多啦${`會幫你`}收款`;', 'x = <p>租多啦會幫你收款</p>;'];
+  for (const source of bad) assert.equal(subjectClaims(source).length, 1, source);
+  assert.equal(subjectClaims('{ "a": { "b": "租多啦\\n代收" } }', "copy.json").length, 1);
+  // Not claims: approved strings, separate values, mutually exclusive branches.
+  for (const source of ['x = "租多啦・廠商";', 'x = "收款帳戶是屋主的";', 'x = { brand: "租多啦", money: "收款" };',
+    'x = ["租多啦・屋主", "待收款"];', 'x = `${flag ? "租多啦" : "收款"}`;']) {
+    assert.deepEqual(subjectClaims(source), [], source);
   }
 });
