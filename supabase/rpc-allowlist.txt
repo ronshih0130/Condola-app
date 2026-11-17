@@ -118,3 +118,7 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # ACL/config asserted by the B-065 probe in scripts/check-function-privileges.sh.
 # service-only: app.b065_issuer_view(text,uuid,boolean)
 # service-only: app.b065_save_issuer_type(text,uuid,boolean,uuid,text)
+# B-109b service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-109b probe in scripts/check-function-privileges.sh.
+# service-only: app.b109_split_shares(jsonb,bigint,bigint)
+# service-only: app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)
