@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 
-const FORBIDDEN = ["房東", "房客", "收款", "收租", "即將推出", "測試模式", "範例沙盒", "示範", "欠租", "本月實收"];
+// Ron 2026-11-13 terminology decision: 「收款」 only in the manager nav name and the owner/vendor own-status strings
+// (exact allowlists below); 收租 and 代收 are banned phrases everywhere; Condola is never the subject of 收款.
+const FORBIDDEN = ["房東", "房客", "收款", "收租", "代收", "即將推出", "測試模式", "範例沙盒", "示範", "欠租", "本月實收"];
 
 const PHRASES = [
   "🧪 測試模式",
@@ -331,4 +333,13 @@ test("GS-32 exemption covers exactly one approved line in the vendor-docs lane",
   assert.equal(withoutVendorDocsIssue(lane, VENDOR_DOCS_LANE).includes("收款"), false);
   assert.equal(withoutVendorDocsIssue('    issue: "確認已全額收款並開立", close: "關閉",', "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
   assert.equal(withoutVendorDocsIssue('    other: "確認已全額收款並開立",', VENDOR_DOCS_LANE).includes("收款"), true);
+});
+
+test("terminology: Condola / 租多啦 is never the subject of 收款, 收租 or 代收 — in any source file, allowlisted lanes included", () => {
+  const subject = /(Condola|租多啦)[^"'`\n]{0,40}(收款|收租|代收)/;
+  const hits = sourceFiles().filter(file => subject.test(decode(read(file)))).map(file => relative(root, file));
+  assert.deepEqual(hits, []);
+  // The rule catches the phrasing it exists for.
+  for (const bad of ["租多啦幫你收款", "Condola 代收租金", "由 Condola 收租"]) assert.match(bad, subject);
+  for (const ok of ["租多啦・廠商", "收款帳戶是屋主的"]) assert.doesNotMatch(ok, subject);
 });

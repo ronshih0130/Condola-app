@@ -44,7 +44,8 @@
 .v-token-v3 .v3-st-l { display: inline-flex; align-items: center; white-space: nowrap; max-width: 100%; }
 .v-token-v3 .v3-st-s { font-weight: 400; color: var(--c-text-2); overflow-wrap: anywhere; max-width: 100%; }
 .v-token-v3 .v3-st.next .v3-st-s { color: var(--c-text-3); }
-.v-token-v3 .v3-st-s.v3-st-wait { display: inline-flex; align-items: center; justify-content: center; gap: .15em; }
+.v-token-v3 .v3-st-s.v3-st-wait { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .15em; }
+.v-token-v3 .v3-st-wait .v3-st-t { white-space: nowrap; }
 .v-token-v3 .v3-st-s.v3-st-wait .v3-wait { width: 1em; height: 1em; margin: 0; }
 .v-token-v3 .v3-st .party { display: inline-grid; place-items: center; width: 2.4em; height: 2.4em; flex: none; position: relative; z-index: 1; margin-bottom: 4px; border: 1.5px solid; border-radius: 30%; font-weight: 700; line-height: 1; }
 .v-token-v3 .v3-st .party-m { background: var(--c-party-m-fill); border-color: var(--c-party-m-line); color: var(--c-party-m-fg); }

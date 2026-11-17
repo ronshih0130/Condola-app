@@ -35,7 +35,7 @@ export function RelayRail({ nodes, end, label, locale }: { nodes: RelayNode[]; e
       <span className="v3-st-l">{node.state === "now" ? <TurnTag>{c.steps[node.step]}</TurnTag> : c.steps[node.step]}</span>
       {/* GS-61 / GS-62: a handed-over step shows the clock beside its first sub; never a tick. */}
       {node.subs.map((sub, j) => <span className={`v3-st-s${node.wait && j === 0 ? " v3-st-wait" : ""}`} key={j}>
-        {node.wait && j === 0 ? <WaitMark /> : null}{subText(sub, locale)}</span>)}
+        {node.wait && j === 0 ? <><WaitMark /><span className="v3-st-t">{subText(sub, locale)}</span></> : subText(sub, locale)}</span>)}
     </li>)}
     {end && <li className="v3-st end" data-state="end"><span className="v3-end-pill">{c.end[end]}</span></li>}
   </ol>;
