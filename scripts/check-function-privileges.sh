@@ -525,6 +525,18 @@ BEGIN
   RAISE EXCEPTION 'B-097 supersede trigger missing or disabled';
  END IF;
 END $b097_gateways$;
+-- B-092 OWN-UNITS: the owner units reader is a service-only VOLATILE definer.
+DO $b092_units$
+DECLARE fn record;
+BEGIN
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b092_owner_units(uuid,uuid,text,uuid)'::regprocedure;
+ IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+  OR has_function_privilege('anon',fn.oid,'EXECUTE') OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-092 owner units ACL/config mismatch';
+ END IF;
+END $b092_units$;
 SQL
 
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"

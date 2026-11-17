@@ -1,4 +1,6 @@
 import { OwnerHomeV3 } from "@/components/v3/owner/home";
+import { OwnerUnitsView } from "@/components/v3/owner/units";
+import { ownerUnits } from "@/server/b092-owner-units";
 import { ownerHomeEstimates } from "@/server/owner-home-v3";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
@@ -59,7 +61,8 @@ export default async function OwnerHomePage({ searchParams }: { searchParams: Pr
   const estimate = (await searchParams)?.estimate;
   return <>
     <OwnerHomeV3 name={session.name} locale={session.locale} state={state} estimate={typeof estimate === "string" ? estimate : undefined} />
-    {/* FE-OWNEMPTY: no interim tenant card (an empty white box) when there are no tenant rows. */}
-    {state.status === "ready" && rows.length ? <div className="v3-owner-legacy card pad">{legacy}</div> : null}
+    {/* B-092 RO-UNITS (OWN-33, OQ-095): 「我的物件」 replaces the interim tenant card under v3 (首頁 until 總覽 exists).
+        Unauthorised spaces are absent and no phone is shown (phones belong to the RO-UNIT panel). */}
+    {state.status === "ready" ? <OwnerUnitsView result={await ownerUnits(session)} locale={session.locale} /> : null}
   </>;
 }

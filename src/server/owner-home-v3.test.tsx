@@ -212,6 +212,9 @@ function pageMocks(v3: boolean, pending = [row]) {
     "@/components/v3/o/decided/decided": { DecidedLoading: Stub },
     "@/components/v3/o/decided/page": { DecidedTicketPage: ({ ticketId }: { ticketId: string }) => <i data-decided-view={ticketId} /> },
     "next/navigation": { redirect: (url: string) => { throw new Error(`REDIRECT:${url}`); }, notFound: () => { throw new Error("NOT_FOUND"); } },
+    // B-092 RO-UNITS replaces the interim tenant card under v3 (OQ-095).
+    "@/server/b092-owner-units": { ownerUnits: async () => ({ state: "ready", rows: [] }) },
+    "@/components/v3/owner/units": { OwnerUnitsView: ({ result }: { result: { state: string } }) => <section data-owner-units={result.state} /> },
   };
 }
 const pageFunction = (text: string, mocks: Record<string, unknown>) => compile(text, mocks).default as (props?: unknown) => Promise<React.ReactNode>;
@@ -224,17 +227,18 @@ test("O-HOME / OQ-055: OFF /o and approvals HTML equal baseline; ON preserves ex
     assert.equal(renderToStaticMarkup(await pageFunction(source(path), mocks)(props)), baseline);
   }
   const html = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), pageMocks(true))({ searchParams: Promise.resolve({}) }));
-  const baseline = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), pageMocks(false))({ searchParams: Promise.resolve({}) }));
-  assert.ok(html.includes(baseline)); assert.doesNotMatch(html, /Hidden Name|0912345678/);
-  assert.ok(html.indexOf("owner-task-card") < html.indexOf("v3-owner-legacy"));
+  // B-092 (OWN-33-AC3, OQ-095): under v3 the interim tenant table is gone; 「我的物件」 follows the task cards.
+  assert.doesNotMatch(html, /v3-owner-legacy|<table|Hidden Name|0912345678/);
+  assert.ok(html.indexOf("owner-task-card") < html.indexOf('data-owner-units="ready"'));
   const failed = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), { ...pageMocks(true), "@/server/owner-home-v3": { ownerHomeEstimates: async () => ({ status: "error" }) } })({ searchParams: Promise.resolve({}) }));
-  assert.doesNotMatch(failed, /v3-owner-legacy|0 件/);
+  assert.doesNotMatch(failed, /v3-owner-legacy|data-owner-units|0 件/);
 });
 test("FE-OWNEMPTY: no interim tenant box without tenants; one 首頁 at most; OFF keeps the empty legacy table", async () => {
   const noTenants = { "@/server/queries": { ownerHome: async () => [] } };
   for (const pending of [[], [row]]) {
     const html = renderToStaticMarkup(await pageFunction(source("src/app/o/page.tsx"), { ...pageMocks(true, pending), ...noTenants })({ searchParams: Promise.resolve({}) }));
     assert.doesNotMatch(html, /v3-owner-legacy|<table/); assert.doesNotMatch(html, /首頁/);
+    assert.match(html, /data-owner-units="ready"/);
     assert.equal(html.includes("林小姐，目前沒有要你處理的事。"), pending.length === 0);
     assert.equal(html.includes('data-testid="owner-empty"'), pending.length === 0);
   }
