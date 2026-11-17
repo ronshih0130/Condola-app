@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261116230000_b109b_shared_meter_bills.sql": {
+    addOnly: false,
+    reason: "B-109b (PR-036 = a, Ron 2026-11-16 「Agree on rec」; GS-53 = A). Not add-only: it replaces the existing app.b109_shared_meter_split body in place (same signature and ACL) so its shares come from the new pure app.b109_split_shares (exact div(), remainder to the first) and 依分表度數 prefers a utility run's typed reading. Adds app.b109_split_shares (IMMUTABLE, pure) and app.b109b_run_config (VOLATILE; every row lock first, then full admission; native admin/manager; shared_meter flag), both service-only SECURITY DEFINER with search_path=pg_catalog,pg_temp and EXECUTE to service_role only. No table, grant, policy, flag or data change. Posting applies the split only for one by-room unit with the flag ON; OFF is unchanged.",
+  },
   "supabase/migrations/20261116190000_b112_vendor_address.sql": {
     addOnly: true,
     reason: "B-112 VEN-ADDR (Round 7 batch 4 ven-addr-confirm; VEN-18-AC5/AC6): a signed-in vendor saves their own confirmed address. Adds one private idempotency ledger app.b112_address_saves (RLS on, all privileges revoked from PUBLIC/anon/authenticated/service_role) and migration-owned SECURITY DEFINER functions with search_path pg_catalog, pg_temp: service-only gateways app.b112_vendor_address (read) and app.b112_save_vendor_address (write), plus internal helpers app.b112_enabled and app.b112_account_profile with no EXECUTE for any API role. Admission is the B-026 account session (app.b026_account_actor) plus the caller's own app.b026_vendor_accounts row in that org, gated by vendor_workbench + app.b026_accounts_enabled + effective brand_v3; never a job or document token. The writer updates only vendor_profiles.address (and current_version/updated_at), appends one vendor_profile_versions row carrying the current seal reference forward, writes one audit_log row and one ledger row. No existing function, table grant, policy, column, constraint, flag or data change; 0 outbound. Not RPC-exposed.",

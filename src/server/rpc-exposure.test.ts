@@ -198,3 +198,11 @@ test("B-076a phone-history reader is inventoried service-only, never authenticat
   assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b076a_")));
   assert.doesNotMatch(read("supabase/migrations/20261116170000_b076a_phone_history.sql"), /FUNCTION public\./);
 });
+
+test("B-109b functions are inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b109_split_shares(jsonb,bigint,bigint)", "app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)"])
+    assert.ok(allow.includes(`# service-only: ${signature}`), signature);
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b109b_") || line.includes("b109_split")));
+  assert.doesNotMatch(read("supabase/migrations/20261116230000_b109b_shared_meter_bills.sql"), /FUNCTION public\./);
+});

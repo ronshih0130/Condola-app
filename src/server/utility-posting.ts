@@ -32,6 +32,7 @@ import {
   utilityLineDescription,
 } from "./utility-post";
 import { requireOrgScope } from "./org-guard";
+import { readRunSharedConfig, seededTotalMilli, sharedWeights, splitSharesMilli, type SharedRecord } from "./b109b-run-split";
 
 /**
  * One request, one transaction, one unit. The worker only rounds the rooms in front of it
@@ -70,6 +71,8 @@ type Share = {
   bearer: "tenant" | "owner";
   previousKwh: number | null;
   currentKwh: number | null;
+  /** B-109b: the shared-meter kWh included in kwhMilli (absent when none). */
+  sharedMilli?: number;
 };
 
 export type UtilityRunInput = {
@@ -410,10 +413,23 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
     const roomSum = meterRows.reduce((total, row) => total + rawOf(row.space), 0);
-    const totalMilli = input.totalKwh == null ? roomSum : kwhMilli(input.totalKwh);
+    // B-109b: the shared-meter decision. null whenever the org flag is OFF (nothing below changes then), for even
+    // mode, archived corrections, and corrections of runs computed without it (issued bills never change).
+    const priorShared = prior
+      ? (await maybe<{ shared: boolean }>(client, `SELECT (inputs ? 'sharedMeter') AS shared FROM utility_allocation_runs WHERE org_id=$1 AND id=$2`, [session.orgId, prior.id]))?.shared === true
+      : false;
+    const sharedConfig = evenMode || archivedCorrection || (prior && !priorShared)
+      ? null : await readRunSharedConfig(client, session, unit.id, input.periodStart, input.periodEnd);
+    if (sharedConfig && (sharedConfig.status === "multi_unit" || sharedConfig.status === "whole_unit")) throw new FlowError("errors.sharedMeterUnits");
+    const sharedApplies = sharedConfig?.status === "applies" ? sharedConfig : null;
+    // The first period of a revision may take its total from the main meter minus the revision's starting reading.
+    const seededMilli = sharedApplies ? seededTotalMilli(sharedApplies, input.totalKwh) : null;
+    const typedTotalKwh = seededMilli == null ? input.totalKwh : seededMilli / 1000;
+    const totalMilli = seededMilli ?? (input.totalKwh == null ? roomSum : kwhMilli(input.totalKwh));
     if (Number.isNaN(totalMilli)) throw new FlowError("errors.amount", { field: "i_usage" });
     // PUBLIC_POWER_RULE: owner keeps total kWh − room meters. A negative result is a credit, not a tenant charge.
-    const publicMilli = evenMode || input.totalKwh == null ? 0 : publicKwhMilli(totalMilli, roomSum);
+    // B-109b: with a shared-meter revision in effect, the positive part is split among its rooms instead (below).
+    const publicMilli = evenMode || typedTotalKwh == null ? 0 : publicKwhMilli(totalMilli, roomSum);
     if (Number.isNaN(publicMilli)) throw new FlowError("errors.amount", { field: "i_usage" });
 
     const expanded: {
@@ -428,6 +444,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       bearer: "tenant" | "owner";
       previousKwh: number | null;
       currentKwh: number | null;
+      sharedMilli?: number;
     }[] = [];
     const pushMeter = (rows: { space: SpaceRow; people: Occupant[] }[], method: "submeter" | "by_reading") => {
       for (const row of rows) {
@@ -475,6 +492,37 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     };
     pushMeter(submeter, "submeter");
     pushMeter(byReading, "by_reading");
+
+    // B-109b: split the shared kWh among the revision's rooms (exact, remainder to the first room), and within a room
+    // among its occupants by days as for the room's own kWh. The lines are then priced at the run's rate as usual.
+    let sharedRecord: SharedRecord | null = null;
+    let distributedMilli = 0;
+    if (sharedApplies) {
+      const roomIds = sharedApplies.spaceIds;
+      const rooms = new Map(roomIds.map((id) => {
+        const metered = meterRows.find((row) => row.space.space_id === id);
+        const row = postable.find((r) => r.space.space_id === id);
+        return [id, { typedMilli: metered ? rawOf(metered.space) : null, days: (row?.people ?? []).reduce((t, p) => t + p.days, 0),
+          hasLine: expanded.some((line) => line.space.space_id === id) }];
+      }));
+      const weights = sharedWeights(sharedApplies.method, roomIds, rooms);
+      const sharesMilli = publicMilli > 0 ? await splitSharesMilli(client, weights, publicMilli) : roomIds.map(() => 0);
+      roomIds.forEach((id, index) => {
+        const lines = expanded.filter((line) => line.space.space_id === id);
+        const parts = lines.length === 1 ? [{ key: lines[0].key, kwhMilli: sharesMilli[index] }]
+          : prorateMilli(lines.map((line) => ({ key: line.key, days: line.days })), sharesMilli[index]);
+        if (!parts) throw new FlowError("errors.meter");
+        for (const part of parts) {
+          const line = lines.find((item) => item.key === part.key);
+          if (!line) continue;
+          line.kwhMilli += part.kwhMilli;
+          line.sharedMilli = (line.sharedMilli ?? 0) + part.kwhMilli;
+        }
+      });
+      distributedMilli = publicMilli > 0 ? publicMilli : 0;
+      sharedRecord = { revision: sharedApplies.revision, method: sharedApplies.method, roomIds, weights: weights.map((w) => String(w.weight)),
+        sharesMilli, kwhMilli: distributedMilli, seededTotalMilli: seededMilli };
+    }
 
     let remainderMinor = 0;
     if (evenMode) {
@@ -524,9 +572,11 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       bearer: row.bearer,
       previousKwh: row.previousKwh,
       currentKwh: row.currentKwh,
+      ...(row.sharedMilli ? { sharedMilli: row.sharedMilli } : {}),
     }));
     const usageMilli = evenMode ? totalMilli : roomSum;
-    const publicAmountMinor = evenMode ? 0 : signedUsageAmountMinor(unit.currency, rateMajor, publicMilli);
+    const ownerPublicMilli = publicMilli - distributedMilli;
+    const publicAmountMinor = evenMode ? 0 : signedUsageAmountMinor(unit.currency, rateMajor, ownerPublicMilli);
     if (
       shares.some((share) => !Number.isSafeInteger(share.amountMinor) || !Number.isSafeInteger(share.kwhMilli)) ||
       (unit.currency === "TWD" && shares.some((share) => share.amountMinor % 100 !== 0))
@@ -594,11 +644,11 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     let gapMinor = 0;
     let gapWarn = false;
     let pureGap = 0;
-    if (!evenMode && enteredBill != null && input.totalKwh != null) {
+    if (!evenMode && enteredBill != null && typedTotalKwh != null) {
       pureGap = billGapMinor(unit.currency, rateMajor, totalMilli, enteredBill);
       gapMinor = enteredBill - (roomTotal + publicAmountMinor);
       gapWarn = billGapExceedsWarning(enteredBill, pureGap);
-    } else if (evenMode && enteredBill != null && input.totalKwh != null) {
+    } else if (evenMode && enteredBill != null && typedTotalKwh != null) {
       pureGap = billGapMinor(unit.currency, rateMajor, totalMilli, enteredBill);
       gapWarn = billGapExceedsWarning(enteredBill, pureGap);
     }
@@ -609,7 +659,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     const averageBelow =
       evenMode &&
       enteredBill != null &&
-      input.totalKwh == null &&
+      typedTotalKwh == null &&
       billAverageBelowRate(enteredBill, storedUsageMilli, rateMajor);
     // The rate-cap trigger still blocks a line when the rate is above the bill average.
     // A lower bill is the owner credit 「電費（帳單差額）」, so record that reason and continue.
@@ -641,8 +691,8 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     const inputs = {
       version: "whole-ntd-v2",
       rate: rateMajor,
-      totalKwh: evenMode && input.totalKwh == null ? null : totalMilli / 1000,
-      publicKwhMilli: publicMilli,
+      totalKwh: evenMode && typedTotalKwh == null ? null : totalMilli / 1000,
+      publicKwhMilli: ownerPublicMilli,
       publicAmountMinor,
       billGapMinor: gapMinor,
       billGapWarn: gapWarn,
@@ -656,6 +706,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
         previousKwh: share.previousKwh,
         currentKwh: share.currentKwh,
       })),
+      ...(sharedRecord ? { sharedMeter: sharedRecord } : {}),
     };
     const runId = existing
       ? existing.id
@@ -1261,6 +1312,7 @@ async function writeShares(
         days: share.days,
         previousKwh: share.previousKwh,
         currentKwh: share.currentKwh,
+        ...(share.sharedMilli ? { sharedKwh: share.sharedMilli / 1000 } : {}),
       },
     });
   }

@@ -108,3 +108,8 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # service-only: app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)
 # service-only: app.b110_share_view(text,boolean)
 # service-only: app.b110_share_photo(text,boolean,uuid)
+
+# B-109b service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-109b probe in scripts/check-function-privileges.sh.
+# service-only: app.b109_split_shares(jsonb,bigint,bigint)
+# service-only: app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)
