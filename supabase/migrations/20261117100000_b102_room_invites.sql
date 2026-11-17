@@ -94,6 +94,43 @@ $$;
 REVOKE ALL ON FUNCTION app.unit_line_issue_room(uuid, uuid, uuid, text, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION app.unit_line_issue_room(uuid, uuid, uuid, text, uuid) TO service_role;
 
+-- 4b) Room get-or-create (opening a room panel or the all-rooms list): under the same unit and room locks, a live
+--     unexpired room invite is kept and NULL is returned; only when none exists is p_hash inserted. Two concurrent
+--     openings therefore never revoke each other's link. Explicit rotation stays app.unit_line_issue_room.
+CREATE FUNCTION app.unit_line_ensure_room(p_org uuid, p_unit uuid, p_room uuid, p_hash text, p_issuer uuid)
+  RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+DECLARE v_id uuid;
+BEGIN
+  IF NOT app.unit_line_invite_on(p_org) THEN
+    RAISE EXCEPTION 'flag_off';
+  END IF;
+  PERFORM 1 FROM public.units u
+   WHERE u.id = p_unit AND u.org_id = p_org AND u.rental_mode = 'by_room' AND u.archived_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'not_found';
+  END IF;
+  PERFORM 1 FROM public.rooms r
+   WHERE r.id = p_room AND r.org_id = p_org AND r.unit_id = p_unit AND r.archived_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'not_found';
+  END IF;
+  IF EXISTS (SELECT 1 FROM app.unit_invite_secrets s
+              WHERE s.org_id = p_org AND s.room_id = p_room AND s.revoked_at IS NULL AND s.expires_at > now()) THEN
+    RETURN NULL;
+  END IF;
+  UPDATE app.unit_invite_secrets
+     SET revoked_at = now()
+   WHERE org_id = p_org AND room_id = p_room AND revoked_at IS NULL;
+  INSERT INTO app.unit_invite_secrets(org_id, unit_id, room_id, token_hash, expires_at, issued_by)
+  VALUES (p_org, p_unit, p_room, p_hash, now() + interval '14 days', p_issuer)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION app.unit_line_ensure_room(uuid, uuid, uuid, text, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION app.unit_line_ensure_room(uuid, uuid, uuid, text, uuid) TO service_role;
+
 -- 5) Accept: same signature. The secret decides the target: a room secret binds that room (room still live, unit
 --    still by_room) and counts the seat cap over that room's bindings; a unit secret is unchanged.
 CREATE OR REPLACE FUNCTION app.unit_line_accept(
@@ -194,8 +231,9 @@ BEGIN
     RAISE EXCEPTION 'not_found';
   END IF;
 
+  -- FOR SHARE: a concurrent lease retarget (UPDATE) waits, so the room_mismatch check holds until the writes commit.
   SELECT l.target_room_id INTO v_target_room FROM public.leases l
-   WHERE l.id = p_lease AND l.org_id = p_org AND l.unit_id = p_unit;
+   WHERE l.id = p_lease AND l.org_id = p_org AND l.unit_id = p_unit FOR SHARE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'not_found';
   END IF;

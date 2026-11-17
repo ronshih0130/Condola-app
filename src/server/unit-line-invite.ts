@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { brandV3ReadForOrg } from "./brand-v3";
 import type { Client } from "pg";
 import { guardEffectiveSession, withEffectiveAuthority } from "./b017-custom-role-governance";
 import { svc } from "./db";
@@ -295,6 +296,7 @@ export async function acceptBind(input: {
   }
   const hash = hashInviteToken(input.token);
   const lineHash = createHash("sha256").update(input.lineSub).digest("hex");
+  try { await assertRoomTokenLive(input.orgId, hash); } catch (err) { await noteFailure(input.token, input.ip); throw err; }
   const displayName = input.displayName || input.enteredName || "tenant";
 
   try {
@@ -341,6 +343,17 @@ export async function acceptBind(input: {
   }
 }
 
+/**
+ * B-102: a ROOM invite exists only under brand_v3 (effective v2 + org brand_v3). If the flag is turned off after a
+ * room invite was issued, its token stops working (404 like any unknown token) instead of binding a room that no
+ * staff screen can show. Unit tokens are unaffected.
+ */
+async function assertRoomTokenLive(orgId: string, hash: string): Promise<void> {
+  const room = await withSql(null, async (client) => (await client.query<{ room_id: string | null }>(
+    "SELECT room_id::text FROM app.unit_invite_secrets WHERE org_id = $1 AND token_hash = $2", [orgId, hash])).rows[0]?.room_id ?? null);
+  if (room && !(await brandV3ReadForOrg(orgId).catch(() => false))) throw new FlowError("errors.not_found");
+}
+
 export function existingLoginHash(userId: string): string {
   return createHash("sha256").update("existing-login:" + userId).digest("hex");
 }
@@ -365,6 +378,7 @@ export async function acceptBindExisting(input: {
   }
   const hash = hashInviteToken(input.token);
   const lineHash = existingLoginHash(input.userId);
+  try { await assertRoomTokenLive(input.orgId, hash); } catch (err) { await noteFailure(input.token, input.ip); throw err; }
   const displayName = input.displayName || "tenant";
 
   try {
@@ -519,6 +533,28 @@ export async function listInvites(session: Session, unitId: string): Promise<Rec
  * invite; the SQL gateway re-checks the flag, the unit (by_room, live) and the room (live, in that unit).
  * Issue and rotate are the same operation for a room (the gateway revokes the room's live secret first).
  */
+/**
+ * B-102: get-or-create for a room (opening its panel or the all-rooms list). Atomic in SQL: a live room invite is
+ * kept, so concurrent openings never revoke each other's link. Returns whether a new invite was created.
+ */
+export async function ensureRoomInvite(session: Session, unitId: string, roomId: string): Promise<boolean> {
+  session = await requireInviteStaff(session);
+  if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
+  const token = newInviteToken();
+  const hash = hashInviteToken(token);
+  try {
+    return await withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
+      const { rows } = await client.query<{ id: string | null }>("SELECT app.unit_line_ensure_room($1, $2, $3, $4, $5) AS id", [session.orgId, unitId, roomId, hash, session.userId]);
+      if (!rows[0]?.id) return false;
+      await client.query("SELECT app.unit_line_store_display($1, $2)", [rows[0].id, token]);
+      await audit(client, session.orgId, session.userId, session.role, "unit_invite_secrets", roomId, "insert", "unit_line_issue_room", maskToken(token));
+      return true;
+    }));
+  } catch (err) {
+    mapSqlError(err);
+  }
+}
+
 export async function issueRoomInvite(session: Session, unitId: string, roomId: string): Promise<{ token: string; path: string }> {
   session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");

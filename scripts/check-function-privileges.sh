@@ -531,6 +531,7 @@ DECLARE signature text; fn record;
 BEGIN
  FOREACH signature IN ARRAY ARRAY[
   'app.unit_line_issue_room(uuid,uuid,uuid,text,uuid)',
+  'app.unit_line_ensure_room(uuid,uuid,uuid,text,uuid)',
   'app.unit_line_issue(uuid,uuid,text,uuid)',
   'app.unit_line_rotate(uuid,uuid,text,uuid)',
   'app.unit_line_accept(uuid,uuid,text,uuid,text,text,text,uuid,text)',

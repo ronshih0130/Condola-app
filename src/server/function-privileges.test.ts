@@ -717,12 +717,18 @@ test("B-102 adds one service-only room-issue gateway; replaces the B2 invite fun
   const sql = read("supabase/migrations/20261117100000_b102_room_invites.sql");
   const compact = sql.replace(/\s+/g, "");
   assert.deepEqual([...sql.matchAll(/CREATE (OR REPLACE )?FUNCTION app\.(\w+)/g)].map(m => `${m[1] ? "replace " : "create "}${m[2]}`), [
-    "replace unit_line_issue", "replace unit_line_rotate", "create unit_line_issue_room", "replace unit_line_accept",
+    "replace unit_line_issue", "replace unit_line_rotate", "create unit_line_issue_room", "create unit_line_ensure_room", "replace unit_line_accept",
     "replace unit_line_include_on_lease", "replace unit_bindings_seat_cap_guard"]);
-  assert.ok(compact.includes("REVOKEALLONFUNCTIONapp.unit_line_issue_room(uuid,uuid,uuid,text,uuid)FROMPUBLIC,anon,authenticated;"));
-  assert.ok(compact.includes("GRANTEXECUTEONFUNCTIONapp.unit_line_issue_room(uuid,uuid,uuid,text,uuid)TOservice_role;"));
-  assert.equal((compact.match(/GRANT/g) ?? []).length, 1, "replaced functions keep their ACL; no other grant");
-  assert.equal((sql.match(/SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS/g) ?? []).length, 6);
+  for (const fn of ["unit_line_issue_room", "unit_line_ensure_room"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${fn}(uuid,uuid,uuid,text,uuid)FROMPUBLIC,anon,authenticated;`), fn);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${fn}(uuid,uuid,uuid,text,uuid)TOservice_role;`), fn);
+    assert.ok(read("supabase/rpc-allowlist.txt").includes(`# service-only: app.${fn}(uuid,uuid,uuid,text,uuid)`), fn);
+  }
+  assert.equal((compact.match(/GRANT/g) ?? []).length, 2, "replaced functions keep their ACL; no other grant");
+  assert.equal((sql.match(/SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS/g) ?? []).length, 7);
+  const ensure = sql.slice(sql.indexOf("CREATE FUNCTION app.unit_line_ensure_room"), sql.indexOf("REVOKE ALL ON FUNCTION app.unit_line_ensure_room"));
+  assert.ok(ensure.indexOf("FOR UPDATE;") < ensure.indexOf("s.revoked_at IS NULL AND s.expires_at > now()) THEN\n    RETURN NULL;"), "keep-live check after the locks");
+  assert.match(sql, /WHERE l\.id = p_lease AND l\.org_id = p_org AND l\.unit_id = p_unit FOR SHARE;/);
   // Unit issue/rotate revoke only the unit's own invite; the room gateway checks the flag, a by_room live unit and a live room.
   assert.equal((sql.match(/WHERE org_id = p_org AND unit_id = p_unit AND room_id IS NULL AND revoked_at IS NULL;/g) ?? []).length, 2);
   const room = sql.slice(sql.indexOf("CREATE FUNCTION app.unit_line_issue_room"), sql.indexOf("REVOKE ALL ON FUNCTION app.unit_line_issue_room"));
@@ -736,5 +742,4 @@ test("B-102 adds one service-only room-issue gateway; replaces the B2 invite fun
   assert.match(sql, /BEFORE INSERT OR UPDATE OF status, org_id, unit_id, room_id ON app\.unit_bindings/);
   assert.match(sql, /CREATE UNIQUE INDEX unit_invite_secrets_one_live_per_room\s+ON app\.unit_invite_secrets \(org_id, room_id\) WHERE revoked_at IS NULL AND room_id IS NOT NULL;/);
   assert.match(read("scripts/check-function-privileges.sh"), /B-102 invite function ACL\/config mismatch/);
-  assert.ok(read("supabase/rpc-allowlist.txt").includes("# service-only: app.unit_line_issue_room(uuid,uuid,uuid,text,uuid)"));
 });

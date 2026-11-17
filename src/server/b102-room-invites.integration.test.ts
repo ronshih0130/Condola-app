@@ -7,7 +7,7 @@ import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { cloneTestDatabase } from "./test-database-clone";
 import { insertTestAuthSession } from "./test-auth-session";
 import type { Session } from "./types";
-import { acceptBind, currentInvite, currentRoomInvite, includeOnLease, issueInvite, issueRoomInvite, rotateInvite } from "./unit-line-invite";
+import { acceptBind, acceptBindExisting, currentInvite, currentRoomInvite, includeOnLease, issueInvite, issueRoomInvite, rotateInvite } from "./unit-line-invite";
 import { mutateStaffInvite, requireStaffInviteRoom, staffInviteLive, staffRoomInviteEntries } from "./b040-staff-ui";
 import { staffAllRoomInvites } from "./b102-room-invites";
 
@@ -19,14 +19,16 @@ test.beforeEach(async () => { await query("DELETE FROM app.unit_invite_attempts"
 
 const isFlow = (key: string) => (e: unknown) => e instanceof FlowError && e.key === key;
 const sqlCode = (code: string) => (e: unknown) => String((e as Error).message).includes(code);
-async function flags(invite: boolean, v3: boolean) {
+/** unit_line_invite for both orgs when `invite`; brand_v2/brand_v3 set independently (v2 defaults to v3). */
+async function flags(invite: boolean, v3: boolean, v2 = v3) {
+  delete process.env.BRAND_V2;
   await query(`INSERT INTO platform_settings(key, value) VALUES ('unit_line_invite', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [JSON.stringify(invite ? { enabled: true, allowed_org_ids: [ORG_ID] } : { enabled: false, allowed_org_ids: [] })]);
-  await query(`UPDATE organizations SET feature_flags = coalesce(feature_flags, '{}'::jsonb) || jsonb_build_object('unit_line_invite', $2::boolean, 'brand_v2', $3::boolean, 'brand_v3', $3::boolean) WHERE id = $1`, [ORG_ID, invite, v3]);
+    [JSON.stringify(invite ? { enabled: true, allowed_org_ids: [ORG_ID, ORG2_ID] } : { enabled: false, allowed_org_ids: [] })]);
+  await query(`UPDATE organizations SET feature_flags = coalesce(feature_flags, '{}'::jsonb) || jsonb_build_object('unit_line_invite', $2::boolean, 'brand_v2', $3::boolean, 'brand_v3', $4::boolean) WHERE id = ANY($1::uuid[])`, [[ORG_ID, ORG2_ID], invite, v2, v3]);
 }
-async function admin(): Promise<Session> {
-  const sessionId = await withClient(c => insertTestAuthSession(c, USERS.admin));
-  return { userId: USERS.admin, sessionId, orgId: ORG_ID, liveOrgId: ORG_ID, kind: "staff", role: "admin", environment: "live",
+async function admin(user: string = USERS.admin, org: string = ORG_ID): Promise<Session> {
+  const sessionId = await withClient(c => insertTestAuthSession(c, user));
+  return { userId: user, sessionId, orgId: org, liveOrgId: org, kind: "staff", role: "admin", environment: "live",
     locale: "zh-TW", calendar: "gregorian", leaseId: null, email: "synthetic@example.test", name: "Synthetic" };
 }
 /** A by_room unit with rooms A, B, C (C archived) and a whole_unit unit, in a seed property of ORG_ID. */
@@ -78,7 +80,7 @@ test("gateway refusals: whole_unit unit, archived room, room of another unit, ot
   await assert.rejects(issueRoomInvite(staff, f.unit, f.c), isFlow("errors.not_found"), "archived room");
   await assert.rejects(issueRoomInvite(staff, f.unit, g.a), isFlow("errors.not_found"), "room of another unit");
   const direct = (org: string) => withClient(c => c.query("SELECT app.unit_line_issue_room($1,$2,$3,$4,$5)", [org, f.unit, f.a, randomUUID().replace(/-/g, "").padEnd(64, "0"), USERS.admin]));
-  await assert.rejects(direct(ORG2_ID), sqlCode("flag_off"), "another org has no invite flag");
+  await assert.rejects(direct(ORG2_ID), sqlCode("not_found"), "another org (flag ON there too) never reaches this unit");
   await flags(false, true);
   await assert.rejects(direct(ORG_ID), sqlCode("flag_off"));
   await assert.rejects(issueRoomInvite(staff, f.unit, f.a), isFlow("errors.notFound"));
@@ -117,6 +119,9 @@ test("include: a room's tenants join only a lease of that room (room_mismatch, n
   assert.equal(await parties(), before);
   assert.equal((await query<{ status: string }>("SELECT status::text FROM app.unit_bindings WHERE id = $1", [bound.bindingId])).rows[0].status, "pending");
   await includeOnLease(staff, f.leaseA, f.unit, [bound.bindingId]);
+  const contact = (await query<{ contact_id: string }>("SELECT contact_id::text FROM app.unit_bindings WHERE id = $1", [bound.bindingId])).rows[0].contact_id;
+  assert.deepEqual((await query<{ lease_id: string; role: string }>("SELECT lease_id::text, role::text FROM lease_parties WHERE contact_id = $1 AND lease_id IN ($2,$3)", [contact, f.leaseA, f.leaseB])).rows,
+    [{ lease_id: f.leaseA, role: "occupant" }], "the tenant joins room A's lease only");
   assert.deepEqual((await query<{ status: string; lease_id: string }>("SELECT status::text, lease_id::text FROM app.unit_bindings WHERE id = $1", [bound.bindingId])).rows[0], { status: "lease_linked", lease_id: f.leaseA });
 });
 
@@ -143,4 +148,76 @@ test("staff UI admission: room invites exist only under brand_v3 for live rooms 
   assert.ok(all.rooms.every(r => /^\/join\/[A-Za-z0-9_-]{43}$/.test(r.path)));
   assert.equal(all.rooms[0].path, `/join/${ra!.token}`, "opening the list never replaces an existing room invite");
   await assert.rejects(staffAllRoomInvites(staff, f.whole), isFlow("errors.notFound"));
+});
+
+test("OFF parity: effective v2 ON with brand_v3 OFF hides room invites, and an already-issued room token stops binding (unit tokens still work)", async () => {
+  await flags(true, true);
+  const staff = await admin(), f = await fixture();
+  const ra = await issueRoomInvite(staff, f.unit, f.a), unit = await issueInvite(staff, f.unit);
+  await flags(true, false, true);
+  await assert.rejects(requireStaffInviteRoom(staff, f.a), isFlow("errors.notFound"));
+  assert.deepEqual(await staffRoomInviteEntries(staff, [{ id: f.a, kind: "room" }]), []);
+  await assert.rejects(staffAllRoomInvites(staff, f.unit), isFlow("errors.notFound"));
+  await assert.rejects(accept(f.unit, ra.token, "off"), isFlow("errors.not_found"));
+  await assert.rejects(acceptBindExisting({ orgId: ORG_ID, unitId: f.unit, token: ra.token, userId: USERS.tenant2 }), isFlow("errors.not_found"));
+  assert.equal((await query("SELECT 1 FROM app.unit_bindings WHERE room_id = $1", [f.a])).rowCount, 0, "no room binding while OFF");
+  await accept(f.unit, unit.token, "unit-off");
+  await flags(true, true);
+  await accept(f.unit, ra.token, "back-on");
+  assert.equal((await query("SELECT 1 FROM app.unit_bindings WHERE room_id = $1", [f.a])).rowCount, 1);
+});
+
+test("cross-org: another org's admin, with every flag ON for both orgs, cannot reach, issue, list or include this org's rooms; no token is disclosed", async () => {
+  await flags(true, true);
+  const staff = await admin(), other = await admin(USERS.coastAdmin, ORG2_ID), f = await fixture();
+  const ra = await issueRoomInvite(staff, f.unit, f.a);
+  const before = (await query("SELECT count(*)::int n FROM app.unit_invite_secrets WHERE unit_id = $1", [f.unit])).rows[0];
+  await assert.rejects(requireStaffInviteRoom(other, f.a), isFlow("errors.notFound"));
+  await assert.rejects(issueRoomInvite(other, f.unit, f.a), isFlow("errors.not_found"));
+  await assert.rejects(staffAllRoomInvites(other, f.unit), (e: unknown) => e instanceof FlowError && ["errors.notFound", "errors.forbidden"].includes(e.key));
+  assert.equal(await currentRoomInvite(other, f.unit, f.a), null, "the reader is org-scoped: no token");
+  await assert.rejects(acceptBind({ orgId: ORG2_ID, unitId: f.unit, token: ra.token, lineSub: `x-${randomUUID()}` }), isFlow("errors.not_found"));
+  assert.deepEqual((await query("SELECT count(*)::int n FROM app.unit_invite_secrets WHERE unit_id = $1", [f.unit])).rows[0], before);
+});
+
+test("rental mode: an own room of a whole_unit unit is refused; switching the unit to whole_unit stops its room tokens", async () => {
+  await flags(true, true);
+  const staff = await admin(), f = await fixture();
+  const wholeRoom = (await query<{ id: string }>("INSERT INTO rooms(org_id, unit_id, label) VALUES ($1,$2,'W') RETURNING id::text", [ORG_ID, f.whole])).rows[0].id;
+  await assert.rejects(issueRoomInvite(staff, f.whole, wholeRoom), isFlow("errors.not_found"));
+  await assert.rejects(requireStaffInviteRoom(staff, wholeRoom), isFlow("errors.notFound"));
+  // A by_room unit without leases (the app refuses a mode switch while leases are active).
+  const free = (await query<{ id: string }>("INSERT INTO units(org_id, property_id, label, rental_mode) VALUES ($1,$2,$3,'by_room') RETURNING id::text", [ORG_ID, f.property, `B102F-${randomUUID().slice(0, 8)}`])).rows[0].id;
+  const freeRoom = (await query<{ id: string }>("INSERT INTO rooms(org_id, unit_id, label) VALUES ($1,$2,'F') RETURNING id::text", [ORG_ID, free])).rows[0].id;
+  const rf = await issueRoomInvite(staff, free, freeRoom);
+  await query("UPDATE units SET rental_mode = 'whole_unit' WHERE id = $1", [free]);
+  await assert.rejects(accept(free, rf.token, "mode"), isFlow("errors.not_found"));
+  await assert.rejects(issueRoomInvite(staff, free, freeRoom), isFlow("errors.not_found"));
+});
+
+test("races: two tenants for a room's last seat → exactly one wins; two concurrent openings keep one live room invite", async () => {
+  await flags(true, true);
+  const staff = await admin(), f = await fixture();
+  const ra = await issueRoomInvite(staff, f.unit, f.a);
+  for (let i = 0; i < 3; i++) await accept(f.unit, ra.token, `seat${i}`);
+  const results = await Promise.allSettled([accept(f.unit, ra.token, "race1"), accept(f.unit, ra.token, "race2")]);
+  assert.deepEqual(results.map(r => r.status).sort(), ["fulfilled", "rejected"]);
+  assert.ok(results.some(r => r.status === "rejected" && isFlow("errors.seat_cap")(r.reason)));
+  assert.equal((await query("SELECT 1 FROM app.unit_bindings WHERE room_id = $1 AND status IN ('pending','lease_linked')", [f.a])).rowCount, 4);
+  await Promise.all([mutateStaffInvite(staff, f.unit, { action: "issue" }, f.b), mutateStaffInvite(staff, f.unit, { action: "issue" }, f.b), staffAllRoomInvites(staff, f.unit)]);
+  assert.equal((await query("SELECT 1 FROM app.unit_invite_secrets WHERE room_id = $1", [f.b])).rowCount, 1, "no opening revoked another's link");
+  const live = await currentRoomInvite(staff, f.unit, f.b);
+  assert.equal((await staffAllRoomInvites(staff, f.unit)).rooms.find(r => r.roomId === f.b)?.path, live?.path);
+});
+
+test("one identity: the same LINE account cannot hold two rooms of one unit; a retry of the same token is refused without moving rooms", async () => {
+  await flags(true, true);
+  const staff = await admin(), f = await fixture();
+  const ra = await issueRoomInvite(staff, f.unit, f.a), rb = await issueRoomInvite(staff, f.unit, f.b);
+  const sub = `same-${randomUUID()}`;
+  const first = await acceptBind({ orgId: ORG_ID, unitId: f.unit, token: ra.token, lineSub: sub, displayName: "Same" });
+  await assert.rejects(acceptBind({ orgId: ORG_ID, unitId: f.unit, token: ra.token, lineSub: sub, displayName: "Same" }));
+  await assert.rejects(acceptBind({ orgId: ORG_ID, unitId: f.unit, token: rb.token, lineSub: sub, displayName: "Same" }));
+  const rows = (await query<{ id: string; room_id: string }>("SELECT id::text, room_id::text FROM app.unit_bindings WHERE user_id = $1 AND status IN ('pending','lease_linked')", [first.userId])).rows;
+  assert.deepEqual(rows, [{ id: first.bindingId, room_id: f.a }]);
 });

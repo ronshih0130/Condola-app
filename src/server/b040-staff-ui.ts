@@ -8,7 +8,7 @@ import { listLeases, propertyDetail, type SpaceRow } from "./queries";
 import { isUuid } from "./repair-rules";
 import type { Session } from "./types";
 import { brandV3ReadForOrg } from "./brand-v3";
-import { currentInvite, currentRoomInvite, existingLoginHash, hashInviteToken, includeOnLease, issueInvite, issueRoomInvite, listBindings, removeBinding, rotateInvite, staffCanManage, unitLineInviteOn } from "./unit-line-invite";
+import { currentInvite, currentRoomInvite, ensureRoomInvite, existingLoginHash, hashInviteToken, includeOnLease, issueInvite, issueRoomInvite, listBindings, removeBinding, rotateInvite, staffCanManage, unitLineInviteOn } from "./unit-line-invite";
 
 export type InviteBinding = { id: string; name: string; displayName: string; method: "line" | "email"; joinedAt: string; joinedAtLabel?: string; pending: boolean };
 export type StaffInviteData = {
@@ -159,8 +159,10 @@ export async function mutateStaffInvite(session: Session, unitId: string, input:
   await requireStaffInviteUnit(session, unitId);
   const current = () => roomId ? currentRoomInvite(session, unitId, roomId) : currentInvite(session, unitId);
   if (input.action === "issue") {
-    if (!await current()) {
-      try { if (roomId) await issueRoomInvite(session, unitId, roomId); else await issueInvite(session, unitId); }
+    // B-102: a room's get-or-create is atomic in SQL, so concurrent openings never revoke each other's link.
+    if (roomId) await ensureRoomInvite(session, unitId, roomId);
+    else if (!await current()) {
+      try { await issueInvite(session, unitId); }
       catch (error) { if (!await current()) throw error; }
     }
   } else if (input.action === "rotate") {
