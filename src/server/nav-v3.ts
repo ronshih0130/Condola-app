@@ -96,6 +96,8 @@ export function areaForPath(pathname: string): ManagerAreaV3 | null {
   if (NO_AREA_PATHS_V3.some(href => pathWithin(path, href))) return null;
   if (pathWithin(path, "/m/notifications")) return MANAGER_AREAS_V3[0];
   if (pathWithin(path, "/m/handover")) return MANAGER_AREAS_V3[3];
+  // B-102: a room's own invite (/m/rooms/{room}/invite) sits under 物件與租客, like the unit invite under /m/units.
+  if (pathWithin(path, "/m/rooms")) return MANAGER_AREAS_V3.find(area => area.id === "properties") ?? null;
   return MANAGER_AREAS_V3.find(area => area.links.length
     ? area.links.some(item => pathWithin(path, item.href)) : pathWithin(path, area.href)) ?? null;
 }

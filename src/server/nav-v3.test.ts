@@ -46,6 +46,7 @@ test("MGT-47-AC5: every actual manager page maps exactly once, or is explicitly 
     const matches = MANAGER_AREAS_V3.filter(area => {
       if (route === "/m/notifications") return area.id === "today";
       if (route.startsWith("/m/handover/")) return area.id === "leases";
+      if (route.startsWith("/m/rooms/")) return area.id === "properties";
       return area.links.length ? area.links.some(link => pathWithin(route, link.href)) : pathWithin(route, area.href);
     });
     assert.equal(matches.length, 1, route);
@@ -54,6 +55,8 @@ test("MGT-47-AC5: every actual manager page maps exactly once, or is explicitly 
   for (const path of ["/m/import", "/m/account", "/m/roles", "/m/upgrade"]) assert.equal(areaForPath(path)?.id, "settings");
   assert.equal(areaForPath("/m/notifications")?.id, "today");
   assert.equal(areaForPath("/m/handover/lease")?.id, "leases");
+  assert.equal(areaForPath("/m/rooms/r1/invite/print")?.id, "properties");
+  assert.equal(areaForPath("/m/units/u1/room-invites")?.id, "properties");
   assert.equal(areaForPath("/m/payments-extra"), null);
 });
 

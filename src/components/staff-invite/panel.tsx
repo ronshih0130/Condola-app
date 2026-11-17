@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { staffInviteCopy } from "../../i18n/staff-invite";
-import { inviteDate, staffInviteApiPath, staffInvitePath, type InviteOptions, type InviteScreen } from "../../lib/staff-invite";
+import { inviteDate, staffInviteApiPath, staffInvitePath, staffRoomInviteApiPath, staffRoomInvitePath, type InviteOptions, type InviteScreen } from "../../lib/staff-invite";
 import { inviteQrSvg } from "../../lib/staff-invite-qr";
 import type { InviteBinding, StaffInviteData } from "../../server/b040-staff-ui";
 
@@ -15,7 +15,7 @@ export function StaffInvitePanel({ data, screen, origin, opts = {} }: {
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState(opts.notice === "saved" ? c.saved : opts.notice ? text(opts.notice) : "");
   // M4-Q (mockup shot-m4q-phone): the latest join is shown once, inside the QR card, as 「{name} 剛剛加入（n／4）」.
   const [joinedLine, setJoinedLine] = useState("");
-  const base = staffInvitePath(data.unitId), api = staffInviteApiPath(data.unitId), tenants = `${base}/tenants`;
+  const base = data.roomId ? staffRoomInvitePath(data.roomId) : staffInvitePath(data.unitId), api = data.roomId ? staffRoomInviteApiPath(data.roomId) : staffInviteApiPath(data.unitId), tenants = `${base}/tenants`;
   const date = data.invite ? inviteDate(data.invite.expiresAt) : "";
   const url = data.invite ? `${origin}${data.invite.path}` : "", count = bindings.length;
 
