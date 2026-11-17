@@ -22,3 +22,11 @@ export function afterSave(previous: ChoiceState["saved"], outcome: SaveOutcome):
 export function startsSave(pending: boolean, saved: RenewalRule, next: RenewalRule): boolean {
   return !pending && next !== saved;
 }
+/**
+ * A newer stored revision from the server (after refresh, or a change elsewhere) replaces the local state, but
+ * only while nothing is saving, and never rolls back to an older revision. No remount, so focus stays put.
+ */
+export function syncFromServer(state: ChoiceState, busy: boolean, rule: RenewalRule, revision: number): ChoiceState {
+  if (busy || revision <= state.saved.revision) return state;
+  return { saved: { rule, revision }, selected: rule, error: false };
+}

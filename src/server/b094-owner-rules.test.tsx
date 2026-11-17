@@ -9,7 +9,7 @@ import { ownerRulesAvailable, ownerRulesPage } from "./b094-owner-rules";
 import { ownerNavigationV3 } from "./nav-v3";
 import { RulesError, RulesLoading, RulesNoPerm, RulesView, repairPolicyHref } from "../components/v3/o/rules/rules";
 import { brandV3OwnerRulesCopy } from "../i18n/lanes/brand-v3-owner-rules";
-import { afterSave, startsSave } from "../components/v3/o/rules/rule-choice-state";
+import { afterSave, startsSave, syncFromServer } from "../components/v3/o/rules/rule-choice-state";
 import type { OwnerRuleView } from "./b091-owner-rules";
 import type { Session } from "./types";
 Object.assign(globalThis, { React });
@@ -128,7 +128,8 @@ test("wiring: the route 404s only when off; the layout passes the live flag; the
   assert.match(choice, /if \(!startsSave\(busy\.current \|\| pending, state\.saved\.rule, next\)\) return;/);
   assert.match(choice, /expectedRevision: previous\.revision/);
   assert.match(choice, /catch \{ outcome = "threw"; \}/);
-  assert.match(read("src/components/v3/o/rules/rules.tsx"), /<RenewalRuleChoice key=\{revision\}/);
+  assert.doesNotMatch(read("src/components/v3/o/rules/rules.tsx"), /<RenewalRuleChoice key=/, "no remount on a new revision (focus)");
+  assert.match(choice, /useEffect\(\(\) => \{ setState\(current => syncFromServer\(current, busy\.current, rule, revision\)\); \}, \[rule, revision\]\);/);
 });
 
 test("OWN-34-AC5 save outcomes: success stores; stale shows the stored rule; any other failure or a throw keeps the previous rule; all failures show the error", () => {
@@ -141,6 +142,11 @@ test("OWN-34-AC5 save outcomes: success stores; stale shows the stored rule; any
   assert.equal(startsSave(false, "delegate_notify", "ask_every_time"), true);
   assert.equal(startsSave(true, "delegate_notify", "ask_every_time"), false, "a second choice while saving is ignored");
   assert.equal(startsSave(false, "delegate_notify", "delegate_notify"), false, "choosing the stored rule saves nothing");
+  const state = { saved: prev, selected: "ask_every_time" as const, error: true };
+  assert.deepEqual(syncFromServer(state, false, "delegate_unless_lower", 3), { saved: { rule: "delegate_unless_lower", revision: 3 }, selected: "delegate_unless_lower", error: false });
+  assert.equal(syncFromServer(state, true, "delegate_unless_lower", 3), state, "never while saving");
+  assert.equal(syncFromServer(state, false, "delegate_unless_lower", 2), state, "same revision: keep local state (error stays)");
+  assert.equal(syncFromServer(state, false, "delegate_unless_lower", 1), state, "never back to an older revision");
 });
 
 test("client bundle: rule-choice reaches no server module (db, pg, node:*) through its relative imports", () => {
@@ -155,11 +161,12 @@ test("client bundle: rule-choice reaches no server module (db, pg, node:*) throu
     const src = read(file);
     // A "use server" module is an action reference in the client bundle, not its code.
     if (file !== path.resolve("src/components/v3/o/rules/rule-choice.tsx") && /^["']use server["'];/.test(src)) return;
-    for (const m of src.matchAll(/^import\s+(type\s+)?[^;]*?from\s+["']([^"']+)["'];?/gm)) {
-      const [, typeOnly, spec] = m;
+    for (const m of src.matchAll(/^(?:import|export)\s+(type\s+)?[^;]*?from\s+["']([^"']+)["'];?|import\(\s*["']([^"']+)["']\s*\)/gm)) {
+      const typeOnly = m[1], spec = m[2] ?? m[3];
       if (typeOnly) continue;
       if (spec === "pg" || spec.startsWith("node:") || /(^|\/)db$/.test(spec)) { bad.push(`${path.relative(process.cwd(), file)} → ${spec}`); continue; }
       if (spec.startsWith(".")) walk(resolve(file, spec));
+      else if (spec.startsWith("@/")) walk(resolve(path.resolve("src/x"), `./${spec.slice(2)}`));
     }
   };
   walk(path.resolve("src/components/v3/o/rules/rule-choice.tsx"));

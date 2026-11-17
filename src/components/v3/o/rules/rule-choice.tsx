@@ -1,11 +1,11 @@
 "use client";
-import { useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Locale } from "../../../../i18n";
 import { brandV3OwnerRulesCopy } from "../../../../i18n/lanes/brand-v3-owner-rules";
 import { RENEWAL_RULES, type RenewalRule } from "../../../../server/b091-owner-rules-values";
 import { setOwnerRuleAction } from "../../../../server/b094-owner-rules-actions";
-import { afterSave, startsSave, type ChoiceState } from "./rule-choice-state";
+import { afterSave, startsSave, syncFromServer, type ChoiceState } from "./rule-choice-state";
 
 /**
  * RO-RULES 續租 (OWN-34-AC3/AC5): choosing an option saves it; there is no solid primary. Each option is a
@@ -18,6 +18,8 @@ export function RenewalRuleChoice({ locale, rule, revision }: { locale: Locale; 
   const [state, setState] = useState<ChoiceState>({ saved: { rule, revision }, selected: rule, error: false });
   const [pending, start] = useTransition();
   const busy = useRef(false);
+  // Server props win only when newer and nothing is saving (no remount: focus stays on the pressed button).
+  useEffect(() => { setState(current => syncFromServer(current, busy.current, rule, revision)); }, [rule, revision]);
   function choose(next: RenewalRule) {
     if (!startsSave(busy.current || pending, state.saved.rule, next)) return;
     busy.current = true;

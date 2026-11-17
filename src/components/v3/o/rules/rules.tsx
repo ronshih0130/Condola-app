@@ -54,8 +54,7 @@ export function RulesView({ locale, company, repairs, rule, revision }: {
       </li>)}</ul>
     </div>}
     <div className="rules-card">
-      {/* key: a new stored revision (after refresh) remounts the choice with the server's rule. */}
-      <RenewalRuleChoice key={revision} locale={locale} rule={rule} revision={revision} />
+      <RenewalRuleChoice locale={locale} rule={rule} revision={revision} />
       <p className="rules-note">{copy.note(company)}</p>
     </div>
   </section>;
