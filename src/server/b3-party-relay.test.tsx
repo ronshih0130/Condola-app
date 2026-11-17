@@ -12,7 +12,7 @@ import { ticketRelayCopy } from "../i18n/lanes/brand-v3-ticket-relay";
 // PLT-52-AC6…AC10 (GS-59…GS-63 = A, Ron 2026-11-17): owner O-EST and vendor RV-JOB relays.
 const read = (path: string) => readFileSync(path, "utf8");
 const steps = (html: string) => [...html.matchAll(/<span class="v3-st-l">(?:<span class="turn-tag" aria-current="step">)?([^<]+)/g)].map(m => m[1]);
-const subs = (html: string) => [...html.matchAll(/<span class="v3-st-s[^"]*">(?:<span class="v3-wait"[\s\S]*?<\/span>)?([^<]+)<\/span>/g)].map(m => m[1]);
+const subs = (html: string) => [...html.matchAll(/<span class="v3-st-s[^"]*">(?:<span class="v3-wait"[\s\S]*?<\/span><span class="v3-st-t">)?([^<]+)<\/span>/g)].map(m => m[1]);
 const nowCount = (html: string) => (html.match(/aria-current="step"/g) ?? []).length;
 const PERSON = /陳師傅|張先生|林小姐/;
 
@@ -146,6 +146,8 @@ test("relay CSS: owner/manager rules scoped to html[data-brand-v3]; vendor rules
   const vendor = read("public/brand/v3/vendor-case.css");
   for (const line of vendor.split("\n").filter(line => line.includes("{"))) assert.match(line, /^\.v-token-v3 /, line);
   for (const rule of [".v3-rail", ".v3-st.now", ".turn-tag", ".party-v", ".v3-st-wait"]) assert.ok(vendor.includes(rule), rule);
+  // A handed-over sub never splits the company name: the clock wraps above it instead.
+  for (const css of [read("public/brand/v3/ticket-relay.css"), vendor]) assert.match(css, /\.v3-st-wait \.v3-st-t \{ ?white-space: ?nowrap; ?\}/);
   assert.match(read("src/app/o/page.tsx"), /href="\/brand\/v3\/ticket-relay\.css"/);
 });
 
