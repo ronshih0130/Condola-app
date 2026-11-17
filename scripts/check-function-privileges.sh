@@ -301,6 +301,42 @@ BEGIN
   RAISE EXCEPTION 'B-076a gateway ACL/config mismatch';
  END IF;
 END $b076a_gateway$;
+-- B-110 service-only gateways and internal helpers, migration-owned VOLATILE definers; private table revoked.
+DO $b110_gateways$
+DECLARE signature text; fn record; role_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b110_vendor_share(text,boolean,text,text)',
+  'app.b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean)',
+  'app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)',
+  'app.b110_share_view(text,boolean)',
+  'app.b110_share_photo(text,boolean,uuid)',
+  'app.b110_enabled(uuid,boolean)',
+  'app.b110_expires_at(app.case_shares)',
+  'app.b110_live(app.case_shares,timestamptz)',
+  'app.b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b110_enabled(%' AND signature NOT LIKE 'app.b110_expires_at(%' AND signature NOT LIKE 'app.b110_live(%' AND signature NOT LIKE 'app.b110_share_for(%')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-110 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.case_shares'::regclass) THEN
+  RAISE EXCEPTION 'B-110 table RLS is off';
+ END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  IF has_table_privilege(role_name,'app.case_shares','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege(role_name,'app.case_shares','SELECT,INSERT,UPDATE,REFERENCES') THEN
+   RAISE EXCEPTION 'B-110 table privilege leaked to %',role_name;
+  END IF;
+ END LOOP;
+END $b110_gateways$;
 DO $b104_helpers$
 DECLARE signature text; fn record; table_name text; role_name text;
 BEGIN

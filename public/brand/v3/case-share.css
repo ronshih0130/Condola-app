@@ -1,0 +1,15 @@
+/* B-110 read-only case share page. Scoped to the share shell; tap targets at least 44px. */
+.v-token-v3.v-share .v-share-card { margin-top: 16px; display: grid; gap: 12px; }
+.v-token-v3.v-share .v-share-h { margin: 8px 0 0; font-size: var(--fs-body); color: var(--c-text-2); }
+.v-token-v3.v-share .v-share-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.v-token-v3.v-share .v-share-tiles li { display: grid; gap: 6px; font-size: var(--fs-caption); color: var(--c-text-2); }
+.v-token-v3.v-share .v-share-tiles img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r-md); background: var(--c-surface-2); }
+.v-token-v3.v-share .v-share-docs { margin: 0; padding: 0; list-style: none; }
+.v-token-v3.v-share .v-share-docs .v-share-doc { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding-block: 8px; border-bottom: 1px solid var(--c-border); color: var(--c-text); text-decoration: none; }
+.v-token-v3.v-share .v-share-mark { display: inline-block; padding: 2px 8px; border-radius: var(--r-pill); background: var(--c-surface-2); color: var(--c-text-2); font-size: var(--fs-caption); }
+.v-token-v3.v-share .v-share-void { opacity: .6; }
+.v-token-v3.v-share .v-share-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.v-token-v3.v-share .v-share-gone { margin-top: 16px; display: grid; justify-items: center; gap: 8px; text-align: center; }
+.v-token-v3.v-share .v-share-gone h1 { font-size: var(--fs-h2); }
+.v-token-v3.v-share .v-share-gone p { margin: 0; color: var(--c-text-2); }
+.v-token-v3.v-share .v-share-empty { margin: 0; color: var(--c-text-2); }

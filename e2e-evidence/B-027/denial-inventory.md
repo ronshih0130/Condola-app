@@ -126,6 +126,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/vendor-jobs/[token]/photos/[id]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/case-decision/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/case-photos/confirm/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-jobs/case-share/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/photos/confirm/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/photos/sign/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/version/route.ts:1 | Enumerated only; outside representative selection |
@@ -133,6 +134,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/m/leases/[id]/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/m/leases/[id]/signed/route.ts:1 | HTTP handler executed above |
 | src/app/m/reports/export/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/s/[token]/photos/[id]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/signup/unit-qr/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/t/history/[leaseId]/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/t/lease/signed/[pdfId]/route.ts:1 | Enumerated only; outside representative selection |

@@ -96,6 +96,8 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/vendor-jobs/photos/sign/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-jobs/photos/confirm/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-job-response/route.ts": { POST: "Vendor link token authentication, no user session" },
+  "api/vendor-jobs/case-share/route.ts": { POST: "B-110: B-105 vendor case token through app.b110_vendor_share, no user session" },
+  "s/[token]/photos/[id]/route.ts": { GET: "B-110 public read-only share link through app.b110_share_photo, no user session" },
   "api/vendor-jobs/case-decision/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-jobs/case-photos/confirm/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-job-completion/route.ts": { POST: "Vendor link token authentication, no user session" },

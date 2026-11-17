@@ -96,3 +96,11 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # B-076a service-only inventory (NOT an authenticated RPC allowlist entry).
 # ACL/config asserted by the B-076a probe in scripts/check-function-privileges.sh.
 # service-only: app.b076a_phone_history(uuid,uuid,text,uuid,uuid,bigint,integer)
+
+# B-110 service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-110 probe in scripts/check-function-privileges.sh.
+# service-only: app.b110_vendor_share(text,boolean,text,text)
+# service-only: app.b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean)
+# service-only: app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)
+# service-only: app.b110_share_view(text,boolean)
+# service-only: app.b110_share_photo(text,boolean,uuid)
