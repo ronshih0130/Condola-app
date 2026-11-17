@@ -8,14 +8,8 @@ import type { RepairRule, RepairStatus, RepairTurn } from "../server/b3-repair-t
  */
 export type RelayParty = "t" | "m" | "o" | "v";
 export type RelayStep = "report" | "dispatch" | "in_progress" | "approve_estimate" | "re_estimate" | "do_repair" | "report_cost" | "confirm_cost";
-export type RelaySub = { kind: "name"; text: string } | { kind: "you" } | { kind: "manager" } | { kind: "sent_back" } | { kind: "more_info" }
-  /** GS-59…GS-63 (owner O-EST, vendor RV-JOB relays): role words and the owner/vendor own results. */
-  | { kind: "tenant" } | { kind: "vendor" } | { kind: "approved" } | { kind: "sent" };
-/**
- * `wait`: the step was handed over and the viewer cannot see its progress, so its first sub carries the clock
- * (GS-61, GS-62 R2), never a navy pill. `plain`: an emergency relay with no current marker at all (GS-60).
- */
-export type RelayNode = { party: RelayParty; step: RelayStep; state: "done" | "now" | "next"; subs: RelaySub[]; wait?: boolean; plain?: boolean };
+export type RelaySub = { kind: "name"; text: string } | { kind: "you" } | { kind: "manager" } | { kind: "sent_back" } | { kind: "more_info" };
+export type RelayNode = { party: RelayParty; step: RelayStep; state: "done" | "now" | "next"; subs: RelaySub[] };
 /** Grey end pill after the last step (TK-RELAY-END). Never a tick. */
 export type RelayEnd = "resolved" | "closed" | "cancelled";
 export type RelayWhy =

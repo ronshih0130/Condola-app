@@ -551,38 +551,3 @@ test("ON pages: RV-JOB-ACCEPT replaces the V-TOKEN content; RV-PHOTOS open then 
   assert.ok(closed.includes("這一案已結案，照片不能再改。要補照片，請") && closed.includes("重開這一案。"));
   assert.doesNotMatch(closed, /type="file"|上傳處理/);
 });
-
-// ---- PLT-52-AC9/AC10 (GS-62, GS-63): the vendor relay kind, read with the B-105 case in one RR snapshot ----
-
-test("PLT-52-AC9/AC10: loadVendorCaseRelay — R7b, legacy-cost R2, and no relay before 接單, when restricted, after close, OFF or for a bad token", async () => {
-  const { loadVendorCaseRelay } = await import("./b3-vendor-case-relay");
-  // Approvals ON with no approved estimate: dispatch is not allowed, the projection is restricted (R8-blocked).
-  const blocked = await fixture();
-  assert.equal((await accept(blocked.token)).status, "recorded");
-  assert.equal(await loadVendorCaseRelay(blocked.token), null, "restricted: no relay, never an unmarked one");
-  // Approvals OFF (legacy branch): the accepted, unreported job is the vendor's R7b.
-  await orgFlags(ORG_ID, { repair_approvals: false });
-  try {
-    const f = await fixture();
-    assert.equal(await loadVendorCaseRelay(f.token), null, "accept stage: RV-JOB-ACCEPT has no relay");
-    assert.equal((await accept(f.token)).status, "recorded");
-    assert.deepEqual(await loadVendorCaseRelay(f.token), { kind: "do_repair", reportReady: false }, "R7b: 廠 到場維修, 你");
-    // The 回報完工 readiness comes from the same snapshot as the relay kind.
-    await attachSql(f.token, f, "before");
-    assert.deepEqual(await loadVendorCaseRelay(f.token), { kind: "do_repair", reportReady: true });
-    await db.query("UPDATE public.repair_vendor_jobs SET reported_at=clock_timestamp(),reported_cost_minor=1000 WHERE id=$1", [f.job]);
-    assert.deepEqual(await loadVendorCaseRelay(f.token), { kind: "confirm_cost", reportReady: true }, "R2: 管 核對費用");
-    await db.query("UPDATE public.maintenance_tickets SET status='closed' WHERE id=$1", [f.ticket]);
-    assert.equal(await loadVendorCaseRelay(f.token), null, "terminal: status only");
-
-    const off = await fixture();
-    assert.equal((await accept(off.token)).status, "recorded");
-    await orgFlags(ORG_ID, { brand_v3: false });
-    try { assert.equal(await loadVendorCaseRelay(off.token), null, "brand_v3 OFF"); }
-    finally { await orgFlags(ORG_ID, { brand_v3: true }); }
-    assert.deepEqual(await loadVendorCaseRelay(off.token), { kind: "do_repair", reportReady: false });
-    await db.query("UPDATE public.repair_vendor_jobs SET revoked_at=clock_timestamp() WHERE id=$1", [off.job]);
-    assert.equal(await loadVendorCaseRelay(off.token), null, "revoked link: no turn");
-  } finally { await orgFlags(ORG_ID, { repair_approvals: true }); }
-  for (const token of ["", "short", randomBytes(32).toString("base64url")]) assert.equal(await loadVendorCaseRelay(token), null);
-});

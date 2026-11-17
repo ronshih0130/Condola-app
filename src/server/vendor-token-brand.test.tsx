@@ -90,8 +90,6 @@ function page(text: string, scenario: Scenario) {
       vendorCaseStage: (value: { decision: string | null }) => value.decision === "accepted" ? "open" : "accept",
       // B-097: the 回報完工 stage flag; these scenarios have no 處理前 photo.
       vendorCaseReportReady: () => false },
-    // PLT-52-AC9: the relay read; these scenarios draw none.
-    "@/server/b3-vendor-case-relay": { loadVendorCaseRelay: async () => null, relayForPage: () => null },
     "@/components/v3/vendor/vendor-case": { VendorCaseView: (props: { stage: string; heading: string; company: string }) => <section data-testid="vendor-case" data-stage={props.stage}>{props.heading}|{props.company}</section> },
     "./vendor-job-controls": { VendorJobControls: ({ children }: { children: React.ReactNode }) => <section data-testid="appointment-controls">{children}</section> },
     "./vendor-line-entry": { VendorLineEntry: () => <aside data-testid="line-entry" /> },

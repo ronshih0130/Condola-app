@@ -316,8 +316,8 @@
     "sha256": "49eecb77b4ec3c3d9061b56817e3c3aab36d6e14a4405c6b6633e26266981778"
   },
   "src/app/v/[token]/page.tsx#VendorJobPage": {
-    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93. B-105: adds one vendor_job_v3 case read through the service-only app.b105_vendor_case bearer gateway and an early return to the RV case view; still token-only, no staff role or session. B-097: passes the 回報完工 stage flag (derived from the same case read) to the RV case view; no new authority. PLT-52-AC9/AC10: for an open case only, one more bearer read (loadVendorCaseRelay: token admission, brand_v3, capability, the M3 projection and the B-105 case on one service RR client) yields an allowlisted relay kind (plus that snapshot's 回報完工 readiness, which must match the page's) or null; no new authority, still token-only.",
-    "sha256": "dfd7eebc44d13d1b16aef3f9384b8e0e8bca455048d376fca12e283f8d4b3dd8"
+    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93. B-105: adds one vendor_job_v3 case read through the service-only app.b105_vendor_case bearer gateway and an early return to the RV case view; still token-only, no staff role or session. B-097: passes the 回報完工 stage flag (derived from the same case read) to the RV case view; no new authority.",
+    "sha256": "134f3363d5fb0d79aaafb8c7605a2508e63a95b06ce6e1eae039c7949ff1f82d"
   },
   "src/server/notification-center.ts#centerVendorAdmission": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",

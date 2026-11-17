@@ -13,9 +13,6 @@ import * as rules from "./repair-approval-rules";
 import * as wire from "../app/o/approvals/decision-request";
 import { Illustration } from "../components/v3/illustrations";
 import { WaitMark } from "../components/v3/wait-mark";
-import * as partyRelay from "../components/v3/party-relay";
-import * as ticketRelayLane from "../i18n/lanes/brand-v3-ticket-relay";
-import * as partyRelayLane from "../i18n/lanes/brand-v3-party-relay";
 import type { EstimateRow, OwnerHomeState } from "../components/v3/owner/home";
 
 const requireHere = createRequire(import.meta.url);
@@ -35,13 +32,11 @@ const emergency = compile(source("src/app/o/approvals/emergency.tsx"), { "@/serv
 const uiMocks = { "../../../i18n": i18n, "../../../i18n/lanes/brand-v3": copy, "../../../i18n/repair-approval": repairCopy,
   "../../../server/repair-approval-rules": rules, "../../../app/o/approvals/decision-request": wire,
   "../../../app/o/approvals/emergency": emergency, "../illustrations": { Illustration }, "../wait-mark": { WaitMark },
-  "../party-relay": partyRelay, "../../../i18n/lanes/brand-v3-ticket-relay": ticketRelayLane,
-  "../../../i18n/lanes/brand-v3-party-relay": partyRelayLane,
   "next/navigation": { useRouter: () => ({ refresh() {}, replace() {} }) },
   "next/link": { __esModule: true, default: ({ children, ...props }: React.PropsWithChildren<{ href: string }>) => <a {...props}>{children}</a> } };
 const ui = compile(source("src/components/v3/owner/home.tsx"), uiMocks);
 const Home = ui.OwnerHomeV3 as React.ComponentType<{ name: string; locale: i18n.Locale; state: OwnerHomeState; estimate?: string; summary?: React.ReactNode; overviewHref?: string }>;
-const Panel = ui.EstimatePanel as React.ComponentType<{ row: EstimateRow; locale: i18n.Locale; onClose: () => void; firm?: string | null }>;
+const Panel = ui.EstimatePanel as React.ComponentType<{ row: EstimateRow; locale: i18n.Locale; onClose: () => void; onReturned: () => void }>;
 
 test("O-HOME / O-ROW / OWN-26-AC1…4: uncapped rows, NONAME, no summary or other task types", () => {
   const rows = Array.from({ length: 57 }, (_, n) => ({ ...row, versionId: String(n) }));
@@ -81,7 +76,7 @@ test("FE-OWNEMPTY / O-EMPTY / O-STATES / OWN-26-AC6…8 / P52: zero lead sentenc
 });
 test("O-EST / OWN-31-AC1 / P52: fields, optional version and unlabeled management explanation", () => {
   for (const version of ["1", "2"]) {
-    const html = renderToStaticMarkup(<Panel row={{ ...row, version }} locale="zh-TW" onClose={() => {}} />);
+    const html = renderToStaticMarkup(<Panel row={{ ...row, version }} locale="zh-TW" onClose={() => {}} onReturned={() => {}} />);
     for (const label of ["核准這筆估價", "物件", "項目", "估價", "廠商", "說明", row.scope, row.managementExplanation!]) assert.ok(html.includes(label));
     assert.equal(html.includes("第 2 版"), version === "2");
     assert.doesNotMatch(html, /管理方說明|填收據抬頭|v3-completion/);
@@ -128,12 +123,12 @@ function changeReason(tree: React.ReactNode, value: string) {
 
 test("O-EST / O-EST-BACK / OWN-31-AC1…5: all outcomes post existing API, reasons, retries, conflicts, done clock", async t => {
   for (const outcome of ["approved", "rejected", "more_information"] as const) {
-    let closed: boolean | undefined; const bodies: wire.DecisionRequest[] = [];
+    let returned = 0; let closed: boolean | undefined; const bodies: wire.DecisionRequest[] = [];
     t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
       assert.equal(url, "/api/owner-repair-decision"); assert.equal(init?.method, "POST");
       bodies.push(JSON.parse(String(init?.body))); return Response.json({ status: "recorded" });
     });
-    const h = harness("EstimatePanel", { row, locale: "zh-TW", firm: "安居物業", onClose: (done: boolean) => { closed = done; } });
+    const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose: (done: boolean) => { closed = done; }, onReturned: () => { returned++; } });
     let tree = h.render();
     if (outcome !== "approved") {
       click(tree, "退回"); tree = h.render();
@@ -148,28 +143,13 @@ test("O-EST / O-EST-BACK / OWN-31-AC1…5: all outcomes post existing API, reaso
       tree = h.render(); const html = renderToStaticMarkup(tree);
       assert.match(html, /估價已核准/); assert.match(html, /v3-wait/); assert.match(html, /核准版本/);
       assert.doesNotMatch(html, /owner-primary|completion-check|填收據抬頭/);
-      // PLT-52-AC8 / O-EST-DONE-RELAY: 屋 done 「已核准」, 廠 到場維修 handed over with the clock, no navy, no tick.
-      assert.match(html, /aria-label="報修進度，你已核准，交給廠商到場維修"/);
-      assert.doesNotMatch(html, /turn-tag|aria-current/);
-      assert.match(html, /data-party="v" data-wait="true"/);
       click(tree, "關閉"); assert.equal(closed, true);
-    } else {
-      // PLT-52-AC8 / O-EST-BACK-DONE: the panel stays with the recorded decision, reason and relay until 關閉.
-      tree = h.render(); const html = renderToStaticMarkup(tree);
-      assert.equal(closed, undefined);
-      assert.match(html, /<h2[^>]*>核准這筆估價<\/h2>/); assert.match(html, /決定已記錄。/);
-      const word = outcome === "rejected" ? "退回" : "補資料";
-      assert.match(html, new RegExp(`<dt>你的決定</dt><dd>${word}</dd>`)); assert.match(html, /<dt>原因<\/dt><dd>請補充規格<\/dd>/);
-      assert.match(html, new RegExp(`aria-label="報修進度，你已${word}，交給管理方重新估價"`));
-      assert.match(html, /data-party="m" data-wait="true"/); assert.doesNotMatch(html, /turn-tag|aria-current|owner-primary/);
-      assert.match(html, /重新估價/); assert.match(html, /安居物業/);
-      click(tree, "關閉"); assert.equal(closed, true);
-    }
+    } else assert.equal(returned, 1);
     t.mock.restoreAll();
   }
   let calls = 0; const bodies: wire.DecisionRequest[] = [];
   t.mock.method(globalThis, "fetch", async (_url: RequestInfo | URL, init?: RequestInit) => { bodies.push(JSON.parse(String(init?.body))); calls++; if (calls === 1) throw new Error("offline"); return Response.json({ status: "rejected_conflict" }); });
-  const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose() {} });
+  const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose() {}, onReturned() {} });
   click(h.render(), "退回"); changeReason(h.render(), "保留原因"); await submit(h.render());
   assert.match(renderToStaticMarkup(h.render()), /再試一次/);
   assert.equal(all(h.render()).find(node => node.type === "textarea")!.props.value, "保留原因");
@@ -181,7 +161,7 @@ test("O-EST / O-EST-BACK / OWN-31-AC1…5: all outcomes post existing API, reaso
 test("O-EST-BACK: whitespace and over-limit reasons never write; cancel/close never write", async t => {
   let writes = 0; let closes = 0;
   t.mock.method(globalThis, "fetch", async () => { writes++; return Response.json({ status: "recorded" }); });
-  const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose: () => { closes++; } });
+  const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose: () => { closes++; }, onReturned() {} });
   click(h.render(), "退回");
   for (const value of ["   ", "長".repeat(4001)]) { changeReason(h.render(), value); await submit(h.render()); }
   assert.equal(writes, 0);
@@ -189,18 +169,19 @@ test("O-EST-BACK: whitespace and over-limit reasons never write; cancel/close ne
   click(h.render(), "關閉"); assert.equal(closes, 1); assert.equal(writes, 0);
 });
 
-test("O-HOME / O-EST-DONE: removal after a decided close; pending deep link admission", t => {
+test("O-HOME / O-EST-DONE: removal after approved close or returned success; pending deep link admission", t => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => { callback(0); return 1; };
   t.after(() => { globalThis.requestAnimationFrame = originalFrame; });
-  {
+  for (const returned of [false, true]) {
     const h = harness("OwnerHomeV3", { name: "林小姐", locale: "zh-TW", state: { status: "ready", rows: [row] } });
     const tree = h.render();
     (button(tree, "核准估價").props.onClick as (event: unknown) => void)({ currentTarget: { isConnected: false } });
     const panel = all(h.render()).find(node => typeof node.type === "function" && node.type.name === "EstimatePanel")!;
     assert.ok(panel); assert.match(renderToStaticMarkup(h.render()), /有 1 件/);
-    (panel.props.onClose as (done: boolean) => void)(true);
+    if (returned) (panel.props.onReturned as () => void)(); else (panel.props.onClose as (done: boolean) => void)(true);
     const html = renderToStaticMarkup(h.render()); assert.doesNotMatch(html, /owner-estimate-row|0 件/); assert.match(html, /目前沒有要你處理/);
+    if (returned) assert.match(html, /決定已記錄。/);
   }
   for (const estimate of [row.ticketId, "unknown", "decided"]) {
     const h = harness("OwnerHomeV3", { name: "", locale: "zh-TW", state: { status: "ready", rows: [row] }, estimate });
@@ -307,7 +288,7 @@ test("O-HOME / OWN-26-AC9: reader admission, emergency completeness, errors and 
 });
 test("O-EST emergency fields preserve the existing read-only card content", () => {
   const history = { version_id: row.versionId, emergency_category: "water", emergency_reason: "水管破裂", emergency_photo_refs: [{ id: "photo-reference" }], emergency_notice_intent_at: "2026-11-15T10:00:00Z" } as NonNullable<EstimateRow["emergency"]>;
-  const html = renderToStaticMarkup(<Panel row={{ ...row, emergency: history }} locale="zh-TW" onClose={() => {}} />);
+  const html = renderToStaticMarkup(<Panel row={{ ...row, emergency: history }} locale="zh-TW" onClose={() => {}} onReturned={() => {}} />);
   for (const value of ["緊急例外", "水務", "水管破裂", "photo-reference", "通知意圖", "意圖已記錄"]) assert.ok(html.includes(value));
 });
 test("O-EMPTY drawing 20 / O-STATES / OWN-26-AC3: token-only adopted drawing and scoped responsive CSS", () => {
@@ -328,7 +309,7 @@ test("O-EST / OWN-31-AC5: in-flight duplicate submit is ignored and edited retri
     if (bodies.length === 1) return new Promise<Response>(resolve => { resolveResponse = resolve; });
     return Response.json({ status: "recorded" });
   });
-  const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose() {} });
+  const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose() {}, onReturned() {} });
   click(h.render(), "退回"); changeReason(h.render(), "原原因");
   await submit(h.render()); await submit(h.render()); assert.equal(bodies.length, 1);
   resolveResponse(Response.json({ status: "busy" })); await new Promise(resolve => setImmediate(resolve));
@@ -340,7 +321,7 @@ test("O-EST / OWN-31-AC5: in-flight duplicate submit is ignored and edited retri
 test("O-EST / OWN-31-AC3: Escape closes without submitting", t => {
   let writes = 0; let closed: boolean | undefined; let prevented = false;
   t.mock.method(globalThis, "fetch", async () => { writes++; return Response.json({ status: "recorded" }); });
-  const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose: (done: boolean) => { closed = done; } });
+  const h = harness("EstimatePanel", { row, locale: "zh-TW", onClose: (done: boolean) => { closed = done; }, onReturned() {} });
   const dialog = h.render() as Element;
   (dialog.props.onCancel as (event: { preventDefault(): void }) => void)({ preventDefault() { prevented = true; } });
   assert.equal(prevented, true); assert.equal(closed, false); assert.equal(writes, 0);
@@ -350,38 +331,8 @@ test("B3 O-ROW/O-EST emergency copy keeps actions, omits owner-turn total and co
   const emergency = { ...row, emergency: { emergency_category: "water", emergency_reason: "Fixture", emergency_photo_refs: [], emergency_notice_intent_at: null } as unknown as NonNullable<EstimateRow["emergency"]> };
   const html = renderToStaticMarkup(<Home name="" locale="zh-TW" state={{ status: "ready", rows: [emergency] }} />);
   assert.match(html, /已緊急處理・仍可核准/); assert.doesNotMatch(html, /有 1 件|輪到你/);
-  const panel = renderToStaticMarkup(React.createElement(ui.EstimatePanel as React.ComponentType<{ row: EstimateRow; locale: string; onClose: () => void }>,
-    { row: emergency, locale: "zh-TW", onClose: () => {} }));
+  const panel = renderToStaticMarkup(React.createElement(ui.EstimatePanel as React.ComponentType<{ row: EstimateRow; locale: string; onClose: () => void; onReturned: () => void }>,
+    { row: emergency, locale: "zh-TW", onClose: () => {}, onReturned: () => {} }));
   assert.match(panel, /已緊急處理・仍可核准/); assert.ok(!panel.includes(copy.brandV3OwnerHomeCopy("zh-TW").note));
   assert.match(panel, /核准估價/);
-});
-
-test("PLT-52-AC6 / AC7 (GS-59, GS-60): O-EST relay after the rows, before the note and buttons; emergency has no marker", () => {
-  const html = renderToStaticMarkup(<Panel row={row} locale="zh-TW" onClose={() => {}} firm="安居物業" />);
-  const at = (needle: string) => { const index = html.indexOf(needle); assert.ok(index >= 0, needle); return index; };
-  assert.ok(at("</dl>") < at('data-testid="owner-estimate-relay"'));
-  assert.ok(at('data-testid="owner-estimate-relay"') < at(copy.brandV3OwnerHomeCopy("zh-TW").note));
-  assert.ok(at(copy.brandV3OwnerHomeCopy("zh-TW").note) < at("owner-panel-actions"));
-  assert.match(html, /aria-label="報修進度共五步，現在輪到你核准估價"/); assert.match(html, /安居物業/);
-  // GS-43: the 廠商 row keeps the vendor's name; the relay itself carries role words and the company only.
-  const relay = html.slice(at('data-testid="owner-estimate-relay"'), html.indexOf("</ol>", at('data-testid="owner-estimate-relay"')));
-  assert.ok(!relay.includes(row.vendor!)); assert.match(relay, />廠商</);
-  const emergency = { ...row, emergency: { emergency_category: "water", emergency_reason: "Fixture", emergency_photo_refs: [], emergency_notice_intent_at: null } as unknown as NonNullable<EstimateRow["emergency"]> };
-  const urgent = renderToStaticMarkup(<Panel row={emergency} locale="zh-TW" onClose={() => {}} firm="安居物業" />);
-  assert.match(urgent, /data-relay="emergency"/); assert.match(urgent, /aria-label="報修進度共五步"/);
-  assert.doesNotMatch(urgent, /turn-tag|aria-current|輪到你|第 \d+ 天/); assert.match(urgent, /已緊急處理・仍可核准/);
-});
-
-test("PLT-52-AC6: a conflict answer withdraws the 你 claim (no relay); a retryable failure keeps it", async t => {
-  t.mock.method(globalThis, "fetch", async () => Response.json({ status: "rejected_conflict" }));
-  const h = harness("EstimatePanel", { row, locale: "zh-TW", firm: "安居物業", onClose() {} });
-  assert.match(renderToStaticMarkup(h.render()), /owner-estimate-relay/);
-  await submit(h.render());
-  const html = renderToStaticMarkup(h.render());
-  assert.match(html, /版本或決定已變更，請重新查看。/); assert.doesNotMatch(html, /owner-estimate-relay/);
-  t.mock.restoreAll();
-  t.mock.method(globalThis, "fetch", async () => { throw new Error("offline"); });
-  const retry = harness("EstimatePanel", { row, locale: "zh-TW", firm: "安居物業", onClose() {} });
-  await submit(retry.render());
-  assert.match(renderToStaticMarkup(retry.render()), /owner-estimate-relay/);
 });

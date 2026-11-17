@@ -18,9 +18,6 @@ import { WaitMark } from "../components/v3/wait-mark";
 import * as approvalCopy from "../i18n/repair-approval";
 import * as rules from "./repair-approval-rules";
 import * as wire from "../app/o/approvals/decision-request";
-import * as partyRelay from "../components/v3/party-relay";
-import * as ticketRelayLane from "../i18n/lanes/brand-v3-ticket-relay";
-import * as partyRelayLane from "../i18n/lanes/brand-v3-party-relay";
 import type { CenterAdmission } from "./notification-center";
 import type { Session } from "./types";
 
@@ -262,8 +259,6 @@ function ownerHome() {
   return load("src/components/v3/owner/home.tsx", { "../../../i18n": i18n, "../../../i18n/lanes/brand-v3": copy, "../../../i18n/repair-approval": approvalCopy,
     "../../../server/repair-approval-rules": rules, "../../../app/o/approvals/decision-request": wire, "../../../app/o/approvals/emergency": emergency,
     "../illustrations": { Illustration }, "../wait-mark": { WaitMark }, "next/navigation": { useRouter: () => ({ refresh() {}, replace() {} }) },
-    "../party-relay": partyRelay, "../../../i18n/lanes/brand-v3-ticket-relay": ticketRelayLane,
-    "../../../i18n/lanes/brand-v3-party-relay": partyRelayLane,
     "next/link": link }).OwnerHomeV3 as React.ComponentType<Record<string, unknown>>;
 }
 test("OV-SH-DESK-HEAD: owner 首頁 exposes exactly one h1, the O-HOME sentence; headings step down; the title row is not a heading", () => {

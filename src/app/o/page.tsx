@@ -60,11 +60,7 @@ export default async function OwnerHomePage({ searchParams }: { searchParams: Pr
   const state = await ownerHomeEstimates(session);
   const estimate = (await searchParams)?.estimate;
   return <>
-    {/* PLT-52-AC6…AC8: the O-EST relay reuses the TK-RELAY rail styles (ON-only asset, like /m/tickets/[id]). */}
-    {/* eslint-disable-next-line @next/next/no-css-tags -- ON-only stylesheet, scoped to html[data-brand-v3] */}
-    <link rel="stylesheet" href="/brand/v3/ticket-relay.css" />
-    <OwnerHomeV3 name={session.name} locale={session.locale} state={state} estimate={typeof estimate === "string" ? estimate : undefined}
-      firm={privacy.name} />
+    <OwnerHomeV3 name={session.name} locale={session.locale} state={state} estimate={typeof estimate === "string" ? estimate : undefined} />
     {/* B-092 RO-UNITS (OWN-33, OQ-095): 「我的物件」 replaces the interim tenant card under v3 (首頁 until 總覽 exists).
         Unauthorised spaces are absent and no phone is shown (phones belong to the RO-UNIT panel). */}
     {state.status === "ready" ? <OwnerUnitsView result={await ownerUnits(session)} locale={session.locale} /> : null}

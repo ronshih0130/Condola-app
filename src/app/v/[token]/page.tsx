@@ -16,7 +16,6 @@ import { requestPrefs } from "@/server/session";
 import { vendorLineEntryEnabled } from "@/server/line/vendor-entry";
 import { loadVendorCase, vendorCaseReportReady, vendorCaseStage } from "@/server/b105-vendor-case";
 import { VendorCaseView } from "@/components/v3/vendor/vendor-case";
-import { loadVendorCaseRelay, relayForPage } from "@/server/b3-vendor-case-relay";
 import { VendorJobControls } from "./vendor-job-controls";
 import { VendorLineEntry } from "./vendor-line-entry";
 
@@ -51,13 +50,10 @@ export default async function VendorJobPage({
     ? await resolveVendorNotificationEntry(token) : null;
   if (tokenBrand && vendorCase) {
     const heading = [tokenBrand.property, job.title].filter(Boolean).join("・") || t("i_vendor_page_title");
-    // PLT-52-AC9/AC10: relay only for an open case, read again with the turn in one snapshot (null draws none).
-    const relay = vendorCase.state === "ready" && vendorCaseStage(vendorCase.value) === "open"
-      ? relayForPage(await loadVendorCaseRelay(token), vendorCaseReportReady(vendorCase.value)) : null;
     const caseView = vendorCase.state === "ready" ? <VendorCaseView locale={prefs.locale} token={token} heading={heading}
       company={vendorCase.value.company} stage={vendorCaseStage(vendorCase.value)} presetDate={null}
       scheduledOn={vendorCase.value.scheduledOn} ownerWaitVersion={vendorCase.value.ownerWaitVersion}
-      estimates={vendorCase.value.estimates} report={vendorCaseReportReady(vendorCase.value)} relay={relay} /> : <VendorCaseView locale={prefs.locale} token={token} heading={heading}
+      estimates={vendorCase.value.estimates} report={vendorCaseReportReady(vendorCase.value)} /> : <VendorCaseView locale={prefs.locale} token={token} heading={heading}
       company="" stage="unavailable" presetDate={null} scheduledOn={null} ownerWaitVersion={null} estimates={false} />;
     const caseMatch = await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;
     return <VendorTokenShell locale={prefs.locale} context={tokenBrand} notificationHref={notificationEntry?.href ?? null}
