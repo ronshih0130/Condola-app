@@ -432,6 +432,38 @@ BEGIN
   END LOOP;
  END LOOP;
 END $b065_gateways$;
+-- B-091 owner-rule gateway ACL/config probe; both tables keep RLS and no application grants.
+DO $b091_gateways$
+DECLARE signature text; fn record; role_name text; table_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)',
+  'app.b091_owner_rule_view(uuid,uuid,text,uuid)',
+  'app.b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-091 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ FOREACH table_name IN ARRAY ARRAY['app.b091_owner_rule_revisions','app.b091_owner_rule_commands'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=table_name::regclass) THEN
+   RAISE EXCEPTION 'B-091 table RLS is off: %',table_name;
+  END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'B-091 table grant to % on %',role_name,table_name;
+   END IF;
+  END LOOP;
+ END LOOP;
+END $b091_gateways$;
 SQL
 
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"

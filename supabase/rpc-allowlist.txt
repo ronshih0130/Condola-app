@@ -109,6 +109,11 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # service-only: app.b110_share_view(text,boolean)
 # service-only: app.b110_share_photo(text,boolean,uuid)
 
+# B-091 service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-091 probe in scripts/check-function-privileges.sh.
+# service-only: app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)
+# service-only: app.b091_owner_rule_view(uuid,uuid,text,uuid)
+# service-only: app.b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)
 # B-065 service-only inventory (NOT authenticated RPC allowlist entries).
 # ACL/config asserted by the B-065 probe in scripts/check-function-privileges.sh.
 # service-only: app.b065_issuer_view(text,uuid,boolean)
