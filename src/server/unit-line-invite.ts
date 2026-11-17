@@ -540,6 +540,8 @@ export async function listInvites(session: Session, unitId: string): Promise<Rec
 export async function ensureRoomInvite(session: Session, unitId: string, roomId: string): Promise<boolean> {
   session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
+  // B-102: room invites exist only under brand_v3; every room helper refuses on its own, not only its callers.
+  if (!(await brandV3ReadForOrg(session.orgId).catch(() => false))) throw new FlowError("errors.notFound");
   const token = newInviteToken();
   const hash = hashInviteToken(token);
   try {
@@ -558,6 +560,8 @@ export async function ensureRoomInvite(session: Session, unitId: string, roomId:
 export async function issueRoomInvite(session: Session, unitId: string, roomId: string): Promise<{ token: string; path: string }> {
   session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
+  // B-102: room invites exist only under brand_v3; every room helper refuses on its own, not only its callers.
+  if (!(await brandV3ReadForOrg(session.orgId).catch(() => false))) throw new FlowError("errors.notFound");
   const token = newInviteToken();
   const hash = hashInviteToken(token);
   try {
@@ -580,6 +584,8 @@ export async function currentRoomInvite(
 ): Promise<{ token: string; path: string; expires_at: Date; bound: number; cap: number } | null> {
   session = await requireInviteStaff(session);
   if (!(await unitLineInviteOn(session.orgId))) throw new FlowError("errors.notFound");
+  // B-102: room invites exist only under brand_v3; every room helper refuses on its own, not only its callers.
+  if (!(await brandV3ReadForOrg(session.orgId).catch(() => false))) throw new FlowError("errors.notFound");
   return withSql(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const { rows } = await client.query<{ token: string; expires_at: Date }>(
       `SELECT d.token, s.expires_at

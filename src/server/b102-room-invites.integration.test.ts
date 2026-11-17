@@ -50,7 +50,7 @@ async function liveSecrets(unit: string) {
 }
 
 test("privileges: the room gateway is service-only; replaced functions keep service-only EXECUTE", async () => {
-  for (const fn of ["app.unit_line_issue_room(uuid,uuid,uuid,text,uuid)", "app.unit_line_issue(uuid,uuid,text,uuid)", "app.unit_line_accept(uuid,uuid,text,uuid,text,text,text,uuid,text)", "app.unit_line_include_on_lease(uuid,uuid,uuid,uuid[])"])
+  for (const fn of ["app.unit_line_issue_room(uuid,uuid,uuid,text,uuid)", "app.unit_line_ensure_room(uuid,uuid,uuid,text,uuid)", "app.unit_line_issue(uuid,uuid,text,uuid)", "app.unit_line_accept(uuid,uuid,text,uuid,text,text,text,uuid,text)", "app.unit_line_include_on_lease(uuid,uuid,uuid,uuid[])"])
     for (const role of ["anon", "authenticated", "service_role"])
       assert.equal((await query<{ ok: boolean }>("SELECT has_function_privilege($1, $2, 'EXECUTE') ok", [role, fn])).rows[0].ok, role === "service_role", `${role} ${fn}`);
 });
@@ -164,7 +164,13 @@ test("OFF parity: effective v2 ON with brand_v3 OFF hides room invites, and an a
   await accept(f.unit, unit.token, "unit-off");
   await flags(true, true);
   await accept(f.unit, ra.token, "back-on");
-  assert.equal((await query("SELECT 1 FROM app.unit_bindings WHERE room_id = $1", [f.a])).rowCount, 1);
+  // Control: the same existing account and token succeed once brand_v3 is back ON.
+  await acceptBindExisting({ orgId: ORG_ID, unitId: f.unit, token: ra.token, userId: USERS.tenant2 });
+  assert.equal((await query("SELECT 1 FROM app.unit_bindings WHERE room_id = $1", [f.a])).rowCount, 2);
+  // The helpers refuse on their own while OFF (not only through the routes).
+  await flags(true, false, true);
+  await assert.rejects(issueRoomInvite(staff, f.unit, f.b), isFlow("errors.notFound"));
+  await assert.rejects(currentRoomInvite(staff, f.unit, f.a), isFlow("errors.notFound"));
 });
 
 test("cross-org: another org's admin, with every flag ON for both orgs, cannot reach, issue, list or include this org's rooms; no token is disclosed", async () => {
@@ -177,6 +183,11 @@ test("cross-org: another org's admin, with every flag ON for both orgs, cannot r
   await assert.rejects(staffAllRoomInvites(other, f.unit), (e: unknown) => e instanceof FlowError && ["errors.notFound", "errors.forbidden"].includes(e.key));
   assert.equal(await currentRoomInvite(other, f.unit, f.a), null, "the reader is org-scoped: no token");
   await assert.rejects(acceptBind({ orgId: ORG2_ID, unitId: f.unit, token: ra.token, lineSub: `x-${randomUUID()}` }), isFlow("errors.not_found"));
+  const mine = await accept(f.unit, ra.token, "mine");
+  const bindings = async () => (await query("SELECT id, status, lease_id FROM app.unit_bindings WHERE unit_id = $1 ORDER BY id", [f.unit])).rows;
+  const snapshot = await bindings();
+  await assert.rejects(includeOnLease(other, f.leaseA, f.unit, [mine.bindingId]), isFlow("errors.not_found"));
+  assert.deepEqual(await bindings(), snapshot, "no binding or lease write from the other org");
   assert.deepEqual((await query("SELECT count(*)::int n FROM app.unit_invite_secrets WHERE unit_id = $1", [f.unit])).rows[0], before);
 });
 
@@ -204,10 +215,11 @@ test("races: two tenants for a room's last seat → exactly one wins; two concur
   assert.deepEqual(results.map(r => r.status).sort(), ["fulfilled", "rejected"]);
   assert.ok(results.some(r => r.status === "rejected" && isFlow("errors.seat_cap")(r.reason)));
   assert.equal((await query("SELECT 1 FROM app.unit_bindings WHERE room_id = $1 AND status IN ('pending','lease_linked')", [f.a])).rowCount, 4);
-  await Promise.all([mutateStaffInvite(staff, f.unit, { action: "issue" }, f.b), mutateStaffInvite(staff, f.unit, { action: "issue" }, f.b), staffAllRoomInvites(staff, f.unit)]);
+  const [, , racingList, racingList2] = await Promise.all([mutateStaffInvite(staff, f.unit, { action: "issue" }, f.b), mutateStaffInvite(staff, f.unit, { action: "issue" }, f.b),
+    staffAllRoomInvites(staff, f.unit), staffAllRoomInvites(staff, f.unit)]);
   assert.equal((await query("SELECT 1 FROM app.unit_invite_secrets WHERE room_id = $1", [f.b])).rowCount, 1, "no opening revoked another's link");
   const live = await currentRoomInvite(staff, f.unit, f.b);
-  assert.equal((await staffAllRoomInvites(staff, f.unit)).rooms.find(r => r.roomId === f.b)?.path, live?.path);
+  for (const list of [racingList, racingList2]) assert.equal(list.rooms.find(r => r.roomId === f.b)?.path, live?.path, "each racing list returned the live link");
 });
 
 test("one identity: the same LINE account cannot hold two rooms of one unit; a retry of the same token is refused without moving rooms", async () => {

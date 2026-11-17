@@ -727,7 +727,9 @@ test("B-102 adds one service-only room-issue gateway; replaces the B2 invite fun
   assert.equal((compact.match(/GRANT/g) ?? []).length, 2, "replaced functions keep their ACL; no other grant");
   assert.equal((sql.match(/SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS/g) ?? []).length, 7);
   const ensure = sql.slice(sql.indexOf("CREATE FUNCTION app.unit_line_ensure_room"), sql.indexOf("REVOKE ALL ON FUNCTION app.unit_line_ensure_room"));
-  assert.ok(ensure.indexOf("FOR UPDATE;") < ensure.indexOf("s.revoked_at IS NULL AND s.expires_at > now()) THEN\n    RETURN NULL;"), "keep-live check after the locks");
+  const unitLock = ensure.indexOf("u.rental_mode = 'by_room' AND u.archived_at IS NULL FOR UPDATE;"), roomLock = ensure.indexOf("r.unit_id = p_unit AND r.archived_at IS NULL FOR UPDATE;");
+  const keep = ensure.indexOf("s.revoked_at IS NULL AND s.expires_at > now()) THEN\n    RETURN NULL;");
+  assert.ok(unitLock > 0 && roomLock > unitLock && keep > roomLock, "unit lock, then room lock, then the keep-live check");
   assert.match(sql, /WHERE l\.id = p_lease AND l\.org_id = p_org AND l\.unit_id = p_unit FOR SHARE;/);
   // Unit issue/rotate revoke only the unit's own invite; the room gateway checks the flag, a by_room live unit and a live room.
   assert.equal((sql.match(/WHERE org_id = p_org AND unit_id = p_unit AND room_id IS NULL AND revoked_at IS NULL;/g) ?? []).length, 2);
