@@ -5,6 +5,7 @@ import type { Locale } from "../../../i18n";
 import { vendorCaseCopy } from "../../../i18n/lanes/brand-v3-vendor-case";
 import type { VendorCaseStage } from "../../../server/b105-vendor-case";
 import { createDecisionController } from "./vendor-case-controller";
+import { CaseShareEntry } from "./case-share-entry";
 
 /**
  * B-105 Round 7 batch 3 job content inside the V-TOKEN shell (VEN-26-AC1 amended; GS-25, GS-26, GS-49).
@@ -71,7 +72,9 @@ export function VendorCaseView(props: VendorCaseViewProps) {
     </section>
     {others.length ? <section className="v-token-card v-case-other" aria-labelledby={`${id}-other`}>
       <h2 id={`${id}-other`}>{copy.other}</h2>
-      <ul className="v-case-list">{others.map(item => <li key={item.href}><a href={item.href}>{item.label}</a></li>)}</ul>
+      <ul className="v-case-list">{others.map(item => <li key={item.href}><a href={item.href}>{item.label}</a></li>)}
+        {/* B-110 ven-copy-link: only after close, only when the case has an issued or voided document (VEN-25-AC1). */}
+        {props.stage === "closed" ? <li><CaseShareEntry locale={props.locale} token={props.token} /></li> : null}</ul>
     </section> : null}
   </>;
 }
