@@ -399,6 +399,39 @@ BEGIN
   END IF;
  END LOOP;
 END $b112_gateways$;
+-- B-097 / B-098 service-only gateways, migration-owned VOLATILE definers; private tables revoked.
+DO $b097_gateways$
+DECLARE signature text; fn record; role_name text; table_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b097_vendor_done_view(text,boolean)',
+  'app.b097_vendor_complete(text,boolean,uuid,text)',
+  'app.b097_staff_reopen(uuid,uuid,text,uuid,boolean,uuid,uuid,text)',
+  'app.b098_vendor_tenant_phone(text,boolean)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-097 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ FOREACH table_name IN ARRAY ARRAY['app.b097_completions','app.b097_requests'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=table_name::regclass) THEN
+   RAISE EXCEPTION 'B-097 table RLS is off: %',table_name;
+  END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'B-097 table privilege leaked to % on %',role_name,table_name;
+   END IF;
+  END LOOP;
+ END LOOP;
+END $b097_gateways$;
 SQL
 
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"

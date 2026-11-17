@@ -108,3 +108,10 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # service-only: app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)
 # service-only: app.b110_share_view(text,boolean)
 # service-only: app.b110_share_photo(text,boolean,uuid)
+
+# B-097 / B-098 service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-097 probe in scripts/check-function-privileges.sh.
+# service-only: app.b097_vendor_done_view(text,boolean)
+# service-only: app.b097_vendor_complete(text,boolean,uuid,text)
+# service-only: app.b097_staff_reopen(uuid,uuid,text,uuid,boolean,uuid,uuid,text)
+# service-only: app.b098_vendor_tenant_phone(text,boolean)

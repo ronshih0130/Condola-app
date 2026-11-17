@@ -6,6 +6,7 @@ import { vendorCaseCopy } from "../../../i18n/lanes/brand-v3-vendor-case";
 import type { VendorCaseStage } from "../../../server/b105-vendor-case";
 import { createDecisionController } from "./vendor-case-controller";
 import { CaseShareEntry } from "./case-share-entry";
+import { vendorCloseCopy } from "../../../i18n/lanes/brand-v3-vendor-close";
 
 /**
  * B-105 Round 7 batch 3 job content inside the V-TOKEN shell (VEN-26-AC1 amended; GS-25, GS-26, GS-49).
@@ -26,6 +27,8 @@ export type VendorCaseViewProps = {
   scheduledOn: string | null;
   ownerWaitVersion: number | null;
   estimates: boolean;
+  /** B-097: the 回報完工 stage (accepted, open, a 處理前 photo exists) gets its solid primary to RV-DONE. */
+  report?: boolean;
 };
 
 type Pending = "accepted" | "declined" | null;
@@ -69,6 +72,8 @@ export function VendorCaseView(props: VendorCaseViewProps) {
       <h2 id={`${id}-job`}>{props.heading}</h2>
       {badge ? <dl><div><dt>{copy.status}</dt><dd><span className={`v-case-badge v-case-badge-${badge.tone}`}>{badge.text}</span></dd></div></dl> : null}
       {props.stage === "accept" ? <AcceptDecision {...props} /> : null}
+      {props.stage === "open" && props.report ? <a className="v-token-primary v-case-block" href={`${path}/done`}
+        data-testid="vendor-case-report">{vendorCloseCopy(props.locale).report}</a> : null}
     </section>
     {others.length ? <section className="v-token-card v-case-other" aria-labelledby={`${id}-other`}>
       <h2 id={`${id}-other`}>{copy.other}</h2>

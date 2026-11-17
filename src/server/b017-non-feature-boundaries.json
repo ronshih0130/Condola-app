@@ -123,6 +123,18 @@
     "reason": "Vendor bearer authority; no member session",
     "sha256": "93b0ee792b3461c19897efd5d1ac76e4b5b40da1695cd08c684f7a46ef381f2f"
   },
+  "src/app/api/vendor-jobs/case-complete/route.ts#POST": {
+    "reason": "B-097 vendor bearer authority via the service-only app.b097_vendor_complete gateway (assigned vendor's B-105 case token, accepted and open, vendor_job_v3); no member session",
+    "sha256": "394d941dd1fae3132804e7821df6624049429886ab10bc601be3659431f08ca9"
+  },
+  "src/app/v/[token]/done/page.tsx#VendorCaseDonePage": {
+    "reason": "B-097 vendor bearer page RV-DONE: the same token gateways as /v/[token] (loadVendorJob, vendorTokenBrand, app.b105_vendor_case) plus the service-only app.b097_vendor_done_view read; 404 unless vendor_job_v3 admits this token on an accepted open case; no staff role or session",
+    "sha256": "bad03099c82b2de4f76f7c1070b15f4031726163467e038c9b00f4b3cf6a5f9f"
+  },
+  "src/app/v/[token]/time/page.tsx#VendorCaseTimePage": {
+    "reason": "B-098 vendor bearer page RV-TIME (phone part): the same token gateways as /v/[token] plus the service-only app.b098_vendor_tenant_phone reader; 404 unless the assigned vendor's accepted open case; no staff role or session",
+    "sha256": "9f00c8f1fadfa9d471bdd233d61ae37492a26b952ea0eeff7840bbc3c088ec11"
+  },
   "src/app/api/vendor-jobs/case-decision/route.ts#POST": {
     "reason": "B-105 vendor bearer authority via the service-only app.b105_vendor_decide gateway (token-only admission, vendor_job_v3); no member session",
     "sha256": "aa9e903f8195e757a60b721e19af8ea0649bfd47a2e9d0df9589df6e80213ea5"
@@ -304,8 +316,8 @@
     "sha256": "49eecb77b4ec3c3d9061b56817e3c3aab36d6e14a4405c6b6633e26266981778"
   },
   "src/app/v/[token]/page.tsx#VendorJobPage": {
-    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93. B-105: adds one vendor_job_v3 case read through the service-only app.b105_vendor_case bearer gateway and an early return to the RV case view; still token-only, no staff role or session.",
-    "sha256": "659c69fcba9804f8bd422604f157654cf35e92d82460a5507aebd74f48e0c0f7"
+    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93. B-105: adds one vendor_job_v3 case read through the service-only app.b105_vendor_case bearer gateway and an early return to the RV case view; still token-only, no staff role or session. B-097: passes the 回報完工 stage flag (derived from the same case read) to the RV case view; no new authority.",
+    "sha256": "134f3363d5fb0d79aaafb8c7605a2508e63a95b06ce6e1eae039c7949ff1f82d"
   },
   "src/server/notification-center.ts#centerVendorAdmission": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",
