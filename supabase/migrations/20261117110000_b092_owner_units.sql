@@ -59,36 +59,38 @@ BEGIN
    AND ((s.room_id IS NULL AND l.target_room_id IS NULL) OR l.target_room_id=s.room_id)
   WHERE l.status IN ('active','pending_signature') AND l.start_date <= s.property_today
   ORDER BY s.unit_id, s.room_id, l.start_date DESC, l.id
- ), month_bill AS (
+ ), month_invoices AS (
   -- This month's bill on the property's date: eligible invoices only; confirmed allocations decide paid/partial.
-  SELECT cl.lease_id, sum(i.total_minor) total,
-   sum(coalesce((SELECT sum(pa.amount_minor) FROM public.payment_allocations pa
+  SELECT cl.lease_id, i.total_minor, i.due_date,
+   coalesce((SELECT sum(pa.amount_minor) FROM public.payment_allocations pa
      JOIN public.payments p ON p.id=pa.payment_id AND p.org_id=p_org AND p.status='confirmed'
-     WHERE pa.org_id=p_org AND pa.invoice_id=i.id),0)) confirmed,
-   min(i.due_date) due_date
+     WHERE pa.org_id=p_org AND pa.invoice_id=i.id),0) confirmed
   FROM current_lease cl JOIN spaces s ON s.unit_id=cl.unit_id AND s.room_id IS NOT DISTINCT FROM cl.room_id
   JOIN public.invoices i ON i.org_id=p_org AND i.lease_id=cl.lease_id
   WHERE i.status NOT IN ('draft','void') AND i.total_minor > 0
    AND i.period_start IS NOT NULL AND date_trunc('month', i.period_start)::date = date_trunc('month', s.property_today)::date
-  GROUP BY cl.lease_id
+ ), month_bill AS (
+  -- Overdue is judged on the earliest due date of an invoice that is not fully confirmed (as b3-money-month).
+  SELECT lease_id, sum(total_minor) total, sum(least(confirmed, total_minor)) confirmed,
+   min(due_date) FILTER (WHERE confirmed < total_minor) open_due_date
+  FROM month_invoices GROUP BY lease_id
  ), last_end AS (
   SELECT s.unit_id, s.room_id, max(coalesce(l.end_date, s.created_on)) ended_on
   FROM spaces s JOIN public.leases l ON l.org_id=p_org AND l.unit_id=s.unit_id
    AND ((s.room_id IS NULL AND l.target_room_id IS NULL) OR l.target_room_id=s.room_id)
   WHERE l.status IN ('ended','terminated') AND coalesce(l.end_date, s.created_on) <= s.property_today
   GROUP BY s.unit_id, s.room_id
- ), rows AS (
+ ), states AS (
   SELECT s.property_id, s.property, s.unit_id, s.room_id, s.space_label,
    CASE WHEN cl.lease_id IS NULL THEN NULL WHEN org.show_name THEN tenant.name ELSE NULL END tenant_name,
    cl.rent, cl.currency,
    CASE WHEN cl.lease_id IS NULL THEN 'vacant'
         WHEN b.total IS NULL THEN 'none'
         WHEN b.confirmed >= b.total THEN 'paid'
-        WHEN b.due_date < s.property_today THEN 'overdue'
+        WHEN b.open_due_date < s.property_today THEN 'overdue'
         WHEN b.confirmed > 0 THEN 'partial'
         ELSE 'none' END status,
-   CASE WHEN cl.lease_id IS NOT NULL AND b.total IS NOT NULL AND b.confirmed > 0 AND b.confirmed < b.total
-        THEN b.total - b.confirmed END remaining,
+   b.total - b.confirmed outstanding,
    -- Vacant since the last lease of the space ended, else since the space was created (both on the property's date).
    CASE WHEN cl.lease_id IS NULL THEN greatest(s.property_today - coalesce(le.ended_on, s.created_on), 0) END vacant_days
   FROM spaces s CROSS JOIN org
@@ -100,6 +102,9 @@ BEGIN
    JOIN public.contacts c ON c.id=lp.contact_id AND c.org_id=lp.org_id
    WHERE lp.org_id=p_org AND lp.lease_id=cl.lease_id AND lp.role='primary' ORDER BY c.id LIMIT 1
   ) tenant ON true
+ ), rows AS (
+  -- The remaining amount belongs to 部分已繳・還差 only; an overdue or other row never carries one.
+  SELECT st.*, CASE WHEN st.status='partial' THEN st.outstanding END remaining FROM states st
  )
  SELECT coalesce(jsonb_agg(jsonb_build_object(
    'propertyId',r.property_id,'property',r.property,'unitId',r.unit_id,'roomId',r.room_id,'space',r.space_label,

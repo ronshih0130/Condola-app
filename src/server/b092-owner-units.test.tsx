@@ -50,7 +50,9 @@ test("parser: strict shapes only; any inconsistency is a read failure", () => {
   assert.deepEqual(parseOwnerUnits({ rows: [base, vacant] }), [base, vacant]);
   for (const bad of [null, {}, { rows: [{ ...base, status: "reported" }] }, { rows: [{ ...base, remainingMinor: null }] },
     { rows: [{ ...vacant, tenant: "x" }] }, { rows: [{ ...vacant, vacantDays: -1 }] }, { rows: [{ ...base, rentMinor: "-1" }] },
-    { rows: [{ ...base, vacantDays: 3 }] }, { rows: [{ ...base, phone: undefined, currency: "twd" }] }, { rows: [{ ...base, unitId: "x" }] }])
+    { rows: [{ ...base, vacantDays: 3 }] }, { rows: [{ ...base, currency: "twd" }] }, { rows: [{ ...base, unitId: "x" }] },
+    { rows: [{ ...base, phone: "0912345678" }] }, { rows: [{ ...base, remainingMinor: "0" }] },
+    { rows: [{ ...base, status: "overdue" }] }])
     assert.throws(() => parseOwnerUnits(bad), JSON.stringify(bad));
 });
 

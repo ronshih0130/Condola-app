@@ -32,14 +32,17 @@ function sqlDenied(error: unknown): boolean {
 export function parseOwnerUnits(value: unknown): OwnerUnitRow[] {
   const v = value as { rows?: unknown } | null;
   if (!v || !Array.isArray(v.rows)) throw new Error("Invalid owner units");
+  const keys = ["currency", "property", "propertyId", "remainingMinor", "rentMinor", "roomId", "space", "status", "tenant", "unitId", "vacantDays"];
   for (const r of v.rows as Record<string, unknown>[]) {
-    const status = r?.status as UnitStatus;
+    // Exact key set: an extra field (a phone, say) is a read failure, never passed through.
+    if (!r || typeof r !== "object" || Object.keys(r).sort().join() !== keys.join()) throw new Error("Invalid owner unit row");
+    const status = r.status as UnitStatus;
     const vacant = status === "vacant";
     if (!r || !uuid(r.propertyId) || !str(r.property) || !uuid(r.unitId) || !(r.roomId === null || uuid(r.roomId)) || !str(r.space)
       || !UNIT_STATUSES.includes(status) || !(r.tenant === null || str(r.tenant)) || !minor(r.rentMinor) || !minor(r.remainingMinor)
       || !(r.currency === null || (str(r.currency) && /^[A-Z]{3}$/.test(r.currency)))
       || (vacant ? !(Number.isInteger(r.vacantDays) && (r.vacantDays as number) >= 0) || r.rentMinor !== null || r.tenant !== null : r.vacantDays !== null || r.rentMinor === null || r.currency === null)
-      || ((status === "partial") !== (r.remainingMinor !== null)))
+      || ((status === "partial") !== (r.remainingMinor !== null)) || r.remainingMinor === "0")
       throw new Error("Invalid owner unit row");
   }
   return v.rows as OwnerUnitRow[];

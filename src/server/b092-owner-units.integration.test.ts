@@ -59,10 +59,20 @@ async function fixture() {
   await leased(p, split, ra, { total: 1500000, confirmed: 400000, dueOffset: 5, name: "周小姐" });
   await leased(p, split, rb, { total: 2400000, confirmed: 0, dueOffset: -1, name: "王小明" });
   await leased(p, split, rc, { total: 1000000, confirmed: 0, dueOffset: 5, name: "林先生" });
+  // Room F: partly paid and past due → 逾期未繳, with no remaining amount (the list must stay readable).
+  const rf = await room("F");
+  await leased(p, split, rf, { total: 1000000, confirmed: 300000, dueOffset: -2, name: "黃小姐" });
+  // Room G, this month: one fully paid past-due invoice plus one unpaid future-due invoice → not overdue.
+  const rg = await room("G");
+  const lg = await leased(p, split, rg, { total: 500000, confirmed: 500000, dueOffset: -3, name: "吳先生" });
+  const inv2 = (await query<{ id: string }>(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,period_start,period_end,status)
+    VALUES($1,$2,$3,$4,'TWD',(clock_timestamp() AT TIME ZONE 'Asia/Taipei')::date + 4,date_trunc('month',(clock_timestamp() AT TIME ZONE 'Asia/Taipei'))::date,
+      (date_trunc('month',(clock_timestamp() AT TIME ZONE 'Asia/Taipei')) + interval '1 month - 1 day')::date,'open') RETURNING id::text`, [ORG_ID, p, lg, randomUUID()])).rows[0].id;
+  await query("INSERT INTO invoice_lines(org_id,invoice_id,line_no,charge_type,description,unit_amount_minor,amount_minor) VALUES($1,$2,1,'rent','Synthetic fee',$3::bigint,$3::bigint)", [ORG_ID, inv2, 200000]);
   // Room D: vacant since a lease ended ten days ago on the property's date.
   await query(`INSERT INTO leases(org_id,property_id,unit_id,target_room_id,status,esign_status,start_date,end_date,currency,rent_amount_minor)
     VALUES($1,$2,$3,$4,'ended','imported','2001-01-01',(clock_timestamp() AT TIME ZONE 'Asia/Taipei')::date - 10,'TWD',1)`, [ORG_ID, p, split, rd]);
-  return { p, whole, split, ra, rb, rc, rd, re };
+  return { p, whole, split, ra, rb, rc, rd, re, rf, rg };
 }
 const pick = (rows: OwnerUnitRow[], unit: string, room: string | null) => rows.find(r => r.unitId === unit && r.roomId === room);
 
@@ -79,7 +89,9 @@ test("OWN-33-AC1: one line per authorised space with tenant, rent and this month
   const res = await ownerUnits(o.s, { v3 });
   assert.equal(res.state, "ready"); if (res.state !== "ready") return;
   const rows = res.rows.filter(r => r.propertyId === f.p);
-  assert.deepEqual(rows.map(r => r.space), ["1F", "2F A", "2F B", "2F C", "2F D"], "archived room E is absent");
+  assert.deepEqual(rows.map(r => r.space), ["1F", "2F A", "2F B", "2F C", "2F D", "2F F", "2F G"], "archived room E is absent");
+  assert.deepEqual([pick(rows, f.split, f.rf)?.status, pick(rows, f.split, f.rf)?.remainingMinor], ["overdue", null], "partly paid and past due");
+  assert.deepEqual([pick(rows, f.split, f.rg)?.status, pick(rows, f.split, f.rg)?.remainingMinor], ["partial", "200000"], "a paid past-due invoice does not make the open future one overdue");
   assert.deepEqual(pick(rows, f.whole, null), { propertyId: f.p, property: rows[0].property, unitId: f.whole, roomId: null, space: "1F", tenant: "陳怡君", rentMinor: "1850000", currency: "TWD", status: "paid", remainingMinor: null, vacantDays: null });
   assert.deepEqual([pick(rows, f.split, f.ra)?.status, pick(rows, f.split, f.ra)?.remainingMinor], ["partial", "1100000"]);
   assert.equal(pick(rows, f.split, f.rb)?.status, "overdue");
@@ -113,10 +125,26 @@ test("OWN-33-AC4 / PR-015: former, future and archived owners, non-owner contact
   const mine = await ownerUnits(current.s, { v3 });
   assert.equal(mine.state, "ready"); if (mine.state !== "ready") return;
   assert.ok(mine.rows.every(r => r.propertyId !== g.p), "another owner's property is absent");
-  for (const who of [former, future, archived, notOwner]) {
+  // Each actor is admitted through a current ownership of ANOTHER property, so per-property filtering is what hides g.
+  for (const who of [former, future, notOwner]) {
+    const h = await fixture();
+    // One live owner contact per user and org: former/future reuse theirs; the non-owner gets an owner contact.
+    const valid = who === notOwner
+      ? (await query<{ id: string }>("INSERT INTO contacts(org_id,user_id,is_owner,display_name) VALUES($1,$2,true,'Synthetic owner 2') RETURNING id::text", [ORG_ID, who.user])).rows[0].id
+      : who.contact;
+    await own(h.p, valid);
     const res = await ownerUnits(who.s, { v3 });
-    assert.ok(res.state === "forbidden" || (res.state === "ready" && res.rows.every(r => r.propertyId !== g.p)), JSON.stringify(res));
+    assert.equal(res.state, "ready", JSON.stringify(res)); if (res.state !== "ready") continue;
+    assert.ok(res.rows.some(r => r.propertyId === h.p), "the valid ownership is listed");
+    assert.ok(res.rows.every(r => r.propertyId !== g.p), "the disallowed ownership is not");
   }
+  // The archived owner contact: the same user also holds a live owner contact for another property.
+  const h = await fixture();
+  const live = (await query<{ id: string }>("INSERT INTO contacts(org_id,user_id,is_owner,display_name) VALUES($1,$2,true,'Synthetic owner 3') RETURNING id::text", [ORG_ID, archived.user])).rows[0].id;
+  await own(h.p, live);
+  const res = await ownerUnits(archived.s, { v3 });
+  assert.equal(res.state, "ready"); if (res.state !== "ready") return;
+  assert.ok(res.rows.some(r => r.propertyId === h.p) && res.rows.every(r => r.propertyId !== g.p));
 });
 
 test("denial: anon (no session), revoked session, another org's owner, staff, and a wrong env/org tuple", async () => {
