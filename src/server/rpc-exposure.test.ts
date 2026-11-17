@@ -201,7 +201,7 @@ test("B-076a phone-history reader is inventoried service-only, never authenticat
 
 test("B-091 owner-rule gateways are inventoried service-only, never authenticated RPC", () => {
   const allow = read("supabase/rpc-allowlist.txt");
-  for (const signature of ["app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer)", "app.b091_owner_rule_view(uuid,uuid,text,uuid)",
+  for (const signature of ["app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)", "app.b091_owner_rule_view(uuid,uuid,text,uuid)",
     "app.b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)"]) assert.ok(allow.includes(`# service-only: ${signature}`), signature);
   assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b091_")));
   assert.doesNotMatch(read("supabase/migrations/20261116240000_b091_owner_rules.sql"), /FUNCTION public\./);

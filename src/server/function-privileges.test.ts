@@ -578,12 +578,16 @@ test("B-091 adds two RLS tables with no application grants, the owner_rules flag
   // Locked sets are aggregated in id order (array comparison), never in subquery or planner order.
   assert.equal((set.match(/array_agg\(z\.id ORDER BY z\.id\)/g) ?? []).length, 3);
   assert.doesNotMatch(set, /array_agg\(z\.id\)/);
+  // Every reserved id is bound to the raw payload, not only to its lossy normalisation.
+  assert.match(sql, /payload_fingerprint text NOT NULL CHECK \(payload_fingerprint ~ '\^\[0-9a-f\]\{64\}\$'\)/);
+  assert.match(set, /fingerprint:=encode\(sha256\(convert_to\(jsonb_build_array\(p_payload_fingerprint,p_rule,p_expected_revision\)::text,'UTF8'\)\),'hex'\);/);
+  assert.match(set, /OR prior\.payload_fingerprint IS DISTINCT FROM fingerprint THEN/);
   assert.match(set, /po\.effective_from <= \(clock_timestamp\(\) AT TIME ZONE o\.timezone\)::date/);
   assert.match(sql, /REVOKE ALL ON app\.b091_owner_rule_revisions, app\.b091_owner_rule_commands FROM PUBLIC, anon, authenticated, service_role;/);
   assert.match(sql, /VALUES \('owner_rules', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\)\nON CONFLICT \(key\) DO NOTHING;/);
   assert.doesNotMatch(sql.replace(/--[^\n]*/g, ""), /GRANT[^;]*\bON (?:TABLE )?app\.b091_owner_rule_(?:revisions|commands)|CREATE OR REPLACE|DROP |CREATE POLICY/i);
   const compact = sql.replace(/\s+/g, "");
-  for (const signature of ["b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer)", "b091_owner_rule_view(uuid,uuid,text,uuid)", "b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)"]) {
+  for (const signature of ["b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)", "b091_owner_rule_view(uuid,uuid,text,uuid)", "b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)"]) {
     assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
     assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
     assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));

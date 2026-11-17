@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { svc } from "./db";
-import { ownerRuleView, setOwnerRule, staffRuleChanges } from "./b091-owner-rules";
+import { ownerRulePayloadFingerprint, ownerRuleView, setOwnerRule, staffRuleChanges } from "./b091-owner-rules";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { resetAndSeed } from "./seed";
 import { cloneTestDatabase } from "./test-database-clone";
@@ -15,7 +15,7 @@ import type { Session } from "./types";
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
 let db: Client;
-const SET = "app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer)";
+const SET = "app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)";
 const VIEW = "app.b091_owner_rule_view(uuid,uuid,text,uuid)";
 const STAFF = "app.b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)";
 const sid: Record<string, string> = {};
@@ -39,7 +39,9 @@ async function call<T>(fn: string, who: string, args: unknown[], opts: Opts = {}
     return (await client.query(`SELECT ${fn.split("(")[0]}($1,$2,$3,$4${params ? "," + params : ""}) r`, [org, opts.live ?? org, env, sid[who], ...args])).rows[0].r;
   }, { isolation: "read committed" });
 }
-const set = (who: string, rule: string | null, expected: number | null, request = randomUUID(), opts: Opts = {}) => call<Result>(SET, who, [request, rule, expected], opts);
+/** Direct gateway call; the payload fingerprint defaults to the one setOwnerRule computes for these raw values. */
+const set = (who: string, rule: string | null, expected: number | null, request = randomUUID(), opts: Opts & { fingerprint?: string } = {}) =>
+  call<Result>(SET, who, [request, rule, expected, ("fingerprint" in opts ? opts.fingerprint : ownerRulePayloadFingerprint({ rule, expectedRevision: expected }))], opts);
 const view = (who: string, opts: Opts = {}) => call<Record<string, unknown> | null>(VIEW, who, [], opts);
 const staff = (who: string, contact: string | null = null, opts: Opts = {}) => call<Record<string, unknown> | null>(STAFF, who, [contact, null, 20], opts);
 const snapshot = async () => (await db.query(`SELECT
@@ -232,6 +234,53 @@ test("idempotency: every request id is reserved with its outcome; replay; confli
   assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: tsId, rule: "ask_every_time", expectedRevision: r + 2 }, { v3 }), { ok: false, reason: "conflict" });
 });
 
+test("a valid id with an invalid expected revision: reserved invalid, replays the same, any other payload under it (another invalid one or the corrected one) is a conflict; nothing written", async () => {
+  await flag(true);
+  const r = await current(ownerContact);
+  const rule = (await view("owner"))!.rule === "ask_every_time" ? "delegate_notify" : "ask_every_time";
+  const id = randomUUID();
+  const commandOf = async () => (await db.query("SELECT outcome,requested_rule,expected_revision,payload_fingerprint,md5(row_to_json(c)::text) h FROM app.b091_owner_rule_commands c WHERE request_id=$1", [id])).rows;
+  const before = await snapshot();
+  assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: id, rule, expectedRevision: -1 }, { v3 }), { ok: false, reason: "invalid" });
+  const reserved = await commandOf();
+  assert.equal(reserved.length, 1);
+  assert.deepEqual([reserved[0].outcome, reserved[0].requested_rule, reserved[0].expected_revision], ["invalid", rule, null], "reserved invalid (the bad revision normalises to NULL)");
+  const after = await snapshot();
+  assert.deepEqual([after.revisions, after.audit], [before.revisions, before.audit], "no revision, no audit");
+  await unchanged("replays and conflicts under the reserved id", async () => {
+    // The same raw payload replays the same answer.
+    assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: id, rule, expectedRevision: -1 }, { v3 }), { ok: false, reason: "invalid" });
+    assert.deepEqual(await set("owner", rule, null, id, { fingerprint: ownerRulePayloadFingerprint({ rule, expectedRevision: -1 }) }), { status: "invalid", replayed: true });
+    // Other invalid payloads that normalise to the same NULL are conflicts, not replays.
+    for (const bad of [-2, 1.5, 2147483648, Number.NaN, "1", null, undefined])
+      assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: id, rule, expectedRevision: bad as never }, { v3 }), { ok: false, reason: "conflict" }, String(bad));
+    // The corrected input is a conflict too.
+    assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: id, rule, expectedRevision: r }, { v3 }), { ok: false, reason: "conflict" });
+  });
+  assert.deepEqual(await commandOf(), reserved, "the reserved command is immutable");
+  // Two different over-long rules normalise to the same NULL: the second is a conflict (TS fingerprint) ...
+  const longId = randomUUID();
+  assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: longId, rule: "x".repeat(65), expectedRevision: r }, { v3 }), { ok: false, reason: "invalid" });
+  await unchanged("over-long rules", async () => {
+    assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: longId, rule: "x".repeat(65), expectedRevision: r }, { v3 }), { ok: false, reason: "invalid" });
+    assert.deepEqual(await setOwnerRule(owner("owner"), { requestId: longId, rule: "y".repeat(65), expectedRevision: r }, { v3 }), { ok: false, reason: "conflict" });
+  });
+  // ... and the gateway's own normalisation is protected as well: the same caller fingerprint with another raw
+  // over-long rule text is a conflict.
+  const gwId = randomUUID(), fp = ownerRulePayloadFingerprint({ rule: "opaque", expectedRevision: r });
+  assert.deepEqual(await set("owner", "a".repeat(80), r, gwId, { fingerprint: fp }), { status: "invalid", replayed: false });
+  await unchanged("gateway normalisation", async () => {
+    assert.deepEqual(await set("owner", "a".repeat(80), r, gwId, { fingerprint: fp }), { status: "invalid", replayed: true });
+    assert.deepEqual(await set("owner", "b".repeat(80), r, gwId, { fingerprint: fp }), { status: "conflict" });
+    assert.deepEqual(await set("owner", "a".repeat(80), r, gwId, { fingerprint: "0".repeat(64) }), { status: "conflict" });
+  });
+  // A missing or malformed fingerprint is refused before anything is reserved.
+  await unchanged("fingerprint required", async () => {
+    for (const bad of [null, "", "XYZ", "A".repeat(64)]) await assert.rejects(set("owner", rule, r, randomUUID(), { fingerprint: bad as never }), code("22023"), String(bad));
+  });
+  assert.equal(await current(ownerContact), r, "nothing saved by any of these");
+});
+
 test("conflict on the actor alone and on the owner contact alone", async () => {
   await flag(true);
   const r = await current(ownerContact);
@@ -378,16 +427,28 @@ test("lock-wait races: a session revoked, an ownership ended or the flag turned 
   assert.deepEqual(await pending, { status: "disabled" });
   assert.deepEqual(await snapshot(), before);
   await flag(true);
-  // 4. Two writers for the same owner with the same expected revision: the second waits on the first's contact lock,
-  //    then answers stale; nothing is lost or duplicated.
+  // 4. Two writers for the same owner, on two different sessions of that owner, with the same expected revision:
+  //    nothing else they share is locked exclusively, so the second waits on the first's contact row lock only, then
+  //    answers stale; nothing is lost or duplicated. The first writer's transaction always closes.
   const r = await current(ownerContact);
+  await session("ownerSecond", USERS.owner);
   const first = await holder();
-  await first.query("SET LOCAL ROLE service_role");
-  await first.query("SELECT set_config('app.active_org_id',$1,true),set_config('app.env','live',true)", [ORG_ID]);
-  const firstResult = (await first.query(`SELECT ${SET.split("(")[0]}($1,$1,'live',$2,$3,$4,$5) r`, [ORG_ID, sid.owner, randomUUID(), r % 2 ? "ask_every_time" : "delegate_unless_lower", r])).rows[0].r;
-  assert.equal(firstResult.status, "saved");
-  pending = setOwnerRule(owner("owner"), { requestId: randomUUID(), rule: "delegate_notify", expectedRevision: r }, { v3 }).then(x => x, e => e);
-  await waitForBlocked(first); await first.query("COMMIT"); await first.end();
+  let firstResult: Result;
+  try {
+    await first.query("SET LOCAL ROLE service_role");
+    await first.query("SELECT set_config('app.active_org_id',$1,true),set_config('app.env','live',true)", [ORG_ID]);
+    const firstRule = r % 2 ? "ask_every_time" : "delegate_unless_lower";
+    firstResult = (await first.query(`SELECT ${SET.split("(")[0]}($1,$1,'live',$2,$3,$4,$5,$6) r`,
+      [ORG_ID, sid.owner, randomUUID(), firstRule, r, ownerRulePayloadFingerprint({ rule: firstRule, expectedRevision: r })])).rows[0].r;
+    assert.equal(firstResult.status, "saved");
+    pending = setOwnerRule({ ...owner("owner"), sessionId: sid.ownerSecond }, { requestId: randomUUID(), rule: "delegate_notify", expectedRevision: r }, { v3 }).then(x => x, e => e);
+    await waitForBlocked(first);
+    // The waiter is queued on a row lock (the contact row; the sessions differ, and FOR SHARE never blocks FOR SHARE).
+    const waiting = (await db.query(`SELECT wait_event_type,wait_event FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))`, [(await first.query("SELECT pg_backend_pid() p")).rows[0].p])).rows;
+    assert.deepEqual(waiting.map(w => w.wait_event_type), ["Lock"]);
+    assert.ok(["transactionid", "tuple"].includes(waiting[0].wait_event), waiting[0].wait_event);
+    await first.query("COMMIT");
+  } finally { await first.end(); }
   assert.deepEqual(await pending, { ok: false, reason: "stale", rule: firstResult.rule, revision: r + 1 });
   assert.equal(await current(ownerContact), r + 1);
   // 5. Negative control: a holder that commits without changing anything lets the waiting writer save.

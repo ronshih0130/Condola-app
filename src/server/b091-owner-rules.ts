@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { guardEffectiveSession } from "./b017-custom-role-governance";
 import { brandV3ReadForOrg } from "./brand-v3";
 import { svc } from "./db";
@@ -89,24 +90,44 @@ export async function ownerRuleView(input: Session, deps: Deps = {}): Promise<Ow
   }
 }
 
+/** One raw form value, typed, so that values JSON would merge (NaN/null, -0/0, 1/"1", undefined/null) stay distinct. */
+function canonicalValue(value: unknown): unknown[] {
+  if (value === undefined) return ["undefined"];
+  if (value === null) return ["null"];
+  if (typeof value === "number") return ["number", Object.is(value, -0) ? "-0" : String(value)];
+  if (typeof value === "string" || typeof value === "boolean" || typeof value === "bigint") return [typeof value, String(value)];
+  try {
+    const sorted = (v: unknown): unknown => Array.isArray(v) ? v.map(sorted)
+      : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map(k => [k, sorted((v as Record<string, unknown>)[k])])) : v;
+    return ["json", JSON.stringify(sorted(value)) ?? "undefined"];
+  } catch { return ["unserialisable", Object.prototype.toString.call(value)]; }
+}
+/** sha256 (hex) of the canonical JSON of the RAW payload the request id is reserved with (rule and expected revision). */
+export function ownerRulePayloadFingerprint(form: { rule?: unknown; expectedRevision?: unknown }): string {
+  return createHash("sha256").update(JSON.stringify({ expectedRevision: canonicalValue(form.expectedRevision), rule: canonicalValue(form.rule) })).digest("hex");
+}
+
 /** OWN-34-AC4: the owner changes the renewal rule; written to the activity log; a save failure keeps the old rule. */
 export async function setOwnerRule(input: Session, form: SetOwnerRuleInput, deps: Deps = {}): Promise<SetOwnerRuleResult> {
   try {
     const session = await admitOwner(input, deps);
     if ("state" in session) return { ok: false, reason: session.state };
     // Only an unusable request id is refused here. Any other invalid payload goes to the gateway, which reserves the
-    // id with outcome invalid, so a retry of that id with corrected input is a conflict, never a second save.
+    // id with outcome invalid, so a retry of that id with corrected input is a conflict, never a second save. The
+    // normalised values below are lossy (every bad revision is NULL), so the id is bound to a fingerprint of the RAW
+    // payload too: the same id with any other payload, valid or not, is a conflict.
     if (!form || !uuid(form.requestId)) return { ok: false, reason: "invalid" };
     const requested = typeof form.rule === "string" && form.rule.length <= 64 ? form.rule : null;
     const expected = revision(form.expectedRevision) && form.expectedRevision <= 2147483647 ? form.expectedRevision : null;
+    const fingerprint = ownerRulePayloadFingerprint(form);
     // READ COMMITTED: the gateway waits on row locks first and re-admits afterwards in a fresh snapshot.
     const result = await (deps.transaction ?? svc)(session.userId, async client => {
       await client.query("SET LOCAL statement_timeout = '5s'");
       await client.query("SET LOCAL lock_timeout = '2s'");
       await client.query(PIN, [session.orgId, session.environment]);
       return (await client.query<{ result: Record<string, unknown> | null }>(
-        "SELECT app.b091_owner_rule_set($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::text,$7::integer) AS result",
-        [session.orgId, session.liveOrgId, session.environment, session.sessionId, form.requestId, requested, expected])).rows[0]?.result ?? null;
+        "SELECT app.b091_owner_rule_set($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::text,$7::integer,$8::text) AS result",
+        [session.orgId, session.liveOrgId, session.environment, session.sessionId, form.requestId, requested, expected, fingerprint])).rows[0]?.result ?? null;
     }, { isolation: "read committed" });
     const status = result?.status, replayed = result?.replayed === true;
     if ((status === "saved" || status === "unchanged") && rule(result?.rule) && revision(result?.revision) && typeof result?.replayed === "boolean")

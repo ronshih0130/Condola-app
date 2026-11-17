@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { DEFAULT_RENEWAL_RULE, ownerRuleView, parseOwnerRule, parseStaffRuleChanges, RENEWAL_RULES, setOwnerRule, staffRuleChanges } from "./b091-owner-rules";
+import { DEFAULT_RENEWAL_RULE, ownerRulePayloadFingerprint, ownerRuleView, parseOwnerRule, parseStaffRuleChanges, RENEWAL_RULES, setOwnerRule, staffRuleChanges } from "./b091-owner-rules";
 import type { Session } from "./types";
 
 // B-091 OWN-RULE (OWN-34-AC3/AC4). Synthetic data only.
@@ -42,7 +42,7 @@ test("owner reader/writer: OFF never opens a transaction; only owner sessions; p
     { v3: async () => true, transaction: client({ status: "saved", rule: "delegate_unless_lower", revision: 2, replayed: false }, saves, saveOpts) }),
     { ok: true, rule: "delegate_unless_lower", revision: 2, changed: true, replayed: false });
   assert.deepEqual(saveOpts, [{ isolation: "read committed" }], "the gateway re-admits after its lock waits in a fresh snapshot");
-  assert.deepEqual(saves[3].args, [ORG, ORG, "live", base.sessionId, C, "delegate_unless_lower", 1]);
+  assert.deepEqual(saves[3].args, [ORG, ORG, "live", base.sessionId, C, "delegate_unless_lower", 1, ownerRulePayloadFingerprint({ rule: "delegate_unless_lower", expectedRevision: 1 })]);
   for (const [result, expected] of [
     [{ status: "unchanged", rule: "ask_every_time", revision: 2, replayed: true }, { ok: true, rule: "ask_every_time", revision: 2, changed: false, replayed: true }],
     [{ status: "stale", rule: "ask_every_time", revision: 3 }, { ok: false, reason: "stale", rule: "ask_every_time", revision: 3 }],
@@ -57,7 +57,8 @@ test("owner reader/writer: OFF never opens a transaction; only owner sessions; p
     const sent: { sql: string; args?: unknown[] }[] = [];
     assert.deepEqual(await setOwnerRule(owner, { ...({ requestId: C, rule: "ask_every_time", expectedRevision: 0 } as Record<string, unknown>), ...bad } as never, { v3: async () => true, transaction: client({ status: "invalid", replayed: false }, sent) }),
       { ok: false, reason: "invalid" }, JSON.stringify(bad));
-    assert.deepEqual(sent[3].args?.slice(5), [rule, expected]);
+    assert.deepEqual(sent[3].args?.slice(5, 7), [rule, expected]);
+    assert.equal(sent[3].args?.[7], ownerRulePayloadFingerprint({ ...({ rule: "ask_every_time", expectedRevision: 0 } as Record<string, unknown>), ...bad }));
   }
   const deny = (async () => { throw Object.assign(new Error("denied"), { cause: { code: "42501" } }); }) as never;
   assert.deepEqual(await setOwnerRule(owner, { requestId: C, rule: "ask_every_time", expectedRevision: 0 }, { v3: async () => true, transaction: deny }), { ok: false, reason: "forbidden" });
@@ -85,4 +86,18 @@ test("wiring: B-017 map; flag registered; no outbound; screens left to B-094", (
   const src = read("src/server/b091-owner-rules.ts");
   assert.doesNotMatch(src, /fetch\(|sms|line-push|sendEmail|notification/i);
   assert.match(src, /Screens are B-094/);
+});
+
+test("the payload fingerprint is sha256 of the canonical raw payload: stable, key-order free, and distinct where normalisation is lossy", () => {
+  const fp = ownerRulePayloadFingerprint;
+  assert.match(fp({ rule: "ask_every_time", expectedRevision: 2 }), /^[0-9a-f]{64}$/);
+  assert.equal(fp({ rule: "ask_every_time", expectedRevision: 2 }), fp({ expectedRevision: 2, rule: "ask_every_time" }));
+  assert.equal(fp({ rule: "ask_every_time", expectedRevision: 2, requestId: "a" } as never), fp({ rule: "ask_every_time", expectedRevision: 2, requestId: "b" } as never), "the request id is not part of the payload");
+  const distinct = [-1, -2, 1.5, 0, -0, Number.NaN, null, undefined, "1", 1, 2147483648, { a: 1 }, [1]].map(e => fp({ rule: "ask_every_time", expectedRevision: e }));
+  assert.equal(new Set(distinct).size, distinct.length, "every invalid revision has its own fingerprint");
+  assert.notEqual(fp({ rule: "x".repeat(65), expectedRevision: 0 }), fp({ rule: "y".repeat(65), expectedRevision: 0 }));
+  assert.notEqual(fp({ rule: null, expectedRevision: 0 }), fp({ rule: undefined, expectedRevision: 0 }));
+  assert.equal(fp({ rule: { b: 1, a: [2] }, expectedRevision: 0 }), fp({ rule: { a: [2], b: 1 }, expectedRevision: 0 }));
+  const cyclic: Record<string, unknown> = {}; cyclic.self = cyclic;
+  assert.match(fp({ rule: cyclic, expectedRevision: 0 }), /^[0-9a-f]{64}$/, "never throws");
 });

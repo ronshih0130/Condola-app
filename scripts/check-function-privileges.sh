@@ -404,7 +404,7 @@ DO $b091_gateways$
 DECLARE signature text; fn record; role_name text; table_name text;
 BEGIN
  FOREACH signature IN ARRAY ARRAY[
-  'app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer)',
+  'app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)',
   'app.b091_owner_rule_view(uuid,uuid,text,uuid)',
   'app.b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)'
  ] LOOP

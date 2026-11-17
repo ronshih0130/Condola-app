@@ -41,6 +41,9 @@ CREATE TABLE app.b091_owner_rule_commands (
   owner_contact_id uuid NOT NULL,
   requested_rule text,
   expected_revision integer,
+  -- sha256 (hex) over the caller's fingerprint of the RAW payload and the gateway's own raw arguments: a reused id
+  -- with any other payload is a conflict, even when both normalise to the same stored rule/revision (NULL).
+  payload_fingerprint text NOT NULL CHECK (payload_fingerprint ~ '^[0-9a-f]{64}$'),
   outcome text NOT NULL CHECK (outcome IN ('saved','unchanged','stale','invalid')),
   result jsonb NOT NULL CHECK (jsonb_typeof(result) = 'object'),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -66,13 +69,16 @@ ON CONFLICT (key) DO NOTHING;
 -- locked contact set and property_owners set must still equal what the same predicates select now. A contact or an
 -- ownership row that appeared, moved to this actor or changed during a wait is refused, never waited on afterwards.
 CREATE FUNCTION app.b091_owner_rule_set(p_org uuid,p_live uuid,p_env text,p_session uuid,p_request uuid,
- p_rule text,p_expected_revision integer)
+ p_rule text,p_expected_revision integer,p_payload_fingerprint text)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE target uuid; actor uuid; owner_id uuid; owners integer; prior app.b091_owner_rule_commands; cur record; result jsonb;
  outcome text; new_rev integer; rev_id uuid; locked_contacts uuid[]; locked_po uuid[]; locked_props uuid[];
- locked_orgs integer; locked_flag integer; req_rule text;
+ locked_orgs integer; locked_flag integer; req_rule text; fingerprint text;
 BEGIN
  IF p_org IS NULL OR p_request IS NULL THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ -- The caller's fingerprint of the raw form payload (sha256 hex of its canonical JSON) is required.
+ IF p_payload_fingerprint IS NULL OR p_payload_fingerprint !~ '^[0-9a-f]{64}$' THEN
+  RAISE EXCEPTION 'Invalid owner rule payload fingerprint' USING ERRCODE='22023'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('b091/owner-rule/'||p_org::text||'/'||p_request::text,0));
  -- Row locks (every wait happens here, before any admission decision). Each locked set is aggregated with its own
  -- ORDER BY id: the sets are later compared as arrays, and the input order of a subquery is not kept by array_agg
@@ -126,11 +132,15 @@ BEGIN
  IF owners<>1 OR NOT (owner_id=ANY(locked_contacts)) THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
  -- The payload as reserved: an over-long rule text is stored as NULL (it is invalid either way).
  req_rule:=CASE WHEN char_length(p_rule)<=64 THEN p_rule END;
+ -- The binding the id is reserved with: the caller's raw-payload fingerprint AND this gateway's raw arguments (the
+ -- full p_rule text before the 64-character normalisation, and p_expected_revision), so the normalisation is never lossy.
+ fingerprint:=encode(sha256(convert_to(jsonb_build_array(p_payload_fingerprint,p_rule,p_expected_revision)::text,'UTF8')),'hex');
  -- Reserved request ids replay their stored result; another actor, owner or payload is a conflict.
  SELECT * INTO prior FROM app.b091_owner_rule_commands c WHERE c.org_id=p_org AND c.request_id=p_request;
  IF FOUND THEN
   IF prior.actor_id IS DISTINCT FROM actor OR prior.owner_contact_id IS DISTINCT FROM owner_id
-    OR prior.requested_rule IS DISTINCT FROM req_rule OR prior.expected_revision IS DISTINCT FROM p_expected_revision THEN
+    OR prior.requested_rule IS DISTINCT FROM req_rule OR prior.expected_revision IS DISTINCT FROM p_expected_revision
+    OR prior.payload_fingerprint IS DISTINCT FROM fingerprint THEN
    RETURN jsonb_build_object('status','conflict');
   END IF;
   RETURN prior.result || jsonb_build_object('replayed',true);
@@ -157,12 +167,12 @@ BEGIN
    'owner_rule_changed',p_request::text,clock_timestamp());
   outcome:='saved'; result:=jsonb_build_object('status','saved','rule',p_rule,'revision',new_rev);
  END IF;
- INSERT INTO app.b091_owner_rule_commands(org_id,request_id,actor_id,owner_contact_id,requested_rule,expected_revision,outcome,result)
- VALUES (p_org,p_request,actor,owner_id,req_rule,p_expected_revision,outcome,result);
+ INSERT INTO app.b091_owner_rule_commands(org_id,request_id,actor_id,owner_contact_id,requested_rule,expected_revision,payload_fingerprint,outcome,result)
+ VALUES (p_org,p_request,actor,owner_id,req_rule,p_expected_revision,fingerprint,outcome,result);
  RETURN result || jsonb_build_object('replayed',false);
 END $$;
-REVOKE ALL ON FUNCTION app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer) TO service_role;
+REVOKE ALL ON FUNCTION app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text) TO service_role;
 
 -- The owner's own rule (OWN-34-AC3): the current rule (default delegate_notify) and its revision. NULL when OFF.
 CREATE FUNCTION app.b091_owner_rule_view(p_org uuid,p_live uuid,p_env text,p_session uuid)
