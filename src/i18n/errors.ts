@@ -46,10 +46,13 @@ export const ERRORS: Record<string, string> = {
   "errors.phone": "i_phone",
   "errors.meter": "i_meter",
   "errors.utilityMethod": "i_utility_method_skip",
-  // B-109b posting blocks (a config spanning units / a whole unit; missing or estimated readings). No approved
+  // B-109b posting blocks (a config spanning units / a whole unit; missing or estimated readings; an archived or
+  // missing selected room; 平均分攤 under a revision). No approved
   // sentence yet: the generic text until P52 copy exists; the key itself is the status.
   "errors.sharedMeterUnits": "i_generic",
   "errors.sharedMeterReadings": "i_generic",
+  "errors.sharedMeterRooms": "i_generic",
+  "errors.sharedMeterMode": "i_generic",
   "errors.utilityState": "i_utility_state",
   "errors.utilityOverlap": "i_utility_overlap",
   "errors.utilityPeriod": "i_utility_period",

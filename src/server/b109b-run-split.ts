@@ -13,7 +13,7 @@ import { kwhMilli } from "./utility-post";
 export type RunSharedConfig =
   | null
   | { status: "none"; revision?: number }
-  | { status: "multi_unit" | "whole_unit"; revision: number }
+  | { status: "multi_unit" | "whole_unit" | "unavailable_rooms"; revision: number }
   | { status: "applies"; revision: number; method: "even" | "days_occupied" | "sub_meter"; effectiveFrom: string; spaceIds: string[];
       startReading: string; firstPeriod: boolean; mainReading: { value: string; estimated: boolean; readOn: string } | null };
 export type SharedRecord = {
@@ -37,7 +37,8 @@ export function parseRunSharedConfig(value: unknown): RunSharedConfig {
   if (value === null || value === undefined) return null;
   const v = value as Record<string, unknown>;
   if (v.status === "none") return { status: "none" };
-  if ((v.status === "multi_unit" || v.status === "whole_unit") && Number.isInteger(v.revision)) return { status: v.status, revision: v.revision as number };
+  if ((v.status === "multi_unit" || v.status === "whole_unit" || v.status === "unavailable_rooms") && Number.isInteger(v.revision))
+    return { status: v.status, revision: v.revision as number };
   const main = v.mainReading as Record<string, unknown> | null;
   if (v.status !== "applies" || !Number.isInteger(v.revision) || !["even", "days_occupied", "sub_meter"].includes(v.method as string)
     || !Array.isArray(v.spaceIds) || !v.spaceIds.length || !v.spaceIds.every(x => typeof x === "string" && UUID.test(x))
@@ -80,16 +81,19 @@ export async function splitSharesMilli(client: Pick<Client, "query">, weights: {
 }
 
 /**
- * The first period of a revision without a typed total: the unit main meter's in-period reading minus the
- * revision's starting reading. Missing or estimated stops posting (never guessed). Later periods need the typed total.
+ * The run's total when the split applies. The unit main meter's in-period reading is REQUIRED in every period and must
+ * be an actual reading (never estimated, never guessed), whether or not a total is typed; in the revision's first
+ * period it must also be at least the revision's starting reading. Then a typed total wins; otherwise only the first
+ * period may take its total from the main reading minus the starting reading. Anything else stops posting.
  */
 export function seededTotalMilli(config: Extract<RunSharedConfig, { status: "applies" }>, typedTotalKwh: number | null): number | null {
-  if (typedTotalKwh != null) return null;
-  if (!config.firstPeriod || !config.mainReading) throw new FlowError("errors.sharedMeterReadings");
-  if (config.mainReading.estimated) throw new FlowError("errors.sharedMeterReadings");
-  const usage = Number(config.mainReading.value) - Number(config.startReading);
+  const main = config.mainReading;
+  if (!main || main.estimated) throw new FlowError("errors.sharedMeterReadings");
+  const usage = Number(main.value) - Number(config.startReading);
   const milli = kwhMilli(usage);
-  if (Number.isNaN(milli)) throw new FlowError("errors.sharedMeterReadings");
+  if (config.firstPeriod && Number.isNaN(milli)) throw new FlowError("errors.sharedMeterReadings");
+  if (typedTotalKwh != null) return null;
+  if (!config.firstPeriod) throw new FlowError("errors.sharedMeterReadings");
   return milli;
 }
 

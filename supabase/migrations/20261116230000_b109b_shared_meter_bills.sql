@@ -6,12 +6,14 @@
 --    app.b109_split_shares, and 依分表度數 prefers the typed reading of a utility run of the space's unit in that
 --    period (what posting uses); without a run it keeps the meter_readings rule.
 --  * app.b109b_run_config: for a utility run (unit + period), the revision in effect at the period start and whether
---    it applies (only rooms of this one by-room unit), spans units, or names a whole unit; plus, for the first
---    period of the revision, the unit main meter's in-period reading (seeded from the revision's starting reading).
+--    it applies (only live rooms of this one by-room unit), names an archived or missing room, spans units, or names
+--    a whole unit; whether this is the revision's first period for the unit (no live run of any other period on or
+--    after its effective date); and the unit main meter's in-period reading.
 --    Lock order (B-091 r2 pattern): every row the decision reads is locked first, as id-ordered locked sets; the
 --    full admission runs last, on the locked rows only, and requires each locked set to equal the current one.
 -- Posting (utility-posting.ts) splits the unit's shared kWh (total minus room meters) among the selected rooms
--- instead of PUBLIC_POWER_RULE when shared_meter is ON; OFF is unchanged. Issued bills never change.
+-- instead of PUBLIC_POWER_RULE when shared_meter is ON, in every mode through app.b109b_run_config and its blocks;
+-- OFF is unchanged. Issued bills never change.
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='60s';
@@ -25,7 +27,7 @@ BEGIN
  IF p_weights IS NULL OR jsonb_typeof(p_weights)<>'array' OR jsonb_array_length(p_weights)=0
    OR p_total IS NULL OR p_total<0 OR (p_amount IS NOT NULL AND p_amount<0)
    OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_weights) e
-     WHERE jsonb_typeof(e)<>'object' OR NOT (e ? 'id') OR jsonb_typeof(e->'weight')<>'number' OR (e->>'weight')::numeric<0) THEN
+     WHERE jsonb_typeof(e)<>'object' OR NOT (e ? 'id') OR jsonb_typeof(e->'weight') IS DISTINCT FROM 'number' OR (e->>'weight')::numeric<0) THEN
   RAISE EXCEPTION 'Invalid split weights' USING ERRCODE='22023';
  END IF;
  n:=jsonb_array_length(p_weights);
@@ -172,24 +174,32 @@ BEGIN
   'kwh',(total_milli::numeric/1000)::numeric(14,3)::text,'amountMinor',p_amount_minor::text,'rows',rows);
 END $$;
 
--- For one utility run (a unit and its period): NULL when shared_meter is OFF. Otherwise
--- {status:none} (no revision in effect at the period start, or it names nothing of this unit),
--- {status:multi_unit} (the revision also names spaces outside this unit) or {status:whole_unit} (it names this unit
--- as a whole unit), both of which block posting, or {status:applies, revision, method, spaceIds (this unit's
--- selected rooms in display order), startReading, firstPeriod, mainReading}. Staff admin/manager only (as posting).
+-- For one utility run (a unit and its period): NULL when shared_meter is OFF. Otherwise, from the revision in effect
+-- at the PERIOD START (a period starting before its effective date is not governed by it, even if it ends after):
+--  {status:none}               no revision in effect, or it names nothing of this unit;
+--  {status:unavailable_rooms}  it names a room of this unit that is archived, or an id that no longer exists;
+--  {status:multi_unit}         it also names spaces of another unit;
+--  {status:whole_unit}         it names this unit as a whole unit (or this unit is not rented by room);
+--  {status:applies, revision, method, effectiveFrom, spaceIds (EVERY selected room of this unit, display order),
+--   startReading, firstPeriod, mainReading}.
+-- Posting blocks on unavailable_rooms, multi_unit and whole_unit (never a silent PUBLIC_POWER_RULE fallback).
+-- firstPeriod: no live (non-void) run of this unit for any OTHER period starting on or after the revision's
+-- effective date, earlier or later; only then may the starting reading seed the total. mainReading: the unit main
+-- meter's latest in-period reading (any period), or null. Staff admin/manager only (as posting).
 CREATE FUNCTION app.b109b_run_config(p_org uuid,p_live uuid,p_env text,p_session uuid,p_unit uuid,
  p_period_start date,p_period_end date)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE target uuid; actor uuid; member_role text; locked_role text; u record; cfg record; inside uuid[]; outside integer;
- whole boolean; first_period boolean; main jsonb; locked_orgs integer; locked_flag integer; locked_props integer;
- locked_cfgs uuid[]; locked_rooms uuid[]; locked_meters uuid[];
+ missing integer; archived integer; whole boolean; first_period boolean; main jsonb; locked_orgs integer; locked_flag integer;
+ locked_props integer; locked_cfgs uuid[]; locked_rooms uuid[]; locked_meters uuid[]; named uuid[]; locked_named_rooms uuid[];
+ locked_named_units uuid[]; locked_runs uuid[];
 BEGIN
  IF p_unit IS NULL OR p_period_start IS NULL OR p_period_end IS NULL OR p_period_end<p_period_start THEN
   RAISE EXCEPTION 'Invalid shared meter run' USING ERRCODE='22023'; END IF;
  -- Row locks, every wait here (B-091 r2 / B-065 pattern): the session, the actor's membership, both orgs, the flag
- -- row, the unit and its property, then the locked SETS the decision reads (the property's revisions, the unit's
- -- rooms, the unit's main meters), each aggregated in id order. Nothing below waits; the posting transaction already
- -- holds its per-unit advisory lock, which serialises runs of this unit (first-period detection).
+ -- row, the unit and its property, then the locked SETS the decision reads, each aggregated in id order: the
+ -- property's revisions, the unit's rooms, every room and unit any of those revisions names, the unit's main meters
+ -- and the unit's live runs. Nothing below waits.
  SELECT x.user_id INTO target FROM public.auth_sessions x WHERE x.id=p_session FOR SHARE;
  SELECT m.role::text INTO locked_role FROM public.org_members m
   WHERE m.org_id=p_org AND m.user_id=target AND m.status::text='active' FOR SHARE;
@@ -201,9 +211,17 @@ BEGIN
   WHERE c.org_id=p_org AND c.property_id=u.property_id ORDER BY c.id FOR SHARE) z;
  SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_rooms FROM (SELECT r.id FROM public.rooms r
   WHERE r.org_id=p_org AND r.unit_id=p_unit ORDER BY r.id FOR SHARE) z;
+ SELECT coalesce(array_agg(DISTINCT s ORDER BY s),'{}') INTO named FROM app.b109_shared_meter_configs c, unnest(c.space_ids) s
+  WHERE c.org_id=p_org AND c.id=ANY(locked_cfgs);
+ SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_named_rooms FROM (SELECT r.id FROM public.rooms r
+  WHERE r.org_id=p_org AND r.id=ANY(named) ORDER BY r.id FOR SHARE) z;
+ SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_named_units FROM (SELECT un.id FROM public.units un
+  WHERE un.org_id=p_org AND un.id=ANY(named) ORDER BY un.id FOR SHARE) z;
  SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_meters FROM (SELECT mt.id FROM public.meters mt
   WHERE mt.org_id=p_org AND mt.unit_id=p_unit AND mt.room_id IS NULL AND mt.utility::text='electricity' AND mt.archived_at IS NULL
   ORDER BY mt.id FOR SHARE) z;
+ SELECT coalesce(array_agg(z.id ORDER BY z.id),'{}') INTO locked_runs FROM (SELECT r.id FROM public.utility_allocation_runs r
+  WHERE r.org_id=p_org AND r.unit_id=p_unit AND r.status::text<>'void' ORDER BY r.id FOR SHARE) z;
  -- Full admission, after every wait, on the locked rows only.
  IF current_setting('app.active_org_id',true) IS DISTINCT FROM p_org::text
    OR current_setting('app.env',true) IS DISTINCT FROM p_env
@@ -231,42 +249,53 @@ BEGIN
    AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)) THEN
   RETURN NULL;
  END IF;
- -- The locked sets must still be exactly what the same predicates select now: a revision saved, a room added or a
- -- main meter swapped while this run waited refuses the run (retry), never a decision on rows it did not lock.
+ -- The locked sets must still be exactly what the same predicates select now: a revision saved, a room added or
+ -- moved, a main meter swapped or a run created/voided while this run waited refuses it (retry), never a decision on
+ -- rows it did not lock.
  IF (SELECT coalesce(array_agg(c.id ORDER BY c.id),'{}') FROM app.b109_shared_meter_configs c
      WHERE c.org_id=p_org AND c.property_id=u.property_id) IS DISTINCT FROM locked_cfgs
    OR (SELECT coalesce(array_agg(r.id ORDER BY r.id),'{}') FROM public.rooms r
      WHERE r.org_id=p_org AND r.unit_id=p_unit) IS DISTINCT FROM locked_rooms
+   OR (SELECT coalesce(array_agg(r.id ORDER BY r.id),'{}') FROM public.rooms r
+     WHERE r.org_id=p_org AND r.id=ANY(named)) IS DISTINCT FROM locked_named_rooms
+   OR (SELECT coalesce(array_agg(un.id ORDER BY un.id),'{}') FROM public.units un
+     WHERE un.org_id=p_org AND un.id=ANY(named)) IS DISTINCT FROM locked_named_units
    OR (SELECT coalesce(array_agg(mt.id ORDER BY mt.id),'{}') FROM public.meters mt
      WHERE mt.org_id=p_org AND mt.unit_id=p_unit AND mt.room_id IS NULL AND mt.utility::text='electricity' AND mt.archived_at IS NULL)
-     IS DISTINCT FROM locked_meters THEN
+     IS DISTINCT FROM locked_meters
+   OR (SELECT coalesce(array_agg(r.id ORDER BY r.id),'{}') FROM public.utility_allocation_runs r
+     WHERE r.org_id=p_org AND r.unit_id=p_unit AND r.status::text<>'void') IS DISTINCT FROM locked_runs THEN
   RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
- -- The revision in effect at the period start (locked rows only): only periods starting on or after its effective date.
+ -- The revision in effect at the period start (locked rows only).
  SELECT * INTO cfg FROM app.b109_shared_meter_configs c
  WHERE c.org_id=p_org AND c.id=ANY(locked_cfgs) AND c.effective_from<=p_period_start
  ORDER BY c.effective_from DESC,c.revision DESC LIMIT 1;
  IF NOT FOUND THEN RETURN jsonb_build_object('status','none'); END IF;
- -- This unit's rooms named by the revision, in display order (archived rooms dropped, as in the preview); spaces
- -- outside this unit; this unit named as a whole.
- SELECT array_agg(r.id ORDER BY r.label,r.id) INTO inside FROM public.rooms r
-  WHERE r.org_id=p_org AND r.id=ANY(locked_rooms) AND r.archived_at IS NULL AND r.id = ANY(cfg.space_ids);
- SELECT count(*) INTO outside FROM unnest(cfg.space_ids) s WHERE s<>p_unit AND NOT (s=ANY(locked_rooms));
+ -- Every selected room of this unit (archived ones included), in display order; archived ones; ids that no longer
+ -- exist; spaces of another unit (rooms elsewhere, or other whole units); this unit named as a whole.
+ SELECT array_agg(r.id ORDER BY r.label,r.id),count(*) FILTER (WHERE r.archived_at IS NOT NULL) INTO inside,archived
+  FROM public.rooms r WHERE r.org_id=p_org AND r.id=ANY(locked_rooms) AND r.id=ANY(cfg.space_ids);
+ SELECT count(*) INTO missing FROM unnest(cfg.space_ids) s
+  WHERE NOT (s=ANY(locked_named_rooms)) AND NOT (s=ANY(locked_named_units));
+ SELECT count(*) INTO outside FROM unnest(cfg.space_ids) s
+  WHERE s<>p_unit AND NOT (s=ANY(locked_rooms)) AND (s=ANY(locked_named_rooms) OR s=ANY(locked_named_units));
  whole:=p_unit = ANY(cfg.space_ids);
- IF inside IS NULL AND NOT whole THEN RETURN jsonb_build_object('status','none','revision',cfg.revision); END IF;
+ IF inside IS NULL AND NOT whole AND missing=0 THEN RETURN jsonb_build_object('status','none','revision',cfg.revision); END IF;
+ IF missing>0 THEN RETURN jsonb_build_object('status','unavailable_rooms','revision',cfg.revision); END IF;
  IF outside>0 THEN RETURN jsonb_build_object('status','multi_unit','revision',cfg.revision); END IF;
  IF whole OR u.mode<>'by_room' THEN RETURN jsonb_build_object('status','whole_unit','revision',cfg.revision); END IF;
- -- The first period of this revision for this unit: no other live run of the unit started on or after its effective date.
+ IF archived>0 THEN RETURN jsonb_build_object('status','unavailable_rooms','revision',cfg.revision); END IF;
+ -- The first period of this revision for this unit: no live run of the unit for any other period starting on or
+ -- after its effective date (a backfill before a later run is not the first period: that run used the baseline).
  first_period:=NOT EXISTS (SELECT 1 FROM public.utility_allocation_runs r
-  WHERE r.org_id=p_org AND r.unit_id=p_unit AND r.status::text<>'void'
-   AND r.period_start>=cfg.effective_from AND r.period_start<p_period_start);
- IF first_period THEN
-  SELECT jsonb_build_object('value',mr.value::text,'estimated',mr.is_estimate,'readOn',mr.read_on::text) INTO main
-  FROM public.meter_readings mr
-  WHERE mr.org_id=p_org AND mr.meter_id=ANY(locked_meters) AND cardinality(locked_meters)=1
-   AND mr.read_on BETWEEN p_period_start AND p_period_end
-   AND NOT EXISTS (SELECT 1 FROM public.meter_readings sup WHERE sup.org_id=mr.org_id AND sup.supersedes_id=mr.id)
-  ORDER BY mr.read_on DESC,mr.created_at DESC,mr.id DESC LIMIT 1;
- END IF;
+  WHERE r.org_id=p_org AND r.id=ANY(locked_runs) AND r.period_start>=cfg.effective_from
+   AND NOT (r.period_start=p_period_start AND r.period_end=p_period_end));
+ SELECT jsonb_build_object('value',mr.value::text,'estimated',mr.is_estimate,'readOn',mr.read_on::text) INTO main
+ FROM public.meter_readings mr
+ WHERE mr.org_id=p_org AND mr.meter_id=ANY(locked_meters) AND cardinality(locked_meters)=1
+  AND mr.read_on BETWEEN p_period_start AND p_period_end
+  AND NOT EXISTS (SELECT 1 FROM public.meter_readings sup WHERE sup.org_id=mr.org_id AND sup.supersedes_id=mr.id)
+ ORDER BY mr.read_on DESC,mr.created_at DESC,mr.id DESC LIMIT 1;
  RETURN jsonb_build_object('status','applies','revision',cfg.revision,'method',cfg.split_method,
   'effectiveFrom',cfg.effective_from::text,'spaceIds',to_jsonb(inside),'startReading',cfg.start_reading::text,
   'firstPeriod',first_period,'mainReading',main);

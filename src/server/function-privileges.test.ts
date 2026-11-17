@@ -566,13 +566,19 @@ test("B-109b: a pure split helper and a run-config gateway, service-only; the pr
   for (const lock of [/auth_sessions x WHERE x\.id=p_session FOR SHARE;/, /m\.user_id=target AND m\.status::text='active' FOR SHARE;/,
     /o\.id IN \(p_org,p_live\) ORDER BY o\.id FOR SHARE\) z;/, /f\.key='shared_meter' FOR SHARE\) z;/, /un\.org_id=p_org AND un\.id=p_unit FOR SHARE;/,
     /pr\.id=u\.property_id FOR SHARE\) z;/, /c\.property_id=u\.property_id ORDER BY c\.id FOR SHARE\) z;/, /r\.unit_id=p_unit ORDER BY r\.id FOR SHARE\) z;/,
-    /mt\.archived_at IS NULL\n  ORDER BY mt\.id FOR SHARE\) z;/]) assert.match(cfg, lock);
+    /mt\.archived_at IS NULL\n  ORDER BY mt\.id FOR SHARE\) z;/, /r\.id=ANY\(named\) ORDER BY r\.id FOR SHARE\) z;/, /un\.id=ANY\(named\) ORDER BY un\.id FOR SHARE\) z;/,
+    /r\.unit_id=p_unit AND r\.status::text<>'void' ORDER BY r\.id FOR SHARE\) z;/]) assert.match(cfg, lock);
   // B-091 r2 pattern: id-ordered locked sets; the decision reads locked rows only; each set must equal the current one.
-  assert.equal((cfg.match(/array_agg\(z\.id ORDER BY z\.id\)/g) ?? []).length, 3);
+  assert.equal((cfg.match(/array_agg\(z\.id ORDER BY z\.id\)/g) ?? []).length, 6);
   assert.doesNotMatch(cfg, /array_agg\(z\.id\)/);
-  for (const set of ["locked_cfgs", "locked_rooms", "locked_meters"]) assert.match(cfg, new RegExp(`IS DISTINCT FROM ${set}`));
+  for (const set of ["locked_cfgs", "locked_rooms", "locked_named_rooms", "locked_named_units", "locked_meters", "locked_runs"]) assert.match(cfg, new RegExp(`IS DISTINCT FROM ${set}`));
+  // Archived or missing selected rooms block (never dropped); the first period ignores no later run.
+  assert.match(cfg, /IF archived>0 THEN RETURN jsonb_build_object\('status','unavailable_rooms'/);
+  assert.match(cfg, /IF missing>0 THEN RETURN jsonb_build_object\('status','unavailable_rooms'/);
+  assert.match(cfg, /r\.id=ANY\(locked_runs\) AND r\.period_start>=cfg\.effective_from\n   AND NOT \(r\.period_start=p_period_start AND r\.period_end=p_period_end\)\);/);
+  assert.match(helper, /jsonb_typeof\(e->'weight'\) IS DISTINCT FROM 'number'/);
   assert.match(cfg, /c\.id=ANY\(locked_cfgs\) AND c\.effective_from<=p_period_start/);
-  assert.match(cfg, /r\.id=ANY\(locked_rooms\) AND r\.archived_at IS NULL/);
+  assert.match(cfg, /r\.id=ANY\(locked_rooms\) AND r\.id=ANY\(cfg\.space_ids\)/);
   assert.match(cfg, /mr\.meter_id=ANY\(locked_meters\)/);
   assert.match(cfg, /member_role IS DISTINCT FROM locked_role/);
   assert.match(cfg, /member_role NOT IN \('admin','manager'\)/);

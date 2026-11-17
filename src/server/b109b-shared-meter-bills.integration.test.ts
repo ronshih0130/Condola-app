@@ -10,7 +10,7 @@ import { resetAndSeed } from "./seed";
 import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
 import type { Session } from "./types";
-import { allocateUtilityMinor } from "./utility-post";
+import { BILL_GAP_DESCRIPTION, PUBLIC_ELECTRICITY_DESCRIPTION, VACANT_ELECTRICITY_DESCRIPTION } from "./utility-expense";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun, type UtilityRunInput } from "./utility-posting";
 
 // B-109b (PR-036 = a; GS-53 = A; MGT-90-AC4…AC6) on a cloned disposable database: the real save gateway, the real
@@ -24,7 +24,7 @@ const RUN = "app.b109b_run_config";
 const SHARES = "app.b109_split_shares";
 const sid: Record<string, string> = {};
 let property: string, unitId: string, roomA: string, roomB: string, roomC: string, mainMeter: string, otherUnit: string, otherRoom: string, wholeUnit: string;
-let leaseA: string, leaseB: string;
+let leaseA: string, leaseB: string, leaseB0: string, days: number;
 let next: { start: string; end: string }, after: { start: string; end: string }, thisMonth: { start: string; end: string };
 type Opts = { org?: string; live?: string; env?: string; pin?: string | null; pinEnv?: string | null; lockTimeout?: string };
 type Config = Record<string, unknown> & { status: string } | null;
@@ -71,6 +71,8 @@ const billing = async () => (await db.query(`SELECT
   (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.invoice_lines x) invoice_lines,
   (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM public.expenses x) expenses,
   (SELECT md5(coalesce(string_agg(row_to_json(x)::text,'|' ORDER BY x.id),'')) FROM app.b109_shared_meter_configs x) configs`)).rows[0] as Record<string, string>;
+/** The billing rows only (the revisions excluded): what a refused posting must leave unchanged. */
+async function billingRows() { const all: Record<string, string | undefined> = { ...await billing() }; delete all.configs; return all; }
 const runInput = (readings: [string, number][], totalKwh: number | null, period = next, extra: Partial<UtilityRunInput> = {}): UtilityRunInput => ({
   unitId, periodStart: period.start, periodEnd: period.end, rateMajor: 5, totalKwh, billTotalMajor: null, overrideReason: "",
   readings: readings.map(([spaceId, kwh]) => ({ spaceId, kwh, previousKwh: null, currentKwh: null })), ...extra,
@@ -82,7 +84,34 @@ function expectShares(total: number, weights: number[]) {
   shares[0] += total - shares.reduce((a, b) => a + b, 0);
   return shares;
 }
-const price = (milli: number) => allocateUtilityMinor({ currency: "TWD", rateMajor: 5, mode: "each", parts: [{ key: "x", kwhMilli: milli }] })[0].amountMinor;
+// Hand oracles, independent of the posting code: TWD prices whole NT$, half-up, on kWh × rate.
+/** rateTenths: the typed rate in tenths of NT$ (5 → 50, 4.4 → 44). */
+const price = (milli: number, rateTenths = 50) => Math.floor((milli * rateTenths + 5000) / 10000) * 100;
+/** A room's kWh between occupants by days: floors, then the leftover units to the largest remainders (ties by key). */
+function byDays(total: number, parts: { key: string; days: number }[]) {
+  if (parts.length === 1) return new Map([[parts[0].key, total]]);
+  const sum = parts.reduce((a, p) => a + p.days, 0);
+  const rows = parts.map(p => ({ key: p.key, floor: Math.floor(total * p.days / sum), frac: (total * p.days) % sum }));
+  let left = total - rows.reduce((a, r) => a + r.floor, 0);
+  for (const r of [...rows].sort((a, b) => a.frac !== b.frac ? b.frac - a.frac : a.key < b.key ? -1 : 1)) { if (left <= 0) break; r.floor += 1; left -= 1; }
+  return new Map(rows.map(r => [r.key, r.floor]));
+}
+/** meter_readings is append-only: a test that needs no main reading gets a fresh main meter (the old one archived). */
+async function clearMainReadings() {
+  await db.query("UPDATE public.meters SET archived_at=clock_timestamp() WHERE id=$1", [mainMeter]);
+  mainMeter = (await db.query(`INSERT INTO public.meters(org_id,property_id,unit_id,utility,usage_unit,payer,split_method,rate_source,rate_minor_per_unit)
+    VALUES($1,$2,$3,'electricity','kWh','owner','none','fixed_rate',500) RETURNING id`, [ORG_ID, property, unitId])).rows[0].id;
+}
+const mainReading = (on: string, value: number, estimate = false) =>
+  db.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value,is_estimate) VALUES($1,$2,$3,$4,$5) RETURNING id", [ORG_ID, mainMeter, on, value, estimate]);
+const day = (period: { start: string }, n: number) => `${period.start.slice(0, 8)}${String(n).padStart(2, "0")}`;
+/** A revision written directly (fixture only): for ids the save gateway would refuse (a missing room). */
+const rawRevision = async (spaces: string[], method = "even") => {
+  const revision = (await db.query("SELECT coalesce(max(revision),0)+1 r FROM app.b109_shared_meter_configs WHERE property_id=$1", [property])).rows[0].r;
+  await db.query(`INSERT INTO app.b109_shared_meter_configs(org_id,property_id,revision,space_ids,split_method,start_reading,effective_from,request_id,created_by)
+    VALUES($1,$2,$3,$4,$5,0,$6,$7,$8)`, [ORG_ID, property, revision, spaces, method, next.start, randomUUID(), USERS.admin]);
+  return revision as number;
+};
 /** Each test starts from no live run of the unit: posted runs are voided through the real flow, open ones removed. */
 async function resetRuns() {
   for (const { id } of (await db.query("SELECT id FROM public.utility_allocation_runs WHERE unit_id=$1 AND status::text IN ('posted','pending_repost')", [unitId])).rows)
@@ -138,7 +167,7 @@ test.before(async () => {
   const months = (await db.query(`SELECT to_char(m,'YYYY-MM') k FROM (SELECT date_trunc('month',(clock_timestamp() AT TIME ZONE 'Asia/Taipei')) + (n||' month')::interval m FROM generate_series(0,2) n) x ORDER BY m`)).rows.map(r => r.k as string);
   const bounds = (k: string) => { const [y, m] = k.split("-").map(Number); return { start: `${k}-01`, end: `${k}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}` }; };
   [thisMonth, next, after] = months.map(bounds);
-  // Tenants: A from this month for a year (all of next month); B from the 11th of next month. C stays vacant.
+  // Tenants: A from this month for a year (all of next month); B two tenants (below). C stays vacant.
   const lease = async (room: string, start: string, name: string, n: number) => {
     const l = await createLeaseFromForm(staff("admin", "admin"), form({ tenantName: name, tenantPhone: `09120000${10 + n}`, tenantEmail: `b109b.t${n}@example.com`,
       lineUserId: "", startDate: start, months: "12", rent: "9000", depositMonths: "2", depositReason: "", dueDay: "5", splitMethod: "even",
@@ -147,7 +176,11 @@ test.before(async () => {
     return l.leaseId as string;
   };
   leaseA = await lease(roomA, thisMonth.start, "王小明", 1);
+  // B has an earlier tenant until the 5th of next month, then another from the 11th: two occupants with unequal days.
+  leaseB0 = await lease(roomB, thisMonth.start, "張家豪", 3);
+  await db.query("UPDATE public.leases SET end_date=$2 WHERE id=$1", [leaseB0, day(next, 5)]);
   leaseB = await lease(roomB, `${next.start.slice(0, 8)}11`, "林美玲", 2);
+  days = Number(next.end.slice(8));
   // A second by-room unit (one room) and a whole unit in the same property, for the blocked shapes.
   otherUnit = (await db.query(`INSERT INTO public.units(org_id,property_id,label,rental_mode) VALUES($1,$2,'4F','by_room') RETURNING id`, [ORG_ID, property])).rows[0].id;
   otherRoom = (await db.query(`INSERT INTO public.rooms(org_id,unit_id,label) VALUES($1,$2,'A') RETURNING id`, [ORG_ID, otherUnit])).rows[0].id;
@@ -161,195 +194,290 @@ test.after(async () => {
   try { for (const h of holders) await h.end().catch(() => undefined); if (db) await db.end(); } finally { await clone?.cleanup(); }
 });
 
-test("fixture: one by-room unit with three rooms, two tenants, a main meter; periods", async () => {
-  assert.ok(property && unitId && mainMeter && leaseA && leaseB);
+test("fixture: one by-room unit with three rooms, three tenants (two in B), a main meter; periods", async () => {
+  assert.ok(property && unitId && mainMeter && leaseA && leaseB && leaseB0);
   assert.ok(next.start > thisMonth.start && after.start > next.start);
 });
 
-test("OFF (org flag off, or platform off): byte-identical PUBLIC_POWER_RULE, no gateway call and no lock wait, even with a revision saved", async () => {
-  await flag(true);
+// The B-109b DB tests share one unit, so each starts from no live run and no main reading.
+async function fresh() { await flag(true); await resetRuns(); await clearMainReadings(); }
+const R = { A: 100.1, B: 50.1, C: 10 }, OWN = { A: 100100, B: 50100, C: 10000 }, TOTAL = 161.201, SHARED = 1001;
+const readings = (): [string, number][] => [[roomA, R.A], [roomB, R.B], [roomC, R.C]];
+/** The expected lines (label, lease, bearer, kWh milli, amount) for own kWh plus shares[A,B], at rateTenths. */
+function expectedLines(shareA: number, shareB: number, rateTenths: number) {
+  const bOwn = byDays(OWN.B, [{ key: leaseB0, days: 5 }, { key: leaseB, days: days - 10 }]);
+  const bShared = byDays(shareB, [{ key: leaseB0, days: 5 }, { key: leaseB, days: days - 10 }]);
+  const b = [leaseB0, leaseB].sort().map(lease => ["B", lease, "tenant", bOwn.get(lease)! + bShared.get(lease)!]);
+  return [["A", leaseA, "tenant", OWN.A + shareA], ...b, ["C", null, "owner", OWN.C]].map(([label, lease, bearer, milli]) =>
+    [label, lease, bearer, String(milli), String(price(milli as number, rateTenths))]);
+}
+const lineRows = async (runId: string) => (await lines(runId)).map(r => [r.label, r.lease, r.bearer, r.milli, r.amount]);
+const sharedKwhOf = async (runId: string) => (await lines(runId)).map(r => r.explanation.sharedKwh ?? null);
+
+test("OFF: equals a hand-computed legacy oracle (lines, 公共用電, gap, owner expenses, tenant invoice lines); no gateway call (EXECUTE revoked)", async () => {
+  await fresh();
   await save([roomA, roomB], "even");
-  const input = runInput([[roomA, 100.1], [roomB, 50.1], [roomC, 10]], 161.201);
-  const results: Record<string, unknown>[] = [];
-  for (const [platform, org] of [[false, false], [true, false], [false, true]] as const) {
-    await voidOpen();
-    await flag(platform, org);
-    const h = await holder();
-    await h.query("SELECT 1 FROM app.b109_shared_meter_configs WHERE property_id=$1 FOR UPDATE", [property]);
-    const started = Date.now();
-    // Any OFF part: no gateway call, so a holder with the revisions locked FOR UPDATE does not delay posting.
-    const run = await prepareUtilityRun(staff("admin", "admin"), input).finally(async () => { await h.query("ROLLBACK"); await h.end(); });
-    assert.ok(Date.now() - started < 5000, "OFF: no wait on the revisions");
-    const inputs = await inputsOf(run.runId);
-    assert.equal("sharedMeter" in inputs, false);
-    assert.equal(inputs.publicKwhMilli, 1001, "PUBLIC_POWER_RULE: total minus the room meters stays with the owner");
-    const rows = await lines(run.runId);
-    assert.deepEqual(rows.map(r => [r.label, r.milli, r.amount]), [["A", "100100", String(price(100100))], ["B", "50100", String(price(50100))], ["C", "10000", String(price(10000))]]);
-    assert.ok(rows.every(r => !("sharedKwh" in (r.explanation ?? {}))));
-    results.push({ inputs: { ...inputs }, rows: rows.map(({ label, lease, bearer, milli, amount, explanation }) => ({ label, lease, bearer, milli, amount, explanation })) });
+  await mainReading(next.end, 500);
+  // The legacy path: PUBLIC_POWER_RULE keeps total − room meters with the owner; every line is its own kWh.
+  const legacy = expectedLines(0, 0, 50);
+  const roomTotal = legacy.reduce((a, l) => a + Number(l[4]), 0), publicMinor = price(SHARED), bill = 81000;
+  const outputs: unknown[] = [];
+  // Any call to the B-109b functions while OFF would now fail with 42501.
+  await db.query("REVOKE EXECUTE ON FUNCTION app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date), app.b109_split_shares(jsonb,bigint,bigint) FROM service_role");
+  try {
+    for (const [platform, org] of [[false, false], [true, false], [false, true]] as const) {
+      await resetRuns();
+      await flag(platform, org);
+      const run = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { billTotalMajor: bill / 100 }));
+      const inputs = await inputsOf(run.runId);
+      assert.equal("sharedMeter" in inputs, false);
+      assert.deepEqual([inputs.totalKwh, inputs.publicKwhMilli, inputs.publicAmountMinor, inputs.billGapMinor], [TOTAL, SHARED, publicMinor, bill - roomTotal - publicMinor]);
+      assert.deepEqual(await lineRows(run.runId), legacy, `lines (platform ${platform}, org ${org})`);
+      assert.deepEqual(await sharedKwhOf(run.runId), legacy.map(() => null));
+      const usage = (await db.query("SELECT r.total_usage::text run, b.total_usage::text bill, b.total_amount_minor::text amount FROM public.utility_allocation_runs r JOIN public.utility_bills b ON b.id=r.utility_bill_id WHERE r.id=$1", [run.runId])).rows[0];
+      assert.deepEqual([Number(usage.run), Number(usage.bill), usage.amount], [160.2, 160.2, String(bill)], "legacy usage: the room meters");
+      await confirmUtilityRun(staff("admin", "admin"), run.runId);
+      // Earlier iterations' runs were voided (with their expenses), so the live expenses are this run's.
+      const expenses = Object.fromEntries((await db.query(`SELECT description, sum(amount_minor)::text amount FROM public.expenses
+        WHERE property_id=$1 AND status::text<>'void' GROUP BY description`, [property])).rows.map(r => [r.description, r.amount]));
+      assert.deepEqual(expenses, { [PUBLIC_ELECTRICITY_DESCRIPTION]: String(publicMinor), [VACANT_ELECTRICITY_DESCRIPTION]: legacy.find(l => l[0] === "C")![4],
+        [BILL_GAP_DESCRIPTION]: String(bill - roomTotal - publicMinor) }, "owner expense lines");
+      const invoiced = (await db.query(`SELECT l.lease_id::text lease, il.amount_minor::text amount FROM public.utility_allocation_lines l
+        JOIN public.invoice_lines il ON il.id=l.posted_invoice_line_id WHERE l.run_id=$1 ORDER BY l.lease_id`, [run.runId])).rows.map(r => [r.lease, r.amount]);
+      assert.deepEqual(invoiced, legacy.filter(l => l[2] === "tenant").map(l => [l[1], l[4]]).sort((a, b) => String(a[0]) < String(b[0]) ? -1 : 1), "tenant invoice lines");
+      outputs.push({ inputs, lines: await lineRows(run.runId), expenses, invoiced });
+    }
+  } finally {
+    await db.query("GRANT EXECUTE ON FUNCTION app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date), app.b109_split_shares(jsonb,bigint,bigint) TO service_role");
   }
-  assert.deepEqual(results[1], results[0], "org off == both off");
-  assert.deepEqual(results[2], results[0], "platform off == both off");
-  await voidOpen();
-  await flag(true);
+  assert.deepEqual(outputs[1], outputs[0], "org off == both off");
+  assert.deepEqual(outputs[2], outputs[0], "platform off == both off");
+  // Control: ON, the same revoked grant makes posting fail, so the OFF passes above really made no call.
+  await resetRuns(); await flag(true);
+  await db.query("REVOKE EXECUTE ON FUNCTION app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date) FROM service_role");
+  try { await assert.rejects(prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL))); }
+  finally { await db.query("GRANT EXECUTE ON FUNCTION app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date) TO service_role"); }
 });
 
-test("ON, each method on a real run: the unit's shared kWh goes to the selected rooms (remainder to the first), priced once at the typed rate; unselected rooms unchanged", async () => {
-  await flag(true);
-  // A 100.1, B 50.1, C 10 (unselected) of a 161.201 kWh total: 1.001 kWh shared between A and B.
-  const own = { A: 100100, B: 50100, C: 10000 }, shared = 1001;
-  const nextDays = Number(next.end.slice(8));
-  await resetRuns();
-  for (const [method, weights] of [["even", [1, 1]], ["days_occupied", [nextDays, nextDays - 10]], ["sub_meter", [own.A, own.B]]] as const) {
-    await voidOpen();
+test("ON, each method, a typed rate unlike the configured one: shares (remainder to the first room) go to the selected rooms, then to each occupant by days; priced once at the typed rate; unselected room unchanged", async () => {
+  await fresh();
+  await mainReading(next.end, 500);
+  assert.equal((await db.query("SELECT rate_per_kwh::text r FROM public.rooms WHERE id=$1", [roomA])).rows[0].r.replace(/\.0+$/, ""), "5", "configured 5; typed 4.4");
+  for (const [method, weights] of [["even", [1, 1]], ["days_occupied", [days, days - 5]], ["sub_meter", [OWN.A, OWN.B]]] as const) {
+    await resetRuns();
     const revision = await save([roomB, roomA], method);
-    const run = await prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, 100.1], [roomB, 50.1], [roomC, 10]], 161.201));
-    const shares = expectShares(shared, [...weights]);
-    assert.equal(shares[0] - Math.floor(shared * weights[0] / (weights[0] + weights[1])) >= 0, true);
+    const run = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { rateMajor: 4.4 }));
+    const shares = expectShares(SHARED, [...weights]);
     const inputs = await inputsOf(run.runId);
-    assert.deepEqual(inputs.sharedMeter, { revision, method, roomIds: [roomA, roomB], weights: weights.map(String), sharesMilli: shares, kwhMilli: shared, seededTotalMilli: null }, method);
-    assert.equal(inputs.publicKwhMilli, 0, "nothing left on the owner's 公共用電");
-    assert.equal(inputs.publicAmountMinor, 0);
-    const rows = await lines(run.runId);
-    const a = rows.find(r => r.label === "A")!, b = rows.find(r => r.label === "B")!, c = rows.find(r => r.label === "C")!;
-    assert.equal(rows.filter(r => r.label === "A").length, 1);
-    assert.deepEqual([a.lease, a.bearer, Number(a.milli)], [leaseA, "tenant", own.A + shares[0]], method);
-    assert.deepEqual([b.lease, b.bearer, Number(b.milli)], [leaseB, "tenant", own.B + shares[1]], method);
-    // Priced once on own + shared at the typed rate (never two separately rounded amounts).
-    assert.equal(Number(a.amount), price(own.A + shares[0]));
-    assert.equal(Number(b.amount), price(own.B + shares[1]));
-    assert.equal(a.explanation.sharedKwh, shares[0] / 1000);
-    assert.equal(b.explanation.sharedKwh, shares[1] / 1000);
-    // C is not selected: its own kWh, its own bearer, no shared part.
-    assert.deepEqual([c.bearer, Number(c.milli), Number(c.amount), "sharedKwh" in c.explanation], ["owner", own.C, price(own.C), false]);
-    // The B-109 preview (with this run's typed readings) gives the same shares.
-    const preview = await call<{ status: string; rows: { id: string; kwh: string }[] }>("app.b109_shared_meter_split", "admin", [property, next.start, String(shared / 1000), null]);
-    assert.equal(preview.status, "ready");
+    assert.deepEqual(inputs.sharedMeter, { revision, method, roomIds: [roomA, roomB], weights: weights.map(String), sharesMilli: shares, kwhMilli: SHARED, seededTotalMilli: null }, method);
+    assert.deepEqual([inputs.publicKwhMilli, inputs.publicAmountMinor, inputs.rate], [0, 0, 4.4]);
+    assert.deepEqual(await lineRows(run.runId), expectedLines(shares[0], shares[1], 44), method);
+    const bShared = byDays(shares[1], [{ key: leaseB0, days: 5 }, { key: leaseB, days: days - 10 }]);
+    assert.deepEqual(await sharedKwhOf(run.runId), [shares[0], ...[leaseB0, leaseB].sort().map(l => bShared.get(l)!), null].map(x => x === null ? null : x / 1000));
+    const usage = (await db.query("SELECT total_usage::text u FROM public.utility_allocation_runs WHERE id=$1", [run.runId])).rows[0].u;
+    assert.equal(Number(usage), TOTAL, "billed usage: room meters + shared kWh");
+    const preview = await call<{ status: string; rows: { id: string; kwh: string }[] }>("app.b109_shared_meter_split", "admin", [property, next.start, String(SHARED / 1000), null]);
     assert.deepEqual(preview.rows.map(r => [r.id, Math.round(Number(r.kwh) * 1000)]), [[roomA, shares[0]], [roomB, shares[1]]], `${method} preview aligned`);
   }
-  // Rounding once matters for these numbers: the even split priced separately would differ.
-  const even = expectShares(shared, [1, 1]);
-  assert.notEqual(price(own.A) + price(even[0]), price(own.A + even[0]));
-  await voidOpen();
+  // These numbers make pricing once matter: own and shared priced separately would differ for room A.
+  const even = expectShares(SHARED, [1, 1]);
+  assert.notEqual(price(OWN.A, 44) + price(even[0], 44), price(OWN.A + even[0], 44));
+});
+
+test("the per-kWh cap (Taipower bill average) is checked once, on every billed kWh: binding with the split, not without; one override record", async () => {
+  // Bill NT$803: over the room meters only (160.2 kWh) the average is above NT$5; over all 161.201 kWh billed it is below.
+  await fresh();
+  await mainReading(next.end, 500);
+  await save([roomA, roomB], "even");
+  const capOf = async (runId: string) => (await db.query(`SELECT r.rate_exceeds_cap, r.cap_minor_per_unit::text cap, r.cap_override_reason IS NOT NULL overridden,
+      b.total_usage::text usage, (SELECT count(*)::int FROM public.rule_check_results x WHERE x.entity_id=r.id) checks
+    FROM public.utility_allocation_runs r JOIN public.utility_bills b ON b.id=r.utility_bill_id WHERE r.id=$1`, [runId])).rows[0];
+  const on = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { billTotalMajor: 803 }));
+  let cap = await capOf(on.runId);
+  assert.deepEqual([cap.rate_exceeds_cap, cap.overridden, Number(cap.usage), cap.checks], [true, true, TOTAL, 1]);
+  assert.ok(Number(cap.cap) < 500 && Math.abs(Number(cap.cap) - 80300 / TOTAL) < 0.000001);
+  // Recomputing the same open run keeps one override record; the lines are priced once at the typed rate.
+  const again = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { billTotalMajor: 803 }));
+  assert.equal(again.runId, on.runId);
+  cap = await capOf(on.runId);
+  assert.equal(cap.checks, 1);
+  const shares = expectShares(SHARED, [1, 1]);
+  assert.deepEqual(await lineRows(on.runId), expectedLines(shares[0], shares[1], 50));
+  await confirmUtilityRun(staff("admin", "admin"), on.runId);
+  // Without the split (OFF), the same bill is not over the cap (the legacy usage is the room meters).
+  await resetRuns(); await flag(false);
+  const off = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { billTotalMajor: 803 }));
+  cap = await capOf(off.runId);
+  assert.deepEqual([cap.rate_exceeds_cap, Number(cap.usage), cap.checks], [false, 160.2, 0]);
+  await flag(true);
 });
 
 test("a negative shared kWh (room meters above the total) stays an owner credit; nothing is split", async () => {
-  await flag(true);
-  await resetRuns();
+  await fresh();
+  await mainReading(next.end, 500);
   await save([roomA, roomB], "even");
   const run = await prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, 100], [roomB, 50], [roomC, 10]], 150));
   const inputs = await inputsOf(run.runId);
   assert.equal(inputs.publicKwhMilli, -10000);
-  assert.deepEqual((inputs.sharedMeter as { sharesMilli: number[]; kwhMilli: number }).sharesMilli, [0, 0]);
-  assert.equal((inputs.sharedMeter as { kwhMilli: number }).kwhMilli, 0);
-  assert.deepEqual((await lines(run.runId)).map(r => Number(r.milli)), [100000, 50000, 10000]);
-  await voidOpen();
+  assert.deepEqual([(inputs.sharedMeter as { sharesMilli: number[] }).sharesMilli, (inputs.sharedMeter as { kwhMilli: number }).kwhMilli], [[0, 0], 0]);
+  assert.deepEqual((await lines(run.runId)).map(r => Number(r.milli)), [100000, ...[leaseB0, leaseB].sort().map(l => byDays(50000, [{ key: leaseB0, days: 5 }, { key: leaseB, days: days - 10 }]).get(l)!), 10000]);
 });
 
-test("issued bills never change; the period before a revision is unaffected; a correction of a run computed without it stays without it", async () => {
-  await flag(true);
-  await resetRuns();
-  // This month: the revision takes effect next month, so this month's run keeps PUBLIC_POWER_RULE.
+test("issued bills never change: a new revision, the flag toggled, and refused postings leave the issued run, its utility bill, invoices, invoice lines and expenses untouched", async () => {
+  await fresh();
+  await mainReading(next.end, 500);
   await save([roomA, roomB], "even");
-  const current = await prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, 100], [roomB, 50], [roomC, 10]], 161, thisMonth));
-  assert.equal("sharedMeter" in await inputsOf(current.runId), false);
-  assert.equal((await inputsOf(current.runId)).publicKwhMilli, 1000);
-  assert.equal((await runConfig("admin", unitId, thisMonth))!.status, "none");
-  // Next month: posted with the split, then issued.
-  const issued = await prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, 100], [roomB, 50], [roomC, 10]], 161));
+  const issued = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { billTotalMajor: 810 }));
   await confirmUtilityRun(staff("admin", "admin"), issued.runId);
-  const snapshotOf = async () => (await db.query(`SELECT md5(row_to_json(r)::text) run,
-      (SELECT md5(string_agg(row_to_json(l)::text,'|' ORDER BY l.id)) FROM public.utility_allocation_lines l WHERE l.run_id=r.id) lines,
-      (SELECT md5(coalesce(string_agg(row_to_json(i)::text,'|' ORDER BY i.id),'')) FROM public.invoice_lines i WHERE i.id IN (SELECT posted_invoice_line_id FROM public.utility_allocation_lines WHERE run_id=r.id)) invoice_lines
-    FROM public.utility_allocation_runs r WHERE r.id=$1`, [issued.runId])).rows[0];
-  const before = await snapshotOf();
-  // A later revision (another method, other rooms) and the flag turned off and on: the issued run is untouched.
+  const counts = (await db.query(`SELECT (SELECT count(*)::int FROM public.utility_allocation_lines WHERE run_id=$1) lines,
+      (SELECT count(*)::int FROM public.utility_bills b JOIN public.utility_allocation_runs r ON r.utility_bill_id=b.id WHERE r.id=$1) bills,
+      (SELECT count(DISTINCT posted_invoice_id)::int FROM public.utility_allocation_lines WHERE run_id=$1 AND posted_invoice_id IS NOT NULL) invoices,
+      (SELECT count(*)::int FROM public.utility_allocation_lines WHERE run_id=$1 AND posted_invoice_line_id IS NOT NULL) invoice_lines,
+      (SELECT count(*)::int FROM public.expenses WHERE property_id=$2 AND status::text<>'void') expenses`, [issued.runId, property])).rows[0];
+  assert.deepEqual([counts.lines, counts.bills, counts.invoice_lines], [4, 1, 3], "a non-empty issued fixture: 4 lines, its utility bill, 3 tenant invoice lines");
+  assert.ok(counts.invoices > 0 && counts.expenses > 0, "invoice headers and owner expenses exist");
+  const issuedRows = billingRows;
+  const before = await issuedRows();
   await save([roomA, roomC], "sub_meter");
   await flag(false); await flag(true);
-  assert.deepEqual(await snapshotOf(), before, "issued run, lines and invoice lines unchanged");
-  // A correction of this month's run (computed without the split) is recomputed without it.
-  await confirmUtilityRun(staff("admin", "admin"), current.runId);
-  const corrected = await prepareUtilityRun(staff("admin", "admin"), { ...runInput([[roomA, 100], [roomB, 50], [roomC, 10]], 162, thisMonth), sourceRunId: current.runId });
-  assert.equal("sharedMeter" in await inputsOf(corrected.runId), false);
-  assert.equal((await inputsOf(corrected.runId)).publicKwhMilli, 2000);
-});
-
-test("blocked shapes: a revision spanning units or naming a whole unit stops posting with nothing written; a revision not naming this unit leaves it alone", async () => {
-  await flag(true);
-  await resetRuns();
-  const input = runInput([[roomA, 100], [roomB, 50], [roomC, 10]], 161);
+  assert.deepEqual(await issuedRows(), before, "revision and flag changes write no billing row");
+  // Refused postings for the issued period: a revision spanning units; an accountant; a revoked session.
   await save([roomA, otherRoom], "even");
-  let before = await billing();
-  await assert.rejects(prepareUtilityRun(staff("admin", "admin"), input), flowKey("errors.sharedMeterUnits"), "spans two units");
-  assert.deepEqual(await billing(), before, "nothing written");
-  assert.deepEqual(await runConfig("admin"), { status: "multi_unit", revision: (await runConfig("admin"))!.revision });
-  await save([roomA, wholeUnit], "even");
-  before = await billing();
-  await assert.rejects(prepareUtilityRun(staff("admin", "admin"), input), flowKey("errors.sharedMeterUnits"), "names a whole unit too");
-  assert.deepEqual(await billing(), before);
-  // The whole unit itself, as a run: blocked (whole_unit), never split.
-  const wholeRevision = await save([wholeUnit], "even");
-  assert.deepEqual(await runConfig("admin", wholeUnit), { status: "whole_unit", revision: wholeRevision });
-  // A revision naming only another unit's room: this unit is not in it and posts by PUBLIC_POWER_RULE.
-  const elsewhere = await save([otherRoom], "even");
-  assert.deepEqual(await runConfig("admin"), { status: "none", revision: elsewhere });
-  const run = await prepareUtilityRun(staff("admin", "admin"), input);
-  assert.equal("sharedMeter" in await inputsOf(run.runId), false);
-  assert.equal((await inputsOf(run.runId)).publicKwhMilli, 1000);
-  await voidOpen();
+  await assert.rejects(prepareUtilityRun(staff("admin", "admin"), { ...runInput(readings(), TOTAL, next, { billTotalMajor: 810 }), sourceRunId: issued.runId }), flowKey("errors.sharedMeterUnits"));
+  await assert.rejects(prepareUtilityRun(staff("accountant", "accountant"), { ...runInput(readings(), TOTAL), sourceRunId: issued.runId }));
+  await session("gone", USERS.admin);
+  await db.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sid.gone]);
+  await assert.rejects(prepareUtilityRun({ ...staff("admin", "admin"), sessionId: sid.gone }, { ...runInput(readings(), TOTAL), sourceRunId: issued.runId }));
+  assert.deepEqual(await issuedRows(), before, "refused postings write nothing");
+  // The period before the revision's effective date is not governed by it.
+  await save([roomA, roomB], "even");
+  const current = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, thisMonth));
+  assert.deepEqual([("sharedMeter" in await inputsOf(current.runId)), (await inputsOf(current.runId)).publicKwhMilli], [false, SHARED]);
 });
 
-test("readings: the first period may take its total from the main meter minus the starting reading; missing or estimated readings, a later period without a total, or a selected room without a typed reading stop posting, nothing written", async () => {
+test("admission by period start, and corrections keep their method: a straddling period is not governed; a later-starting one is; a correction of a run computed OFF stays without the split", async () => {
+  await fresh();
+  await save([roomA, roomB], "even");
+  // Straddles the effective date (starts mid this month, ends mid next month): not governed (period start rule).
+  const straddle = { start: day(thisMonth, 15), end: day(next, 14) };
+  assert.deepEqual(await runConfig("admin", unitId, straddle), { status: "none" });
+  const s1 = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, straddle));
+  assert.deepEqual([("sharedMeter" in await inputsOf(s1.runId)), (await inputsOf(s1.runId)).publicKwhMilli], [false, SHARED]);
+  // Starts after the effective date and ends next-next month: governed.
+  const later = { start: day(next, 15), end: day(after, 14) };
+  await mainReading(day(after, 14), 500);
+  assert.equal((await runConfig("admin", unitId, later))!.status, "applies");
+  const s2 = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, later));
+  assert.equal(((await inputsOf(s2.runId)).sharedMeter as { kwhMilli: number }).kwhMilli, SHARED);
+  // A run of an eligible period computed with the flag OFF, issued, then corrected with the flag ON: the correction
+  // keeps the method its issued bill used (no split).
+  await resetRuns(); await clearMainReadings(); await mainReading(next.end, 500);
+  await flag(false);
+  const offRun = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), TOTAL, next, { billTotalMajor: 810 }));
+  await confirmUtilityRun(staff("admin", "admin"), offRun.runId);
   await flag(true);
-  await resetRuns();
+  assert.equal((await runConfig("admin"))!.status, "applies", "the period is eligible");
+  const corrected = await prepareUtilityRun(staff("admin", "admin"), { ...runInput([[roomA, 100.1], [roomB, 50.1], [roomC, 11]], 162.201, next, { billTotalMajor: 810 }), sourceRunId: offRun.runId });
+  assert.equal(corrected.runId, offRun.runId);
+  const inputs = await inputsOf(corrected.runId);
+  assert.deepEqual([("sharedMeter" in inputs), inputs.publicKwhMilli], [false, SHARED]);
+});
+
+test("blocked shapes, each through prepareUtilityRun with nothing written: spans units; names a whole unit; the whole unit's own run; an archived or missing selected room (even all of them); 平均分攤 under a revision", async () => {
+  await fresh();
+  await mainReading(next.end, 500);
+  const input = runInput(readings(), TOTAL);
+  const blocked = async (key: string, run: () => Promise<unknown>, label: string) => {
+    const before = await billing();
+    await assert.rejects(run(), flowKey(key), label);
+    assert.deepEqual(await billing(), before, `${label}: nothing written`);
+  };
+  await save([roomA, otherRoom], "even");
+  await blocked("errors.sharedMeterUnits", () => prepareUtilityRun(staff("admin", "admin"), input), "spans two units");
+  await save([roomA, wholeUnit], "even");
+  await blocked("errors.sharedMeterUnits", () => prepareUtilityRun(staff("admin", "admin"), input), "names a whole unit too");
+  // The whole unit's own run under a revision naming it.
+  await save([wholeUnit], "even");
+  await db.query("UPDATE public.units SET electricity_method='submeter' WHERE id=$1", [wholeUnit]);
+  await blocked("errors.sharedMeterUnits", () => prepareUtilityRun(staff("admin", "admin"), { ...runInput([[wholeUnit, 100]], 100), unitId: wholeUnit }), "whole unit only");
+  // Archived selected room: one of two, then the only one (never 'none', never PUBLIC_POWER_RULE).
+  await save([roomA, roomB], "even");
+  await db.query("UPDATE public.rooms SET archived_at=clock_timestamp() WHERE id=$1", [roomB]);
+  try {
+    assert.equal((await runConfig("admin"))!.status, "unavailable_rooms");
+    await blocked("errors.sharedMeterRooms", () => prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, R.A], [roomC, R.C]], TOTAL)), "one archived");
+    await rawRevision([roomB]);
+    assert.equal((await runConfig("admin"))!.status, "unavailable_rooms", "all selected rooms archived");
+    await blocked("errors.sharedMeterRooms", () => prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, R.A], [roomC, R.C]], TOTAL)), "all archived");
+  } finally { await db.query("UPDATE public.rooms SET archived_at=NULL WHERE id=$1", [roomB]); }
+  // A selected id that no longer exists.
+  await rawRevision([roomA, randomUUID()]);
+  await blocked("errors.sharedMeterRooms", () => prepareUtilityRun(staff("admin", "admin"), input), "missing room");
+  // 平均分攤 (every room 'even') under a revision for this unit; and under one spanning units.
+  await db.query("UPDATE public.rooms SET electricity_method='even' WHERE unit_id=$1", [unitId]);
+  try {
+    const even = runInput([], null, next, { billTotalMajor: 900 });
+    await save([roomA, roomB], "even");
+    await blocked("errors.sharedMeterMode", () => prepareUtilityRun(staff("admin", "admin"), even), "even split under a revision");
+    await save([roomA, otherRoom], "even");
+    await blocked("errors.sharedMeterUnits", () => prepareUtilityRun(staff("admin", "admin"), even), "even split, spanning revision");
+    // Positive control: with a revision not naming this unit, the even split posts as before.
+    await save([otherRoom], "even");
+    const run = await prepareUtilityRun(staff("admin", "admin"), even);
+    assert.equal("sharedMeter" in await inputsOf(run.runId), false);
+  } finally { await db.query("UPDATE public.rooms SET electricity_method='submeter' WHERE unit_id=$1", [unitId]); }
+  // A selected room without a line in a metered run (tenant pays directly).
+  await save([roomA, roomB], "even");
+  await db.query("UPDATE public.rooms SET electricity_method='tenant_direct' WHERE id=$1", [roomB]);
+  try { await blocked("errors.sharedMeterReadings", () => prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, R.A], [roomC, R.C]], TOTAL)), "room B has no line"); }
+  finally { await db.query("UPDATE public.rooms SET electricity_method='submeter' WHERE id=$1", [roomB]); }
+});
+
+test("readings: an actual main reading is required in every period (typed total or not); the first period may seed its total; a later period needs a typed total; a backfill before a later run is not the first period", async () => {
+  await fresh();
   await save([roomA, roomB], "sub_meter", "1000.5");
-  const noTotal = runInput([[roomA, 100], [roomB, 50], [roomC, 10]], null);
-  // No in-period main reading: blocked.
-  let before = await billing();
-  await assert.rejects(prepareUtilityRun(staff("admin", "admin"), noTotal), flowKey("errors.sharedMeterReadings"), "missing main reading");
-  assert.deepEqual(await billing(), before);
-  // An estimated in-period main reading: blocked.
-  await db.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value,is_estimate) VALUES($1,$2,$3,1162.5,true)", [ORG_ID, mainMeter, next.end]);
-  before = await billing();
-  await assert.rejects(prepareUtilityRun(staff("admin", "admin"), noTotal), flowKey("errors.sharedMeterReadings"), "estimated main reading");
-  assert.deepEqual(await billing(), before);
-  // A real reading superseding it: seeded total 1162.5 − 1000.5 = 162 kWh; 2 kWh shared by sub-meter 100:50.
-  const estimated = (await db.query("SELECT id FROM public.meter_readings WHERE meter_id=$1 AND is_estimate", [mainMeter])).rows[0].id;
-  await db.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value,is_estimate,supersedes_id) VALUES($1,$2,$3,1162.5,false,$4)", [ORG_ID, mainMeter, next.end, estimated]);
+  const blocked = async (input: UtilityRunInput, label: string) => {
+    const before = await billing();
+    await assert.rejects(prepareUtilityRun(staff("admin", "admin"), input), flowKey("errors.sharedMeterReadings"), label);
+    assert.deepEqual(await billing(), before, `${label}: nothing written`);
+  };
+  // First period, no main reading: blocked with or without a typed total.
+  await blocked(runInput(readings(), null), "no main reading, no total");
+  await blocked(runInput(readings(), TOTAL), "no main reading, typed total");
+  // Estimated: blocked, typed or not. Below the starting reading: blocked.
+  const est = (await mainReading(next.end, 1162.5, true)).rows[0].id;
+  await blocked(runInput(readings(), null), "estimated, no total");
+  await blocked(runInput(readings(), TOTAL), "estimated, typed total");
+  const low = (await db.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value,is_estimate,supersedes_id) VALUES($1,$2,$3,999,false,$4) RETURNING id", [ORG_ID, mainMeter, next.end, est])).rows[0].id;
+  await blocked(runInput(readings(), TOTAL), "below the starting reading");
+  // An actual reading superseding it: seeded total 1162.5 − 1000.5 = 162 kWh.
+  await db.query("INSERT INTO public.meter_readings(org_id,meter_id,read_on,value,is_estimate,supersedes_id) VALUES($1,$2,$3,1162.5,false,$4)", [ORG_ID, mainMeter, next.end, low]);
   const config = await runConfig("admin");
-  assert.deepEqual([config!.status, config!.firstPeriod, (config!.mainReading as { value: string; estimated: boolean }).estimated], ["applies", true, false]);
-  const seeded = await prepareUtilityRun(staff("admin", "admin"), noTotal);
-  const inputs = await inputsOf(seeded.runId);
+  assert.deepEqual([config!.status, config!.firstPeriod, (config!.mainReading as { estimated: boolean }).estimated], ["applies", true, false]);
+  const seeded = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), null));
+  let inputs = await inputsOf(seeded.runId);
   assert.equal(inputs.totalKwh, 162);
-  assert.deepEqual((inputs.sharedMeter as Record<string, unknown>).sharesMilli, expectShares(2000, [100000, 50000]));
+  assert.deepEqual((inputs.sharedMeter as Record<string, unknown>).sharesMilli, expectShares(162000 - 160200, [OWN.A, OWN.B]));
   assert.equal((inputs.sharedMeter as Record<string, unknown>).seededTotalMilli, 162000);
   await confirmUtilityRun(staff("admin", "admin"), seeded.runId);
-  // The period after: no longer the first period, so a total must be typed.
-  const later = runInput([[roomA, 100], [roomB, 50], [roomC, 10]], null, after);
-  assert.equal((await runConfig("admin", unitId, after))!.firstPeriod, false);
-  before = await billing();
-  await assert.rejects(prepareUtilityRun(staff("admin", "admin"), later), flowKey("errors.sharedMeterReadings"), "later period needs a typed total");
-  assert.deepEqual(await billing(), before);
-  // A metered room without its typed reading is refused by posting itself, as before B-109b.
-  before = await billing();
-  await assert.rejects(prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, 100], [roomC, 10]], 161, after)), flowKey("errors.amount"), "room B has no reading");
-  assert.deepEqual(await billing(), before);
-  // A selected room that is not metered in this run (tenant pays the utility directly) cannot carry a share: blocked.
-  await db.query("UPDATE public.rooms SET electricity_method='tenant_direct' WHERE id=$1", [roomB]);
-  try {
-    before = await billing();
-    await assert.rejects(prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, 100], [roomC, 10]], 161, after)), flowKey("errors.sharedMeterReadings"), "room B has no line");
-    assert.deepEqual(await billing(), before);
-  } finally { await db.query("UPDATE public.rooms SET electricity_method='submeter' WHERE id=$1", [roomB]); }
-  // With the total typed, the later period posts.
-  const typed = await prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, 100], [roomB, 50], [roomC, 10]], 163, after));
-  assert.deepEqual(((await inputsOf(typed.runId)).sharedMeter as Record<string, unknown>).sharesMilli, expectShares(3000, [100000, 50000]));
-  await voidOpen();
+  // The period after, with a VALID main reading: not the first period, so only the missing typed total blocks.
+  await mainReading(after.end, 1330.5);
+  const later = await runConfig("admin", unitId, after);
+  assert.deepEqual([later!.firstPeriod, (later!.mainReading as { estimated: boolean }).estimated], [false, false]);
+  await blocked(runInput(readings(), null, after), "later period needs a typed total");
+  const typed = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), 163, after));
+  inputs = await inputsOf(typed.runId);
+  assert.deepEqual([inputs.totalKwh, (inputs.sharedMeter as Record<string, unknown>).sharesMilli], [163, expectShares(2800, [OWN.A, OWN.B])]);
+  // Backfill: with the later run live, the first period's own run voided and re-prepared is no longer the first period.
+  await voidUtilityRun(staff("admin", "admin"), seeded.runId, "測試重設");
+  assert.equal((await runConfig("admin"))!.firstPeriod, false, "a later run used the baseline");
+  await blocked(runInput(readings(), null), "backfill cannot seed from the starting reading");
+  const backfill = await prepareUtilityRun(staff("admin", "admin"), runInput(readings(), 162));
+  assert.equal(((await inputsOf(backfill.runId)).sharedMeter as Record<string, unknown>).seededTotalMilli, null);
 });
 
-test("privileges and denials: service-only functions; staff admin/manager only; revoked, cross-org, tuple and app.env refused; read-only (no writes)", async () => {
-  await flag(true);
-  await resetRuns();
+test("privileges and denials: service-only functions; staff admin/manager only; revoked, cross-org, tuple and app.env refused; read-only; the split helper validates (a missing weight included)", async () => {
+  await fresh();
   await save([roomA, roomB], "even");
   for (const fn of ["app.b109_split_shares(jsonb,bigint,bigint)", "app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)"]) {
     const r = (await db.query(`SELECT has_function_privilege('anon',$1,'EXECUTE') anon, has_function_privilege('authenticated',$1,'EXECUTE') auth,
@@ -372,81 +500,84 @@ test("privileges and denials: service-only functions; staff admin/manager only; 
   await assert.rejects(runConfig("admin", unitId, next, { pinEnv: "sandbox" }), code("42501"), "app.env");
   await assert.rejects(runConfig("admin", randomUUID()), code("42501"), "unknown unit");
   await assert.rejects(runConfig("admin", unitId, { start: next.end, end: next.start }), code("22023"), "bad period");
-  // Accountants cannot post at all (posting's own guard), whatever the flag.
-  await assert.rejects(prepareUtilityRun(staff("accountant", "accountant"), runInput([[roomA, 100], [roomB, 50], [roomC, 10]], 161)));
-  // The flag off: null (posting then never calls it).
+  await assert.rejects(prepareUtilityRun(staff("accountant", "accountant"), runInput(readings(), TOTAL)));
   await flag(false, true);
-  assert.equal(await runConfig("admin"), null);
+  assert.equal(await runConfig("admin"), null, "flag off: null");
   await flag(true);
   assert.deepEqual(await billing(), before, "read-only: nothing written by any call");
-  // The split helper is exact and validates its input.
   const shares = await svc(null, async c => (await c.query(`SELECT ${SHARES}($1::jsonb,$2,$3) r`, [JSON.stringify([{ id: "a", weight: 2 }, { id: "b", weight: 1 }, { id: "c", weight: 0 }]), 1001, 1001])).rows[0].r);
   assert.deepEqual(shares.map((x: { milli: string; amount: string }) => [x.milli, x.amount]), [["668", "668"], ["333", "333"], ["0", "0"]]);
   const zero = await svc(null, async c => (await c.query(`SELECT ${SHARES}($1::jsonb,10,NULL) r`, [JSON.stringify([{ id: "a", weight: 0 }, { id: "b", weight: 0 }, { id: "c", weight: 0 }])])).rows[0].r);
   assert.deepEqual(zero.map((x: { milli: string }) => x.milli), ["4", "3", "3"], "all-zero weights split evenly, remainder to the first");
-  for (const bad of ['[]', '[{"id":"a","weight":-1}]', '[{"weight":1}]', '[{"id":"a","weight":"1"}]', '{}'])
+  for (const bad of ['[]', '[{"id":"a","weight":-1}]', '[{"weight":1}]', '[{"id":"a","weight":"1"}]', '[{"id":"a"}]', '[{"id":"a","weight":null}]', '[{"id":"a","weight":1},{"id":"b"}]', '{}'])
     await assert.rejects(svc(null, c => c.query(`SELECT ${SHARES}($1::jsonb,1,NULL)`, [bad])), code("22023"), bad);
   await assert.rejects(svc(null, c => c.query(`SELECT ${SHARES}('[{"id":"a","weight":1}]'::jsonb,-1,NULL)`)), code("22023"));
 });
 
-test("lock races (real holders, pid-matched waits, lock_timeout): a revoked session, a demoted member, a new revision, a swapped main meter or the flag turned off while waiting → refused / OFF; positive controls serialise", async () => {
-  await flag(true);
-  await resetRuns();
+test("lock races, each through prepareUtilityRun with real holders, pid-matched waits and billing snapshots: revoked session, demoted member, new revision, swapped main meter → refused, nothing written; the flag turned off mid-wait → serialised OFF posting", async () => {
+  await fresh();
+  await mainReading(next.end, 500);
   await save([roomA, roomB], "even");
-  const race = async (setup: (h: Client) => Promise<void>, who = "admin") => {
+  const input = runInput(readings(), TOTAL, next, { billTotalMajor: 810 });
+  /** Holder first, then posting; the holder commits once posting waits on it. Posting's result or error. */
+  const race = async (setup: (h: Client) => Promise<unknown>, who: Session = staff("admin", "admin")) => {
     const h = await holder();
     try {
       await setup(h);
-      const pending = runConfig(who, unitId, next, { lockTimeout: "5s" }).then(x => x, e => e);
+      const pending = prepareUtilityRun(who, input).then(x => x, e => e);
       await waitForBlocked(h);
       await h.query("COMMIT");
       return await pending;
     } finally { await h.end(); }
   };
-  const before = await billing();
-  // 1. The session revoked while the gateway waits on it.
+  const refused = async (label: string, setup: (h: Client) => Promise<unknown>, who?: Session) => {
+    const before = await billingRows();
+    const result = await race(setup, who);
+    assert.ok(result instanceof Error, `${label}: refused (${JSON.stringify(result)})`);
+    assert.deepEqual(await billingRows(), before, `${label}: nothing written`);
+  };
+  // 1. The session revoked while posting waits on it.
   await session("racer", USERS.admin);
-  assert.ok(code("42501")(await race(h => h.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sid.racer]).then(() => undefined), "racer")));
-  // 2. The member demoted to accountant while the gateway waits on the membership row.
+  await refused("revoked", h => h.query("UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE id=$1", [sid.racer]), { ...staff("admin", "admin"), sessionId: sid.racer });
+  // 2. The member demoted to accountant while posting waits on the membership row.
   await session("racer2", USERS.manager);
-  assert.ok(code("42501")(await race(h => h.query("UPDATE public.org_members SET role='accountant' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]).then(() => undefined), "racer2")));
+  await refused("demoted", h => h.query("UPDATE public.org_members SET role='accountant' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]), { ...staff("manager", "manager"), sessionId: sid.racer2 });
   await db.query("UPDATE public.org_members SET role='manager' WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]);
-  // Positive control: the same holder committing no change → serialised and admitted.
-  assert.equal((await race(h => h.query("UPDATE public.org_members SET role=role WHERE org_id=$1 AND user_id=$2", [ORG_ID, USERS.manager]).then(() => undefined), "racer2") as Config)!.status, "applies");
-  // 3. A new revision saved while the gateway waits (holder on a room row the gateway locks after the revisions):
-  //    the locked revision set no longer equals the current one → refused.
+  // 3. A new revision saved while posting waits (holder also on a room row the gateway locks after the revisions).
   const latest = (await runConfig("admin"))!.revision as number;
-  const insertRevision = (h: Client, method: string) => h.query(`INSERT INTO app.b109_shared_meter_configs(org_id,property_id,revision,space_ids,split_method,start_reading,effective_from,request_id,created_by)
-    VALUES($1,$2,$3,$4,$5,0,$6,$7,$8)`, [ORG_ID, property, latest + 1, [roomA, roomB], method, next.start, randomUUID(), USERS.admin]);
-  assert.ok(code("42501")(await race(async h => { await h.query("UPDATE public.rooms SET label=label WHERE id=$1", [roomC]); await insertRevision(h, "days_occupied"); })));
-  // Positive control: committed before the call, the new revision is the one applied.
-  const now = await runConfig("admin");
-  assert.deepEqual([now!.status, now!.revision, now!.method], ["applies", latest + 1, "days_occupied"]);
-  // 4. The main meter swapped while waiting (holder on the meter row): the locked meter set differs → refused.
-  const newMeter = randomUUID();
-  assert.ok(code("42501")(await race(async h => {
-    await h.query("UPDATE public.meters SET archived_at=clock_timestamp() WHERE id=$1", [mainMeter]);
-    await h.query(`INSERT INTO public.meters(id,org_id,property_id,unit_id,utility,usage_unit,payer,split_method,rate_source,rate_minor_per_unit)
-      VALUES($1,$2,$3,$4,'electricity','kWh','owner','none','fixed_rate',500)`, [newMeter, ORG_ID, property, unitId]);
-  })));
-  await db.query("DELETE FROM public.meters WHERE id=$1", [newMeter]);
-  await db.query("UPDATE public.meters SET archived_at=NULL WHERE id=$1", [mainMeter]);
-  // 5. The flag turned off while waiting on the flag row → OFF (null), never applied.
-  assert.equal(await race(h => h.query(`UPDATE public.platform_settings SET value=jsonb_set(value,'{enabled}','false'::jsonb) WHERE key='shared_meter'`).then(() => undefined)), null);
-  await flag(true);
-  assert.equal((await runConfig("admin"))!.status, "applies", "positive control after the flag is back");
-  // 6. Posting itself, end to end, with a holder on a room row: serialised, the split applied once, no partial write.
-  const h = await holder();
-  let run: { runId: string } | undefined;
-  try {
+  await refused("new revision", async h => {
     await h.query("UPDATE public.rooms SET label=label WHERE id=$1", [roomC]);
-    const pending = prepareUtilityRun(staff("admin", "admin"), runInput([[roomA, 100], [roomB, 50], [roomC, 10]], 161)).then(x => x, e => e);
-    await waitForBlocked(h);
-    await h.query("COMMIT");
-    run = await pending as { runId: string };
-  } finally { await h.end(); }
-  assert.ok(run?.runId, "serialised behind the holder");
-  assert.equal(((await inputsOf(run.runId)).sharedMeter as { kwhMilli: number }).kwhMilli, 1000);
-  assert.notDeepEqual(await billing(), before);
+    await h.query(`INSERT INTO app.b109_shared_meter_configs(org_id,property_id,revision,space_ids,split_method,start_reading,effective_from,request_id,created_by)
+      VALUES($1,$2,$3,$4,'days_occupied',0,$5,$6,$7)`, [ORG_ID, property, latest + 1, [roomA, roomB], next.start, randomUUID(), USERS.admin]);
+  });
+  assert.deepEqual([(await runConfig("admin"))!.revision, (await runConfig("admin"))!.method], [latest + 1, "days_occupied"], "positive control: committed first, it is the one applied");
+  // 4. The main meter swapped while posting waits on it.
+  const newMeter = randomUUID();
+  try {
+    await refused("main meter swapped", async h => {
+      await h.query("UPDATE public.meters SET archived_at=clock_timestamp() WHERE id=$1", [mainMeter]);
+      await h.query(`INSERT INTO public.meters(id,org_id,property_id,unit_id,utility,usage_unit,payer,split_method,rate_source,rate_minor_per_unit)
+        VALUES($1,$2,$3,$4,'electricity','kWh','owner','none','fixed_rate',500)`, [newMeter, ORG_ID, property, unitId]);
+    });
+  } finally {
+    await db.query("DELETE FROM public.meters WHERE id=$1", [newMeter]);
+    await db.query("UPDATE public.meters SET archived_at=NULL WHERE id=$1", [mainMeter]);
+  }
+  // 5. A real change that serialises: the flag turned off while posting waits on the flag row. Posting then runs
+  //    OFF (PUBLIC_POWER_RULE) on the committed state: one run, four lines, the legacy amounts.
+  const runsBefore = (await db.query("SELECT count(*)::int n FROM public.utility_allocation_runs WHERE unit_id=$1 AND status::text<>'void'", [unitId])).rows[0].n;
+  const result = await race(h => h.query(`UPDATE public.platform_settings SET value=jsonb_set(value,'{enabled}','false'::jsonb) WHERE key='shared_meter'`)) as { runId: string };
+  assert.ok(result.runId, JSON.stringify(result));
+  const runs = (await db.query("SELECT count(*)::int n FROM public.utility_allocation_runs WHERE unit_id=$1 AND status::text<>'void'", [unitId])).rows[0].n;
+  assert.equal(runs, runsBefore + 1, "exactly one new run");
+  const inputs = await inputsOf(result.runId);
+  assert.deepEqual([("sharedMeter" in inputs), inputs.publicKwhMilli, inputs.publicAmountMinor], [false, SHARED, price(SHARED)]);
+  assert.deepEqual(await lineRows(result.runId), expectedLines(0, 0, 50), "four lines, legacy usage and amounts");
+  await flag(true);
+  // Positive control: the same holder committing no change → the split applies, one run, four lines, split amounts.
   await resetRuns();
+  const ok = await race(h => h.query("UPDATE public.platform_settings SET value=value WHERE key='shared_meter'")) as { runId: string };
+  const shares = expectShares(SHARED, [days, days - 5]);
+  assert.deepEqual(((await inputsOf(ok.runId)).sharedMeter as { sharesMilli: number[] }).sharesMilli, shares);
+  assert.deepEqual(await lineRows(ok.runId), expectedLines(shares[0], shares[1], 50));
 });

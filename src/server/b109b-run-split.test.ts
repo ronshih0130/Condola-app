@@ -26,6 +26,7 @@ test("parseRunSharedConfig accepts the gateway's shapes and refuses anything els
   assert.deepEqual(parseRunSharedConfig({ status: "none", revision: 3 }), { status: "none" });
   assert.deepEqual(parseRunSharedConfig({ status: "multi_unit", revision: 3 }), { status: "multi_unit", revision: 3 });
   assert.deepEqual(parseRunSharedConfig({ status: "whole_unit", revision: 1 }), { status: "whole_unit", revision: 1 });
+  assert.deepEqual(parseRunSharedConfig({ status: "unavailable_rooms", revision: 4 }), { status: "unavailable_rooms", revision: 4 });
   assert.deepEqual(parseRunSharedConfig(applies()), applies());
   assert.deepEqual(parseRunSharedConfig(applies({ mainReading: null, firstPeriod: false })), applies({ mainReading: null, firstPeriod: false }));
   for (const bad of [{ status: "ready" }, { status: "multi_unit" }, applies({ spaceIds: [] }), applies({ spaceIds: ["x"] }), applies({ method: "weird" as never }),
@@ -34,15 +35,26 @@ test("parseRunSharedConfig accepts the gateway's shapes and refuses anything els
     assert.throws(() => parseRunSharedConfig(bad), /Invalid shared meter run config/, JSON.stringify(bad));
 });
 
-test("seededTotalMilli: a typed total wins; the first period seeds main reading − starting reading; anything else stops posting", () => {
-  assert.equal(seededTotalMilli(applies(), 161), null);
+test("seededTotalMilli: an actual main reading is required in every period, typed total or not; a typed total then wins; only the first period seeds", () => {
+  const stop = (c: Extract<RunSharedConfig, { status: "applies" }>, typed: number | null) =>
+    assert.throws(() => seededTotalMilli(c, typed), (e: { key?: string }) => e.key === "errors.sharedMeterReadings", JSON.stringify([c.firstPeriod, c.mainReading, typed]));
+  const estimated = { value: "1162.500", estimated: true, readOn: "2026-12-31" }, below = { value: "999.000", estimated: false, readOn: "2026-12-31" };
+  // First period.
+  assert.equal(seededTotalMilli(applies(), 161), null, "typed total wins");
   assert.equal(seededTotalMilli(applies(), 0), null);
-  assert.equal(seededTotalMilli(applies(), null), 162000);
-  const stop = (c: Extract<RunSharedConfig, { status: "applies" }>) => assert.throws(() => seededTotalMilli(c, null), (e: { key?: string }) => e.key === "errors.sharedMeterReadings");
-  stop(applies({ firstPeriod: false }));
-  stop(applies({ mainReading: null }));
-  stop(applies({ mainReading: { value: "1162.500", estimated: true, readOn: "2026-12-31" } }));
-  stop(applies({ mainReading: { value: "999.000", estimated: false, readOn: "2026-12-31" } }));
+  assert.equal(seededTotalMilli(applies(), null), 162000, "seeded: 1162.5 − 1000.5");
+  for (const typed of [161, null]) {
+    stop(applies({ mainReading: null }), typed);
+    stop(applies({ mainReading: estimated }), typed);
+    stop(applies({ mainReading: below }), typed);
+  }
+  // A later period: the reading is still required and actual; the total must be typed.
+  const later = (main: Extract<RunSharedConfig, { status: "applies" }>["mainReading"]) => applies({ firstPeriod: false, mainReading: main });
+  assert.equal(seededTotalMilli(later({ value: "1300.000", estimated: false, readOn: "2027-01-31" }), 140), null);
+  assert.equal(seededTotalMilli(later(below), 140), null, "a later period is not compared with the starting reading");
+  stop(later({ value: "1300.000", estimated: false, readOn: "2027-01-31" }), null);
+  stop(later(null), 140);
+  stop(later(estimated), 140);
 });
 
 test("sharedWeights by method, in the revision's order; a selected room without a line or a typed reading stops posting", () => {
@@ -90,7 +102,9 @@ test("readRunSharedConfig: flag OFF (any part) → no gateway call; ON → the g
   await assert.rejects(readRunSharedConfig(client(q => q.sql.includes("platform_settings") ? { on: true } : { r: { status: "bogus" } }) as never, scope, A, "2026-12-01", "2026-12-31"), /Invalid shared meter run config/);
 });
 
-test("the two posting blocks have message keys (generic text until approved copy exists)", () => {
+test("the posting blocks have message keys (generic text until approved copy exists)", () => {
   assert.equal(ERRORS["errors.sharedMeterUnits"], "i_generic");
   assert.equal(ERRORS["errors.sharedMeterReadings"], "i_generic");
+  assert.equal(ERRORS["errors.sharedMeterRooms"], "i_generic");
+  assert.equal(ERRORS["errors.sharedMeterMode"], "i_generic");
 });

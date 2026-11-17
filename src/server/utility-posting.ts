@@ -413,14 +413,20 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
     const roomSum = meterRows.reduce((total, row) => total + rawOf(row.space), 0);
-    // B-109b: the shared-meter decision. null whenever the org flag is OFF (nothing below changes then), for even
-    // mode, archived corrections, and corrections of runs computed without it (issued bills never change).
+    // B-109b: the shared-meter decision, in EVERY mode (even split included). null whenever the flag is OFF (nothing
+    // below changes then); also null for archived corrections and for corrections of runs computed without it (a
+    // correction keeps the method its issued bill used).
     const priorShared = prior
       ? (await maybe<{ shared: boolean }>(client, `SELECT (inputs ? 'sharedMeter') AS shared FROM utility_allocation_runs WHERE org_id=$1 AND id=$2`, [session.orgId, prior.id]))?.shared === true
       : false;
-    const sharedConfig = evenMode || archivedCorrection || (prior && !priorShared)
+    const sharedConfig = archivedCorrection || (prior && !priorShared)
       ? null : await readRunSharedConfig(client, session, unit.id, input.periodStart, input.periodEnd);
+    // Blocks, never a silent PUBLIC_POWER_RULE fallback: a revision spanning units or naming a whole unit; one naming
+    // an archived or missing room; and 平均分攤 (a bill split evenly over every room) under a revision that gives
+    // the shared kWh to selected rooms only.
     if (sharedConfig && (sharedConfig.status === "multi_unit" || sharedConfig.status === "whole_unit")) throw new FlowError("errors.sharedMeterUnits");
+    if (sharedConfig?.status === "unavailable_rooms") throw new FlowError("errors.sharedMeterRooms");
+    if (sharedConfig?.status === "applies" && evenMode) throw new FlowError("errors.sharedMeterMode");
     const sharedApplies = sharedConfig?.status === "applies" ? sharedConfig : null;
     // The first period of a revision may take its total from the main meter minus the revision's starting reading.
     const seededMilli = sharedApplies ? seededTotalMilli(sharedApplies, input.totalKwh) : null;
@@ -574,7 +580,9 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       currentKwh: row.currentKwh,
       ...(row.sharedMilli ? { sharedMilli: row.sharedMilli } : {}),
     }));
-    const usageMilli = evenMode ? totalMilli : roomSum;
+    // B-109b: with the split, the run's usage (and the bill's, which sets the per-kWh cap average) is every kWh billed:
+    // the room meters plus the shared kWh given to rooms. Without it (distributedMilli 0) this is unchanged.
+    const usageMilli = evenMode ? totalMilli : roomSum + distributedMilli;
     const ownerPublicMilli = publicMilli - distributedMilli;
     const publicAmountMinor = evenMode ? 0 : signedUsageAmountMinor(unit.currency, rateMajor, ownerPublicMilli);
     if (
