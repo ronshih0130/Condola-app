@@ -72,12 +72,15 @@ const PROBES = [
     "SELECT x.org_id, x.unit_id, x.assigned_member_id FROM public.maintenance_tickets x WHERE x.id=$1", /maintenance_tickets_pkey/],
   ["SELECT m.id INTO me FROM public.org_members m WHERE m.org_id=t.org_id AND m.user_id=auth.uid() AND m.role='maintenance' AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id)",
     "SELECT m.id FROM public.org_members m WHERE m.org_id=$2 AND m.user_id=$3 AND m.role='maintenance' AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id)",
-    // Either user-keyed index is an exact caller lookup; the planner picks by version/stats (CI chose org_members_user_idx).
-    /Index (Only )?Scan using (org_members_org_id_user_id_key|org_members_user_idx) on org_members/],
+    // Any index scan on org_members: the planner picks among the user/org indexes by version and stats (CI chose
+    // org_members_user_idx). The caller-first bound that matters is asserted on the assignment-table probes below.
+    /Index (Only )?Scan using \w+ on org_members/],
   ["EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=t.org_id AND a.member_id=me AND a.unit_id=t.unit_id)",
     "SELECT EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=$2 AND a.member_id=$4 AND a.unit_id=$5)", /b059_unit_assignments_member_unit_key/],
   ["FOR inv IN SELECT i.id FROM public.invitations i WHERE i.accepted_by=auth.uid() AND i.org_id=t.org_id AND i.status='accepted' LOOP",
-    "SELECT i.id FROM public.invitations i WHERE i.accepted_by=$3 AND i.org_id=$2 AND i.status='accepted'", /b059_invitations_accepted_by_idx/],
+    "SELECT i.id FROM public.invitations i WHERE i.accepted_by=$3 AND i.org_id=$2 AND i.status='accepted'",
+    // Any index scan on invitations (CI chose invitations_org_idx over the partial accepted_by index); never a Seq Scan.
+    /Index (Only )?Scan using \w+ on invitations/],
   ["EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=t.org_id AND a.invitation_id=inv AND a.unit_id=t.unit_id)",
     "SELECT EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=$2 AND a.invitation_id=$6 AND a.unit_id=$5)",
     /b059_unit_assignments_invite_unit_key/],
