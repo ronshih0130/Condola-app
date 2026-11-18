@@ -17,6 +17,8 @@
 # authenticated, and service_role. The scratch database records that default
 # before migrations so has_function_privilege sees the same grants a hosted
 # CREATE FUNCTION receives. 20261030130000 then revokes those defaults.
+# It records the hosted table and sequence defaults for postgres too; the
+# PR-029 / LPQ-21 chain guard fails if anon or PUBLIC keeps any of them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -95,6 +97,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+-- PR-029 / LPQ-21: hosted postgres/public defaults for tables and sequences
+-- (staging pg_default_acl before PR-029: r = anon=arwdxtm, S = anon=rwU).
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 SQL
   echo "SET ROLE postgres;"
   for migration in supabase/migrations/*.sql; do
@@ -638,6 +646,56 @@ echo "gotrue_confirm_uses anon/authenticated/public: ${table_state}"
 if [[ -f supabase/migrations/20261030110000_gotrue_confirm_single_use.sql && "$table_state" != "none" ]]; then
   echo "anon, authenticated, or PUBLIC can use public.gotrue_confirm_uses (${table_state})" >&2
   exit 1
+fi
+
+# PR-029 / LPQ-21 chain guard. The scratch database started with the hosted
+# postgres/public table and sequence defaults (setup above). After the whole
+# chain, anon and PUBLIC must hold no default and no grant on any public
+# relation, and a table plus sequence that postgres creates now must give them
+# nothing, while the authenticated/service_role defaults stay as they were.
+# A later migration that re-grants the default, or a migration that runs before
+# the revokes and leaves a public table open, fails here.
+if [[ -f supabase/migrations/20261116120000_pr029_default_privileges.sql ]]; then
+  pr029_state="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+BEGIN;
+SET LOCAL ROLE postgres;
+CREATE TABLE public.pr029_default_priv_probe (id bigserial PRIMARY KEY);
+RESET ROLE;
+WITH d AS (
+  SELECT d.defaclobjtype t, a.grantee
+  FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) a
+  WHERE d.defaclrole = 'postgres'::regrole AND d.defaclnamespace = 'public'::regnamespace
+    AND d.defaclobjtype IN ('r', 'S')
+), rel AS (
+  SELECT c.relname FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
+  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+    AND (a.grantee = 0 OR a.grantee = 'anon'::regrole)
+)
+SELECT concat_ws(' ',
+  'default_anon_public=' || (SELECT count(*) FROM d WHERE grantee = 0 OR grantee = 'anon'::regrole),
+  'default_auth_r=' || (SELECT count(*) > 0 FROM d WHERE t = 'r' AND grantee = 'authenticated'::regrole),
+  'default_svc_r=' || (SELECT count(*) > 0 FROM d WHERE t = 'r' AND grantee = 'service_role'::regrole),
+  'default_auth_S=' || (SELECT count(*) > 0 FROM d WHERE t = 'S' AND grantee = 'authenticated'::regrole),
+  'default_svc_S=' || (SELECT count(*) > 0 FROM d WHERE t = 'S' AND grantee = 'service_role'::regrole),
+  'open_relations=' || coalesce((SELECT string_agg(DISTINCT relname, ',' ORDER BY relname) FROM rel), 'none'),
+  'probe_anon=' || (has_table_privilege('anon', 'public.pr029_default_priv_probe', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_sequence_privilege('anon', 'public.pr029_default_priv_probe_id_seq', 'USAGE,SELECT,UPDATE')),
+  'probe_public=' || (SELECT count(*) FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
+    WHERE c.oid IN ('public.pr029_default_priv_probe'::regclass, 'public.pr029_default_priv_probe_id_seq'::regclass) AND a.grantee = 0),
+  'probe_auth=' || (has_table_privilege('authenticated', 'public.pr029_default_priv_probe', 'SELECT')
+    AND has_sequence_privilege('authenticated', 'public.pr029_default_priv_probe_id_seq', 'USAGE')),
+  'probe_svc=' || (has_table_privilege('service_role', 'public.pr029_default_priv_probe', 'SELECT')
+    AND has_sequence_privilege('service_role', 'public.pr029_default_priv_probe_id_seq', 'USAGE')));
+ROLLBACK;
+SQL
+)"
+  pr029_state="$(printf '%s\n' "$pr029_state" | grep '^default_anon_public=')"
+  echo "PR-029 table/sequence defaults: ${pr029_state}"
+  expected="default_anon_public=0 default_auth_r=true default_svc_r=true default_auth_S=true default_svc_S=true open_relations=none probe_anon=false probe_public=0 probe_auth=true probe_svc=true"
+  if [[ "$pr029_state" != "$expected" ]]; then
+    echo "anon/PUBLIC table or sequence default-privilege drift after the migration chain (expected: ${expected})" >&2
+    exit 1
+  fi
 fi
 
 # Stand in for PR #18 when those functions are not in this database. Grant
