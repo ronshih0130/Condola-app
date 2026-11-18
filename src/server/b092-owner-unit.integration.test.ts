@@ -104,14 +104,15 @@ test("OWN-33-AC2: whole unit — tenant, term, rent; six-month window on the pro
   assert.ok(!/email|@/.test(JSON.stringify(u)), "never an email");
 });
 
-test("OWN-33-AC2: room panel; open repairs only (max five, newest first) of this space; vacant room", async () => {
+test("OWN-33-AC2: room panel; open repairs only (max five, newest first) of this space, also while vacant", async () => {
   const f = await fixture(), o = await person(ORG_ID);
   await own(f.p, o.contact);
   const keep = [];
   for (let i = 0; i < 6; i++) keep.push(await ticket(f.p, f.whole, null, `Synthetic whole ${i}`, ["open", "triaged", "assigned", "in_progress", "on_hold", "open"][i], i + 1));
   for (const st of ["resolved", "closed", "cancelled"]) await ticket(f.p, f.whole, null, `Done ${st}`, st, 0);
   const roomOpen = await ticket(f.p, f.split, f.ra, "Synthetic room A", "assigned", 2);
-  await ticket(f.p, f.split, f.rb, "Synthetic room B", "open", 1);
+  const roomBOpen = await ticket(f.p, f.split, f.rb, "Synthetic room B", "open", 1);
+  await ticket(f.p, f.split, f.rb, "Room B closed", "closed", 0);
   await ticket(f.p, f.split, null, "Synthetic 2F common", "open", 1);
   await ticket(f.p, f.split, f.ra, "Room A resolved", "resolved", 0);
   const whole = await ownerUnit(o.s, f.whole, null, { v3 });
@@ -124,7 +125,8 @@ test("OWN-33-AC2: room panel; open repairs only (max five, newest first) of this
   assert.deepEqual(room.unit.repairs, [{ id: roomOpen, title: "Synthetic room A", status: "assigned" }], "only this room's open ticket");
   const vacant = await ownerUnit(o.s, f.split, f.rb, { v3 });
   assert.deepEqual(vacant, { state: "ready", unit: { property: room.unit.property, space: "2F B", vacant: true, tenant: null, phone: null,
-    startDate: null, endDate: null, rentMinor: null, currency: null, months: [], repairs: [] } });
+    startDate: null, endDate: null, rentMinor: null, currency: null, months: [],
+    repairs: [{ id: roomBOpen, title: "Synthetic room B", status: "open" }] } }, "a vacant room still lists its own open repairs; not room A's, not closed ones");
 });
 
 test("MGT-138 / phone rule: name hidden → tenant null; phone only when the company switch AND the owner's row allow it", async () => {

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import React from "react";
+import ts from "typescript";
 import { renderToStaticMarkup } from "react-dom/server";
-import { OwnerUnitError, OwnerUnitLoading, OwnerUnitNoPerm, OwnerUnitView, monthStatusText, termText } from "../components/v3/owner/unit";
+import { OwnerUnitError, OwnerUnitNoPerm, OwnerUnitView, monthStatusText, termText } from "../components/v3/owner/unit";
 import { OwnerUnitsView, ownerUnitHref } from "../components/v3/owner/units";
 import { brandV3OwnerUnitsCopy } from "../i18n/lanes/brand-v3-owner-units";
 import { ownerUnit, parseOwnerUnit, type OwnerUnitDetail } from "./b092-owner-unit";
@@ -69,7 +72,7 @@ test("monthStatusText: only the approved wording", () => {
   assert.equal(monthStatusText({ month: "2026-11", status: "none", remainingMinor: null }, "TWD", "zh-TW"), null);
 });
 
-test("OWN-33-AC4 states: error with retry to the same URL; B1-NOPERM names nothing; loading has no amounts", () => {
+test("OWN-33-AC4 states: error with retry to the same URL; B1-NOPERM names nothing", () => {
   const href = ownerUnitHref({ unitId: U, roomId: R });
   assert.equal(href, `/o/units/${U}?room=${R}`);
   assert.equal(ownerUnitHref({ unitId: U, roomId: null }), `/o/units/${U}`);
@@ -77,8 +80,6 @@ test("OWN-33-AC4 states: error with retry to the same URL; B1-NOPERM names nothi
   assert.match(err, /這裡暫時讀不到，請再試一次。.*href="\/o\/units\/[^"]+\?room=[^"]+">再試一次/);
   const noperm = renderToStaticMarkup(<OwnerUnitNoPerm locale="zh-TW" />);
   assert.match(noperm, /你目前的角色看不到這一頁/); assert.doesNotMatch(noperm, /信義路|陳怡君/);
-  const loading = renderToStaticMarkup(<OwnerUnitLoading locale="zh-TW" />);
-  assert.match(loading, /aria-busy="true"/); assert.doesNotMatch(loading, /NT\$|\d{2}/);
 });
 
 test("RO-UNITS list: each leased line is one link to its panel (room carries ?room=); vacant lines stay plain", () => {
@@ -96,9 +97,11 @@ test("RO-UNITS list: each leased line is one link to its panel (room carries ?ro
 test("parser: strict shapes only; any extra field or inconsistency is a read failure", () => {
   assert.deepEqual(parseOwnerUnit(unit), unit);
   assert.deepEqual(parseOwnerUnit(vacantUnit), vacantUnit);
+  // A vacant space may still have open repairs; never a lease, tenant, phone or payment month.
+  assert.deepEqual(parseOwnerUnit({ ...vacantUnit, repairs: unit.repairs }), { ...vacantUnit, repairs: unit.repairs });
   const m = unit.months[0], r = unit.repairs[0];
   for (const bad of [null, [], {}, { ...unit, email: "x@example.test" }, { ...unit, phone: "0912345678" }, { ...unit, vacant: "no" },
-    { ...vacantUnit, tenant: "x" }, { ...vacantUnit, months: [m] }, { ...unit, startDate: null }, { ...unit, startDate: "2026-13-01" },
+    { ...vacantUnit, tenant: "x" }, { ...vacantUnit, months: [m] }, { ...vacantUnit, phone: "+886912345678" }, { ...vacantUnit, rentMinor: "1" }, { ...unit, startDate: null }, { ...unit, startDate: "2026-13-01" },
     { ...unit, rentMinor: "-1" }, { ...unit, currency: "twd" }, { ...unit, months: [{ ...m, remainingMinor: null }] },
     { ...unit, months: [{ ...m, remainingMinor: "0" }] }, { ...unit, months: [{ ...m, status: "overdue" }] },
     { ...unit, months: [{ ...m, status: "vacant", remainingMinor: null }] }, { ...unit, months: [m, m] }, { ...unit, months: [{ ...m, month: "2026-11-01" }] },
@@ -118,4 +121,64 @@ test("reader: OFF is off without a DB call; non-owner or bad ids are forbidden; 
   assert.deepEqual(await ownerUnit(owner, U, R, { v3: async () => true, transaction: denied }), { state: "forbidden" });
   assert.deepEqual(await ownerUnit(owner, U, null, { v3: async () => true, transaction: run(() => ({ ...unit, phone: 1 })) }), { state: "unavailable" });
   assert.deepEqual(await ownerUnit(owner, U, null, { v3: async () => true, transaction: run(() => unit) }), { state: "ready", unit });
+});
+
+// ---- Route wiring (compiled with mocks, no DB): the read is awaited before rendering; OFF and vacant are 404s. ----
+const requireHere = createRequire(import.meta.url);
+function compile(text: string, mocks: Record<string, unknown>) {
+  const code = ts.transpileModule(text, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  const exports: Record<string, unknown> = {};
+  new Function("require", "exports", code)((name: string) => {
+    if (name in mocks) return mocks[name];
+    if (name === "react" || name === "react/jsx-runtime") return requireHere(name);
+    throw new Error(`Unmocked dependency: ${name}`);
+  }, exports);
+  return exports;
+}
+const route = readFileSync("src/app/o/units/[unitId]/page.tsx", "utf8");
+async function runRoute(opts: { v3: boolean; result?: unknown; unitId?: string; room?: string | string[] }) {
+  const calls: string[] = [];
+  const unitView = requireHere("../components/v3/owner/unit") as typeof import("../components/v3/owner/unit");
+  const reader = requireHere("./b092-owner-unit") as typeof import("./b092-owner-unit");
+  const mocks = {
+    "next/navigation": { notFound: () => { calls.push("notFound"); throw new Error("NEXT_NOT_FOUND"); } },
+    "@/components/v3/owner/unit": unitView,
+    "@/components/v3/owner/units": { ownerUnitHref: (row: { unitId: string; roomId: string | null }) => `/o/units/${row.unitId}${row.roomId ? `?room=${row.roomId}` : ""}` },
+    // The real reader's id validation runs (bad ids → forbidden with no DB call); the gateway call is replaced.
+    "@/server/b092-owner-unit": { ownerUnit: async (session: Session, unitId: unknown, roomId: unknown) => {
+      calls.push(`read:${String(unitId)}:${String(roomId)}`);
+      return reader.ownerUnit(session, unitId, roomId, { v3: async () => true,
+        transaction: (async (_u: string, cb: (c: unknown) => Promise<unknown>) => cb({ query: async (sql: string) => {
+          if (!sql.includes("b092_owner_unit(")) return { rows: [] };
+          if (opts.result === "denied") throw Object.assign(new Error("errors.forbidden"), { code: "42501" });
+          return { rows: [{ result: opts.result }] };
+        } })) as never });
+    } },
+    "@/server/brand-v3": { brandV3EnabledForOrg: async () => { calls.push("v3"); return opts.v3; } },
+    "@/server/consent-gate": { requireCurrentConsent: async () => { calls.push("consent"); } },
+    "@/server/session": { getSession: async () => owner },
+  };
+  const Page = compile(route, mocks).default as (p: unknown) => Promise<React.ReactElement>;
+  try {
+    const el = await Page({ params: Promise.resolve({ unitId: opts.unitId ?? U }), searchParams: Promise.resolve(opts.room === undefined ? {} : { room: opts.room }) });
+    return { calls, html: renderToStaticMarkup(el) };
+  } catch (e) { return { calls, html: (e as Error).message }; }
+}
+
+test("RO-UNIT route: OFF and vacant are 404 before anything renders; forbidden and bad ids are B1-NOPERM; ready is the panel", async () => {
+  const off = await runRoute({ v3: false, result: unit });
+  assert.equal(off.html, "NEXT_NOT_FOUND"); assert.ok(!off.calls.some(c => c.startsWith("read:")), "OFF never reads");
+  assert.equal((await runRoute({ v3: true, result: vacantUnit })).html, "NEXT_NOT_FOUND");
+  assert.equal((await runRoute({ v3: true, result: { ...vacantUnit, repairs: unit.repairs } })).html, "NEXT_NOT_FOUND", "vacant with repairs is still a 404");
+  for (const bad of [{ result: "denied" }, { unitId: "x", result: unit }, { room: "x", result: unit }, { room: [R, R], result: unit }]) {
+    const res = await runRoute({ v3: true, ...bad });
+    assert.match(res.html, /data-testid="owner-unit-noperm"/, JSON.stringify(bad));
+    assert.doesNotMatch(res.html, /信義路|陳怡君/);
+  }
+  const ready = await runRoute({ v3: true, result: unit, room: R });
+  assert.match(ready.html, /data-testid="owner-unit"/); assert.match(ready.html, /<h2>信義路 2 樓<\/h2>/);
+  assert.ok(ready.calls.includes(`read:${U}:${R}`));
+  const failed = await runRoute({ v3: true, result: { ...unit, phone: 1 }, room: R });
+  assert.match(failed.html, new RegExp(`data-testid="owner-unit-error".*href="/o/units/${U}\\?room=${R}"`));
+  assert.doesNotMatch(route.replace(/^\s*\*.*$/gm, ""), /Suspense|Loading|fallback=/);
 });

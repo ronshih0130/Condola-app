@@ -86,11 +86,3 @@ export function OwnerUnitNoPerm({ locale }: { locale: Locale }) {
     <Link className="owner-action owner-primary" href="/o">{copy.home}</Link>
   </section>;
 }
-
-/** Loading (OWN-33-AC4): skeletons only, never an amount, date or name. */
-export function OwnerUnitLoading({ locale }: { locale: Locale }) {
-  return <section className="v3-owner-unit owner-unit" aria-busy="true" data-testid="owner-unit-loading">
-    <Crumb locale={locale} />
-    <div className="owner-unit-card card" aria-hidden="true">{[0, 1, 2].map(i => <div className="owner-unit-skeleton" key={i}><span /><span /></div>)}</div>
-  </section>;
-}

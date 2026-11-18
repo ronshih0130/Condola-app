@@ -40,7 +40,8 @@ export function parseOwnerUnit(value: unknown): OwnerUnitDetail {
   if (!str(v.property) || !str(v.space) || typeof v.vacant !== "boolean" || !Array.isArray(v.months) || !Array.isArray(v.repairs)) return bad();
   if (!(v.tenant === null || str(v.tenant)) || !(v.phone === null || (str(v.phone) && /^\+[1-9][0-9]{6,14}$/.test(v.phone)))) return bad();
   if (v.vacant) {
-    if ([v.tenant, v.phone, v.startDate, v.endDate, v.rentMinor, v.currency].some(x => x !== null) || v.months.length || v.repairs.length) return bad();
+    // Vacant: no lease, tenant, phone or payments; open repairs of the space may still be listed.
+    if ([v.tenant, v.phone, v.startDate, v.endDate, v.rentMinor, v.currency].some(x => x !== null) || v.months.length) return bad();
   } else if (!date(v.startDate) || !(v.endDate === null || date(v.endDate)) || !minor(v.rentMinor)
     || !(str(v.currency) && /^[A-Z]{3}$/.test(v.currency))) return bad();
   if (v.months.length > 6 || v.repairs.length > 5) return bad();

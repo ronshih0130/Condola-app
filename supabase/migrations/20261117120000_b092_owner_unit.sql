@@ -3,8 +3,8 @@
 -- app.b092_owner_units lists it. Returns the current lease's tenant name (only when the company-wide MGT-138
 -- name switch allows it), the tenant phone (only when the company phone switch is on AND the actor's current
 -- property_owners row allows it: the legacy owner page rule), the lease term and rent, the last six months'
--- payment status on the property's own date (PLT-54) and up to five open repairs. A space the owner is not
--- authorised for is errors.forbidden (42501). No existing object, table grant, policy, flag or data change.
+-- payment status on the property's own date (PLT-54) and up to five open repairs (also while vacant). A space the
+-- owner is not authorised for is errors.forbidden (42501). No existing object, table grant, policy, flag or data change.
 -- Admission is B-093's (PR-015): the selected env/live tuple, app.b013_actor, and the org-local current
 -- property-owner predicate. Never an email. Migration-owned, fixed search_path.
 BEGIN;
@@ -56,6 +56,17 @@ BEGIN
  WHERE u.archived_at IS NULL
   AND ((p_room IS NULL AND u.rental_mode='whole_unit') OR (p_room IS NOT NULL AND u.rental_mode='by_room' AND r.id IS NOT NULL));
  IF NOT FOUND THEN RAISE EXCEPTION 'errors.forbidden' USING ERRCODE='42501'; END IF;
+ -- Open repairs of this space, newest first, at most five, whether or not it is leased right now. A whole unit:
+ -- unit_id = the unit (whole_unit spaces have no rooms); a room: room_id = the room. Only id, title, raw status.
+ SELECT coalesce(jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'status',t.status::text)
+   ORDER BY t.created_at DESC, t.id DESC),'[]'::jsonb)
+ INTO repairs FROM (
+  SELECT mt.id, mt.title, mt.status, mt.created_at FROM public.maintenance_tickets mt
+  WHERE mt.org_id=p_org AND mt.property_id=s.property_id
+   AND ((s.room_id IS NULL AND mt.unit_id=s.unit_id) OR (s.room_id IS NOT NULL AND mt.room_id=s.room_id))
+   AND mt.status NOT IN ('resolved','closed','cancelled')
+  ORDER BY mt.created_at DESC, mt.id DESC LIMIT 5
+ ) t;
  -- The space's current lease (as the list): active (or awaiting signature) and already started on the property's date.
  SELECT l.id lease_id, l.rent_amount_minor rent, l.currency::text currency, l.start_date, l.end_date INTO cl
  FROM public.leases l
@@ -65,7 +76,7 @@ BEGIN
  ORDER BY l.start_date DESC, l.id LIMIT 1;
  IF NOT FOUND THEN
   RETURN jsonb_build_object('property',s.property,'space',s.space_label,'vacant',true,'tenant',NULL,'phone',NULL,
-   'startDate',NULL,'endDate',NULL,'rentMinor',NULL,'currency',NULL,'months','[]'::jsonb,'repairs','[]'::jsonb);
+   'startDate',NULL,'endDate',NULL,'rentMinor',NULL,'currency',NULL,'months','[]'::jsonb,'repairs',repairs);
  END IF;
  SELECT c.display_name name, c.phone_e164 phone INTO tenant FROM public.lease_parties lp
  JOIN public.contacts c ON c.id=lp.contact_id AND c.org_id=lp.org_id
@@ -98,17 +109,6 @@ BEGIN
  SELECT coalesce(jsonb_agg(jsonb_build_object('month',to_char(m,'YYYY-MM'),'status',status,
    'remainingMinor',CASE WHEN status='partial' THEN outstanding::text END) ORDER BY m DESC),'[]'::jsonb)
  INTO months FROM st;
- -- Open repairs of this space, newest first, at most five. A whole unit: unit_id = the unit (whole_unit spaces
- -- have no rooms); a room: room_id = the room. Only id, title and the raw ticket status.
- SELECT coalesce(jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'status',t.status::text)
-   ORDER BY t.created_at DESC, t.id DESC),'[]'::jsonb)
- INTO repairs FROM (
-  SELECT mt.id, mt.title, mt.status, mt.created_at FROM public.maintenance_tickets mt
-  WHERE mt.org_id=p_org AND mt.property_id=s.property_id
-   AND ((s.room_id IS NULL AND mt.unit_id=s.unit_id) OR (s.room_id IS NOT NULL AND mt.room_id=s.room_id))
-   AND mt.status NOT IN ('resolved','closed','cancelled')
-  ORDER BY mt.created_at DESC, mt.id DESC LIMIT 5
- ) t;
  RETURN jsonb_build_object('property',s.property,'space',s.space_label,'vacant',false,
   'tenant',CASE WHEN show_name THEN tenant.name END,
   'phone',CASE WHEN show_phone AND s.can_phone THEN tenant.phone END,
