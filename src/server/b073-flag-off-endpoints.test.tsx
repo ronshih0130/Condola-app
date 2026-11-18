@@ -32,6 +32,8 @@ const cases = [
   { path: "src/app/api/team-security/route.ts", input: { required: true } },
   ...NOTIFY_BLOCKS.map(block => ({ path: "src/app/api/notify-settings/route.ts", input: { block, field: "leaseExpiry", value: true } })),
   { path: "src/app/o/units/[unitId]/page.tsx" },
+  // B-094 RO-RULES (B-113 / OWN-34-AC6 adds the no-limit lines): brand_v3 OFF or a failed lookup 404s before any rule or limit read.
+  { path: "src/app/o/rules/page.tsx" },
 ];
 const encode = (text: string) => new TextEncoder().encode(text);
 function streamed(chunks: Uint8Array[], contentLength?: string, path = "/api/owner-view") {
