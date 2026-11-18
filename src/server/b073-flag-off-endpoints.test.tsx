@@ -13,10 +13,11 @@ const read = (p: string) => readFileSync(p, "utf8");
 const ORG = "00000000-0000-4000-8000-000000000001";
 const UNIT = "00000000-0000-4000-8000-000000000002";
 const URL = "http://localhost";
-function compile(source: string, mocks: Record<string, unknown>) {
+function compile(source: string, mocks: Record<string, unknown> | ((name: string) => unknown)) {
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const exports: Record<string, unknown> = {};
   new Function("require", "exports", code)((name: string) => {
+    if (typeof mocks === "function") return mocks(name);
     if (name in mocks) return mocks[name];
     if (["react", "react/jsx-runtime"].includes(name)) return requireHere(name);
     throw new Error(`Unmocked dependency: ${name}`);
@@ -46,6 +47,57 @@ function streamed(chunks: Uint8Array[], contentLength?: string, path = "/api/own
   return { request: new Request(`${URL}${path}`, init), calls };
 }
 
+function recordingDependency(name: string, calls: string[], allowed?: Record<string, unknown>): unknown {
+  return new Proxy(() => undefined, {
+    get(_target, key) {
+      if (allowed && Object.prototype.hasOwnProperty.call(allowed, key)) return Reflect.get(allowed, key);
+      const member = `${name}.${String(key)}`;
+      calls.push(`read:${member}`);
+      return recordingDependency(member, calls);
+    },
+    apply() {
+      calls.push(`read:${name}`);
+      return undefined;
+    },
+  });
+}
+
+function trackPageInput<T>(name: string, value: T, calls: string[]) {
+  const promise = Promise.resolve(value);
+  return new Proxy({ then: promise.then.bind(promise) }, {
+    get(target, key, receiver) {
+      calls.push(name);
+      return Reflect.get(target, key, receiver);
+    },
+  });
+}
+
+function assertPageGuardOrder(path: string, source: string) {
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const page = file.statements.find(statement => ts.isFunctionDeclaration(statement)
+    && statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword));
+  assert.ok(page && ts.isFunctionDeclaration(page) && page.body, `${path}: expected a default page function with a body`);
+
+  const calls: string[] = [];
+  let foundNotFound = false;
+  function visit(node: ts.Node): void {
+    if (foundNotFound) return;
+    // Visit arguments first so a call inside notFound(...) counts before the 404.
+    ts.forEachChild(node, visit);
+    if (foundNotFound || !ts.isCallExpression(node)) return;
+    const callee = node.expression.getText(file);
+    if (callee === "notFound") foundNotFound = true;
+    else calls.push(callee);
+  }
+  for (const statement of page.body.statements) {
+    visit(statement);
+    if (foundNotFound) break;
+  }
+
+  assert.ok(foundNotFound, `${path}: expected a notFound() call in the default export`);
+  assert.deepEqual(calls, ["requireCurrentConsent", "getSession", "brandV3EnabledForOrg"], path);
+}
+
 test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before API permission or body, unit reads, writes or audit", async () => {
   for (const { path, input } of cases) for (const fail of [false, true]) {
     const label = `${path} ${JSON.stringify(input)} ${fail ? "lookup failure" : "flag OFF"}`;
@@ -53,7 +105,8 @@ test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before 
     const record = (name: string) => () => { calls.push(name); };
     const write = record("write"), writeAudit = record("audit");
     const save = async () => { calls.push("save"); write(); writeAudit(); return { ok: false, status: 404 }; };
-    const route = compile(read(path), {
+    const source = read(path);
+    const mocks = {
       "@/server/brand-v3": { brandV3EnabledForOrg: (orgId: string) => brandV3EnabledForOrg(orgId, {}, async id => {
         calls.push("flag"); lookups.push(id);
         if (fail) throw new Error("flag lookup failed");
@@ -73,8 +126,9 @@ test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before 
       "@/components/v3/owner/unit": {},
       "@/components/v3/owner/units": {},
       "next/navigation": { notFound: () => { calls.push("notFound"); throw new Error("NEXT_NOT_FOUND"); } },
-    });
+    };
     if (input) {
+      const route = compile(source, mocks);
       const { request, calls: stream } = streamed([encode(JSON.stringify(input))], undefined, path.slice("src/app".length, -"/route.ts".length));
       const response = await (route.POST as (request: Request) => Promise<Response>)(request);
       assert.equal(response.status, 404, label);
@@ -82,9 +136,28 @@ test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before 
       assert.deepEqual(stream, { pulls: 0, cancels: 0 }, label);
       assert.deepEqual(calls, ["consent", "session", "flag"], label);
     } else {
+      assertPageGuardOrder(path, source);
+      const allowed = new Map<string, Record<string, unknown>>([
+        ["@/server/consent-gate", {
+          requireCurrentConsent: async (...args: unknown[]) => {
+            calls.push("consent");
+            assert.deepEqual(args, [undefined, "page"], label);
+            return null;
+          },
+        }],
+        ["@/server/session", { getSession: mocks["@/server/session"].getSession }],
+        ["@/server/brand-v3", mocks["@/server/brand-v3"]],
+        ["next/navigation", mocks["next/navigation"]],
+      ]);
+      const route = compile(source, (name: string) => recordingDependency(name, calls, allowed.get(name)));
       const Page = route.default as (props: unknown) => Promise<unknown>;
-      await assert.rejects(() => Page({ params: Promise.resolve({ unitId: UNIT }), searchParams: Promise.resolve({}) }), /^Error: NEXT_NOT_FOUND$/, label);
-      // The consent-entrypoints rule requires the page guard to run before session and flag checks.
+      // Ignore module-load accesses; CJS export reads during Page still hit the proxies.
+      calls.length = 0;
+      await assert.rejects(() => Page({
+        params: trackPageInput("params", { unitId: UNIT }, calls),
+        searchParams: trackPageInput("searchParams", {}, calls),
+      }), /^Error: NEXT_NOT_FOUND$/, label);
+      // Destructuring binds the tracked values; reading a property or awaiting either records an access.
       assert.deepEqual(calls, ["consent", "session", "flag", "notFound"], label);
     }
     assert.deepEqual(lookups, [ORG], label);

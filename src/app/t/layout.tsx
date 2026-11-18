@@ -10,9 +10,6 @@ import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
-import { brandV3EnabledForOrg } from "@/server/brand-v3";
-import { tenantShellView } from "@/server/b090-tenant-shell";
-import { TenantShellV3 } from "@/components/v3/tenant/shell";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +24,6 @@ export default async function TenantLayout({ children }: { children: React.React
   const lineEnabled = await tenantLineEntryEnabled(session.orgId);
   const task = path === "/t/id" || path.startsWith("/t/id/");
   const backHref = path === "/t/id/notice" || path.startsWith("/t/id/notice/") ? "/t/id" : "/t";
-  // B-090 slice 1 (TEN-55-AC1): under brand_v3 the tenant pages sit in the v3 shell with the five phone tabs. The ID
-  // task pages keep their focused legacy frame (back link, no tabs). brand_v3 OFF: the legacy frame below, unchanged.
-  if (!task && (await brandV3EnabledForOrg(session.orgId))) {
-    return <TenantShellV3 locale={session.locale} view={await tenantShellView(session, lineEnabled)}>{children}</TenantShellV3>;
-  }
   const tiles = [
     ["/t/pay", "tenant-tile-pay", "i_rich_pay"],
     ["/t/repair", "tenant-tile-repair", "i_rich_repair"],
