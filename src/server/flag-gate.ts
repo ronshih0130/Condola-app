@@ -3,6 +3,14 @@ import { readSession } from "@/server/session";
 import { logServerError } from "@/server/errors";
 
 // Constraint: AGENTS.md §7, REVIEW-CHECKLIST 13; LPQ-28 (404-before-401) is a later, separately approved behaviour change — do not change the order here.
+//
+// Constraint (owner-view parity, review finding 5): a flag predicate that REJECTS (throws) fails
+// closed to 404 in this wrapper (see the `spec.flag` try/catch below), whereas today's owner-view
+// try/catch surfaces a rejected lookup as 500. Byte-identical migration therefore holds ONLY for
+// predicates that can never reject — e.g. brandV3EnabledForOrg catches internally and returns false,
+// so it is safe. Any route whose predicate CAN throw changes 500 -> 404 and MUST be excluded from the
+// byte-identical migration batches and listed for a separate, explicitly approved behaviour change.
+// See NOTES.md.
 
 /**
  * Non-enumerable marker attached to every withFlagGate-wrapped route handler so
@@ -79,6 +87,8 @@ export function withFlagGate<Ctx = unknown>(
     }
 
     // Fail closed: a false flag OR a throwing lookup both become 404. A throw is logged.
+    // NOTE (finding 5): this 404-on-throw diverges from owner-view's 500-on-throw; see the Constraint
+    // comment at the top of this file — only never-rejecting predicates migrate byte-identically.
     try {
       if (!(await spec.flag(session))) return new Response(null, { status: 404, headers });
     } catch (error) {
