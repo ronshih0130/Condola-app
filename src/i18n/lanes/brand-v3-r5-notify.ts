@@ -3,9 +3,9 @@ import type { Locale } from "../index";
 // R5-NOTIFY (設定 › 通知設定; MGT-135, B-073). zh-TW is verbatim from the approved frame 「設定・通知設定」 in
 // brand-3.0.html (round 5); the new words (lead, each switch's sub-line, the footer) are P52 approved as written
 // (Ron, PENDING-RON PR-018, round 5 strings). The read error, retry and save failure reuse the GS-02 pattern
-// (MGT-135-AC5). The 我的帳號 link line (MGT-135-AC2) is the first clause of the approved R5-ACCT frame sentence
-// 「提醒信的開關在「通知設定」；全公司的兩步驟驗證規則在「團隊」。」 — the 團隊 clause is left out because that rule has
-// not moved yet (R5-TEAM). On 規則與資料 the R5-OWNVIEW side-card row 「提醒租客・在「通知設定」」 is the link line.
+// (MGT-135-AC5). The 我的帳號 link line (MGT-135-AC2) is the approved R5-ACCT frame sentence 「設定・我的帳號」, verbatim:
+// 「提醒信的開關在「通知設定」；全公司的兩步驟驗證規則在「團隊」。」 (the 團隊 rule moves there in R5-TEAM, which merges
+// first). Only 通知設定 is a link here. On 規則與資料 the R5-OWNVIEW side-card row 「提醒租客・在「通知設定」」 is the link line.
 // EN is a translation (draft).
 const copy = {
   "zh-TW": {
@@ -27,7 +27,7 @@ const copy = {
     saveFailed: "沒有存成功，請再試一次。",
     movedBefore: "提醒信的開關在「",
     movedLink: "通知設定",
-    movedAfter: "」。",
+    movedAfter: "」；全公司的兩步驟驗證規則在「團隊」。",
   },
   en: {
     lead: "Notifications: choose which reminders you get, and which ones tenants get.",
@@ -48,7 +48,7 @@ const copy = {
     saveFailed: "That didn't save. Please try again.",
     movedBefore: "Reminder email switches are in ",
     movedLink: "Notifications",
-    movedAfter: ".",
+    movedAfter: "; the company-wide two-step verification rule is in Team.",
   },
 };
 export function brandV3NotifyCopy(locale: Locale) { return copy[locale]; }

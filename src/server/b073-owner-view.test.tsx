@@ -329,7 +329,7 @@ test("MGT-135-AC2 (brand_v3 ON): the old places show one link line to 通知設�
   for (const role of ["admin", "manager"] as const) {
     const on = await renderPage(read("src/app/m/account/page.tsx"), true, staff(role));
     assert.equal((on.html.match(/data-testid="notify-moved"/g) ?? []).length, 1, role);
-    assert.match(on.html, /提醒信的開關在「<a href="\/m\/notify">通知設定<\/a>」。/);
+    assert.match(on.html, /提醒信的開關在「<a href="\/m\/notify">通知設定<\/a>」；全公司的兩步驟驗證規則在「團隊」。/);
     assert.doesNotMatch(on.html, /mail-lease|mail-overdue|i_mail_heading|actionEmailPrefs/);
     assert.ok(!on.trace.includes("member-prefs"), role);
     const offAccount = await renderPage(read("src/app/m/account/page.tsx"), false, staff(role));

@@ -49,8 +49,8 @@ test("MGT-135 copy: zh-TW verbatim from the approved frame (PR-018); GS-02 state
     ["寄給租客的", "只有管理員看得到這一塊。", "租約到期", "租約快到期時提醒租客。", "租金逾期", "租金逾期時提醒租客。"]);
   assert.equal(zh.footer, "這一頁只存設定，改了不會因此多寄任何東西。");
   assert.deepEqual([zh.readFailed, zh.retry, zh.saveFailed], ["這裡暫時讀不到，請再試一次。", "再試一次", "沒有存成功，請再試一次。"]);
-  // MGT-135-AC2 我的帳號 line: the first clause of the approved R5-ACCT sentence.
-  assert.equal(zh.movedBefore + zh.movedLink + zh.movedAfter, "提醒信的開關在「通知設定」。");
+  // MGT-135-AC2 我的帳號 line: the approved R5-ACCT frame sentence, verbatim.
+  assert.equal(zh.movedBefore + zh.movedLink + zh.movedAfter, "提醒信的開關在「通知設定」；全公司的兩步驟驗證規則在「團隊」。");
   const en = brandV3NotifyCopy("en");
   assert.deepEqual(Object.keys(en), Object.keys(zh));
   for (const value of Object.values(en)) assert.doesNotMatch(value, /[一-鿿]/);
@@ -354,8 +354,9 @@ test("MGT-135-AC1 /m/notify page and layout: brand_v3 opens it for admin and man
 
 test("MGT-135-AC2 我的帳號 link line: one line linking to 通知設定", () => {
   const html = renderToStaticMarkup(<NotifyMovedLine locale="zh-TW" />);
-  assert.equal(html, '<p class="card pad" data-testid="notify-moved">提醒信的開關在「<a href="/m/notify">通知設定</a>」。</p>');
-  assert.match(renderToStaticMarkup(<NotifyMovedLine locale="en" />), /Reminder email switches are in <a href="\/m\/notify">Notifications<\/a>\./);
+  assert.equal(html, '<p class="card pad" data-testid="notify-moved">提醒信的開關在「<a href="/m/notify">通知設定</a>」；全公司的兩步驟驗證規則在「團隊」。</p>');
+  assert.equal(text(html), "提醒信的開關在「通知設定」；全公司的兩步驟驗證規則在「團隊」。");
+  assert.match(renderToStaticMarkup(<NotifyMovedLine locale="en" />), /Reminder email switches are in <a href="\/m\/notify">Notifications<\/a>; the company-wide two-step verification rule is in Team\./);
   // 規則與資料: the R5-OWNVIEW side-card row is that page's one link line; actionOrgMail keeps the stored values under brand_v3.
   const actions = read("src/server/auth-actions.ts");
   const orgMail = actions.slice(actions.indexOf("export async function actionOrgMail"), actions.indexOf("export async function actionAccept"));
