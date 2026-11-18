@@ -263,6 +263,8 @@ function settingsMocks(v3: boolean, trace: string[], session: Session) {
     "@/server/b056-trial-rules": { formatTrialDate: () => "", parseTrialPlan: () => null, previewTrialEnd: () => new Date(0) },
     "@/components/b056-trial-confirm": { TrialConfirm: box("trial-confirm") },
     "@/server/auth": { ownerPrivacy: async () => { trace.push("privacy"); return { showName: true, showPhone: false, name: "x" }; } },
+    // R5-TEAM (MGT-133-AC1): under brand_v3 /m/roles opens 團隊 (b073-team.test.tsx covers it).
+    "next/navigation": { redirect: (to: string) => { trace.push(`redirect:${to}`); throw Object.assign(new Error("NEXT_REDIRECT"), { to, trace: [...trace] }); } },
   };
 }
 async function renderPage(source: string, v3: boolean, session: Session, query: Record<string, string> = {}) {
@@ -286,10 +288,10 @@ test("MGT-138 flag OFF: /m/settings and /m/roles render byte-for-byte as before,
 });
 
 test("MGT-138 route move (brand_v3 ON): /m/roles has no privacy checkboxes and does not read them; /m/settings opens with the block", async () => {
-  const roles = await renderPage(read("src/app/m/roles/page.tsx"), true, staff("admin"));
-  assert.doesNotMatch(roles.html, /privacy-name|privacy-phone|i_owner_privacy|actionOwnerPrivacy/);
-  assert.match(roles.html, /data-testid="perm-matrix"/);
-  assert.ok(!roles.trace.includes("privacy"));
+  // R5-TEAM (MGT-133-AC1) later moved /m/roles under brand_v3 to 團隊: an admin is redirected before any privacy read.
+  const roles = await renderPage(read("src/app/m/roles/page.tsx"), true, staff("admin")).then(() => null, (error: { to?: string; trace?: string[] }) => error);
+  assert.equal(roles?.to, "/m/team?perms=1#v3-team-perms");
+  assert.ok(!roles?.trace?.includes("privacy"));
   const settings = await renderPage(read("src/app/m/settings/page.tsx"), true, staff("admin"));
   const header = settings.html.indexOf('data-test="header"'), section = settings.html.indexOf('data-test="owner-view-section"'), mail = settings.html.indexOf('data-testid="tenant-lease-mail"');
   assert.ok(header >= 0 && header < section && section < mail, "lead, then the block, then the rest of today's page");

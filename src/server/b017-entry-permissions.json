@@ -463,5 +463,8 @@
   "src/server/b091-owner-rules.ts#staffRuleChanges": "props.view",
   "src/server/b073-owner-view.ts#ownerViewRead": "settings.edit",
   "src/server/b073-owner-view.ts#saveOwnerView": "settings.edit",
-  "src/app/api/owner-view/route.ts#POST": "settings.edit"
+  "src/app/api/owner-view/route.ts#POST": "settings.edit",
+  "src/server/b073-team.ts#teamRead": "team.manage",
+  "src/server/b073-team.ts#saveTeamSecurity": "settings.edit",
+  "src/app/api/team-security/route.ts#POST": "settings.edit"
 }

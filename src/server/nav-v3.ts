@@ -36,7 +36,7 @@ export const MANAGER_AREAS_V3: readonly ManagerAreaV3[] = [
   ] },
   { id: "maintenance", icon: "tool", ...link("v3.maintenance", "/m/tickets", "any"), links: [] },
   { id: "settings", icon: "gear", ...link("i_sec_set", "/m/settings", "any"), links: [
-    link("i_nav_settings", "/m/settings", "settings.edit"), link("i_nav_team", "/m/team", "team.manage"),
+    link("i_nav_settings", "/m/settings", "settings.edit"), link("v3.team", "/m/team", "team.manage"),
     link("v3.roles", "/m/roles", "team.manage"), link("i_nav_notify", "/m/notify", "settings.edit"),
     link("i_nav_audit", "/m/audit", "admin"), link("i_nav_pricing", "/m/upgrade", "settings.edit"),
     link("v3.import", "/m/import", "props.edit"), link("i_account", "/m/account", "any"),
