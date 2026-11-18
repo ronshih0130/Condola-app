@@ -91,7 +91,8 @@ export async function tenantPaymentHistory(s:Session,leaseId:string,options:{vie
  }),{orgId:s.orgId,environment:s.environment},{isolation:'repeatable read',readOnly:true});}catch(error){logServerError('tenant_payment_history',error);return unavailable;}
 }
 /**
- * B-090 RT-HOME reuses these admission rules (session shape, org/session context, lease party) in its own
- * reader, b090-tenant-home-reader.ts. Exported as they are: this reader's own queries are not changed.
+ * B-090 RT-HOME and RT-PAY reuse these admission rules (session shape, org/session context, lease party, own-report
+ * scope) in their own readers, b090-tenant-home-reader.ts and b090-tenant-pay-reader.ts. Exported as they are: this
+ * reader's own queries are not changed.
  */
-export { valid as tenantHistorySessionValid, ctx as TENANT_HISTORY_CONTEXT_SQL, party as TENANT_HISTORY_PARTY_SQL };
+export { valid as tenantHistorySessionValid, ctx as TENANT_HISTORY_CONTEXT_SQL, party as TENANT_HISTORY_PARTY_SQL, personal as TENANT_HISTORY_OWN_REPORT_SQL };
