@@ -80,4 +80,6 @@ Never change an existing test assertion unless the PR cites a spec change. Put a
 Newly added tests are always allowed. Enforced by `scripts/check-pr-rules.mjs`.
 
 ## 15. R3 — Green gates on every PR
-`npm run typecheck` (`tsc --noEmit`) and the tests must pass: `npm run test:unit` at minimum, and also `npm run test:rls` when the change touches schema, RLS, or SQL. Enforced by `scripts/check-pr-rules.mjs`.
+`npm run typecheck` (`tsc --noEmit`) and `npm run test:unit` must pass on every PR. These two gates — and only these two — are what `scripts/check-pr-rules.mjs` enforces for R3; the script does no schema/SQL inspection and never runs `test:rls`.
+
+When a change touches schema, RLS, or SQL, `npm run test:rls` is also required. That conditional gate is real, but it is enforced by hosted CI / gate scripts, not by `check-pr-rules.mjs`. So: `check-pr-rules.mjs` green means typecheck + unit are green — it is not a substitute for running `test:rls` on schema/RLS/SQL changes.

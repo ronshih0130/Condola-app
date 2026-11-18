@@ -1,6 +1,18 @@
 #!/usr/bin/env node
 // check-pr-rules.mjs — enforce R2 (no silent test-assertion changes) and R3
 // (typecheck + unit tests pass). Runnable locally and in CI. No extra deps.
+//
+// R2 assertion-mutation detection is a parenthesis-depth heuristic: an
+// assertion call is opened when a line matches the assertion detector, and its
+// depth is tracked across context (' ') and removed ('-') lines by counting
+// parentheses so that argument-only edits of multiline assert/expect calls
+// (e.g. a lone `-  200` inside `assert.strictEqual(\n ... \n)`) are still
+// caught. It can miss unusual formatting (parens inside strings/comments), but
+// argument-only edits of standard multiline assert/expect calls must be
+// caught. For this to work the diff must carry context lines, so git diffs are
+// generated with -U3; a --diff-file passed in at -U0 with no opener context
+// for a multiline call cannot be fully analysed (the opener keyword is absent),
+// so git-generated diffs from this script always include context.
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -113,9 +125,11 @@ function getDiffFromGit(base, head) {
     fail(`head ref "${head}" does not exist`);
   }
   // Prefer triple-dot (merge-base) range; fall back to two-dot.
-  let r = git(['diff', '--find-renames', '-U0', `${base}...${head}`, '--']);
+  // -U3: carry context lines so multiline assertion openers are visible even
+  // when only an argument line is removed (see header note).
+  let r = git(['diff', '--find-renames', '-U3', `${base}...${head}`, '--']);
   if (r.status === 0) return r.stdout;
-  r = git(['diff', '--find-renames', '-U0', `${base}..${head}`, '--']);
+  r = git(['diff', '--find-renames', '-U3', `${base}..${head}`, '--']);
   if (r.status === 0) return r.stdout;
   fail(`git diff failed for ${base}...${head} and ${base}..${head}: ${(r.stderr || '').trim()}`);
 }
@@ -181,35 +195,54 @@ function detectAssertionMutations(diffText) {
   const offending = [];
 
   let currentFile = null;
+  let oldFile = null; // path from the most recent '--- ' line
   let isTest = false;
   let isNew = false;
   let isBinary = false;
   let oldLineNo = 0;
+  // Parenthesis depth of an open assertion call in the old-file stream
+  // (context + removed lines). >0 means we are inside a multiline assertion.
+  let assertDepth = 0;
 
   for (const line of lines) {
     if (line.startsWith('diff --git ')) {
       currentFile = null;
+      oldFile = null;
       isTest = false;
       isNew = false;
       isBinary = false;
       oldLineNo = 0;
+      assertDepth = 0;
       continue;
     }
     if (line.startsWith('new file mode ')) { isNew = true; continue; }
     if (line.startsWith('Binary files ')) { isBinary = true; continue; }
     if (line.startsWith('--- ')) {
-      if (line.slice(4).trim() === '/dev/null') isNew = true;
+      const raw = line.slice(4).trim();
+      if (raw === '/dev/null') { isNew = true; oldFile = null; }
+      else { oldFile = parseGitPath(raw); }
       continue;
     }
     if (line.startsWith('+++ ')) {
       const raw = line.slice(4).trim();
-      if (raw === '/dev/null') { currentFile = null; isTest = false; }
-      else { currentFile = parseGitPath(raw); isTest = isTestFile(currentFile); }
+      if (raw === '/dev/null') {
+        // Deleted file: '+++' is /dev/null but the file still had content in
+        // the old tree. Keep tracking removals (incl. a wholesale test delete)
+        // by taking the path from the '--- a/<file>' line; this is an edit of
+        // the old file, not a new file.
+        currentFile = oldFile;
+        isTest = isTestFile(currentFile);
+        isNew = false;
+      } else {
+        currentFile = parseGitPath(raw);
+        isTest = isTestFile(currentFile);
+      }
       continue;
     }
     if (line.startsWith('@@')) {
       const m = /^@@ -(\d+)(?:,(\d+))? \+/.exec(line);
       oldLineNo = m ? parseInt(m[1], 10) : 0;
+      assertDepth = 0; // hunks are discontinuous in the old file
       continue;
     }
 
@@ -222,23 +255,41 @@ function detectAssertionMutations(diffText) {
       continue;
     }
 
-    if (line.startsWith('-') && !line.startsWith('--- ')) {
+    const isRemoved = line.startsWith('-') && !line.startsWith('--- ');
+    const isContext = line.startsWith(' ');
+
+    if (isRemoved || isContext) {
       const content = line.slice(1);
-      if (looksLikeAssertion(content)) {
+      const before = assertDepth;
+      const inside = before > 0;
+      const isOpener = before === 0 && looksLikeAssertion(content);
+
+      // Track paren depth across context + removed lines once an assertion
+      // call is open (or opens on this line). '+' lines never touch old-file
+      // depth, so argument-only edits keep the opener's depth intact.
+      if (inside || isOpener) {
+        const open = (content.match(/\(/g) || []).length;
+        const close = (content.match(/\)/g) || []).length;
+        assertDepth = Math.max(0, before + open - close);
+      }
+
+      // A removed line is an R2 mutation if it is an assertion opener itself
+      // or sits inside an unclosed assertion call (argument-only edit).
+      if (isRemoved && (inside || isOpener)) {
         const excerpt = content.trim().slice(0, 140);
         offending.push({ file: currentFile, line: oldLineNo, excerpt });
       }
-      oldLineNo++;
-    } else if (line.startsWith(' ')) {
+
       oldLineNo++;
     }
-    // '+' lines do not advance the old-file counter and are never R2 offenders
+    // '+' lines do not advance the old-file counter, do not change old-file
+    // assertion depth, and are never R2 offenders
   }
 
   return offending;
 }
 
-const SPEC_CHANGE_RE = /^\s*Spec-Change:\s+\S+/m;
+const SPEC_CHANGE_RE = /^\s*(?:[-*]|\d+\.)?\s*Spec-Change:\s+\S+/m;
 
 function runR2() {
   const base = resolveBase();
