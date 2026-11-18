@@ -6,7 +6,7 @@ import { hashVendorToken } from "./vendor-repair-rules";
 
 /**
  * B-065 phase B slice P1 (VEN-18-AC6, AC9, AC10 data layer): the vendor's direction-1 receipt stamp versions and their
- * consent, through the service-only app.b065_* gateways (migration 20261118100000_b065_stamp.sql). Two admissions,
+ * consent, through the service-only app.b065_* gateways (migration 20261118110000_b065_stamp.sql). Two admissions,
  * both verified on the server: the B-026 account session (ven-stamp, login only) and the B-025 document token
  * (B-067's receipt flow on /v/documents/[token]). No route, page or generator here (P2). No outbound.
  */

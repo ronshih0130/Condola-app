@@ -781,7 +781,7 @@ test("B-092 RO-UNIT adds one service-only single-unit reader with B-093 admissio
 });
 
 test("B-065 phase B P1 adds three revoked append-only tables, eight service-only gateways and internal helpers, migration-owned (VEN-18)", () => {
-  const sql = read("supabase/migrations/20261118100000_b065_stamp.sql");
+  const sql = read("supabase/migrations/20261118110000_b065_stamp.sql");
   const code = sql.replace(/--[^\n]*/g, "");
   const compact = sql.replace(/\s+/g, "");
   const gateways = ["b065_stamp_view(text,uuid,boolean)", "b065_stamp_preview_by_grant(text,uuid,uuid)", "b065_receipt_stamp(text,uuid,boolean)",

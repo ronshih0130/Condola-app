@@ -17,7 +17,7 @@ test("VEN-18 constants: the approved consent sentence (rec-stamp) and the readin
   assert.equal(STAMP_CONSENT_TEXT, "我同意使用這枚印章開立收據");
   assert.deepEqual([...STAMP_READINESS], ["needs_tax_id", "needs_stamp", "stale", "needs_consent", "ready"]);
   assert.equal(STAMP_SVG_MAX_BYTES, 512 * 1024);
-  const sql = readFileSync("supabase/migrations/20261118100000_b065_stamp.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20261118110000_b065_stamp.sql", "utf8");
   assert.equal((sql.match(/'我同意使用這枚印章開立收據'/g) ?? []).length, 2, "the CHECK and the writer use the same sentence");
   assert.match(sql, /octet_length\(p_svg\) BETWEEN 1 AND 524288/);
 });
