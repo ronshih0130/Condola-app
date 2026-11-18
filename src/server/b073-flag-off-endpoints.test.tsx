@@ -46,7 +46,7 @@ function streamed(chunks: Uint8Array[], contentLength?: string, path = "/api/own
   return { request: new Request(`${URL}${path}`, init), calls };
 }
 
-test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before body, writes, audit or page consent", async () => {
+test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before API permission or body, unit reads, writes or audit", async () => {
   for (const { path, input } of cases) for (const fail of [false, true]) {
     const label = `${path} ${JSON.stringify(input)} ${fail ? "lookup failure" : "flag OFF"}`;
     const calls: string[] = [], lookups: string[] = [];
@@ -62,6 +62,7 @@ test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before 
       "@/server/consent-gate": { requireCurrentConsent: async () => { calls.push("consent"); return null; } },
       "@/server/session": {
         readSession: async () => { calls.push("session"); return { orgId: ORG, kind: input ? "staff" : "owner", role: input ? "admin" : null }; },
+        getSession: async () => { calls.push("session"); return { orgId: ORG, kind: "owner", role: null }; },
       },
       "@/server/b073-owner-view": { authorizeSettingsEdit: record("permission"), saveOwnerView: save },
       "@/server/b073-team": { saveTeamSecurity: save },
@@ -83,7 +84,8 @@ test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before 
     } else {
       const Page = route.default as (props: unknown) => Promise<unknown>;
       await assert.rejects(() => Page({ params: Promise.resolve({ unitId: UNIT }), searchParams: Promise.resolve({}) }), /^Error: NEXT_NOT_FOUND$/, label);
-      assert.deepEqual(calls, ["session", "flag", "notFound"], label);
+      // The consent-entrypoints rule requires the page guard to run before session and flag checks.
+      assert.deepEqual(calls, ["consent", "session", "flag", "notFound"], label);
     }
     assert.deepEqual(lookups, [ORG], label);
   }

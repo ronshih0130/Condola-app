@@ -4,7 +4,7 @@ import { ownerUnitHref } from "@/components/v3/owner/units";
 import { ownerUnit } from "@/server/b092-owner-unit";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { requireCurrentConsent } from "@/server/consent-gate";
-import { readSession } from "@/server/session";
+import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +17,9 @@ export const dynamic = "force-dynamic";
 export default async function OwnerUnitRoute({ params, searchParams }: {
   params: Promise<{ unitId: string }>; searchParams: Promise<{ room?: string | string[] }>;
 }) {
-  const session = await readSession();
-  if (session?.kind !== "owner" || !(await brandV3EnabledForOrg(session.orgId))) notFound();
-  await requireCurrentConsent(session, "page");
+  await requireCurrentConsent(undefined, "page");
+  const session = await getSession();
+  if (!(await brandV3EnabledForOrg(session.orgId))) notFound();
   const { unitId } = await params;
   const { room } = await searchParams;
   const roomId = room ?? null;
