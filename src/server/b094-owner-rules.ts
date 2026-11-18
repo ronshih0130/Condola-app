@@ -10,7 +10,23 @@ import type { Session } from "./types";
  * limits are the existing B-021 owner repair policy, one line per property that has a policy entry, each
  * with 「修改」 to its own policy page. Read-only here: the only write is setOwnerRule through its action.
  */
-export type RepairLimitLine = { propertyId: string; name: string; minor: string | null; currency: string; minorUnit: number };
+/**
+ * OWN-34-AC6 (R8, B-113): which limit applies to a property, from B-021's own resolution (b013_owner_view, read only):
+ * - "owner": the owner's per-property override or own default ('property_override' / 'owner_default'), above NT$0;
+ * - "zero": the same, set to 0, so every estimate above NT$0 asks the owner;
+ * - "regional": nothing set, the regional default for the org country + property currency applies ('regional_default');
+ * - "unset": nothing set and no regional default ('configuration_required'): an estimate cannot be submitted;
+ * - "pending": a limit exists but needs the owner's confirmation (minor-unit or legacy mismatch): name and 「修改」 only.
+ * NULL or 'clear' is "not set"; 0 is a real limit. The amount always comes from the view, never a constant.
+ */
+export type RepairLimitState = "owner" | "zero" | "regional" | "unset" | "pending";
+export type RepairLimitLine = { propertyId: string; name: string; minor: string | null; currency: string; minorUnit: number; state: RepairLimitState };
+export function repairLimitState(effectiveSource: string, effectiveMinor: string | null): RepairLimitState {
+  if (effectiveMinor !== null && (effectiveSource === "property_override" || effectiveSource === "owner_default")) return effectiveMinor === "0" ? "zero" : "owner";
+  if (effectiveMinor !== null && effectiveSource === "regional_default") return "regional";
+  if (effectiveMinor === null && effectiveSource === "configuration_required") return "unset";
+  return "pending";
+}
 export type OwnerRulesPage =
   | { state: "off" | "forbidden" | "unavailable" }
   | { state: "ready"; rule: Extract<OwnerRuleView, { state: "ready" }>; repairs: RepairLimitLine[]; company: string };
@@ -43,7 +59,8 @@ export async function ownerRulesPage(session: Session, deps: Deps = {}): Promise
       if (view.state === "disabled" || view.state === "recovery_only") continue;
       // One unreadable policy makes the page's read fail in place, never a partial or guessed limit.
       if (view.state !== "enabled") return { state: "unavailable" };
-      repairs.push({ propertyId: property.id, name: property.name, minor: view.effectiveMinor, currency: view.currency, minorUnit: view.minorUnit });
+      repairs.push({ propertyId: property.id, name: property.name, minor: view.effectiveMinor, currency: view.currency, minorUnit: view.minorUnit,
+        state: repairLimitState(view.effectiveSource, view.effectiveMinor) });
     }
     // 「改了會通知{company}」: the firm name, read only after the B-091 gateway admitted this owner.
     const company = (await (deps.firm ?? ownerPrivacy)(session.orgId)).name;

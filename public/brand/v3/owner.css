@@ -88,6 +88,7 @@ html[data-brand="v2"][data-brand-v3] .rules-lines { list-style:none; padding:0; 
 html[data-brand="v2"][data-brand-v3] .rules-lines li + li { border-top:1px solid var(--c-divider); }
 html[data-brand="v2"][data-brand-v3] .rules-line { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; padding:10px 0; }
 html[data-brand="v2"][data-brand-v3] .rules-edit { flex:none; color:var(--c-primary); min-height:44px; display:inline-flex; align-items:center; }
+html[data-brand="v2"][data-brand-v3] .rules-line .owner-action { flex:none; }
 html[data-brand="v2"][data-brand-v3] .rules-edit:focus-visible, html[data-brand="v2"][data-brand-v3] .rules-option:focus-visible { outline:2px solid var(--c-focus); outline-offset:2px; border-radius:var(--r-sm); }
 html[data-brand="v2"][data-brand-v3] .rules-option-on { font-weight:600; }
 html[data-brand="v2"][data-brand-v3] .rules-error { margin:8px 0; color:var(--c-danger); }
