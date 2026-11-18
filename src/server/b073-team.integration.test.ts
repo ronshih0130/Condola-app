@@ -120,10 +120,30 @@ const post = (token: string, body: unknown, origin = "http://localhost") => {
   return POST(new Request("http://localhost/api/team-security", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
 };
 
+const V3 = { brand_v2: true, brand_v3: true };
+
+test("MGT-133 flag OFF: /api/team-security answers 404 to an admin and leaves settings and audit rows unchanged", async () => {
+  for (const flags of [{}, { brand_v2: true }, { brand_v3: true }]) {
+    const { orgId, tokens, sessions } = await makeOrg(flags);
+    const before = await orgRow(orgId), auditBefore = await audits(orgId);
+    const res = await post(tokens.admin, { required: true });
+    assert.equal(res.status, 404, JSON.stringify(flags)); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+    assert.equal((await post(tokens.manager, { required: true })).status, 403, "authorization still comes first");
+    assert.deepEqual(await saveTeamSecurity(sessions.admin, { required: true }), { ok: false, status: 404 });
+    assert.deepEqual(await orgRow(orgId), before);
+    assert.deepEqual(await audits(orgId), auditBefore);
+  }
+});
+
 test("MGT-133-AC7/AC8 HTTP: non-admins 403; admin turns the company 2FA rule on with the existing require_2fa audit row", async () => {
-  const { orgId, tokens, sessions } = await makeOrg();
+  const { orgId, tokens, sessions } = await makeOrg(V3);
   const before = await orgRow(orgId), auditBefore = await audits(orgId);
-  for (const role of ["manager", "accountant", "maintenance"]) assert.equal((await post(tokens[role], { required: true })).status, 403, role);
+  for (const role of ["manager", "accountant", "maintenance"]) {
+    assert.equal((await post(tokens[role], { required: true })).status, 403, role);
+    cookie = tokens[role];
+    const malformed = await POST(new Request("http://localhost/api/team-security", { method: "POST", headers: { Origin: "http://localhost", "Content-Type": "application/json" }, body: "{" }));
+    assert.equal(malformed.status, 403, `${role} malformed body`);
+  }
   assert.equal((await post(tokens.admin, { required: true }, "http://evil.example")).status, 403);
   assert.equal((await post(tokens.admin, { required: "on" })).status, 400);
   assert.deepEqual(await orgRow(orgId), before);

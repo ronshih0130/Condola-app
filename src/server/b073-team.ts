@@ -147,20 +147,30 @@ export function teamPermissionMatrix(): TeamMatrixRow[] {
   }));
 }
 
-/** POST /api/team-security answers this as its HTTP status. 403 = not allowed (MGT-133-AC8); 400 = bad input. */
-export type TeamSecuritySaveResult = { ok: true; required: boolean } | { ok: false; status: 400 | 403 | 500 };
-type SaveDeps = { write?: (session: Session, required: boolean) => Promise<void>; read?: (orgId: string) => Promise<boolean> };
+/** POST /api/team-security answers this as its HTTP status. 403 = not allowed (MGT-133-AC8); 404 = brand_v3 OFF
+ * for the session's organization (the endpoint exists only for the v3 page); 400 = bad input. */
+export type TeamSecuritySaveResult = { ok: true; required: boolean } | { ok: false; status: 400 | 403 | 404 | 500 };
+type SaveDeps = {
+  write?: (session: Session, required: boolean) => Promise<void>;
+  read?: (orgId: string) => Promise<boolean>;
+  /** brand_v3 for the org; a failed read throws (→ 500), never a silent ON or OFF. */
+  v3?: (orgId: string) => Promise<boolean>;
+};
 /**
  * MGT-133-AC7: the company 2FA rule with its existing behaviour — `setRequireMfa` (settings.edit guard, the same
  * settings key and its `require_2fa` audit row), then the stored value is read back for the switch.
+ * Order: authorize (settings.edit, so a non-admin always gets 403 whatever the body), then brand_v3 for the
+ * session's organization (OFF → 404, nothing read or written), then the body.
  */
 export async function saveTeamSecurity(session: Session, input: unknown, deps: SaveDeps = {}): Promise<TeamSecuritySaveResult> {
-  const value = input as { required?: unknown } | null;
-  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== 1 || typeof value.required !== "boolean")
-    return { ok: false, status: 400 };
   try {
     session = await guardEffectiveSession(session, "settings.edit");
     assertPerm(session, "settings.edit");
+    const v3 = await (deps.v3 ?? (async (orgId: string) => (await import("./brand-v3")).brandV3ReadForOrg(orgId)))(session.orgId);
+    if (!v3) return { ok: false, status: 404 };
+    const value = input as { required?: unknown } | null;
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== 1 || typeof value.required !== "boolean")
+      return { ok: false, status: 400 };
     await (deps.write ?? (await import("./auth")).setRequireMfa)(session, value.required);
     return { ok: true, required: await (deps.read ?? readRequire2fa)(session.orgId) };
   } catch (error) {

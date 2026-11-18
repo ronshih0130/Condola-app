@@ -61,3 +61,4 @@ html[data-brand="v2"][data-brand-v3] .v3-team-skeleton-title{ width:min(240px,60
   html[data-brand="v2"][data-brand-v3] .v3-team-knob,
   html[data-brand="v2"][data-brand-v3] .v3-team-knob::after{ transition:none; }
 }
+html[data-brand="v2"][data-brand-v3] .v3-team-panel:focus-visible{ outline:2px solid var(--c-focus); outline-offset:3px; }

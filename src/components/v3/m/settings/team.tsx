@@ -4,6 +4,8 @@ import { brandV3TeamCopy, fill } from "../../../../i18n/lanes/brand-v3-r5-team";
 import { teamPermissionMatrix, type TeamRowV3, type TeamSeats } from "../../../../server/b073-team";
 import { ROLE_KEYS } from "../../../../server/perms";
 import type { OrgRole } from "../../../../server/types";
+import { TeamFocus } from "./team-focus";
+import { TEAM_ADD_ID, TEAM_CLOSE_HREF, TEAM_PANEL_ID } from "./team-focus-state";
 
 /**
  * R5-TEAM + R5-FULL (設定 › 團隊, MGT-133). Presentation only (server-safe, no hooks): row actions, the existing
@@ -54,10 +56,10 @@ function StatusCell({ locale, row }: { locale: Locale; row: TeamRowV3 }) {
 /** MGT-133-AC5 (R5-FULL): the two ways forward; nothing is invited. */
 export function TeamFullPanel({ locale, seats, plans = true }: { locale: Locale; seats: TeamSeats; plans?: boolean }) {
   const c = brandV3TeamCopy(locale);
-  return <section className="v3-team-card v3-team-panel" id="v3-team-panel" aria-labelledby="v3-team-full-title" data-testid="team-full">
+  return <section className="v3-team-card v3-team-panel" id={TEAM_PANEL_ID} tabIndex={-1} aria-labelledby="v3-team-full-title" data-testid="team-full">
     <h2 id="v3-team-full-title">{c.fullTitle}</h2>
     <p>{fill(c.fullBody, { used: seats.used, limit: seats.limit ?? "" })}</p>
-    <div className="v3-team-row">{plans && <a className="btn" href={PLANS_HREF}>{c.plans}</a>}<a className="btn txt" href={TEAM_HREF}>{c.close}</a></div>
+    <div className="v3-team-row">{plans && <a className="btn" href={PLANS_HREF}>{c.plans}</a>}<a className="btn txt" href={TEAM_CLOSE_HREF}>{c.close}</a></div>
   </section>;
 }
 
@@ -93,17 +95,18 @@ export function TeamView({ locale, rows, seats, panel, permsOpen = false, plans 
 }) {
   const c = brandV3TeamCopy(locale);
   const side = panel === "full" ? <TeamFullPanel locale={locale} seats={seats} plans={plans} />
-    : panel === "add" ? <section className="v3-team-panel" id="v3-team-panel" aria-label={c.add} data-testid="team-invite">
-      {invite}<a className="btn txt" href={TEAM_HREF}>{c.cancel}</a>
+    : panel === "add" ? <section className="v3-team-panel" id={TEAM_PANEL_ID} tabIndex={-1} aria-label={c.add} data-testid="team-invite">
+      {invite}<a className="btn txt" href={TEAM_CLOSE_HREF}>{c.cancel}</a>
     </section>
     : security ? <section className="v3-team-card" aria-labelledby="v3-team-security-title" data-testid="team-security">
       <h2 id="v3-team-security-title">{c.securityTitle}</h2>{security}
     </section> : null;
   return <section className="v3-team" aria-label={c.title} data-testid="team">
+    <TeamFocus panel={panel} />
     {notice}
     <header className="v3-team-lead">
       <div><h1>{seatLead(locale, seats)}</h1><p>{c.leadNote}</p></div>
-      <a className={panel === "add" ? "btn" : "btn pri"} href={TEAM_ADD_HREF} data-testid="team-add">{c.add}</a>
+      <a className={panel === "add" ? "btn" : "btn pri"} href={TEAM_ADD_HREF} id={TEAM_ADD_ID} data-testid="team-add">{c.add}</a>
     </header>
     <div className={side ? "v3-team-two" : undefined}>
       <div className="v3-team-card v3-team-list-card">

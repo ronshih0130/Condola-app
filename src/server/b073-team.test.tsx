@@ -19,6 +19,7 @@ import { makeT } from "../i18n";
 import { seatLead, TeamError, TeamFullPanel, TeamLoading, TeamPermissions, TeamView } from "../components/v3/m/settings/team";
 import { TeamSecurityRow } from "../components/v3/m/settings/team-security-row";
 import { afterSecuritySave, initialTeamSecurity, postTeamSecurity, startSecurityToggle, syncTeamSecurity } from "../components/v3/m/settings/team-security-state";
+import { focusTeamOnLoad, TEAM_ADD_ID, TEAM_CLOSE_HREF, TEAM_PANEL_ID } from "../components/v3/m/settings/team-focus-state";
 import type { OrgRole, Session } from "./types";
 
 // B-073 / R5-TEAM + R5-FULL (設定 › 團隊, MGT-133 AC1, AC3–AC8). Synthetic data only; nothing outbound.
@@ -227,7 +228,7 @@ test("MGT-133-AC1/AC4/AC6/AC7 page: lead + note + solid 「新增同事」 link;
   const html = view();
   const t = text(html);
   assert.match(html, /<h1>團隊人數 4／5<\/h1><p>每位同事都算一人，不分角色。<\/p>/);
-  assert.match(html, /<a class="btn pri" href="\/m\/team\?add=1#v3-team-panel" data-testid="team-add">新增同事<\/a>/);
+  assert.match(html, /<a class="btn pri" href="\/m\/team\?add=1#v3-team-panel" id="v3-team-add" data-testid="team-add">新增同事<\/a>/);
   assert.equal((html.match(/btn pri/g) ?? []).length, 1, "one solid button");
   assert.doesNotMatch(html, disabled);
   assert.match(html, /<th scope="col">同事<\/th><th scope="col">角色<\/th><th scope="col">狀態<\/th>/);
@@ -250,26 +251,49 @@ test("MGT-133-AC1/AC4/AC6/AC7 page: lead + note + solid 「新增同事」 link;
 test("MGT-133-AC5 full vs room: at the limit 「新增同事」 opens R5-FULL (nothing invited); with room it opens the existing invite flow", () => {
   const full = view({ seats: { used: 5, limit: 5 }, panel: "full", invite: <form data-invite="1" /> });
   assert.match(full, /<h2 id="v3-team-full-title">團隊人數已滿<\/h2><p>團隊人數已滿（5／5）。升級到進階方案就不限人數，或先停用一位同事。<\/p>/);
-  assert.match(full, /<a class="btn" href="\/m\/settings">看方案<\/a><a class="btn txt" href="\/m\/team">關閉<\/a>/);
-  assert.match(full, /<a class="btn pri" href="\/m\/team\?add=1#v3-team-panel" data-testid="team-add">新增同事<\/a>/, "still a live button");
+  assert.match(full, /<a class="btn" href="\/m\/settings">看方案<\/a><a class="btn txt" href="\/m\/team#v3-team-add">關閉<\/a>/);
+  assert.match(full, /<section class="v3-team-card v3-team-panel" id="v3-team-panel" tabindex="-1" aria-labelledby="v3-team-full-title"/);
+  assert.match(full, /<a class="btn pri" href="\/m\/team\?add=1#v3-team-panel" id="v3-team-add" data-testid="team-add">新增同事<\/a>/, "still a live button");
   assert.doesNotMatch(full, /data-invite|全公司的安全規則/); assert.doesNotMatch(full, disabled);
   assert.doesNotMatch(view({ seats: { used: 5, limit: 5 }, panel: "full", plans: false }), /看方案/);
   const add = view({ panel: "add", invite: <form data-invite="1" /> });
-  assert.match(add, /<section class="v3-team-panel" id="v3-team-panel" aria-label="新增同事" data-testid="team-invite"><form data-invite="1"><\/form><a class="btn txt" href="\/m\/team">取消<\/a><\/section>/);
-  assert.match(add, /<a class="btn" href="\/m\/team\?add=1#v3-team-panel" data-testid="team-add">新增同事<\/a>/, "outline while the form's own submit is the solid one");
+  assert.match(add, /<section class="v3-team-panel" id="v3-team-panel" tabindex="-1" aria-label="新增同事" data-testid="team-invite"><form data-invite="1"><\/form><a class="btn txt" href="\/m\/team#v3-team-add">取消<\/a><\/section>/);
+  assert.match(add, /<a class="btn" href="\/m\/team\?add=1#v3-team-panel" id="v3-team-add" data-testid="team-add">新增同事<\/a>/, "outline while the form's own submit is the solid one");
   assert.doesNotMatch(add, /團隊人數已滿/);
   assert.match(renderToStaticMarkup(<TeamFullPanel locale="en" seats={{ used: 1, limit: 1 }} />), /Your team is full \(1\/1\)\./);
 });
 
+test("R5-FULL / invite panel focus: an open panel takes focus; 「關閉」/「取消」 return focus to 「新增同事」", () => {
+  const made = (ids: string[]) => {
+    const focused: string[] = [];
+    return { focused, doc: { getElementById: (id: string) => ids.includes(id) ? { focus: () => { focused.push(id); } } : null } };
+  };
+  const open = made([TEAM_PANEL_ID, TEAM_ADD_ID]);
+  assert.equal(focusTeamOnLoad(open.doc, ""), TEAM_PANEL_ID); assert.deepEqual(open.focused, [TEAM_PANEL_ID]);
+  const back = made([TEAM_ADD_ID]);
+  assert.equal(focusTeamOnLoad(back.doc, "#v3-team-add"), TEAM_ADD_ID); assert.deepEqual(back.focused, [TEAM_ADD_ID]);
+  const plain = made([TEAM_ADD_ID]);
+  assert.equal(focusTeamOnLoad(plain.doc, ""), null); assert.deepEqual(plain.focused, [], "a plain visit does not move focus");
+  assert.equal(focusTeamOnLoad(made([]).doc, "#v3-team-add"), null);
+  assert.equal(TEAM_CLOSE_HREF, "/m/team#v3-team-add");
+  // The effect runs on the client for every panel state; the client file imports only the pure module.
+  const client = read("src/components/v3/m/settings/team-focus.tsx");
+  assert.match(client, /^"use client";/);
+  assert.match(client, /useEffect\(\(\) => \{ focusTeamOnLoad\(document, window\.location\.hash\); \}, \[panel\]\);/);
+  assert.doesNotMatch(client, /b073-team|from "\.\/team"/);
+  assert.match(read("src/components/v3/m/settings/team.tsx"), /<TeamFocus panel=\{panel\} \/>/);
+  assert.match(read("public/brand/v3/settings-team.css"), /\.v3-team-panel:focus-visible\{ outline:2px solid var\(--c-focus\)/);
+});
+
 const sectionSource = read("src/components/v3/m/settings/team-page.tsx");
-async function renderSection(read: Awaited<ReturnType<typeof teamRead>>, query: Record<string, string>, invites: "live" | "legacy" | "closed" = "live", gate: { redirectTo: string | null } = { redirectTo: null }) {
+async function renderSection(read: Awaited<ReturnType<typeof teamRead>>, query: Record<string, string>, invites: "live" | "legacy" | "closed" = "live", gate: { redirectTo: string | null } | "throws" = { redirectTo: null }) {
   const calls: string[] = [];
   const Section = compile(sectionSource, {
     "@/i18n": { makeT },
     "@/components/ui": { ErrorBanner: box("error") },
     "@/server/demo": { demoModeEnabled: () => false },
     "@/server/billing": { FREE_UNITS: 5 },
-    "@/server/upgrade-gate": { upgradeGate: async () => { calls.push("gate"); return gate; } },
+    "@/server/upgrade-gate": { upgradeGate: async () => { calls.push("gate"); if (gate === "throws") throw new Error("partner controls down"); return gate; } },
     "@/server/b073-team": { teamRead: async () => read, teamRowActions },
     "./team": requireHere("../components/v3/m/settings/team"),
     "./team-actions": { TeamRowActionsCell: box("actions") },
@@ -283,7 +307,11 @@ test("MGT-133-AC5 section: the server decides full vs invite from the same seat 
   const data = { state: "ready" as const, rows: ready, seats: { used: 5, limit: 5 }, full: true, security: { required: true } };
   const full = await renderSection(data, { add: "1" });
   assert.match(full.html, /團隊人數已滿（5／5）/); assert.doesNotMatch(full.html, /invite-flow/); assert.deepEqual(full.calls, ["gate"]);
-  assert.doesNotMatch((await renderSection(data, { add: "1" }, "live", { redirectTo: "/m" })).html, /看方案/);
+  assert.doesNotMatch((await renderSection(data, { add: "1" }, "live", { redirectTo: "/m" })).html, /看方案/, "confirmed partner restriction kept");
+  // A failed lookup is not "pricing hidden": the read error with 「再試一次」, no panel without 「看方案」.
+  const failed = await renderSection(data, { add: "1" }, "live", "throws");
+  assert.match(failed.html, /這裡暫時讀不到，請再試一次。[^]*<a class="btn" href="\/m\/team">再試一次<\/a>/);
+  assert.doesNotMatch(failed.html, /團隊人數已滿|data-testid="team-list"/);
   const room = await renderSection({ ...data, seats: { used: 4, limit: 5 }, full: false }, { add: "1" }, "legacy");
   assert.match(room.html, /data-test="invite-flow">\{&quot;locale&quot;:&quot;zh-TW&quot;,&quot;invites&quot;:&quot;legacy&quot;\}/);
   assert.doesNotMatch(room.html, /團隊人數已滿/); assert.deepEqual(room.calls, []);
@@ -360,20 +388,32 @@ test("MGT-133-AC7 2FA switch: existing setRequireMfa behaviour; one save at a ti
   const client = read("src/components/v3/m/settings/team-security-switch.tsx");
   assert.match(client, /^"use client";/);
   assert.doesNotMatch(client, /from "\.\/team"|b073-team|redirect\(|"use server"/, "the client bundle imports no server module");
-  // Server: settings.edit before any write; bad input 400; failures 500; the existing setRequireMfa is the writer.
-  for (const role of ["manager", "accountant", "maintenance"] as const) {
-    const trace: string[] = [];
-    assert.deepEqual(await saveTeamSecurity(staff(role), { required: true }, { write: async () => { trace.push("write"); }, read: async () => { trace.push("read"); return true; } }), { ok: false, status: 403 });
-    assert.deepEqual(trace, []);
-  }
-  for (const input of [null, {}, { required: "on" }, { required: true, extra: 1 }, [true], "true"]) {
-    assert.deepEqual(await saveTeamSecurity(staff("admin"), input, { write: async () => { throw new Error("must not write"); } }), { ok: false, status: 400 });
+  // Server: settings.edit first (whatever the body), then brand_v3 (OFF → 404), then the body; the existing
+  // setRequireMfa is the writer.
+  const on = async () => true;
+  for (const role of ["manager", "accountant", "maintenance"] as const)
+    for (const input of [{ required: true }, null, {}, { required: "on" }, undefined, "{"]) {
+      const trace: string[] = [];
+      assert.deepEqual(await saveTeamSecurity(staff(role), input, { v3: async () => { trace.push("v3"); return true; }, write: async () => { trace.push("write"); }, read: async () => { trace.push("read"); return true; } }), { ok: false, status: 403 }, `${role} ${JSON.stringify(input)}`);
+      assert.deepEqual(trace, []);
+    }
+  const offTrace: string[] = [];
+  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: true }, { v3: async () => false, write: async () => { offTrace.push("write"); }, read: async () => { offTrace.push("read"); return true; } }), { ok: false, status: 404 });
+  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: "on" }, { v3: async () => false }), { ok: false, status: 404 }, "OFF before the body");
+  assert.deepEqual(offTrace, []);
+  const failTrace: string[] = [];
+  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: true }, { v3: async () => { throw new Error("flag read failed"); }, write: async () => { failTrace.push("write"); } }), { ok: false, status: 500 });
+  assert.deepEqual(failTrace, [], "a failed flag read writes nothing");
+  for (const input of [null, {}, { required: "on" }, { required: true, extra: 1 }, [true], "true", undefined]) {
+    assert.deepEqual(await saveTeamSecurity(staff("admin"), input, { v3: on, write: async () => { throw new Error("must not write"); } }), { ok: false, status: 400 });
   }
   const writes: boolean[] = [];
-  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: true }, { write: async (_s, v) => { writes.push(v); }, read: async () => true }), { ok: true, required: true });
+  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: true }, { v3: on, write: async (_s, v) => { writes.push(v); }, read: async () => true }), { ok: true, required: true });
   assert.deepEqual(writes, [true]);
-  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: false }, { write: async () => { throw new Error("db down"); } }), { ok: false, status: 500 });
-  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: false }, { write: async () => { throw new FlowError("errors.forbidden"); } }), { ok: false, status: 403 });
+  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: false }, { v3: on, write: async () => { throw new Error("db down"); } }), { ok: false, status: 500 });
+  assert.deepEqual(await saveTeamSecurity(staff("admin"), { required: false }, { v3: on, write: async () => { throw new FlowError("errors.forbidden"); } }), { ok: false, status: 403 });
+  // The default flag reader is the fail-loud brand_v3 reader for the session's organization.
+  assert.match(read("src/server/b073-team.ts"), /\(await import\("\.\/brand-v3"\)\)\.brandV3ReadForOrg\(orgId\)\)\)\(session\.orgId\);\n    if \(!v3\) return \{ ok: false, status: 404 \};/);
   assert.match(read("src/server/b073-team.ts"), /\(deps\.write \?\? \(await import\("\.\/auth"\)\)\.setRequireMfa\)\(session, value\.required\)/);
 });
 
@@ -381,7 +421,9 @@ test("MGT-133-AC8 route: same-origin JSON only; non-admin → HTTP 403; bad body
   const source = read("src/app/api/team-security/route.ts");
   const trace: unknown[] = [];
   let session: Session | null = staff("admin");
-  let save: (s: Session, input: unknown) => Promise<unknown> = saveTeamSecurity as never;
+  let v3 = true;
+  const real = (s: Session, input: unknown) => saveTeamSecurity(s, input, { v3: async () => v3, write: async () => { trace.push("write"); }, read: async () => true });
+  let save: (s: Session, input: unknown) => Promise<unknown> = real;
   const route = compile(source, {
     "@/server/consent-gate": { requireCurrentConsent: async (_s: Session, mode: string) => { trace.push(`consent:${mode}`); return null; } },
     "@/server/session": { readSession: async () => { trace.push("session"); return session; } },
@@ -398,9 +440,15 @@ test("MGT-133-AC8 route: same-origin JSON only; non-admin → HTTP 403; bad body
   for (const role of ["manager", "accountant", "maintenance"] as const) {
     session = staff(role); const res = await post({ required: true });
     assert.equal(res.status, 403, role); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+    // A malformed body from a non-admin is still 403 (authorization before validation).
+    for (const body of ["{", "null", JSON.stringify({ required: 1 })]) assert.equal((await post(body)).status, 403, `${role} ${body}`);
   }
   session = staff("admin");
   for (const body of ["{", "null", JSON.stringify({ required: 1 })]) assert.equal((await post(body)).status, 400, body);
+  // brand_v3 OFF for the session's organization: 404 and nothing written.
+  v3 = false; trace.length = 0;
+  assert.equal((await post({ required: true })).status, 404); assert.ok(!trace.includes("write"));
+  v3 = true;
   save = async (_s, input) => { trace.push(input); return { ok: true, required: true }; };
   trace.length = 0;
   const ok = await post({ required: true });
