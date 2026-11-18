@@ -1,6 +1,7 @@
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { FlatCompat } from "@eslint/eslintrc";
+import condola from "./eslint-rules/flag-gate.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,6 +30,13 @@ const eslintConfig = [
     files: ["scripts/**/*.cjs"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    files: ["src/app/**/*.{ts,tsx}"],
+    plugins: { condola },
+    rules: {
+      "condola/flag-gate": "error",
     },
   },
 ];
