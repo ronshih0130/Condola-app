@@ -5,6 +5,8 @@ import Link from "next/link";
 import { makeT } from "@/i18n";
 import { actionPickLease } from "@/server/actions";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { TenantHomeV3Route } from "@/components/v3/tenant/home-route";
 import { moneyLabel } from "@/server/format";
 import { loadLeaseIdCheck } from "@/server/id-docs";
 import { identityRequiredForSigningFor } from "@/server/id-sign-gate";
@@ -46,58 +48,66 @@ export default async function TenantHome() {
   }
   const lease = leases.find((item) => item.lease_id === session.leaseId) ?? leases[0];
   if (!lease) return <p data-v2-page={v2 ? "t-home" : undefined}>{t("i_empty")}</p>;
-  const [history, idCheck, reminderPreference] = await Promise.all([
-    tenantPaymentHistory(session, lease.lease_id, { view: 'current' }),
-    loadLeaseIdCheck(session, lease.lease_id),
-    tenantDuePreference(session,lease.lease_id),
-  ]);
-  const idRequired = await identityRequiredForSigningFor(session);
-  const money = history.state === "off" ? await tenantLeaseMoney(session, lease.lease_id) : null;
-  const rentMinor = money?.lease.rent ?? "0";
-  const depositMinor = money?.lease.deposit ?? "0";
-  const dueMinor = money?.dueMinor ?? 0;
-  const currency = money?.lease.currency ?? "TWD";
-  const pendingUnsigned = (money?.lease.status ?? lease.lease_status) === "pending_signature";
-  return (
-    <div data-v2-page={v2 ? "t-home" : undefined}>
-      <h2>{t("i_hello", { name: session.name })}</h2>
-      <p>
-        {lease.firm_name} · {displaySampleName(`${lease.property_name} ${lease.room_label ?? ""}`)}
-      </p>
-      {idCheck && !idCheck.ready && idRequired ? (
+  const legacyHome = async () => {
+    const [history, idCheck, reminderPreference] = await Promise.all([
+      tenantPaymentHistory(session, lease.lease_id, { view: 'current' }),
+      loadLeaseIdCheck(session, lease.lease_id),
+      tenantDuePreference(session,lease.lease_id),
+    ]);
+    const idRequired = await identityRequiredForSigningFor(session);
+    const money = history.state === "off" ? await tenantLeaseMoney(session, lease.lease_id) : null;
+    const rentMinor = money?.lease.rent ?? "0";
+    const depositMinor = money?.lease.deposit ?? "0";
+    const dueMinor = money?.dueMinor ?? 0;
+    const currency = money?.lease.currency ?? "TWD";
+    const pendingUnsigned = (money?.lease.status ?? lease.lease_status) === "pending_signature";
+    return (
+      <div data-v2-page={v2 ? "t-home" : undefined}>
+        <h2>{t("i_hello", { name: session.name })}</h2>
         <p>
-          <Link className="btn block" href="/t/id" data-testid="idv-home-link">
-            {t("idv_start")}
-          </Link>
-          <span className="small">{t("idv_gate")}</span>
+          {lease.firm_name} · {displaySampleName(`${lease.property_name} ${lease.room_label ?? ""}`)}
         </p>
-      ) : null}
-      {history.state === 'unavailable' ? <p role="status">{tenantPaymentHistoryCopy(session.locale).unavailable}</p> : history.state === 'ready' ? <div data-testid="rent-due-notice"><TenantBillSummary data={history} locale={session.locale} /><Link className="fbtn" href="/t/pay">{t("i_rich_pay")}</Link></div> : pendingUnsigned ? (
-        <p className="small" data-testid="unsigned-rent-note">{t("i_pay_unsigned_bill")}</p>
-      ) : (
-        <div className="flex" data-testid="rent-due-notice">
-          <div className="fh">{t("i_pay_total")}</div>
-          <div className="fb">
-            <div className="big" data-testid="rent-due-amount" data-minor={dueMinor}>
-              {moneyLabel(dueMinor, currency, session.locale)}
+        {idCheck && !idCheck.ready && idRequired ? (
+          <p>
+            <Link className="btn block" href="/t/id" data-testid="idv-home-link">
+              {t("idv_start")}
+            </Link>
+            <span className="small">{t("idv_gate")}</span>
+          </p>
+        ) : null}
+        {history.state === 'unavailable' ? <p role="status">{tenantPaymentHistoryCopy(session.locale).unavailable}</p> : history.state === 'ready' ? <div data-testid="rent-due-notice"><TenantBillSummary data={history} locale={session.locale} /><Link className="fbtn" href="/t/pay">{t("i_rich_pay")}</Link></div> : pendingUnsigned ? (
+          <p className="small" data-testid="unsigned-rent-note">{t("i_pay_unsigned_bill")}</p>
+        ) : (
+          <div className="flex" data-testid="rent-due-notice">
+            <div className="fh">{t("i_pay_total")}</div>
+            <div className="fb">
+              <div className="big" data-testid="rent-due-amount" data-minor={dueMinor}>
+                {moneyLabel(dueMinor, currency, session.locale)}
+              </div>
+              <div className="small" data-testid="rent-due-rent" data-minor={rentMinor}>
+                {t("s_b6c3113")} {moneyLabel(rentMinor, currency, session.locale)}
+              </div>
+              <div className="small" data-testid="rent-due-deposit" data-minor={depositMinor}>
+                {t("s_8b17769")} {moneyLabel(depositMinor, currency, session.locale)}
+              </div>
             </div>
-            <div className="small" data-testid="rent-due-rent" data-minor={rentMinor}>
-              {t("s_b6c3113")} {moneyLabel(rentMinor, currency, session.locale)}
-            </div>
-            <div className="small" data-testid="rent-due-deposit" data-minor={depositMinor}>
-              {t("s_8b17769")} {moneyLabel(depositMinor, currency, session.locale)}
-            </div>
+            <Link className="fbtn" href="/t/pay">
+              {t("i_rich_pay")}
+            </Link>
           </div>
-          <Link className="fbtn" href="/t/pay">
-            {t("i_rich_pay")}
-          </Link>
-        </div>
-      )}
-      {reminderPreference !== null ? <p><Link href={`/t/reminders/${lease.lease_id}`} data-testid="tenant-reminder-settings">{reminderCopy(session.locale).tenantTitle}</Link></p> : null}
-      <HandoverEntry session={session} leaseId={lease.lease_id} />
-      <NotificationCenterEntry session={session} />
-      <p className="small">{t("i_addr_managed", { address: displaySampleName(lease.address_display ?? lease.property_name), firm: lease.firm_name })}</p>
-      <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
-    </div>
-  );
+        )}
+        {reminderPreference !== null ? <p><Link href={`/t/reminders/${lease.lease_id}`} data-testid="tenant-reminder-settings">{reminderCopy(session.locale).tenantTitle}</Link></p> : null}
+        <HandoverEntry session={session} leaseId={lease.lease_id} />
+        <NotificationCenterEntry session={session} />
+        <p className="small">{t("i_addr_managed", { address: displaySampleName(lease.address_display ?? lease.property_name), firm: lease.firm_name })}</p>
+        <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
+      </div>
+    );
+  };
+  // B-090 slice 1, RT-HOME (TEN-54): under brand_v3 the 首頁 sentence and cards. While the tenant payment-history
+  // reader is not live for the org it answers "off" and the existing body below renders inside the v3 shell.
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    return <TenantHomeV3Route session={session} leaseId={lease.lease_id} company={lease.firm_name} legacy={legacyHome} />;
+  }
+  return legacyHome();
 }
