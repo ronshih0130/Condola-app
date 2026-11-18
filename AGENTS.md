@@ -11,6 +11,17 @@ Living detail stays in the private hub `condola-hub` (do not paste long hub text
 
 Box copies: `/workspace/ops` and `/workspace/condola-hub`. Cite hub paths/sections (e.g. `00-ops/PRINCIPLES.md` §51, `20-build/REVIEW-CHECKLIST.md` item 14) rather than copying.
 
+## 1a. Product map — read first, update with every feature/spec PR
+
+1. **Before any task**, read hub `10-product/product-map/product-map.md`. Part 1 = generated features × journeys × BUILD-ORDER status × prod flag state. Part 2 = state machines for lease, invite/LINE binding, billing/payment, repair request, plan/trial, unit, account/roles, plus the Contradictions list. Check the feature row and the state machine for the object you touch. If the task conflicts with a listed contradiction or a `NOT BUILT`/`UNKNOWN` state, raise it in OPEN-QUESTIONS / PENDING-RON per P69/P76; do not guess.
+2. **Every new feature PR or spec PR** updates the hub product map in the same change set:
+   - After updating hub sources (`BUILD-ORDER.md`, `capability-list-v2`, `TRACEABILITY.md`), run `python3 10-product/product-map/gen-product-map.py` in the hub. Never hand-edit Part 1.
+   - If the PR adds or changes a state or transition, edit `10-product/product-map/product-map.part2.md`. Link the spec, AC id and test file; mark `NOT BUILT` until it ships. Never invent transitions; write `UNKNOWN`. Re-run the generator after editing Part 2.
+   - Commit the regenerated `product-map.md`, `product-map.data.json` and `product-map.html`. Refresh the prod flag snapshot only with `--refresh-flags`, which runs the read-only prod query wrapper on the box; never change prod flags for this. `--check` exits 1 when the map is stale.
+   - In the app PR body, cite the hub commit that updated the map: `Product-Map: <hub sha>`. Use `Product-Map: n/a — <reason>` only if the PR changes no feature, spec, state or flag (e.g. pure refactor, CI, deps).
+
+Documentation rule only; no CI job enforces it yet. Wiring it into `.github/workflows` needs a separate PR with the CEO's exact-SHA GO (P47).
+
 ## 2. Stack and commands
 Production runtime is Cloudflare Workers + Supabase (Postgres, RLS) + TypeScript. This is NOT a Vercel/Next.js host. Local `npm run dev|build|start` invoke the Next.js CLI only because the Worker is built with OpenNext (`npm run cf:build` = `opennextjs-cloudflare build …`). Do not assume Vercel, `next start` in production, or generic Next.js hosting.
 
