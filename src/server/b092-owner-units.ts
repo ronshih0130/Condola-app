@@ -18,12 +18,12 @@ export type OwnerUnitRow = {
   remainingMinor: string | null; vacantDays: number | null;
 };
 export type OwnerUnits = { state: "off" | "forbidden" | "unavailable" } | { state: "ready"; rows: OwnerUnitRow[] };
-type Deps = { v3?: typeof brandV3ReadForOrg; transaction?: typeof svc };
+export type Deps = { v3?: typeof brandV3ReadForOrg; transaction?: typeof svc };
 
 const str = (v: unknown): v is string => typeof v === "string";
 const uuid = (v: unknown): v is string => str(v) && isUuid(v);
 const minor = (v: unknown) => v === null || (str(v) && /^(0|[1-9][0-9]{0,18})$/.test(v));
-function sqlDenied(error: unknown): boolean {
+export function sqlDenied(error: unknown): boolean {
   const e = error as { code?: unknown; cause?: { code?: unknown } } | null;
   return e?.code === "42501" || e?.cause?.code === "42501";
 }
@@ -48,7 +48,7 @@ export function parseOwnerUnits(value: unknown): OwnerUnitRow[] {
   return v.rows as OwnerUnitRow[];
 }
 
-async function admit(input: Session, deps: Deps): Promise<Session | { state: "off" | "forbidden" }> {
+export async function admit(input: Session, deps: Deps): Promise<Session | { state: "off" | "forbidden" }> {
   if (!(await (deps.v3 ?? brandV3ReadForOrg)(input.orgId))) return { state: "off" };
   const session = await guardEffectiveSession(input, null);
   if (session.kind !== "owner" || !uuid(session.orgId) || !uuid(session.liveOrgId) || !uuid(session.sessionId)

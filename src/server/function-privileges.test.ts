@@ -760,3 +760,22 @@ test("B-092 adds one service-only owner units reader with B-093 admission and th
   assert.match(read("scripts/check-function-privileges.sh"), /B-092 owner units ACL\/config mismatch/);
   assert.ok(read("supabase/rpc-allowlist.txt").includes("# service-only: app.b092_owner_units(uuid,uuid,text,uuid)"));
 });
+
+test("B-092 RO-UNIT adds one service-only single-unit reader with B-093 admission and the PR-015 predicate; nothing else", () => {
+  const sql = read("supabase/migrations/20261117120000_b092_owner_unit.sql");
+  const compact = sql.replace(/\s+/g, "");
+  const code = sql.replace(/--[^\n]*/g, "");
+  assert.deepEqual([...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)/g)].map(m => m[1]), ["b092_owner_unit"]);
+  assert.ok(compact.includes("REVOKEALLONFUNCTIONapp.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)FROMPUBLIC,anon,authenticated;"));
+  assert.ok(compact.includes("GRANTEXECUTEONFUNCTIONapp.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)TOservice_role;"));
+  assert.equal((compact.match(/GRANT/g) ?? []).length, 1);
+  assert.match(sql, /RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/);
+  assert.match(sql, /SELECT \* INTO a FROM app\.b013_actor\(p_org,p_session\);/);
+  assert.match(sql, /c\.user_id=a\.actor AND c\.is_owner AND c\.archived_at IS NULL\s+AND po\.effective_from <= org\.org_today AND \(po\.effective_to IS NULL OR po\.effective_to > org\.org_today\)/);
+  // The phone needs both the company switch and the owner's own row; never an email.
+  assert.match(code, /'phone',CASE WHEN show_phone AND s\.can_phone THEN tenant\.phone END/);
+  assert.match(code, /o\.settings->'show_tenant_phone' = 'true'::jsonb/);
+  assert.doesNotMatch(code, /email|CREATE TABLE|ALTER |INSERT |UPDATE |DELETE |CREATE POLICY/i);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-092 owner unit ACL\/config mismatch/);
+  assert.ok(read("supabase/rpc-allowlist.txt").includes("# service-only: app.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)"));
+});
