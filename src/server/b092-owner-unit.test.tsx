@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { OwnerUnitError, OwnerUnitLoading, OwnerUnitNoPerm, OwnerUnitView, monthStatusText } from "../components/v3/owner/unit";
+import { OwnerUnitError, OwnerUnitLoading, OwnerUnitNoPerm, OwnerUnitView, monthStatusText, termText } from "../components/v3/owner/unit";
 import { OwnerUnitsView, ownerUnitHref } from "../components/v3/owner/units";
 import { brandV3OwnerUnitsCopy } from "../i18n/lanes/brand-v3-owner-units";
 import { ownerUnit, parseOwnerUnit, type OwnerUnitDetail } from "./b092-owner-unit";
@@ -30,10 +30,10 @@ test("RO-UNIT copy (frame + PR-023): section titles, row label and month; never 
 });
 
 test("OWN-33-AC2: heading, tenant, term, rent; months with RO-UNITS wording ('none' shows nothing); repairs with the approved words", () => {
-  const html = renderToStaticMarkup(<OwnerUnitView locale="zh-TW" unit={unit} />);
+  const html = renderToStaticMarkup(<OwnerUnitView locale="zh-TW" calendar="gregorian" unit={unit} />);
   assert.match(html, /<h2>信義路 2 樓<\/h2>/);
   assert.match(html, /<dt>租客<\/dt><dd data-testid="owner-unit-tenant">陳怡君<\/dd>/);
-  assert.match(html, /<dt>租期<\/dt><dd class="num">2026-01-01～2026-12-31<\/dd>/);
+  assert.match(html, /<dt>租期<\/dt><dd class="num">2026年1月1日～2026年12月31日<\/dd>/);
   assert.match(html, /<dt>月租<\/dt><dd class="num">NT\$/);
   assert.match(html, /<h3>最近的繳款<\/h3>/);
   assert.match(html, /<span>11 月<\/span><span class="owner-unit-status">部分已繳・還差 NT\$/);
@@ -46,11 +46,22 @@ test("OWN-33-AC2: heading, tenant, term, rent; months with RO-UNITS wording ('no
 });
 
 test("OWN-33-AC2: phone row only when the gateway returns one; hidden name reads 「租客」; open end; empty sections omitted", () => {
-  const html = renderToStaticMarkup(<OwnerUnitView locale="zh-TW" unit={{ ...unit, tenant: null, phone: "+886912345678", endDate: null, months: [], repairs: [] }} />);
+  const html = renderToStaticMarkup(<OwnerUnitView locale="zh-TW" calendar="gregorian" unit={{ ...unit, tenant: null, phone: "+886912345678", endDate: null, months: [], repairs: [] }} />);
   assert.match(html, /<dt>電話<\/dt><dd class="num" data-testid="owner-unit-phone">\+886912345678<\/dd>/);
   assert.match(html, /<dd data-testid="owner-unit-tenant">租客<\/dd>/);
-  assert.match(html, /2026-01-01～<\/dd>/);
+  assert.match(html, /2026年1月1日～<\/dd>/);
   assert.doesNotMatch(html, /最近的繳款|進行中的報修|owner-unit-payments|owner-unit-repairs/);
+});
+
+test("OQ-079: 租期 uses the app's own date format (ROC when the org uses it) joined by 「～」", () => {
+  assert.equal(termText(unit, "zh-TW", "gregorian"), "2026年1月1日～2026年12月31日");
+  assert.equal(termText(unit, "zh-TW", "roc"), "民國 115 年 1 月 1 日～民國 115 年 12 月 31 日");
+  assert.equal(termText({ startDate: "2026-01-01", endDate: null }, "zh-TW", "roc"), "民國 115 年 1 月 1 日～");
+  assert.equal(termText(unit, "en", "gregorian"), "Jan 1, 2026～Dec 31, 2026");
+  assert.equal(termText({ startDate: null, endDate: null }, "zh-TW", "gregorian"), null);
+  const roc = renderToStaticMarkup(<OwnerUnitView locale="zh-TW" calendar="roc" unit={unit} />);
+  assert.match(roc, /<dt>租期<\/dt><dd class="num">民國 115 年 1 月 1 日～民國 115 年 12 月 31 日<\/dd>/);
+  assert.doesNotMatch(roc, /2026-01-01/);
 });
 
 test("monthStatusText: only the approved wording", () => {

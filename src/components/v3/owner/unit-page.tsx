@@ -18,5 +18,5 @@ export async function OwnerUnitPage({ session, unitId, roomId }: { session: Sess
     return <OwnerUnitError locale={session.locale} retryHref={retry} />;
   }
   if (result.unit.vacant) notFound();
-  return <OwnerUnitView unit={result.unit} locale={session.locale} />;
+  return <OwnerUnitView unit={result.unit} locale={session.locale} calendar={session.calendar} />;
 }

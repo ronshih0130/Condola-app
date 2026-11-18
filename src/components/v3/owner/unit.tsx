@@ -1,14 +1,15 @@
 import React from "react";
 import Link from "next/link";
-import { makeT, type Locale } from "../../../i18n";
+import { dictionary, makeT, type Locale } from "../../../i18n";
 import { brandV3OwnerStateCopy } from "../../../i18n/lanes/brand-v3";
 import { brandV3OwnerDecidedCopy } from "../../../i18n/lanes/brand-v3-owner-decided";
 import { brandV3OwnerUnitsCopy } from "../../../i18n/lanes/brand-v3-owner-units";
 import { ticketRelayCopy } from "../../../i18n/lanes/brand-v3-ticket-relay";
 import { MAINTENANCE_STATUS_WORD } from "../../../lib/b3-ticket-relay";
 import type { OwnerUnitDetail, OwnerUnitMonth } from "../../../server/b092-owner-unit";
-import { moneyLabel } from "../../../server/format";
+import { formatDate, moneyLabel } from "../../../server/format";
 import { displaySampleName } from "../../../server/sandbox-data";
+import type { CalendarMode } from "../../../server/types";
 import { Illustration } from "../illustrations";
 
 /**
@@ -28,9 +29,16 @@ export function monthStatusText(month: OwnerUnitMonth, currency: string | null, 
   return null;
 }
 
-export function OwnerUnitView({ unit, locale }: { unit: OwnerUnitDetail; locale: Locale }) {
+/** 租期 in the app's own date format (OQ-079; the org's ROC-calendar setting, as RO-DECIDED), joined by the frame's 「～」. */
+export function termText(unit: Pick<OwnerUnitDetail, "startDate" | "endDate">, locale: Locale, calendar: CalendarMode): string | null {
+  if (!unit.startDate) return null;
+  const day = (value: string | null) => value ? formatDate(value, locale, calendar, dictionary(locale)) : "";
+  return `${day(unit.startDate)}～${day(unit.endDate)}`;
+}
+
+export function OwnerUnitView({ unit, locale, calendar }: { unit: OwnerUnitDetail; locale: Locale; calendar: CalendarMode }) {
   const c = brandV3OwnerUnitsCopy(locale), t = makeT(locale), mnt = ticketRelayCopy(locale).mntStatus;
-  const term = unit.startDate ? `${unit.startDate}～${unit.endDate ?? ""}` : null;
+  const term = termText(unit, locale, calendar);
   return <section className="v3-owner-unit owner-unit" data-testid="owner-unit">
     <Crumb locale={locale} />
     <h2>{displaySampleName(`${unit.property} ${unit.space}`)}</h2>
