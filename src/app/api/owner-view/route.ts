@@ -5,6 +5,7 @@ import { logServerError } from "@/server/errors";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
+const MAX_BODY_BYTES = 1024;
 
 /**
  * B-073 / R5-OWNVIEW (MGT-138): one switch of 「屋主看得到什麼」 per request, JSON `{ field, value }`.
@@ -14,14 +15,23 @@ const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
 export async function POST(request: Request) {
   if (request.headers.get("origin") !== new URL(request.url).origin) return new Response(null, { status: 403, headers });
   if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return new Response(null, { status: 415, headers });
-  const session = await readSession();
-  if (!session) return new Response(null, { status: 401, headers });
-  const denied = await requireCurrentConsent(session, "api");
-  if (denied) return denied;
+  // Bound the body before reading it (Content-Length), then again in bytes after reading.
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (!Number.isFinite(declared) || declared > MAX_BODY_BYTES) return new Response(null, { status: 413, headers });
+  let session: Awaited<ReturnType<typeof readSession>>;
+  try {
+    session = await readSession();
+    if (!session) return new Response(null, { status: 401, headers });
+    const denied = await requireCurrentConsent(session, "api");
+    if (denied) return denied;
+  } catch (error) {
+    logServerError("b073_owner_view_route", error);
+    return new Response(null, { status: 500, headers });
+  }
   let input: unknown;
   try {
     const text = await request.text();
-    if (text.length > 1024) return new Response(null, { status: 413, headers });
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return new Response(null, { status: 413, headers });
     input = JSON.parse(text);
   } catch {
     return new Response(null, { status: 400, headers });
