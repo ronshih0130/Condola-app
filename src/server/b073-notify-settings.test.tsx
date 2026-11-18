@@ -7,8 +7,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import postcss from "postcss";
-import { notifySettingsRead, saveNotifySetting } from "./b073-notify-settings";
+import { authorizeNotifySettings, notifySettingsRead, saveNotifySetting } from "./b073-notify-settings";
 import { FlowError } from "./errors";
+import { readCappedJson } from "./read-capped-json";
 import * as perms from "./perms";
 import * as brand from "../i18n/lanes/brand-v3";
 import { brandV3NotifyCopy } from "../i18n/lanes/brand-v3-r5-notify";
@@ -272,11 +273,14 @@ test("MGT-135-AC4 route: same-origin JSON only; non-admin 寄給租客的 → HT
   const source = read("src/app/api/notify-settings/route.ts");
   const trace: unknown[] = [];
   let session: Session | null = staff("admin");
-  let save: (s: Session, input: unknown) => Promise<unknown> = saveNotifySetting as never;
+  let save: (s: Session, input: unknown) => Promise<unknown> = (s, input) => saveNotifySetting(s, input, deps([]));
   const route = compile(source, {
     "@/server/consent-gate": { requireCurrentConsent: async (_s: Session, mode: string) => { trace.push(`consent:${mode}`); return null; } },
     "@/server/session": { readSession: async () => { trace.push("session"); return session; } },
-    "@/server/b073-notify-settings": { saveNotifySetting: (s: Session, input: unknown) => save(s, input) },
+    "@/server/brand-v3": { brandV3EnabledForOrg: async () => { trace.push("flag"); return true; } },
+    "@/server/b073-notify-settings": { authorizeNotifySettings: (s: Session) => { trace.push("permission"); return authorizeNotifySettings(s); },
+      saveNotifySetting: (s: Session, input: unknown) => save(s, input) },
+    "@/server/read-capped-json": { readCappedJson: (r: Request) => { trace.push("body"); return readCappedJson(r); } },
     "@/server/errors": { logServerError: () => { trace.push("logged"); } },
   }).POST as (r: Request) => Promise<Response>;
   const post = (body: unknown, init: { origin?: string | null; type?: string } = {}) => route(new Request("http://localhost/api/notify-settings", { method: "POST",
@@ -289,10 +293,12 @@ test("MGT-135-AC4 route: same-origin JSON only; non-admin 寄給租客的 → HT
   assert.equal((await post({ block: "me", field: "leaseExpiry", value: false }, { type: "text/plain" })).status, 415);
   assert.equal((await post("x".repeat(2048))).status, 413);
   for (const role of ["manager", "accountant", "maintenance"] as const) {
-    session = staff(role); const res = await post({ block: "tenant", field: "rentOverdue", value: true });
+    trace.length = 0; session = staff(role); const res = await post({ block: "tenant", field: "rentOverdue", value: true });
     assert.equal(res.status, 403, role); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+    assert.deepEqual(trace, ["consent:api", "session", "flag", "permission", ...(role === "manager" ? ["body"] : [])]);
   }
   session = staff("accountant"); assert.equal((await post({ block: "me", field: "rentOverdue", value: true })).status, 403);
+  session = staff("manager"); assert.equal((await post({ block: "me", field: "rentOverdue", value: true })).status, 200);
   session = staff("admin");
   for (const body of ["{", "null", JSON.stringify({ block: "tenant", field: "contactEmail", value: true }), JSON.stringify({ block: "me", field: "leaseExpiry", value: 1 })])
     assert.equal((await post(body)).status, 400, body);
@@ -300,7 +306,7 @@ test("MGT-135-AC4 route: same-origin JSON only; non-admin 寄給租客的 → HT
   trace.length = 0;
   const ok = await post({ block: "tenant", field: "rentOverdue", value: true });
   assert.equal(ok.status, 200); assert.deepEqual(await ok.json(), { block: "tenant", toggles: ON });
-  assert.deepEqual(trace, ["consent:api", "session", { block: "tenant", field: "rentOverdue", value: true }]);
+  assert.deepEqual(trace, ["consent:api", "session", "flag", "permission", "body", { block: "tenant", field: "rentOverdue", value: true }]);
   save = async () => ({ ok: false, status: 404 }); assert.equal((await post({ block: "me", field: "rentOverdue", value: true })).status, 404);
   save = async () => ({ ok: false, status: 500 }); assert.equal((await post({ block: "me", field: "rentOverdue", value: true })).status, 500);
   save = async () => { throw new Error("boom"); }; trace.length = 0;
@@ -340,7 +346,7 @@ test("MGT-135 page body: ready → both blocks for admin, one for manager; forbi
   assert.match(renderToStaticMarkup(kids[2].props.fallback as React.ReactElement), /data-testid="notify-loading"/);
 });
 
-test("MGT-135-AC1 /m/notify page and layout: brand_v3 opens it for admin and manager; OFF keeps today's route gate", async () => {
+test("MGT-135-AC1 /m/notify page and layout: brand_v3 opens it for admin and manager; flag OFF keeps today's route gate", async () => {
   // Page: flag ON renders the v3 page; OFF renders today's empty notice.
   const pageSource = read("src/app/m/notify/page.tsx");
   for (const v3 of [false, true]) {

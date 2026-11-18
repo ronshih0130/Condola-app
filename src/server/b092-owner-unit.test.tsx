@@ -156,7 +156,7 @@ async function runRoute(opts: { v3: boolean; result?: unknown; unitId?: string; 
     } },
     "@/server/brand-v3": { brandV3EnabledForOrg: async () => { calls.push("v3"); return opts.v3; } },
     "@/server/consent-gate": { requireCurrentConsent: async () => { calls.push("consent"); } },
-    "@/server/session": { getSession: async () => owner },
+    "@/server/session": { readSession: async () => owner },
   };
   const Page = compile(route, mocks).default as (p: unknown) => Promise<React.ReactElement>;
   try {
@@ -167,7 +167,7 @@ async function runRoute(opts: { v3: boolean; result?: unknown; unitId?: string; 
 
 test("RO-UNIT route: OFF and vacant are 404 before anything renders; forbidden and bad ids are B1-NOPERM; ready is the panel", async () => {
   const off = await runRoute({ v3: false, result: unit });
-  assert.equal(off.html, "NEXT_NOT_FOUND"); assert.ok(!off.calls.some(c => c.startsWith("read:")), "OFF never reads");
+  assert.equal(off.html, "NEXT_NOT_FOUND"); assert.deepEqual(off.calls, ["v3", "notFound"], "OFF never reaches consent or the reader");
   assert.equal((await runRoute({ v3: true, result: vacantUnit })).html, "NEXT_NOT_FOUND");
   assert.equal((await runRoute({ v3: true, result: { ...vacantUnit, repairs: unit.repairs } })).html, "NEXT_NOT_FOUND", "vacant with repairs is still a 404");
   for (const bad of [{ result: "denied" }, { unitId: "x", result: unit }, { room: "x", result: unit }, { room: [R, R], result: unit }]) {

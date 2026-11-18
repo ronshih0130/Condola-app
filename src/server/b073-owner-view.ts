@@ -1,5 +1,6 @@
 import { guardEffectiveSession, requireEffectivePerm } from "./b017-custom-role-governance";
 import { writeAudit } from "./audit";
+import { brandV3EnabledForOrg } from "./brand-v3";
 import { FlowError, logServerError } from "./errors";
 import { requireOrgScope } from "./org-guard";
 import { assertPerm } from "./perms";
@@ -19,8 +20,8 @@ export type OwnerViewRead =
   | { state: "forbidden" | "unavailable" }
   | { state: "ready"; privacy: OwnerPrivacy; company: OwnerViewCompany };
 export type OwnerViewSaveInput = { field: OwnerViewField; value: boolean };
-/** POST /api/owner-view answers this as its HTTP status. 403 = not allowed (MGT-138-AC3); 400 = bad input. */
-export type OwnerViewSaveResult = { ok: true; privacy: OwnerPrivacy } | { ok: false; status: 400 | 403 | 500 };
+/** POST /api/owner-view answers this as its HTTP status. 404 = brand_v3 OFF; 403 = not allowed; 400 = bad input. */
+export type OwnerViewSaveResult = { ok: true; privacy: OwnerPrivacy } | { ok: false; status: 400 | 403 | 404 | 500 };
 
 type Row = { settings: unknown; name: string | null; tax_id: string | null };
 async function readOrganization(orgId: string): Promise<Row | undefined> {
@@ -66,9 +67,21 @@ async function writeOwnerViewKey(session: Session, field: OwnerViewField, value:
     return privacy;
   }, requireOrgScope(session));
 }
-type Deps = { read?: typeof readOrganization; write?: typeof writeOwnerViewKey; audit?: AuditWriter };
+type Deps = { read?: typeof readOrganization; write?: typeof writeOwnerViewKey; audit?: AuditWriter; v3?: (orgId: string) => Promise<boolean> };
 const forbidden = (error: unknown) => (error instanceof FlowError && error.key === "errors.forbidden")
   || ((error as { code?: string } | null)?.code ?? (error as { cause?: { code?: string } } | null)?.cause?.code) === "42501";
+
+/** Shared pre-body permission check for the company settings switches. */
+export async function authorizeSettingsEdit(session: Session): Promise<Session | null> {
+  try {
+    session = await guardEffectiveSession(session, "settings.edit");
+    assertPerm(session, "settings.edit");
+    return session;
+  } catch (error) {
+    if (forbidden(error)) return null;
+    throw error;
+  }
+}
 
 /**
  * The 統編 comes from `organizations.tax_id` (schema column; the app has no editor for it yet), shown only when
@@ -91,13 +104,14 @@ export async function ownerViewRead(session: Session, deps: Deps = {}): Promise<
 
 /** One switch per save: only its key is written (see writeOwnerViewKey). */
 export async function saveOwnerView(session: Session, input: unknown, deps: Deps = {}): Promise<OwnerViewSaveResult> {
-  const value = input as Partial<OwnerViewSaveInput> | null;
-  if (!value || typeof value !== "object" || !OWNER_VIEW_FIELDS.includes(value.field as OwnerViewField) || typeof value.value !== "boolean")
-    return { ok: false, status: 400 };
   try {
-    session = await guardEffectiveSession(session, "settings.edit");
-    assertPerm(session, "settings.edit");
-    const privacy = await (deps.write ?? writeOwnerViewKey)(session, value.field as OwnerViewField, value.value, deps.audit);
+    if (!await (deps.v3 ?? brandV3EnabledForOrg)(session.orgId)) return { ok: false, status: 404 };
+    const authorized = await authorizeSettingsEdit(session);
+    if (!authorized) return { ok: false, status: 403 };
+    const value = input as Partial<OwnerViewSaveInput> | null;
+    if (!value || typeof value !== "object" || !OWNER_VIEW_FIELDS.includes(value.field as OwnerViewField) || typeof value.value !== "boolean")
+      return { ok: false, status: 400 };
+    const privacy = await (deps.write ?? writeOwnerViewKey)(authorized, value.field as OwnerViewField, value.value, deps.audit);
     return { ok: true, privacy };
   } catch (error) {
     if (forbidden(error)) return { ok: false, status: 403 };

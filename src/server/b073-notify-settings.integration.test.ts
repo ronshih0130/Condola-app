@@ -201,8 +201,10 @@ test("MGT-135 API boundary: brand_v3 OFF → 404 for both blocks (direct and HTT
     const res = await post(tokens[role], { block, field: "rentOverdue", value: false });
     assert.equal(res.status, 404, `${role} ${block} HTTP`); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
   }
-  // Authority still answers first: a manager asking for 寄給租客的 is 403 whatever the flag.
-  assert.equal((await post(tokens.manager, { block: "tenant", field: "leaseExpiry", value: false })).status, 403);
+  // With brand_v3 OFF, HTTP returns 404 before reading the body.
+  assert.equal((await post(tokens.manager, { block: "tenant", field: "leaseExpiry", value: false })).status, 404);
+  // A direct save still checks block authority before the flag.
+  assert.deepEqual(await saveNotifySetting(sessions.manager, { block: "tenant", field: "leaseExpiry", value: false }), { ok: false, status: 403 });
   assert.deepEqual(await orgRow(orgId), before);
   assert.deepEqual(await memberPrefs(orgId), prefsBefore);
   assert.deepEqual(await outbound(), sent);

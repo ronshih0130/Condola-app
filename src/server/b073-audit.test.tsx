@@ -10,6 +10,7 @@ import ts from "typescript";
 import postcss from "postcss";
 import * as auditRead from "./audit-read";
 import { encodeCursor, type RawAudit } from "./audit-read";
+import { brandV3EnabledForOrg } from "./brand-v3";
 import {
   AUDIT_V3_ITEMS,
   PLAIN_FIELDS,
@@ -335,6 +336,44 @@ test("MGT-136 flag OFF: /m/audit renders byte-for-byte as before, same reads in 
       assert.deepEqual(await renderAudit(read(FILE), false, session, query), await renderAudit(baseline(FILE), false, session, query), `${session.role} ${session.locale} ${JSON.stringify(query)}`);
   const off = (await renderAudit(read(FILE), false, staff("admin"))).html;
   assert.match(off, /data-testid="audit-filters"/); assert.doesNotMatch(off, /settings-audit\.css|audit-section/);
+});
+
+test("MGT-136 flag lookup failure: /m/audit renders the flag-OFF output with the same reads", async () => {
+  const session = staff("admin"), query = { action: "update" };
+  async function render(fail: boolean) {
+    const trace: string[] = [], lookups: string[] = [];
+    const Page = compile(read(FILE), {
+      "@/server/brand-v3": { brandV3EnabledForOrg: (orgId: string) => brandV3EnabledForOrg(orgId, {}, async id => {
+        lookups.push(id);
+        if (fail) throw new Error("flag lookup failed");
+        return false;
+      }, async () => true) },
+      "@/server/consent-gate": { requireCurrentConsent: async () => { trace.push("consent"); } },
+      "@/server/session": { getSession: async () => { trace.push("session"); return session; } },
+      "@/server/perms": perms,
+      "@/server/demo": { showDemoLineCopy: () => { trace.push("demo"); return false; } },
+      "@/server/audit-read": { ...auditRead, loadAuditScreen: async (s: Session, q: unknown) => {
+        assert.equal(s, session); assert.equal(q, query);
+        assert.deepEqual(lookups, [ORG], "flag lookup completed before the legacy reader");
+        trace.push("legacy"); return { filters: {}, entries: [], actors: [], hasMore: false };
+      } },
+      "@/components/v3/m/settings/audit": { AuditLoading },
+      "@/components/v3/m/settings/audit-page": { AuditV3Section: () => { trace.push("v3 read"); return null; } },
+      "@/i18n/lanes/brand-v3-r5-audit": { brandV3AuditCopy },
+      "@/components/management-empty-state": { ManagementEmptyState: () => <div data-test="legacy-empty" /> },
+      "@/components/audit-log": { AuditRows: () => null },
+      "@/components/ui": { PageHeader: ({ title }: { title: string }) => <h1>{title}</h1> },
+      "@/i18n": { makeT: () => (key: string) => key },
+      "next/link": { default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> },
+      "next/navigation": { redirect: (to: string) => { throw new Error(to); } },
+    }).default as (p: { searchParams: Promise<typeof query> }) => Promise<React.ReactElement>;
+    const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve(query) }));
+    return { html, trace };
+  }
+  const off = await render(false);
+  assert.match(off.html, /data-testid="audit-filters"/);
+  assert.deepEqual(off.trace, ["consent", "session", "demo", "legacy"]);
+  assert.deepEqual(await render(true), off);
 });
 
 test("MGT-136-AC3 flag ON: a non-admin is still sent to the no-permission page before anything is read; an admin gets the lead and the v3 log", async () => {

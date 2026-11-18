@@ -26,12 +26,12 @@ test.before(async () => {
 });
 test.after(async () => { mock.restoreAll(); globalThis.fetch = realFetch; await db?.end(); assert.equal(fetchCalls, 0); });
 
-async function makeOrg() {
+async function makeOrg(featureFlags = { brand_v2: true, brand_v3: true }) {
   const tag = `b073.${randomUUID()}`;
   const settings = { show_tenant_phone: false, require_2fa: false, b073_fixture: "kept" };
   const orgId = (await db.query<{ id: string }>(
-    `INSERT INTO organizations(name,tax_id,country_code,default_currency,plan_tier,settings)
-     VALUES ($1,'04595257','TW','TWD','beta',$2::jsonb) RETURNING id`, [tag, JSON.stringify(settings)])).rows[0].id;
+    `INSERT INTO organizations(name,tax_id,country_code,default_currency,plan_tier,settings,feature_flags)
+     VALUES ($1,'04595257','TW','TWD','beta',$2::jsonb,$3::jsonb) RETURNING id`, [tag, JSON.stringify(settings), JSON.stringify(featureFlags)])).rows[0].id;
   const sessions: Record<string, Session> = {};
   const tokens: Record<string, string> = {};
   for (const role of ["admin", "manager", "accountant", "maintenance"] as OrgRole[]) {
@@ -103,6 +103,19 @@ const post = (token: string, body: unknown, origin = "http://localhost") => {
   cookie = token;
   return POST(new Request("http://localhost/api/owner-view", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
 };
+
+test("MGT-138 flag OFF: direct save and POST /api/owner-view answer 404 to an admin without changing settings or audits", async () => {
+  const { orgId, sessions, tokens } = await makeOrg({ brand_v2: true, brand_v3: false });
+  const before = await orgRow(orgId), auditBefore = await audits(orgId);
+  const input = { field: "showPhone", value: true };
+  assert.deepEqual(await saveOwnerView(sessions.admin, input), { ok: false, status: 404 });
+  assert.deepEqual(await orgRow(orgId), before);
+  assert.deepEqual(await audits(orgId), auditBefore);
+  const res = await post(tokens.admin, input);
+  assert.equal(res.status, 404); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+  assert.deepEqual(await orgRow(orgId), before);
+  assert.deepEqual(await audits(orgId), auditBefore);
+});
 
 test("MGT-138-AC3 HTTP: non-admins get 403 and cross-origin gets 403, with settings and audit rows unchanged", async () => {
   const { orgId, tokens } = await makeOrg();
