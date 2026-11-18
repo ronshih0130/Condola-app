@@ -128,7 +128,7 @@ test("MGT-133 flag OFF: /api/team-security answers 404 to an admin and leaves se
     const before = await orgRow(orgId), auditBefore = await audits(orgId);
     const res = await post(tokens.admin, { required: true });
     assert.equal(res.status, 404, JSON.stringify(flags)); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
-    assert.equal((await post(tokens.manager, { required: true })).status, 403, "authorization still comes first");
+    assert.equal((await post(tokens.manager, { required: true })).status, 404, "the HTTP flag gate precedes permission");
     assert.deepEqual(await saveTeamSecurity(sessions.admin, { required: true }), { ok: false, status: 404 });
     assert.deepEqual(await orgRow(orgId), before);
     assert.deepEqual(await audits(orgId), auditBefore);

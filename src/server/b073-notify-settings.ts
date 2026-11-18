@@ -115,6 +115,17 @@ export async function notifySettingsRead(session: Session, deps: Deps = {}): Pro
   }
 }
 
+/** Before reading the block, require eligibility for at least one of the two saves. */
+export async function authorizeNotifySettings(session: Session): Promise<Session | null> {
+  try {
+    session = await guardEffectiveSession(session, "settings.edit");
+    return hasPersonalReminders(session) || can(session, "settings.edit") ? session : null;
+  } catch (error) {
+    if (forbidden(error)) return null;
+    throw error;
+  }
+}
+
 /**
  * One switch per save: only its key is written. 「寄給租客的」 needs settings.edit; 「寄給我的」 writes the caller's own row.
  * Order: the body (400), then authority for that block (403, whatever the flag), then brand_v3 for the session's
@@ -127,7 +138,9 @@ export async function saveNotifySetting(session: Session, input: unknown, deps: 
     return { ok: false, status: 400 };
   const block = value.block as NotifyBlock, field = value.field as NotifyField;
   try {
-    session = await guardEffectiveSession(session, "settings.edit");
+    const authorized = await authorizeNotifySettings(session);
+    if (!authorized) return { ok: false, status: 403 };
+    session = authorized;
     if (block === "tenant") assertPerm(session, "settings.edit");
     else if (!hasPersonalReminders(session)) throw new FlowError("errors.forbidden");
     // 通知設定 is a brand_v3 page: the API is closed for an organization without it (flag OFF has no such page).

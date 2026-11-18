@@ -469,5 +469,7 @@
   "src/app/api/notify-settings/route.ts#POST": "settings.edit",
   "src/server/b073-team.ts#teamRead": "team.manage",
   "src/server/b073-team.ts#saveTeamSecurity": "settings.edit",
-  "src/app/api/team-security/route.ts#POST": "settings.edit"
+  "src/app/api/team-security/route.ts#POST": "settings.edit",
+  "src/server/b073-owner-view.ts#authorizeSettingsEdit": "settings.edit",
+  "src/server/b073-notify-settings.ts#authorizeNotifySettings": "settings.edit"
 }

@@ -11,6 +11,8 @@ import ts from "typescript";
 import postcss from "postcss";
 import { saveTeamSecurity, seatsFull, teamPermissionMatrix, teamRead, teamRowActions, teamRows, teamSeats, type TeamRowV3 } from "./b073-team";
 import { FlowError } from "./errors";
+import { authorizeSettingsEdit } from "./b073-owner-view";
+import { readCappedJson } from "./read-capped-json";
 import * as perms from "./perms";
 import { crumbFor } from "./nav-v3";
 import { TEAM_INVITES_ENABLED, teamInvitesAllowedForOrg } from "./team-invites";
@@ -427,7 +429,10 @@ test("MGT-133-AC8 route: same-origin JSON only; non-admin → HTTP 403; bad body
   const route = compile(source, {
     "@/server/consent-gate": { requireCurrentConsent: async (_s: Session, mode: string) => { trace.push(`consent:${mode}`); return null; } },
     "@/server/session": { readSession: async () => { trace.push("session"); return session; } },
+    "@/server/brand-v3": { brandV3EnabledForOrg: async () => { trace.push("flag"); return v3; } },
+    "@/server/b073-owner-view": { authorizeSettingsEdit: (s: Session) => { trace.push("permission"); return authorizeSettingsEdit(s); } },
     "@/server/b073-team": { saveTeamSecurity: (s: Session, input: unknown) => save(s, input) },
+    "@/server/read-capped-json": { readCappedJson: (r: Request) => { trace.push("body"); return readCappedJson(r); } },
     "@/server/errors": { logServerError: () => { trace.push("logged"); } },
   }).POST as (r: Request) => Promise<Response>;
   const post = (body: unknown, init: { origin?: string | null; type?: string } = {}) => route(new Request("http://localhost/api/team-security", { method: "POST",
@@ -438,8 +443,9 @@ test("MGT-133-AC8 route: same-origin JSON only; non-admin → HTTP 403; bad body
   }
   assert.equal((await post({ required: true }, { type: "text/plain" })).status, 415);
   for (const role of ["manager", "accountant", "maintenance"] as const) {
-    session = staff(role); const res = await post({ required: true });
+    trace.length = 0; session = staff(role); const res = await post({ required: true });
     assert.equal(res.status, 403, role); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+    assert.deepEqual(trace, ["consent:api", "session", "flag", "permission"]);
     // A malformed body from a non-admin is still 403 (authorization before validation).
     for (const body of ["{", "null", JSON.stringify({ required: 1 })]) assert.equal((await post(body)).status, 403, `${role} ${body}`);
   }
@@ -447,13 +453,13 @@ test("MGT-133-AC8 route: same-origin JSON only; non-admin → HTTP 403; bad body
   for (const body of ["{", "null", JSON.stringify({ required: 1 })]) assert.equal((await post(body)).status, 400, body);
   // brand_v3 OFF for the session's organization: 404 and nothing written.
   v3 = false; trace.length = 0;
-  assert.equal((await post({ required: true })).status, 404); assert.ok(!trace.includes("write"));
+  assert.equal((await post({ required: true })).status, 404); assert.deepEqual(trace, ["consent:api", "session", "flag"]);
   v3 = true;
-  save = async (_s, input) => { trace.push(input); return { ok: true, required: true }; };
+  save = async (_s, input) => { (trace as unknown[]).push(input); return { ok: true, required: true }; };
   trace.length = 0;
   const ok = await post({ required: true });
   assert.equal(ok.status, 200); assert.deepEqual(await ok.json(), { required: true });
-  assert.deepEqual(trace, ["consent:api", "session", { required: true }]);
+  assert.deepEqual(trace, ["consent:api", "session", "flag", "permission", "body", { required: true }]);
   save = async () => { throw new Error("boom"); }; trace.length = 0;
   assert.equal((await post({ required: true })).status, 500); assert.ok(trace.includes("logged"));
   session = null; assert.equal((await post({ required: true })).status, 401);

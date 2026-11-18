@@ -7,8 +7,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import postcss from "postcss";
-import { ownerViewRead, saveOwnerView } from "./b073-owner-view";
+import { authorizeSettingsEdit, ownerViewRead, saveOwnerView as saveOwnerViewWithFlag } from "./b073-owner-view";
 import { FlowError } from "./errors";
+import { readCappedJson } from "./read-capped-json";
 import * as perms from "./perms";
 import { brandV3OwnViewCopy } from "../i18n/lanes/brand-v3-r5-ownview";
 import { OwnerViewError, OwnerViewLayout, OwnerViewLoading, OwnerViewSwitchRows } from "../components/v3/m/settings/owner-view";
@@ -19,6 +20,7 @@ import type { OrgRole, Session } from "./types";
 const requireHere = createRequire(import.meta.url);
 const read = (p: string) => readFileSync(p, "utf8");
 const read_ = read;
+const saveOwnerView: typeof saveOwnerViewWithFlag = (session, input, deps) => saveOwnerViewWithFlag(session, input, { v3: async () => true, ...deps });
 const BASE = "5cfeaa71612644697c4474f20bba0b42e074b65e"; // origin/main before this slice
 const baseline = (p: string) => execFileSync("git", ["show", `${BASE}:${p}`], { encoding: "utf8" });
 const ORG = "00000000-0000-4000-8000-000000000001";
@@ -199,7 +201,10 @@ test("MGT-138-AC3 route: same-origin JSON only; non-admin → HTTP 403; bad body
   const route = compile(source, {
     "@/server/consent-gate": { requireCurrentConsent: async (_s: Session, mode: string) => { trace.push(`consent:${mode}`); return null; } },
     "@/server/session": { readSession: async () => { trace.push("session"); return session; } },
-    "@/server/b073-owner-view": { saveOwnerView: (s: Session, input: unknown) => save(s, input) },
+    "@/server/brand-v3": { brandV3EnabledForOrg: async () => { trace.push("flag"); return true; } },
+    "@/server/b073-owner-view": { authorizeSettingsEdit: (s: Session) => { trace.push("permission"); return authorizeSettingsEdit(s); },
+      saveOwnerView: (s: Session, input: unknown) => save(s, input) },
+    "@/server/read-capped-json": { readCappedJson: (r: Request) => { trace.push("body"); return readCappedJson(r); } },
     "@/server/errors": { logServerError: () => { trace.push("logged"); } },
   }).POST as (r: Request) => Promise<Response>;
   const post = (body: unknown, init: { origin?: string | null; type?: string } = {}) => route(new Request("http://localhost/api/owner-view", { method: "POST",
@@ -211,8 +216,9 @@ test("MGT-138-AC3 route: same-origin JSON only; non-admin → HTTP 403; bad body
   }
   assert.equal((await post({ field: "showName", value: false }, { type: "text/plain" })).status, 415);
   for (const role of ["manager", "accountant", "maintenance"] as const) {
-    session = staff(role); const res = await post({ field: "showPhone", value: true });
+    trace.length = 0; session = staff(role); const res = await post("{", { type: "text/plain" });
     assert.equal(res.status, 403, role); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+    assert.deepEqual(trace, ["consent:api", "session", "flag", "permission"]);
   }
   session = staff("admin");
   for (const body of ["{", "null", JSON.stringify({ field: "showEmail", value: true }), JSON.stringify({ field: "showName", value: 1 })]) assert.equal((await post(body)).status, 400, body);
@@ -220,7 +226,7 @@ test("MGT-138-AC3 route: same-origin JSON only; non-admin → HTTP 403; bad body
   trace.length = 0;
   const ok = await post({ field: "showPhone", value: true });
   assert.equal(ok.status, 200); assert.deepEqual(await ok.json(), { privacy: { showName: true, showPhone: true } });
-  assert.deepEqual(trace, ["consent:api", "session", { field: "showPhone", value: true }]);
+  assert.deepEqual(trace, ["consent:api", "session", "flag", "permission", "body", { field: "showPhone", value: true }]);
   save = async () => ({ ok: false, status: 500 }); assert.equal((await post({ field: "showPhone", value: true })).status, 500);
   save = async () => { throw new Error("boom"); }; trace.length = 0;
   assert.equal((await post({ field: "showPhone", value: true })).status, 500); assert.ok(trace.includes("logged"));

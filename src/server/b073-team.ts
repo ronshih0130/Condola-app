@@ -1,4 +1,5 @@
 import { guardEffectiveSession } from "./b017-custom-role-governance";
+import { authorizeSettingsEdit } from "./b073-owner-view";
 import { FlowError, logServerError } from "./errors";
 import { assertPerm, can, PERMS, ROLE_KEYS, type PermKey } from "./perms";
 import type { OrgRole, Session } from "./types";
@@ -164,8 +165,9 @@ type SaveDeps = {
  */
 export async function saveTeamSecurity(session: Session, input: unknown, deps: SaveDeps = {}): Promise<TeamSecuritySaveResult> {
   try {
-    session = await guardEffectiveSession(session, "settings.edit");
-    assertPerm(session, "settings.edit");
+    const authorized = await authorizeSettingsEdit(session);
+    if (!authorized) return { ok: false, status: 403 };
+    session = authorized;
     const v3 = await (deps.v3 ?? (async (orgId: string) => (await import("./brand-v3")).brandV3ReadForOrg(orgId)))(session.orgId);
     if (!v3) return { ok: false, status: 404 };
     const value = input as { required?: unknown } | null;
