@@ -1,6 +1,8 @@
 import React from "react";
 import { makeT, type Locale } from "@/i18n";
 import { brandV3TeamCopy } from "@/i18n/lanes/brand-v3-r5-team";
+import { brandV3AssignCopy } from "@/i18n/lanes/brand-v3-assign";
+import Link from "next/link";
 import { ConfirmDeactivate } from "@/components/confirm-deactivate";
 import { TeamInviteLinkButton } from "@/components/team-invite-link-button";
 import { actionMemberActive, actionMemberRole, actionResendInvite, actionRevokeInvite } from "@/server/auth-actions";
@@ -14,10 +16,13 @@ const ROLE_LABEL = { admin: "i_role_admin", manager: "i_role_manager", accountan
  * which copies a new link; sandbox: the legacy resend form) behind the same staff-invite gate; nothing is mailed.
  * 「更多」 opens today's B-040 actions for the row through the same server actions; R5-OFF (handover) is a later slice.
  */
-export function TeamRowActionsCell({ locale, row, actions }: { locale: Locale; row: TeamRowV3; actions: TeamRowActions }) {
+export function TeamRowActionsCell({ locale, row, actions, assignHref = null }: { locale: Locale; row: TeamRowV3; actions: TeamRowActions;
+  /** B-059 (GS-24): 「負責的單位」 for a maintenance row while maint_unit_assign is on; null otherwise. */
+  assignHref?: string | null }) {
   const c = brandV3TeamCopy(locale);
   const t = makeT(locale);
   return <div className="v3-team-actions">
+    {assignHref ? <Link className="btn txt" href={assignHref} data-testid="team-assign">{brandV3AssignCopy(locale).teamLink}</Link> : null}
     {actions.primary === "resend-link" && row.invitationId
       ? <TeamInviteLinkButton invitationId={row.invitationId} label={c.resend} buttonClassName="btn txt" />
       : actions.primary === "resend-legacy" && row.invitationId

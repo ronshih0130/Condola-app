@@ -779,3 +779,36 @@ test("B-092 RO-UNIT adds one service-only single-unit reader with B-093 admissio
   assert.match(read("scripts/check-function-privileges.sh"), /B-092 owner unit ACL\/config mismatch/);
   assert.ok(read("supabase/rpc-allowlist.txt").includes("# service-only: app.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)"));
 });
+
+test("B-059 (MGT-118) adds two service-only gateways, owner-only flag helper, four authenticated RLS helpers and two restrictive policies; nothing else", () => {
+  const sql = read("supabase/migrations/20261118100000_b059_maint_unit_assign.sql");
+  const compact = sql.replace(/\s+/g, "");
+  const code = sql.replace(/--[^\n]*/g, "");
+  assert.deepEqual([...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)/g)].map(m => m[1]),
+    ["b059_flag_on", "b059_scoped_orgs", "b059_visible_units", "b059_own_members", "b059_visible_tickets", "b059_assign_view", "b059_assign_save"]);
+  for (const signature of ["b059_assign_view(uuid,uuid,text,uuid,uuid)", "b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+  }
+  assert.ok(compact.includes("REVOKEALLONFUNCTIONapp.b059_flag_on(uuid),app.b059_scoped_orgs(),app.b059_visible_units(),app.b059_own_members(),app.b059_visible_tickets()FROMPUBLIC,anon,authenticated,service_role;"));
+  assert.ok(compact.includes("GRANTEXECUTEONFUNCTIONapp.b059_scoped_orgs(),app.b059_visible_units(),app.b059_own_members(),app.b059_visible_tickets()TOauthenticated;"));
+  assert.equal((code.match(/\bGRANT\b/g) ?? []).length, 3);
+  assert.equal((sql.match(/SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 7);
+  // Only new tables; RLS on and no grant to any application role.
+  assert.deepEqual([...sql.matchAll(/CREATE TABLE ([\w.]+)/g)].map(m => m[1]), ["app.b059_unit_assignments", "app.b059_assign_commands"]);
+  assert.match(sql, /REVOKE ALL ON app\.b059_unit_assignments, app\.b059_assign_commands FROM PUBLIC, anon, authenticated, service_role;/);
+  // Exactly two new policies, both RESTRICTIVE and only TO authenticated; no ALTER of anything existing.
+  assert.deepEqual([...code.matchAll(/CREATE POLICY (\w+) ON ([\w.]+) AS RESTRICTIVE TO authenticated/g)].map(m => `${m[1]}@${m[2]}`),
+    ["b059_maint_unit_scope@public.maintenance_tickets", "b059_maint_unit_photo_scope@public.ticket_attachments"]);
+  assert.equal((code.match(/CREATE POLICY/g) ?? []).length, 2);
+  assert.deepEqual([...code.matchAll(/ALTER TABLE ([\w.]+)/g)].map(m => m[1]), ["app.b059_unit_assignments", "app.b059_assign_commands"]);
+  assert.doesNotMatch(code, /DROP |ALTER POLICY|DISABLE ROW LEVEL|CREATE OR REPLACE/i);
+  // The flag seed is OFF and never overwritten; the helpers only ever read the caller's own rows.
+  assert.match(sql, /VALUES \('maint_unit_assign', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\)\nON CONFLICT \(key\) DO NOTHING;/);
+  assert.match(sql, /JOIN public\.org_members m ON m\.user_id=auth\.uid\(\) AND m\.role='maintenance' AND m\.status='active'/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-059 gateway ACL\/config mismatch/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-059 RLS helper ACL\/config mismatch/);
+  const allow = read("supabase/rpc-allowlist.txt");
+  assert.ok(allow.includes("# service-only: app.b059_assign_view(uuid,uuid,text,uuid,uuid)"));
+  assert.ok(allow.includes("# service-only: app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])"));
+});

@@ -74,7 +74,10 @@ test("PLT-46-AC1 / PLT-44-AC8: SH-ME/SH-ORG/SH-TRIAL manager OFF preserves marku
     let calls: string[] = [];
     let on = false;
     let shellProps: Record<string, unknown> = {};
+    const itemReads: boolean[] = [];
     const mocks = {
+      // B-059 (GS-46): the 單位分派 nav row's flag, read only inside the v3 branch and only for admin/manager.
+      "@/server/b059-maint-unit-assign": { maintUnitAssignEnabledForOrg: async () => { itemReads.push(on); return false; } },
       "next/headers": { headers: async () => ({ get: () => path }), cookies: async () => { calls.push("cookies"); return { get: () => ({ value: hidden ? "1" : "0" }) }; } },
       "next/navigation": { redirect: (to: string) => { throw new Error(to); } }, "@/build-info": { BUILD_SHA: "fixture" },
       "@/components/chrome": { Sidebar: stub, TaskPanel: stub },
@@ -89,9 +92,11 @@ test("PLT-46-AC1 / PLT-44-AC8: SH-ME/SH-ORG/SH-TRIAL manager OFF preserves marku
     const baseline = await renderLayout(old, mocks); const baselineCalls = calls;
     calls = []; assert.equal(await renderLayout(source("src/app/m/layout.tsx"), mocks), baseline);
     assert.deepEqual(calls, baselineCalls);
+    assert.deepEqual(itemReads, [], "brand_v3 OFF never reads maint_unit_assign");
     on = true; calls = [];
     const html = await renderLayout(source("src/app/m/layout.tsx"), mocks);
     assert.deepEqual(calls, baselineCalls);
+    assert.deepEqual(itemReads, role === "admin" || role === "manager" ? [true] : []);
     assert.equal(shellProps.showReset, demo && role === "admin");
     assert.equal(shellProps.canSwitchCompany, true);
     assert.equal(shellProps.hasLiveCompany, true);
@@ -113,6 +118,7 @@ test("SH-ORG / PLT-44-AC13: layout uses existing env eligibility, including miss
       "@/server/demo": { demoModeEnabled: () => false }, "@/server/perms": { can, noPermHref },
       "@/server/queries": { loadManagerChrome: async () => ({ flags: {}, firm: { name: "fixture" }, badge: {} }) },
       "@/server/session": { getSession: async () => actor }, "@/server/b056-trial": { trialBannerFor: async () => null },
+      "@/server/b059-maint-unit-assign": { maintUnitAssignEnabledForOrg: async () => false },
       "@/components/b056-trial-banner": { TrialBanner: stub }, "@/server/brand-v3": { brandV3EnabledForOrg: async () => true },
       "@/i18n/lanes/brand-v3": copy, "@/server/nav-v3": nav,
       "@/components/v3/shell/manager-shell": { ManagerShellV3: (value: Record<string, unknown>) => { props = value; return stub(value); } },
@@ -266,6 +272,8 @@ test("SH-MORE / MGT-47-AC3: More is staff-only, navigation-only, admits custom r
     "@/server/session": { getSession: async () => actor },
     "@/server/brand-v3": { brandV3EnabledForOrg: async () => { calls.push("flag"); return on; } },
     "@/server/nav-v3": nav, "@/i18n/lanes/brand-v3": copy, "@/components/v3/shell/icon": { ShellIcon },
+    // B-059 (GS-46): read after the brand flag, admin/manager only; OFF here, so the links below are unchanged.
+    "@/server/b059-maint-unit-assign": { maintUnitAssignEnabledForOrg: async () => { calls.push("item-flag"); return false; } },
   };
   assert.doesNotMatch(source("src/app/m/more/page.tsx"), /guardEffectiveSession|query\(|tx\(|svc\(/);
   const Page = compile(source("src/app/m/more/page.tsx"), mocks).default as () => Promise<React.ReactNode>;

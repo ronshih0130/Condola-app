@@ -573,6 +573,41 @@ BEGIN
   RAISE EXCEPTION 'B-092 owner unit ACL/config mismatch';
  END IF;
 END $b092_unit$;
+-- B-059: two service-only VOLATILE definer gateways, one internal flag helper (owner only) and four STABLE definer
+-- RLS helpers that authenticated may execute (and nobody else); both tables RLS on with no application grant.
+DO $b059$
+DECLARE fn record; sig text; role_name text;
+BEGIN
+ FOREACH sig IN ARRAY ARRAY['app.b059_assign_view(uuid,uuid,text,uuid,uuid)','app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])'] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=sig::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE') OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-059 gateway ACL/config mismatch: %', sig;
+  END IF;
+ END LOOP;
+ FOREACH sig IN ARRAY ARRAY['app.b059_scoped_orgs()','app.b059_visible_units()','app.b059_own_members()','app.b059_visible_tickets()','app.b059_flag_on(uuid)'] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=sig::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'s' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('anon',fn.oid,'EXECUTE') OR has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE') IS DISTINCT FROM (sig<>'app.b059_flag_on(uuid)')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-059 RLS helper ACL/config mismatch: %', sig;
+  END IF;
+ END LOOP;
+ FOREACH sig IN ARRAY ARRAY['app.b059_unit_assignments','app.b059_assign_commands'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=sig::regclass) THEN RAISE EXCEPTION 'B-059 table RLS off: %', sig; END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,sig,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'B-059 table grant: % on %', role_name, sig;
+   END IF;
+  END LOOP;
+ END LOOP;
+ IF (SELECT count(*) FROM pg_policy WHERE polname IN ('b059_maint_unit_scope','b059_maint_unit_photo_scope') AND NOT polpermissive)<>2 THEN
+  RAISE EXCEPTION 'B-059 restrictive policies missing';
+ END IF;
+END $b059$;
 SQL
 
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"

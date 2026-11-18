@@ -1,0 +1,39 @@
+/* B-059 單位分派 (設定 › 單位分派 and 負責的單位・{名字}, MGT-118): loaded only by /m/assign and /m/assign/[id] under
+   brand_v3 + maint_unit_assign. Tokens only; every control is at least 44px; one column on a phone. The list page has
+   no solid button (frame); the edit page's 「儲存」 is the one solid button. */
+html[data-brand="v2"][data-brand-v3] .v3-assign { display:grid; gap:16px; min-width:0; max-width:880px; margin-bottom:20px; }
+html[data-brand="v2"][data-brand-v3] .v3-assign :is(h1,h2,p,fieldset,legend,ul) { margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-head { display:grid; gap:4px; padding:16px 20px; border-radius:var(--r-lg); background:var(--c-tint-soft); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-head h1 { font-size:clamp(1.375rem,2.4vw,1.75rem); line-height:1.4; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-head p { color:var(--c-text-2); line-height:1.7; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-card { display:grid; gap:12px; min-width:0; padding:8px 20px; background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); box-shadow:var(--shadow-1); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-list { list-style:none; padding:0; display:grid; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; min-height:44px; padding:12px 0; border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-row:first-child { border-top:0; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-row > div { display:grid; gap:2px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-row b { font-weight:700; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-sub { color:var(--c-text-2); font-size:.9em; font-variant-numeric:tabular-nums; }
+html[data-brand="v2"][data-brand-v3] .v3-assign .btn { display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:44px; padding:10px 16px; border:1px solid var(--c-primary); border-radius:var(--r-btn); background:var(--c-surface); color:var(--c-primary); text-decoration:none; font:inherit; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-assign .btn.pri { background:var(--c-primary); color:var(--c-on-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-assign .btn[aria-disabled="true"] { cursor:progress; opacity:.7; }
+html[data-brand="v2"][data-brand-v3] .v3-assign :is(a,button,input):focus-visible { outline:2px solid var(--c-focus); outline-offset:2px; }
+html[data-brand="v2"][data-brand-v3] .v3-assign .btn.pri:focus-visible { outline:2px solid var(--c-on-primary); outline-offset:-4px; box-shadow:0 0 0 2px var(--c-focus); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-form { display:grid; gap:16px; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-units { display:grid; gap:0; border:0; padding:8px 20px; min-width:0; background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); box-shadow:var(--shadow-1); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-units legend { float:left; width:100%; padding:12px 0 8px; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-check { clear:both; display:flex; align-items:center; gap:12px; min-height:44px; padding:8px 0; border-top:1px solid var(--c-divider); cursor:pointer; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-check input { flex:none; width:20px; height:20px; margin:0; accent-color:var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-fail { font-weight:600; color:var(--c-text); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-fail:empty { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-state { display:grid; justify-items:center; gap:12px; padding:24px 20px; text-align:center; background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-state p { color:var(--c-text-2); line-height:1.7; }
+html[data-brand="v2"][data-brand-v3] .v3-assign-skeleton { display:block; height:1em; margin:14px 0; border-radius:var(--r-sm); background:var(--c-surface-2); }
+html[data-brand="v2"][data-brand-v3] .v3-assign-skeleton.title { width:40%; height:1.5em; }
+@media (prefers-reduced-motion:no-preference) { html[data-brand="v2"][data-brand-v3] .v3-assign-skeleton { animation:v3-assign-pulse 1.4s ease-in-out infinite; } }
+@keyframes v3-assign-pulse { 50% { opacity:.55; } }
+@media (max-width:50em) {
+ html[data-brand="v2"][data-brand-v3] .v3-assign-head { padding:14px 16px; }
+ html[data-brand="v2"][data-brand-v3] .v3-assign-card, html[data-brand="v2"][data-brand-v3] .v3-assign-units { padding:4px 16px; }
+ html[data-brand="v2"][data-brand-v3] .v3-assign-actions .btn { flex:1 1 auto; }
+}

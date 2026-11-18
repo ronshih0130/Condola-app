@@ -1,0 +1,320 @@
+import assert from "node:assert/strict";
+import { randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { Client } from "pg";
+import { assignEdit, assignList, saveAssign } from "./b059-maint-unit-assign";
+import { svc } from "./db";
+import { updateTicket } from "./domain";
+import { ORG_ID, ORG2_ID, USERS } from "./ids";
+import { listTickets, ticketDetail } from "./queries";
+import { readRepairPhoto } from "./repairs";
+import { resetAndSeed } from "./seed";
+import { cloneTestDatabase } from "./test-database-clone";
+import { disposableDbUrl } from "./test-disposable-db";
+import type { Session } from "./types";
+
+// MGT-118 (B-059 / DO-3) on a cloned disposable database: the real gateways through service_role and the real
+// ticket readers (tx as authenticated, so the RESTRICTIVE policy applies). Never a pg mock or a grant.
+disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
+let db: Client;
+const VIEW = "app.b059_assign_view(uuid,uuid,text,uuid,uuid)";
+const SAVE = "app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])";
+const HELPERS = ["app.b059_scoped_orgs()", "app.b059_visible_units()", "app.b059_own_members()", "app.b059_visible_tickets()"];
+const sid: Record<string, string> = {};
+const member: Record<string, string> = {};
+let unitA: string, unitB: string, unitC: string, archivedUnit: string, org2Unit: string, property: string;
+let tA: string, tB: string, tC: string, tProperty: string, tAssigned: string, attachmentB: string, org2Ticket: string;
+let invite: string, managerInvite: string;
+type Result = Record<string, unknown> & { status: string };
+const code = (c: string) => (e: unknown) => ((e as { code?: string }).code ?? (e as { cause?: { code?: string } }).cause?.code) === c;
+
+const session = (who: keyof typeof USERS, role: Session["role"], org = ORG_ID): Session => ({ kind: "staff", role, orgId: org, liveOrgId: org,
+  userId: USERS[who], sessionId: sid[who], name: "Synthetic", email: "", environment: "live", locale: "zh-TW", calendar: "gregorian", leaseId: null });
+const admin = () => session("admin", "admin");
+const manager = () => session("manager", "manager");
+const accountant = () => session("accountant", "accountant");
+const maint = () => session("maintenance", "maintenance");
+
+async function flag(on: boolean, orgs: string[] = [ORG_ID, ORG2_ID]) {
+  await db.query(`UPDATE public.platform_settings SET value=jsonb_build_object('enabled',$1::boolean,'allowed_org_ids',to_jsonb($2::text[])) WHERE key='maint_unit_assign'`, [on, orgs]);
+  await db.query(`UPDATE public.organizations SET feature_flags=feature_flags||jsonb_build_object('maint_unit_assign',$2::boolean) WHERE id = ANY($1::uuid[])`, [[ORG_ID, ORG2_ID], on]);
+}
+type Opts = { org?: string; live?: string; env?: string; pin?: string | null };
+async function call<T>(fn: string, who: string, args: unknown[], opts: Opts = {}): Promise<T> {
+  const org = opts.org ?? ORG_ID, env = opts.env ?? "live";
+  return svc(null, async client => {
+    if (opts.pin !== null) await client.query("SELECT set_config('app.active_org_id',$1,true),set_config('app.env',$2,true)", [opts.pin ?? org, env]);
+    const params = args.map((_, i) => `$${i + 5}`).join(",");
+    return (await client.query(`SELECT ${fn.split("(")[0]}($1,$2,$3,$4,${params}) r`, [org, opts.live ?? org, env, sid[who], ...args])).rows[0].r;
+  });
+}
+const save = (who: string, target: string, units: string[], request = randomUUID(), opts: Opts = {}) => call<Result>(SAVE, who, [request, target, units], opts);
+const view = (who: string, target: string | null = null, opts: Opts = {}) => call<Record<string, unknown> | null>(VIEW, who, [target], opts);
+const snapshot = async () => (await db.query(`SELECT
+  (SELECT md5(coalesce(string_agg(row_to_json(a)::text,'|' ORDER BY a.id),'')) FROM app.b059_unit_assignments a) rows,
+  (SELECT md5(coalesce(string_agg(row_to_json(c)::text,'|' ORDER BY c.request_id),'')) FROM app.b059_assign_commands c) commands,
+  (SELECT count(*)::int FROM public.audit_log a WHERE a.table_name='b059_unit_assignments') audit`)).rows[0] as Record<string, unknown>;
+async function unchanged(label: string, fn: () => Promise<unknown>) { const before = await snapshot(); await fn(); assert.deepEqual(await snapshot(), before, label); }
+const unitsOf = async (target: string) => (await db.query(`SELECT array_agg(unit_id::text ORDER BY unit_id) u FROM app.b059_unit_assignments WHERE member_id=$1 OR invitation_id=$1`, [target])).rows[0].u ?? [];
+async function ticket(org: string, prop: string, unit: string | null, title: string, assigned: string | null = null) {
+  return (await db.query(`INSERT INTO public.maintenance_tickets(org_id,ticket_number,property_id,unit_id,title,assigned_member_id)
+    VALUES($1,(SELECT coalesce(max(ticket_number),1000)+1 FROM public.maintenance_tickets WHERE org_id=$1),$2,$3,$4,$5) RETURNING id`,
+  [org, prop, unit, title, assigned])).rows[0].id as string;
+}
+const ids = (rows: { id: string }[]) => rows.map(r => r.id).sort();
+/** Every SQL text the app sends while fn runs (the readers' own statements; parity is on these texts). */
+async function sqlTexts(fn: () => Promise<unknown>): Promise<string[]> {
+  const seen: string[] = [];
+  const original = Client.prototype.query;
+  Client.prototype.query = function (this: Client, ...args: unknown[]) {
+    const first = args[0] as string | { text?: string };
+    seen.push(typeof first === "string" ? first : first?.text ?? "");
+    return (original as (...a: unknown[]) => unknown).apply(this, args);
+  } as typeof Client.prototype.query;
+  try { await fn(); } finally { Client.prototype.query = original; }
+  return seen;
+}
+
+test.before(async () => {
+  clone = await cloneTestDatabase();
+  db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  const demo = process.env.DEMO_MODE, key = process.env.ID_DOC_ENCRYPTION_KEY;
+  try {
+    process.env.DEMO_MODE = "true";
+    process.env.ID_DOC_ENCRYPTION_KEY = randomBytes(32).toString("hex");
+    await resetAndSeed();
+  } finally {
+    if (demo === undefined) delete process.env.DEMO_MODE; else process.env.DEMO_MODE = demo;
+    if (key === undefined) delete process.env.ID_DOC_ENCRYPTION_KEY; else process.env.ID_DOC_ENCRYPTION_KEY = key;
+  }
+  for (const who of Object.keys(USERS)) {
+    sid[who] = randomUUID();
+    await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '2 hours')", [sid[who], USERS[who as keyof typeof USERS], randomUUID()]);
+  }
+  sid.revoked = randomUUID();
+  await db.query("INSERT INTO public.auth_sessions(id,user_id,token_hash,expires_at,revoked_at) VALUES($1,$2,$3,clock_timestamp()+interval '2 hours',clock_timestamp())", [sid.revoked, USERS.admin, randomUUID()]);
+  for (const row of (await db.query<{ id: string; user_id: string; org_id: string }>("SELECT id::text,user_id::text,org_id::text FROM public.org_members")).rows)
+    member[`${row.org_id}:${row.user_id}`] = row.id;
+  property = (await db.query(`INSERT INTO public.properties(org_id,name,country_code,currency,timezone) VALUES($1,'B059 民生東路','TW','TWD','Asia/Taipei') RETURNING id`, [ORG_ID])).rows[0].id;
+  const unit = async (org: string, prop: string, label: string) => (await db.query(`INSERT INTO public.units(org_id,property_id,label,rental_mode) VALUES($1,$2,$3,'whole_unit') RETURNING id`, [org, prop, label])).rows[0].id as string;
+  unitA = await unit(ORG_ID, property, "B059-1F"); unitB = await unit(ORG_ID, property, "B059-2F"); unitC = await unit(ORG_ID, property, "B059-3F");
+  archivedUnit = await unit(ORG_ID, property, "B059-9F");
+  await db.query("UPDATE public.units SET archived_at=clock_timestamp() WHERE id=$1", [archivedUnit]);
+  const org2Property = (await db.query(`INSERT INTO public.properties(org_id,name,country_code,currency,timezone) VALUES($1,'B059 海岸','TW','TWD','Asia/Taipei') RETURNING id`, [ORG2_ID])).rows[0].id;
+  org2Unit = await unit(ORG2_ID, org2Property, "B059-X");
+  tA = await ticket(ORG_ID, property, unitA, "B059 A"); tB = await ticket(ORG_ID, property, unitB, "B059 B"); tC = await ticket(ORG_ID, property, unitC, "B059 C");
+  tProperty = await ticket(ORG_ID, property, null, "B059 property-level");
+  tAssigned = await ticket(ORG_ID, property, unitC, "B059 assigned to maintenance", member[`${ORG_ID}:${USERS.maintenance}`]);
+  org2Ticket = await ticket(ORG2_ID, org2Property, org2Unit, "B059 org2");
+  const file = randomUUID();
+  await db.query(`INSERT INTO files(id,org_id,storage_bucket,storage_path,file_name,mime_type,uploaded_by,size_bytes) VALUES($1,$2,'ticket-photos-private',$3,'b.png','image/png',$4,42)`,
+    [file, ORG_ID, `org/${ORG_ID}/tickets/${tB}/${file}.png`, USERS.admin]);
+  attachmentB = (await db.query(`INSERT INTO ticket_attachments(org_id,ticket_id,file_id) VALUES($1,$2,$3) RETURNING id`, [ORG_ID, tB, file])).rows[0].id;
+  const invitation = async (role: string, email: string) => (await db.query(`INSERT INTO public.invitations(org_id,kind,role,email,code_hash,status,invited_by)
+    VALUES($1,'team_member',$2::org_role,$3,$4,'pending',$5) RETURNING id`, [ORG_ID, role, email, randomUUID(), USERS.admin])).rows[0].id as string;
+  invite = await invitation("maintenance", "b059-fixer@example.test");
+  managerInvite = await invitation("manager", "b059-manager@example.test");
+});
+
+test.beforeEach(async () => { await flag(true); });
+test.after(async () => {
+  try { if (db) await db.end(); } finally { await clone?.cleanup(); }
+});
+
+test("MGT-118 privileges: gateways service_role only, RLS helpers authenticated only, tables have no application privilege", async () => {
+  for (const fn of [VIEW, SAVE]) for (const role of ["anon", "authenticated", "service_role"])
+    assert.equal((await db.query("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [role, fn])).rows[0].ok, role === "service_role", `${role} ${fn}`);
+  for (const fn of HELPERS) for (const role of ["anon", "authenticated", "service_role"])
+    assert.equal((await db.query("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [role, fn])).rows[0].ok, role === "authenticated", `${role} ${fn}`);
+  for (const table of ["app.b059_unit_assignments", "app.b059_assign_commands"]) for (const role of ["anon", "authenticated", "service_role"])
+    assert.equal((await db.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') ok", [role, table])).rows[0].ok, false, `${role} ${table}`);
+});
+
+test("MGT-118 Tier 2 anon denial: anon cannot run either gateway or read either table", async () => {
+  for (const sql of [`SELECT ${VIEW.split("(")[0]}($1,$1,'live',$2,NULL)`, `SELECT ${SAVE.split("(")[0]}($1,$1,'live',$2,$3,$3,ARRAY[]::uuid[])`,
+    "SELECT count(*) FROM app.b059_unit_assignments", "SELECT count(*) FROM app.b059_assign_commands"]) {
+    await db.query("BEGIN");
+    try {
+      await db.query("SET LOCAL ROLE anon");
+      const args = sql.includes("$3") ? [ORG_ID, sid.admin, randomUUID()] : sql.includes("$2") ? [ORG_ID, sid.admin] : [];
+      await assert.rejects(db.query(sql, args), code("42501"), sql);
+    } finally { await db.query("ROLLBACK"); }
+  }
+});
+
+test("MGT-118-AC1: admin and manager assign units; the list counts them; replay, unchanged and conflict are idempotent", async () => {
+  const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
+  const request = randomUUID();
+  const first = await save("admin", fixer, [unitA, unitB], request);
+  assert.deepEqual(first, { status: "saved", units: 2, replayed: false });
+  await unchanged("a replay writes nothing", async () =>
+    assert.deepEqual(await save("admin", fixer, [unitA, unitB], request), { status: "saved", units: 2, replayed: true }));
+  await unchanged("same id, other payload", async () =>
+    assert.deepEqual(await save("admin", fixer, [unitA], request), { status: "conflict" }));
+  await unchanged("same id, other actor", async () =>
+    assert.deepEqual(await save("manager", fixer, [unitA, unitB], request), { status: "conflict" }));
+  const audit = (await db.query("SELECT count(*)::int n FROM public.audit_log WHERE table_name='b059_unit_assignments' AND request_id=$1", [request])).rows[0].n;
+  assert.equal(audit, 1);
+  assert.deepEqual(await save("manager", fixer, [unitB, unitA]), { status: "unchanged", units: 2, replayed: false });
+  assert.deepEqual(await save("manager", fixer, [unitA]), { status: "saved", units: 1, replayed: false });
+  assert.deepEqual(await unitsOf(fixer), [unitA]);
+  const list = await view("manager") as { people: { id: string; kind: string; units: number; name: string }[] };
+  const row = list.people.find(p => p.id === fixer);
+  assert.equal(row?.kind, "member"); assert.equal(row?.units, 1);
+  // AC2: only maintenance people are listed (the pending maintenance invitation too; never a manager or accountant).
+  assert.ok(list.people.some(p => p.id === invite && p.kind === "invite"));
+  assert.ok(!list.people.some(p => p.id === managerInvite || p.id === member[`${ORG_ID}:${USERS.manager}`] || p.id === member[`${ORG_ID}:${USERS.accountant}`]));
+  const edit = await view("admin", fixer) as { person: { id: string }; units: { id: string; checked: boolean }[] };
+  assert.equal(edit.person.id, fixer);
+  assert.deepEqual(edit.units.filter(u => [unitA, unitB, unitC].includes(u.id)).map(u => [u.id, u.checked]).sort(),
+    [[unitA, true], [unitB, false], [unitC, false]].sort());
+  assert.ok(!edit.units.some(u => u.id === archivedUnit || u.id === org2Unit), "no archived or foreign unit");
+  // The app layer: same results through the TypeScript readers.
+  const app = await assignList(manager());
+  assert.equal(app.state, "ready");
+  const saved = await saveAssign(admin(), { requestId: randomUUID(), target: fixer, units: [unitA, unitC] });
+  assert.deepEqual(saved, { ok: true, status: "saved", units: 2, replayed: false });
+  const appEdit = await assignEdit(admin(), fixer);
+  assert.ok(appEdit.state === "ready" && appEdit.units.filter(u => u.checked).map(u => u.id).sort().join() === [unitA, unitC].sort().join());
+});
+
+test("MGT-118-AC7 + Tier 2 cross-org: accountant, maintenance, revoked session, other org and tuple tricks are 42501 with no write", async () => {
+  const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
+  await unchanged("denials", async () => {
+    for (const who of ["accountant", "maintenance", "revoked", "tenant", "owner"]) {
+      await assert.rejects(save(who, fixer, [unitA]), code("42501"), who);
+      await assert.rejects(view(who), code("42501"), who);
+    }
+    // ORG2's admin, with its own tuple, against ORG1's person and units.
+    await assert.rejects(save("coastAdmin", fixer, [unitA], randomUUID(), { org: ORG2_ID }), code("42501"));
+    await assert.rejects(view("coastAdmin", fixer, { org: ORG2_ID }), code("42501"));
+    // ORG2's admin with ORG1's tuple (not a member there).
+    await assert.rejects(save("coastAdmin", fixer, [unitA]), code("42501"));
+    // A pinned org that differs from the tuple.
+    await assert.rejects(save("admin", fixer, [unitA], randomUUID(), { pin: ORG2_ID }), code("42501"));
+    await assert.rejects(save("admin", fixer, [unitA], randomUUID(), { pin: null }), code("42501"));
+    // TS layer: 403 / forbidden, never a write.
+    assert.deepEqual(await assignList(accountant()), { state: "forbidden" });
+    assert.deepEqual(await assignList(maint()), { state: "forbidden" });
+    assert.deepEqual(await assignEdit(accountant(), fixer), { state: "forbidden" });
+    assert.deepEqual(await saveAssign(maint(), { requestId: randomUUID(), target: fixer, units: [unitA] }), { ok: false, status: 403 });
+  });
+});
+
+test("MGT-118-AC2: the target must be a maintenance member or pending maintenance invitation of the same org; units must be this org's live units", async () => {
+  await unchanged("bad targets", async () => {
+    for (const target of [member[`${ORG_ID}:${USERS.manager}`], member[`${ORG_ID}:${USERS.accountant}`], member[`${ORG_ID}:${USERS.admin}`],
+      member[`${ORG2_ID}:${USERS.coastAdmin}`], managerInvite, randomUUID()]) {
+      await assert.rejects(save("admin", target, [unitA]), code("42501"), target);
+      await assert.rejects(view("admin", target), code("42501"), target);
+    }
+  });
+  const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
+  const before = await unitsOf(fixer);
+  for (const units of [[archivedUnit], [org2Unit], [unitA, unitA], [unitA, randomUUID()]]) {
+    const request = randomUUID();
+    assert.deepEqual(await save("admin", fixer, units, request), { status: "invalid", replayed: false }, JSON.stringify(units));
+    assert.deepEqual(await save("admin", fixer, units, request), { status: "invalid", replayed: true });
+  }
+  assert.deepEqual(await unitsOf(fixer), before);
+  assert.deepEqual(await saveAssign(admin(), { requestId: randomUUID(), target: fixer, units: [org2Unit] }), { ok: false, status: 400 });
+  // A pending maintenance invitation can be assigned ahead (GS-24).
+  assert.deepEqual(await save("admin", invite, [unitB]), { status: "saved", units: 1, replayed: false });
+  assert.deepEqual(await unitsOf(invite), [unitB]);
+});
+
+test("flag OFF: view NULL, save disabled, the TS layer says off / 404, nothing written", async () => {
+  await flag(false);
+  const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
+  await unchanged("OFF", async () => {
+    assert.equal(await view("admin"), null);
+    assert.deepEqual(await save("admin", fixer, [unitA]), { status: "disabled" });
+    assert.deepEqual(await assignList(admin()), { state: "off" });
+    assert.deepEqual(await saveAssign(admin(), { requestId: randomUUID(), target: fixer, units: [unitA] }), { ok: false, status: 404 });
+  });
+});
+
+test("MGT-118-AC3/AC4/AC5: ON scopes maintenance to assigned units plus its own tickets; admin, manager, accountant unaffected; OFF is the unscoped baseline with the same SQL", async () => {
+  const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
+  await save("admin", fixer, [unitA]);
+  const ours = [tA, tB, tC, tProperty, tAssigned];
+  const visible = async (s: Session) => ids(await listTickets(s)).filter(id => ours.includes(id));
+  // Baseline: flag OFF, every role sees every ticket (as before this item).
+  await flag(false);
+  const offTexts = await sqlTexts(async () => { await listTickets(maint()); await ticketDetail(maint(), tA); });
+  const offHidden = await sqlTexts(() => ticketDetail(maint(), tB));
+  for (const s of [admin(), manager(), maint()]) assert.deepEqual(await visible(s), [...ours].sort(), `OFF ${s.role}`);
+  assert.ok(await ticketDetail(maint(), tB), "OFF: detail of an unassigned unit's ticket");
+  // ON: only unit A's ticket and the ticket explicitly assigned to the maintenance member (AC5); the property-level
+  // ticket and units B/C are hidden. Admin, manager unchanged (AC4).
+  await flag(true);
+  assert.deepEqual(await visible(maint()), [tA, tAssigned].sort());
+  for (const s of [admin(), manager()]) assert.deepEqual(await visible(s), [...ours].sort(), `ON ${s.role}`);
+  assert.equal(await ticketDetail(maint(), tB), null);
+  assert.ok(await ticketDetail(maint(), tA));
+  assert.ok(await ticketDetail(maint(), tAssigned));
+  // Same SQL text ON and OFF: the gate is the policy, not a reader change (flag-OFF data-read parity).
+  const onTexts = await sqlTexts(async () => { await listTickets(maint()); await ticketDetail(maint(), tA); });
+  assert.deepEqual(onTexts, offTexts);
+  // A hidden ticket: the very same statements up to the ticket read, which now finds no row (then the reader stops).
+  const onHidden = await sqlTexts(() => ticketDetail(maint(), tB));
+  assert.deepEqual(onHidden.slice(0, -1), offHidden.slice(0, onHidden.length - 1));
+  assert.equal(onHidden.at(-1), "COMMIT");
+  // Writes follow visibility: a hidden ticket is not found for maintenance; the admin can still update it.
+  await assert.rejects(updateTicket(maint(), tB, { status: "in_progress" }), (e: unknown) => (e as { key?: string }).key === "errors.notFound");
+  await updateTicket(maint(), tA, { note: "B059 visible" });
+  // The by-id photo reader: hidden ticket's photo row is gone for maintenance, present for the admin.
+  assert.equal(await readRepairPhoto(maint(), attachmentB), null);
+  assert.ok(await readRepairPhoto(admin(), attachmentB));
+  // Another org's flag/assignments never touch ORG2 readers; ORG1's maintenance never sees ORG2 rows anyway.
+  assert.ok(ids(await listTickets(session("coastAdmin", "admin", ORG2_ID))).includes(org2Ticket));
+  // Flag ON but no assignment: only the explicitly assigned ticket.
+  await save("admin", fixer, []);
+  assert.deepEqual(await visible(maint()), [tAssigned]);
+  // Back OFF: everything again, assignments kept.
+  await flag(false);
+  assert.deepEqual(await visible(maint()), [...ours].sort());
+  assert.equal((await db.query("SELECT count(*)::int n FROM app.b059_unit_assignments WHERE member_id=$1", [fixer])).rows[0].n, 0);
+});
+
+test("MGT-118 policy baseline: with the flag OFF the policies change no row for any role (compared with the policies dropped)", async () => {
+  const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
+  await save("admin", fixer, [unitA]);
+  await flag(false);
+  const read = async () => Promise.all([admin(), manager(), accountant(), maint()].map(async s => {
+    try { return ids(await listTickets(s)); } catch (error) { return `error:${(error as { key?: string }).key ?? "?"}`; }
+  }));
+  const withPolicies = await read();
+  const photos = async () => Promise.all([admin(), maint()].map(s => readRepairPhoto(s, attachmentB).then(r => r?.ticket_id ?? null)));
+  const photoWith = await photos();
+  const sql = readFileSync(new URL("../../supabase/migrations/20261118100000_b059_maint_unit_assign.sql", import.meta.url), "utf8");
+  const creates = [...sql.matchAll(/CREATE POLICY[\s\S]*?;\n/g)].map(m => m[0]);
+  assert.equal(creates.length, 2);
+  await db.query("DROP POLICY b059_maint_unit_scope ON public.maintenance_tickets; DROP POLICY b059_maint_unit_photo_scope ON public.ticket_attachments");
+  try {
+    assert.deepEqual(await read(), withPolicies);
+    assert.deepEqual(await photos(), photoWith);
+  } finally {
+    for (const create of creates) await db.query(create);
+  }
+});
+
+test("GS-24: units saved on a pending invitation apply once that invitation is accepted by the maintenance user", async () => {
+  const user = USERS.maintenance, fixer = member[`${ORG_ID}:${user}`];
+  await save("admin", fixer, []);
+  const pending = (await db.query(`INSERT INTO public.invitations(org_id,kind,role,email,code_hash,status,invited_by)
+    VALUES($1,'team_member','maintenance','b059-accept@example.test',$2,'pending',$3) RETURNING id`, [ORG_ID, randomUUID(), USERS.admin])).rows[0].id;
+  assert.deepEqual(await save("admin", pending, [unitC]), { status: "saved", units: 1, replayed: false });
+  assert.ok(!ids(await listTickets(maint())).includes(tC), "not before acceptance");
+  await db.query("UPDATE public.invitations SET status='accepted',accepted_by=$2,accepted_at=clock_timestamp() WHERE id=$1", [pending, user]);
+  assert.ok(ids(await listTickets(maint())).includes(tC), "applies after acceptance");
+  const list = await view("admin") as { people: { id: string; units: number }[] };
+  assert.equal(list.people.find(p => p.id === fixer)?.units, 1, "the member row counts the accepted invitation's units");
+  // Saving the member replaces both (the invitation's rows move to the member).
+  assert.deepEqual(await save("admin", fixer, [unitA]), { status: "saved", units: 1, replayed: false });
+  assert.deepEqual(await unitsOf(pending), []);
+  assert.deepEqual(await unitsOf(fixer), [unitA]);
+});
