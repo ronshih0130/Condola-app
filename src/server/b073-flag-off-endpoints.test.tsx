@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { brandV3EnabledForOrg } from "./brand-v3";
 import { maintUnitAssignEnabledForOrg } from "./b059-maint-unit-assign";
@@ -228,6 +230,87 @@ test("brand_v3 + item-flag endpoints: brand_v3 ON with the item flag OFF or its 
   }
 });
 
+// B-090 slice 1 re-land (PENDING-RON PR-043, OQ-107, REVIEW-CHECKLIST 13): existing tenant pages that gained a brand_v3
+// branch. They are not OFF 404s: OFF they render the legacy page. With the flag OFF and with a throwing flag lookup, the
+// v3 modules are never touched (no v3 data read), the reads are exactly origin/main's plus the one flag lookup, nothing
+// is written or audited, and the flag is read after consent and session (for the page: consent → session → flag first).
+const TENANT_BASE = "a0aa278e3e92732b066fdbd74bd8f7430d76df0b"; // origin/main before the B-090 slice 1 re-land
+const tenantCases = [
+  { path: "src/app/t/page.tsx", kind: "page" },
+  { path: "src/app/t/layout.tsx", kind: "layout" },
+] as const;
+const tenantV3Modules = ["@/components/v3/tenant/home-route", "@/components/v3/tenant/shell", "@/server/b090-tenant-shell",
+  "@/server/b090-tenant-home", "@/server/b090-tenant-home-reader"];
+
+async function runTenantEntry(source: string, kind: "page" | "layout", path: string, fail: boolean) {
+  const calls: string[] = [], lookups: string[] = [];
+  const read = <T,>(name: string, value: T) => async () => { calls.push(name); return value; };
+  const link = ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>;
+  const stub = (name: string) => () => { calls.push(`render:${name}`); return null; };
+  const lease = { lease_id: UNIT, firm_name: "Firm", property_name: "P", unit_label: "2F", room_label: null, address_display: null, lease_status: "active" };
+  const mocks: Record<string, unknown> = {
+    "@/server/brand-v3": { brandV3EnabledForOrg: (orgId: string) => brandV3EnabledForOrg(orgId, {}, async id => {
+      calls.push("flag"); lookups.push(id);
+      if (fail) throw new Error("flag lookup failed");
+      return false;
+    }, async () => true) },
+    "@/server/consent-gate": { requireCurrentConsent: read("consent", null) },
+    "@/server/session": { getSession: read("session", { orgId: ORG, kind: "tenant", role: null, locale: "zh-TW", name: "Tenant", leaseId: null }) },
+    "@/server/b017-custom-role-governance": { guardEffectiveSession: async (s: unknown) => { calls.push("guard"); return s; } },
+    "@/server/brand-v2": { brandV2EnabledForOrg: read("brand_v2", true) },
+    "@/server/line/tenant-entry": { tenantLineEntryEnabled: read("line", true) },
+    "@/server/queries": { tenantLeases: read("leases", [lease]), tenantLeaseMoney: read("lease_money", { lease: { rent: "1", deposit: "2", currency: "TWD", status: "active" }, dueMinor: 1 }) },
+    "@/server/tenant-payment-history": { tenantPaymentHistory: read("payment_history", { state: "off" }) },
+    "@/server/id-docs": { loadLeaseIdCheck: read("id_check", { ready: true }) },
+    "@/server/id-sign-gate": { identityRequiredForSigningFor: read("id_required", false) },
+    "@/server/tenant-reminder-preferences": { tenantDuePreference: read("due_preference", null) },
+    "@/server/db": { query: read("write", null), tx: read("write", null) },
+    "@/server/audit": { writeAudit: read("audit", null) },
+    "@/components/notification-center-entry": { NotificationCenterEntry: stub("notification-entry") },
+    "@/components/handover-entry": { HandoverEntry: stub("handover-entry") },
+    "@/components/tenant-payment-history": { TenantBillSummary: stub("bill-summary") },
+    "@/components/brand": { BrandImage: () => null },
+    "@/server/actions": { actionPickLease: "/pick" },
+    "@/server/format": { moneyLabel: () => "NT$1" },
+    "@/server/sandbox-data": { displaySampleName: (x: string) => x },
+    "@/i18n": { makeT: () => (key: string) => key },
+    "@/i18n/lanes/reminders": { reminderCopy: () => ({ tenantTitle: "x" }) },
+    "@/i18n/tenant-payment-history": { tenantPaymentHistoryCopy: () => ({ unavailable: "x" }) },
+    "@/i18n/line-tenant": { lineTenantCopy: () => ({ manage: "x" }) },
+    "@/i18n/tenant-lease-history": { tenantLeaseHistoryCopy: () => ({ link: "x" }) },
+    "next/headers": { headers: async () => ({ get: () => path }) },
+    "next/link": { __esModule: true, default: link },
+    "next/navigation": { redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); }, notFound: () => { calls.push("notFound"); throw new Error("NEXT_NOT_FOUND"); } },
+  };
+  const entry = compile(source, (name: string) => {
+    if (name in mocks) return mocks[name];
+    if ((tenantV3Modules as readonly string[]).includes(name)) return recordingDependency(`v3:${name}`, calls);
+    if (["react", "react/jsx-runtime"].includes(name)) return requireHere(name);
+    throw new Error(`Unmocked dependency: ${name}`);
+  });
+  calls.length = 0; // module-load accesses are not reads
+  const Entry = entry.default as (props: unknown) => Promise<React.ReactElement>;
+  const html = renderToStaticMarkup(await (kind === "page" ? Entry({}) : Entry({ children: <main>page</main> })));
+  return { calls, lookups, html };
+}
+
+test("brand_v3 tenant 首頁 and layout (B-090): OFF and a throwing lookup add no v3 read, write or audit; flag after consent and session", async () => {
+  for (const { path, kind } of tenantCases) for (const at of kind === "page" ? ["/t"] : ["/t", "/t/pay", "/t/id"]) for (const fail of [false, true]) {
+    const label = `${path} ${at} ${fail ? "lookup failure" : "flag OFF"}`;
+    const base = await runTenantEntry(execFileSync("git", ["show", `${TENANT_BASE}:${path}`], { encoding: "utf8" }), kind, at, fail);
+    const head = await runTenantEntry(read(path), kind, at, fail);
+    assert.equal(head.html, base.html, `${label}: the legacy markup`);
+    assert.deepEqual(head.calls.filter(call => call !== "flag"), base.calls, `${label}: origin/main's reads, in order, plus only the flag lookup`);
+    assert.equal(head.calls.filter(call => call === "flag").length, 1, label);
+    assert.ok(!head.calls.some(call => call.startsWith("read:v3:") || call === "write" || call === "audit" || call === "notFound"), `${label}: ${head.calls.join(",")}`);
+    const flag = head.calls.indexOf("flag");
+    assert.ok(head.calls.indexOf("consent") < flag && head.calls.indexOf("session") < flag, label);
+    if (kind === "page") assert.deepEqual(head.calls.slice(0, 3), ["consent", "session", "flag"], label);
+    else assert.equal(head.calls[flag - 1], "consent", `${label}: no data read between consent and the flag`);
+    assert.deepEqual(head.lookups, [ORG], label);
+  }
+});
+
 const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(e => {
   const path = `${dir}/${e.name}`;
   return e.isDirectory() ? walk(path) : [path];
@@ -245,6 +328,14 @@ test("brand_v3 endpoint registry covers every added route and page importing the
   const itemFlagged = walk("src/app").filter(path => /\/(?:route\.ts|page\.tsx)$/.test(path)).filter(path =>
     /maintUnitAssignEnabledForOrg\(/.test(read(path)));
   for (const path of itemFlagged) if (added.has(path)) assert.ok(itemCovered.has(path), `Missing item-flag OFF case: ${path}`);
+  // B-090: every tenant page or layout that started reading the flag after TENANT_BASE is in the tenant table above.
+  const tenantCovered = new Set<string>(tenantCases.map(row => row.path));
+  const importsFlag = (text: string) => /from "@\/server\/brand-v3"/.test(text);
+  const atBase = (path: string) => { try { return execFileSync("git", ["show", `${TENANT_BASE}:${path}`], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch { return ""; } };
+  for (const path of walk("src/app/t").filter(path => /\/(?:page|layout)\.tsx$/.test(path))) {
+    if (importsFlag(read(path)) && !importsFlag(atBase(path))) assert.ok(tenantCovered.has(path), `Missing tenant flag-OFF case: ${path}`);
+  }
+  for (const { path } of tenantCases) assert.ok(importsFlag(read(path)), `${path} no longer reads the flag: drop its tenant case`);
 });
 
 test("existing management pages and layout keep their flag-OFF regression tests", () => {

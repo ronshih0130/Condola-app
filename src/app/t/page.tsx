@@ -5,6 +5,8 @@ import Link from "next/link";
 import { makeT } from "@/i18n";
 import { actionPickLease } from "@/server/actions";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { TenantHomeV3Route } from "@/components/v3/tenant/home-route";
 import { moneyLabel } from "@/server/format";
 import { loadLeaseIdCheck } from "@/server/id-docs";
 import { identityRequiredForSigningFor } from "@/server/id-sign-gate";
@@ -16,12 +18,15 @@ import { reminderCopy } from "@/i18n/lanes/reminders";
 import { tenantPaymentHistory } from "@/server/tenant-payment-history";
 import { TenantBillSummary } from "@/components/tenant-payment-history";
 import { tenantPaymentHistoryCopy } from "@/i18n/tenant-payment-history";
+import type { Session } from "@/server/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function TenantHome() {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  // B-090 (OQ-107, REVIEW-CHECKLIST 13): the flag is read right after consent and session, before any data read.
+  const v3 = await brandV3EnabledForOrg(session.orgId);
   const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const leases = await tenantLeases(session);
@@ -46,6 +51,16 @@ export default async function TenantHome() {
   }
   const lease = leases.find((item) => item.lease_id === session.leaseId) ?? leases[0];
   if (!lease) return <p data-v2-page={v2 ? "t-home" : undefined}>{t("i_empty")}</p>;
+  // B-090 slice 1, RT-HOME (TEN-54): under brand_v3 the 首頁 sentence and cards. While the tenant payment-history
+  // gate is not live for the org the v3 reader answers "off" and the existing body below renders inside the v3 shell.
+  if (v3) return <TenantHomeV3Route session={session} leaseId={lease.lease_id} company={lease.firm_name} legacy={() => legacyTenantHome(session, lease, v2, t)} />;
+  return legacyTenantHome(session, lease, v2, t);
+}
+
+type TenantLease = Awaited<ReturnType<typeof tenantLeases>>[number];
+
+/** The existing 首頁 body (brand_v3 OFF, and brand_v3 ON while the payment-history gate is off), unchanged. */
+async function legacyTenantHome(session: Session, lease: TenantLease, v2: boolean, t: ReturnType<typeof makeT>) {
   const [history, idCheck, reminderPreference] = await Promise.all([
     tenantPaymentHistory(session, lease.lease_id, { view: 'current' }),
     loadLeaseIdCheck(session, lease.lease_id),
