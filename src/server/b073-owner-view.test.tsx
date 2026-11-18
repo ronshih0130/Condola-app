@@ -272,6 +272,8 @@ function settingsMocks(v3: boolean, trace: string[], session: Session) {
     // R5-NOTIFY (MGT-135) pages: /m/notify and /m/account (flag OFF parity; ON link line).
     "@/components/v3/m/settings/notify-page": { NotifyV3Page: box("notify-v3-page") },
     "@/components/v3/m/settings/notify": requireHere("../components/v3/m/settings/notify"),
+    // R5-ACCT (MGT-137): under brand_v3 /m/account hands the request to the v3 page (b073-account.test.tsx covers it).
+    "@/components/v3/m/settings/account-page": { AccountV3Page: box("account-v3-page") },
     "next/headers": { cookies: async () => ({ get: () => undefined }) },
     "@/components/pending-submit": { PendingSubmit: box("pending-submit") },
     "@/i18n/staff-profile": requireHere("../i18n/staff-profile"),
@@ -291,11 +293,12 @@ async function renderPage(source: string, v3: boolean, session: Session, query: 
   return { html, trace: trace.filter(step => step !== "flag") };
 }
 
-test("MGT-138 / MGT-135 flag OFF: /m/settings, /m/roles, /m/notify and /m/account render byte-for-byte as before, same reads in the same order", async () => {
+test("MGT-138 / MGT-135 / MGT-137 flag OFF: /m/settings, /m/roles, /m/notify and /m/account render byte-for-byte as before, same reads in the same order", async () => {
   // R5-NOTIFY (MGT-135) extends this parity check to /m/notify and /m/account (the pages it changes under brand_v3).
   for (const file of ["src/app/m/settings/page.tsx", "src/app/m/roles/page.tsx", "src/app/m/notify/page.tsx", "src/app/m/account/page.tsx"]) {
     for (const session of [staff("admin"), staff("admin", "en"), { ...staff("admin"), environment: "sandbox" as const }, staff("manager"), staff("accountant")])
-      for (const query of [{}, { saved: "1", error: "errors.forbidden" }] as Record<string, string>[]) {
+      // R5-ACCT (MGT-137) adds today's enrollment / backup / name-result returns to the /m/account parity check.
+      for (const query of [{}, { saved: "1", error: "errors.forbidden" }, { enroll: "1", backup: "1", profile: "stale" }] as Record<string, string>[]) {
         assert.deepEqual(await renderPage(read(file), false, session, query), await renderPage(baseline(file), false, session, query), `${file} ${session.role} ${JSON.stringify(query)}`);
       }
   }
@@ -327,19 +330,16 @@ test("MGT-135-AC2 (brand_v3 ON): the old places show one link line to 通知設�
   assert.match(settings.html, /data-testid="org-contact-email"/);
   const off = await renderPage(read("src/app/m/settings/page.tsx"), false, staff("admin"));
   assert.match(off.html, /data-testid="tenant-lease-mail"/); assert.match(off.html, /data-testid="tenant-overdue-mail"/);
-  // /m/account: admin and manager see one line linking to /m/notify, no switches, and the prefs are not read.
-  for (const role of ["admin", "manager"] as const) {
+  // /m/account: R5-ACCT (MGT-137) replaces the whole page under brand_v3; its footer carries the same link line
+  // (b073-account.test.tsx). Here: no switches, and the prefs are not read.
+  for (const role of ["admin", "manager", "accountant", "maintenance"] as const) {
     const on = await renderPage(read("src/app/m/account/page.tsx"), true, staff(role));
-    assert.equal((on.html.match(/data-testid="notify-moved"/g) ?? []).length, 1, role);
-    assert.match(on.html, /提醒信的開關在「<a href="\/m\/notify">通知設定<\/a>」；全公司的兩步驟驗證規則在「團隊」。/);
+    assert.equal((on.html.match(/data-test="account-v3-page"/g) ?? []).length, 1, role);
     assert.doesNotMatch(on.html, /mail-lease|mail-overdue|i_mail_heading|actionEmailPrefs/);
     assert.ok(!on.trace.includes("member-prefs"), role);
     const offAccount = await renderPage(read("src/app/m/account/page.tsx"), false, staff(role));
-    assert.match(offAccount.html, /data-testid="mail-lease"/); assert.doesNotMatch(offAccount.html, /notify-moved/);
-  }
-  for (const role of ["accountant", "maintenance"] as const) {
-    const on = await renderPage(read("src/app/m/account/page.tsx"), true, staff(role));
-    assert.doesNotMatch(on.html, /notify-moved|mail-lease/, role);
+    if (role === "admin" || role === "manager") assert.match(offAccount.html, /data-testid="mail-lease"/);
+    assert.doesNotMatch(offAccount.html, /notify-moved|account-v3-page/);
   }
   // /m/notify under brand_v3 is the new page (not a link line).
   assert.match((await renderPage(read("src/app/m/notify/page.tsx"), true, staff("manager"))).html, /data-test="notify-v3-page"/);

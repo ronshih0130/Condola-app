@@ -21,10 +21,10 @@ import {
 } from "@/server/auth-actions";
 import { CHALLENGE_COOKIE, listSessions, mfaStatus, peekChallenge } from "@/server/auth";
 import { memberEmailPrefs } from "@/server/mail-settings";
-import { can, hasPersonalReminders } from "@/server/perms";
+import { can } from "@/server/perms";
 import { getSession } from "@/server/session";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
-import { NotifyMovedLine } from "@/components/v3/m/settings/notify";
+import { AccountV3Page } from "@/components/v3/m/settings/account-page";
 
 export const dynamic = "force-dynamic";
 
@@ -37,13 +37,14 @@ export default async function AccountPage({
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
+  // R5-ACCT (MGT-137): under brand_v3 this is 設定 › 我的帳號 over the same account functions and actions. The
+  // reminder switches (通知設定, MGT-135) and the company 2FA rule (團隊, MGT-133-AC7) are not on it. Flag OFF as before.
+  if (await brandV3EnabledForOrg(session.orgId)) return <AccountV3Page session={session} params={params} />;
   const showMailPrefs = session.kind === "staff" && (session.role === "admin" || session.role === "manager");
-  // R5-NOTIFY (MGT-135-AC2): under brand_v3 the reminder switches live on 通知設定; this page shows one link line instead.
-  const mailMoved = showMailPrefs && (await brandV3EnabledForOrg(session.orgId));
   const [sessions, factor, mailPrefs] = await Promise.all([
     listSessions(session.userId),
     mfaStatus(session.userId),
-    showMailPrefs && !mailMoved ? memberEmailPrefs(session.orgId, session.userId) : Promise.resolve(null),
+    showMailPrefs ? memberEmailPrefs(session.orgId, session.userId) : Promise.resolve(null),
   ]);
   const profile = session.kind === 'staff' && session.environment === 'live' ? await staffProfileView(session) : {state:'unavailable' as const};
   const profileCopy = staffProfileCopy(session.locale);
@@ -147,7 +148,7 @@ export default async function AccountPage({
               {t("i_save")}
             </button>
           </form>
-        ) : mailMoved && hasPersonalReminders(session) ? <NotifyMovedLine locale={session.locale} /> : null}
+        ) : null}
         <div className="card pad">
           <h3>{t("i_devices")}</h3>
           <form action={actionRevokeOthers}>
