@@ -207,7 +207,7 @@ test("MGT-138-AC3 route: same-origin JSON only; non-admin → HTTP 403; bad body
     body: typeof body === "string" ? body : JSON.stringify(body) }));
   for (const origin of ["http://evil.example", null]) {
     trace.length = 0; const res = await post({ field: "showName", value: false }, { origin });
-    assert.equal(res.status, 403); assert.deepEqual(trace, [], "cross-origin is refused before reading the session");
+    assert.equal(res.status, 403); assert.deepEqual(trace, ["consent:api", "session"], "consent guard first, then the session; cross-origin is refused before the body is read");
   }
   assert.equal((await post({ field: "showName", value: false }, { type: "text/plain" })).status, 415);
   for (const role of ["manager", "accountant", "maintenance"] as const) {
@@ -220,7 +220,7 @@ test("MGT-138-AC3 route: same-origin JSON only; non-admin → HTTP 403; bad body
   trace.length = 0;
   const ok = await post({ field: "showPhone", value: true });
   assert.equal(ok.status, 200); assert.deepEqual(await ok.json(), { privacy: { showName: true, showPhone: true } });
-  assert.deepEqual(trace, ["session", "consent:api", { field: "showPhone", value: true }]);
+  assert.deepEqual(trace, ["consent:api", "session", { field: "showPhone", value: true }]);
   save = async () => ({ ok: false, status: 500 }); assert.equal((await post({ field: "showPhone", value: true })).status, 500);
   save = async () => { throw new Error("boom"); }; trace.length = 0;
   assert.equal((await post({ field: "showPhone", value: true })).status, 500); assert.ok(trace.includes("logged"));
