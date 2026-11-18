@@ -172,13 +172,19 @@ test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before 
 // is written or audited, and the flag is read after consent and session (for the page: consent → session → flag first).
 const TENANT_BASE = "a0aa278e3e92732b066fdbd74bd8f7430d76df0b"; // origin/main before the B-090 slice 1 re-land
 const tenantCases = [
-  { path: "src/app/t/page.tsx", kind: "page" },
-  { path: "src/app/t/layout.tsx", kind: "layout" },
+  { path: "src/app/t/page.tsx", kind: "page", at: ["/t"] },
+  { path: "src/app/t/layout.tsx", kind: "layout", at: ["/t", "/t/pay", "/t/id"] },
+  // B-090 slice 2 (RT-PAY / RT-REPORT): 繳款, its 回報已繳 form (?report=1) and a bounced send (?report=1&error=…).
+  { path: "src/app/t/pay/page.tsx", kind: "page", at: ["/t/pay", "/t/pay?report=1", "/t/pay?report=1&error=errors.generic", "/t/pay?done=1"] },
 ] as const;
 const tenantV3Modules = ["@/components/v3/tenant/home-route", "@/components/v3/tenant/shell", "@/server/b090-tenant-shell",
-  "@/server/b090-tenant-home", "@/server/b090-tenant-home-reader"];
+  "@/server/b090-tenant-home", "@/server/b090-tenant-home-reader",
+  "@/components/v3/tenant/pay-route", "@/server/b090-tenant-pay", "@/server/b090-tenant-pay-reader"];
+// /t/pay reads its lease through this helper; each side runs its own revision of it, so the helper's reads are counted.
+const TENANT_LEASE_LIB = "src/lib/tenant-lease.ts";
 
-async function runTenantEntry(source: string, kind: "page" | "layout", path: string, fail: boolean) {
+async function runTenantEntry(source: string, kind: "page" | "layout", at: string, fail: boolean, libSource: string) {
+  const [path, query = ""] = at.split("?");
   const calls: string[] = [], lookups: string[] = [];
   const read = <T,>(name: string, value: T) => async () => { calls.push(name); return value; };
   const link = ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>;
@@ -195,7 +201,8 @@ async function runTenantEntry(source: string, kind: "page" | "layout", path: str
     "@/server/b017-custom-role-governance": { guardEffectiveSession: async (s: unknown) => { calls.push("guard"); return s; } },
     "@/server/brand-v2": { brandV2EnabledForOrg: read("brand_v2", true) },
     "@/server/line/tenant-entry": { tenantLineEntryEnabled: read("line", true) },
-    "@/server/queries": { tenantLeases: read("leases", [lease]), tenantLeaseMoney: read("lease_money", { lease: { rent: "1", deposit: "2", currency: "TWD", status: "active" }, dueMinor: 1 }) },
+    "@/server/queries": { tenantLeases: read("leases", [lease]), tenantLeaseMoney: read("lease_money", { lease: { rent: "1", deposit: "2", currency: "TWD", status: "active", place: "P 2F" }, dueMinor: 1, paidMinor: 0, currency: "TWD",
+      rentLines: [{ amount: "1" }], depositLines: [], utilityLines: [], otherLines: [] }) },
     "@/server/tenant-payment-history": { tenantPaymentHistory: read("payment_history", { state: "off" }) },
     "@/server/id-docs": { loadLeaseIdCheck: read("id_check", { ready: true }) },
     "@/server/id-sign-gate": { identityRequiredForSigningFor: read("id_required", false) },
@@ -204,10 +211,16 @@ async function runTenantEntry(source: string, kind: "page" | "layout", path: str
     "@/server/audit": { writeAudit: read("audit", null) },
     "@/components/notification-center-entry": { NotificationCenterEntry: stub("notification-entry") },
     "@/components/handover-entry": { HandoverEntry: stub("handover-entry") },
-    "@/components/tenant-payment-history": { TenantBillSummary: stub("bill-summary") },
+    "@/components/tenant-payment-history": { TenantBillSummary: stub("bill-summary"), TenantPaymentHistory: stub("history") },
     "@/components/brand": { BrandImage: () => null },
-    "@/server/actions": { actionPickLease: "/pick" },
-    "@/server/format": { moneyLabel: () => "NT$1" },
+    // The report action is passed to the v3 form only: touching it at all counts as a v3 read.
+    "@/server/actions": recordingDependency("v3:@/server/actions", calls, { actionPickLease: "/pick" }),
+    "@/components/v3/wait-mark": { WaitMark: stub("wait-mark") },
+    "@/components/dialogs": { PayDialog: stub("pay-dialog") },
+    "@/components/ui": { ErrorBanner: stub("error-banner"), chargeKey: (k: string) => k },
+    "@/components/tenant-payee": { TenantPayee: stub("payee") },
+    "@/server/pay-note": { tenantPayeeVisible: () => true, unsignedRentNoteKey: () => null },
+    "@/server/format": { moneyLabel: () => "NT$1", electricityMonthLabel: () => "m", signedMoney: () => "NT$1" },
     "@/server/sandbox-data": { displaySampleName: (x: string) => x },
     "@/i18n": { makeT: () => (key: string) => key },
     "@/i18n/lanes/reminders": { reminderCopy: () => ({ tenantTitle: "x" }) },
@@ -218,6 +231,11 @@ async function runTenantEntry(source: string, kind: "page" | "layout", path: str
     "next/link": { __esModule: true, default: link },
     "next/navigation": { redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); }, notFound: () => { calls.push("notFound"); throw new Error("NEXT_NOT_FOUND"); } },
   };
+  mocks["@/lib/tenant-lease"] = compile(libSource, (name: string) => {
+    if (name in mocks) return mocks[name];
+    if (name === "@/server/types") return {};
+    throw new Error(`Unmocked lease-helper dependency: ${name}`);
+  });
   const entry = compile(source, (name: string) => {
     if (name in mocks) return mocks[name];
     if ((tenantV3Modules as readonly string[]).includes(name)) return recordingDependency(`v3:${name}`, calls);
@@ -226,17 +244,21 @@ async function runTenantEntry(source: string, kind: "page" | "layout", path: str
   });
   calls.length = 0; // module-load accesses are not reads
   const Entry = entry.default as (props: unknown) => Promise<React.ReactElement>;
-  const html = renderToStaticMarkup(await (kind === "page" ? Entry({}) : Entry({ children: <main>page</main> })));
+  const searchParams = Promise.resolve(Object.fromEntries(new URLSearchParams(query)));
+  const html = renderToStaticMarkup(await (kind === "page" ? Entry({ searchParams }) : Entry({ children: <main>page</main> })));
   return { calls, lookups, html };
 }
 
-test("brand_v3 tenant 首頁 and layout (B-090): OFF and a throwing lookup add no v3 read, write or audit; flag after consent and session", async () => {
-  for (const { path, kind } of tenantCases) for (const at of kind === "page" ? ["/t"] : ["/t", "/t/pay", "/t/id"]) for (const fail of [false, true]) {
+test("brand_v3 tenant 首頁, 繳款 and layout (B-090): OFF and a throwing lookup add no v3 read, write or audit; flag after consent and session", async () => {
+  const baseLib = execFileSync("git", ["show", `${TENANT_BASE}:${TENANT_LEASE_LIB}`], { encoding: "utf8" });
+  for (const { path, kind, at: paths } of tenantCases) for (const at of paths) for (const fail of [false, true]) {
     const label = `${path} ${at} ${fail ? "lookup failure" : "flag OFF"}`;
-    const base = await runTenantEntry(execFileSync("git", ["show", `${TENANT_BASE}:${path}`], { encoding: "utf8" }), kind, at, fail);
-    const head = await runTenantEntry(read(path), kind, at, fail);
+    const base = await runTenantEntry(execFileSync("git", ["show", `${TENANT_BASE}:${path}`], { encoding: "utf8" }), kind, at, fail, baseLib);
+    const head = await runTenantEntry(read(path), kind, at, fail, read(TENANT_LEASE_LIB));
     assert.equal(head.html, base.html, `${label}: the legacy markup`);
-    assert.deepEqual(head.calls.filter(call => call !== "flag"), base.calls, `${label}: origin/main's reads, in order, plus only the flag lookup`);
+    // /t/pay already read the flag on origin/main (after its lease read); the 首頁 and the layout did not.
+    assert.deepEqual(head.calls.filter(call => call !== "flag"), base.calls.filter(call => call !== "flag"), `${label}: origin/main's reads, in order, plus only the flag lookup`);
+    assert.ok(base.calls.filter(call => call === "flag").length <= 1, label);
     assert.equal(head.calls.filter(call => call === "flag").length, 1, label);
     assert.ok(!head.calls.some(call => call.startsWith("read:v3:") || call === "write" || call === "audit" || call === "notFound"), `${label}: ${head.calls.join(",")}`);
     const flag = head.calls.indexOf("flag");
