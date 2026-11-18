@@ -276,8 +276,13 @@ test("B025 integrity: exact trade totals, version snapshots and sibling scans", 
       for (const sql of ["SELECT * FROM app.b025_profile_seals", "UPDATE app.b025_profile_seals SET bytes=bytes", "DELETE FROM app.b025_profile_seals", "TRUNCATE app.b025_profile_seals"])
         await assert.rejects(raw(sql, [], role), pgCode("42501"));
     }
-    for (const sql of ["UPDATE app.b025_profile_seals SET bytes=bytes", "DELETE FROM app.b025_profile_seals", "TRUNCATE app.b025_profile_seals"])
+    for (const sql of ["UPDATE app.b025_profile_seals SET bytes=bytes", "DELETE FROM app.b025_profile_seals"])
       await assert.rejects(db.query(sql), pgCode("55000"));
+    // B-065 P1 (app.b065_stamp_versions.seal_id) references this table, so a plain TRUNCATE is refused by that FK
+    // (0A000) before any trigger runs; with CASCADE the immutability triggers refuse it (55000). Either way nothing goes.
+    await assert.rejects(db.query("TRUNCATE app.b025_profile_seals"), pgCode("0A000"));
+    await assert.rejects(db.query("TRUNCATE app.b025_profile_seals CASCADE"), pgCode("55000"));
+    assert.equal((await db.query(`SELECT tgenabled FROM pg_trigger WHERE tgrelid='app.b025_profile_seals'::regclass AND tgname='b025_seals_no_truncate'`)).rows[0]?.tgenabled, "O");
     const catalog = (await db.query(`SELECT relrowsecurity FROM pg_class WHERE oid='app.b025_profile_seals'::regclass`)).rows[0];
     assert.equal(catalog.relrowsecurity, true);
     const readers = (await db.query(`SELECT prosecdef,proconfig FROM pg_proc WHERE oid='app.b025_read_profile_seal(uuid,uuid,uuid,integer)'::regprocedure`)).rows[0];

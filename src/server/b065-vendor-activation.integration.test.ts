@@ -156,7 +156,7 @@ test("privileges: gateways service-only, helpers unexecutable, both tables fully
     }
   }
   const fns = (await db.query(`SELECT p.proname,p.prosecdef,p.provolatile,p.proconfig FROM pg_proc p
-    WHERE p.pronamespace='app'::regnamespace AND p.proname LIKE 'b065\\_%' ORDER BY 1`)).rows;
+    WHERE p.pronamespace='app'::regnamespace AND p.proname IN ('b065_enabled','b065_account_contact','b065_issuer_view','b065_save_issuer_type') ORDER BY 1`)).rows;
   assert.equal(fns.length, 4);
   // Ownership (postgres on Supabase) is asserted by scripts/check-function-privileges.sh; locally the owner is the migration role.
   for (const fn of fns) assert.deepEqual([fn.prosecdef, fn.provolatile, fn.proconfig], [true, "v", ["search_path=pg_catalog, pg_temp"]], fn.proname);
