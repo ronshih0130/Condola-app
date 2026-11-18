@@ -826,3 +826,52 @@ test("B-059 (MGT-118) adds two service-only gateways, owner-only flag helper, fo
   assert.ok(allow.includes("# service-only: app.b059_assign_view(uuid,uuid,text,uuid,uuid)"));
   assert.ok(allow.includes("# service-only: app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])"));
 });
+
+test("B-065 phase B P1 adds three revoked append-only tables, eight service-only gateways and internal helpers, migration-owned (VEN-18)", () => {
+  const sql = read("supabase/migrations/20261118110000_b065_stamp.sql");
+  const code = sql.replace(/--[^\n]*/g, "");
+  const compact = sql.replace(/\s+/g, "");
+  const gateways = ["b065_stamp_view(text,uuid,boolean)", "b065_stamp_preview_by_grant(text,uuid,uuid)", "b065_receipt_stamp(text,uuid,boolean)",
+    "b065_receipt_stamp_by_grant(text,uuid,uuid)", "b065_save_stamp(text,uuid,boolean,uuid,text,text,text,text,integer[])",
+    "b065_save_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,integer[])", "b065_consent_stamp(text,uuid,boolean,uuid,text,text,text,text,text,integer[])",
+    "b065_consent_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,text,integer[])"];
+  const helpers = ["b065_svg_canonical(text)", "b065_stamp_version_guard()", "b065_stamp_consent_guard()", "b065_stamp_inputs(public.vendor_profiles)",
+    "b065_inputs_sha256(jsonb)", "b065_inputs_fit(jsonb)", "b065_art_meta_ok(text,text,text,integer[])", "b065_grant_enabled(uuid)",
+    "b065_stamp_account(text,uuid,boolean,boolean)", "b065_stamp_grant(text,uuid,uuid,boolean)", "b065_stamp_locks(uuid,uuid)",
+    "b065_stamp_state(uuid,uuid,public.vendor_profiles,text)",
+    "b065_stamp_write(text,text,uuid,uuid,uuid,uuid,public.vendor_profiles,uuid,text,text,text,text,text,integer[])"];
+  assert.deepEqual([...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)/g)].map(m => m[1]).sort(),
+    [...gateways, ...helpers].map(s => s.split("(")[0]).sort());
+  // Every function but the IMMUTABLE art check is a VOLATILE definer with the fixed search path; writers add lock_timeout.
+  assert.equal((sql.match(/VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp (?:SET lock_timeout='3s' )?AS/g) ?? []).length, gateways.length + helpers.length - 1);
+  assert.equal((sql.match(/SET lock_timeout='3s' AS/g) ?? []).length, 4);
+  assert.match(sql, /CREATE FUNCTION app\.b065_svg_canonical\(p_svg text\) RETURNS boolean\nLANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS/);
+  assert.doesNotMatch(code, /CREATE OR REPLACE|DROP|ALTER FUNCTION|ALTER TABLE public|ALTER TABLE app\.b0(?!65_stamp)|GRANT[^;]*\bON (?:TABLE )?(?:app|public)\.|READ ONLY|UPDATE public\.|DELETE FROM|INSERT INTO public\.platform_settings/i);
+  assert.equal((sql.match(/CREATE TABLE app\./g) ?? []).length, 3);
+  for (const table of ["app.b065_stamp_versions", "app.b065_stamp_consents", "app.b065_stamp_requests"]) {
+    assert.ok(sql.includes(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`), table);
+    assert.ok(sql.includes(`REVOKE ALL ON ${table} FROM PUBLIC,anon,authenticated,service_role;`), table);
+    assert.ok(sql.includes(`BEFORE UPDATE OR DELETE ON ${table}\nFOR EACH ROW EXECUTE FUNCTION app.b025_history_immutable();`), table);
+    assert.ok(sql.includes(`BEFORE TRUNCATE ON ${table}\nFOR EACH STATEMENT EXECUTE FUNCTION app.b025_history_immutable();`), table);
+  }
+  assert.match(read("scripts/check-function-privileges.sh"), /'app\.b065_stamp_versions','app\.b065_stamp_consents','app\.b065_stamp_requests'/);
+  for (const signature of gateways) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`), signature);
+    assert.ok(read("supabase/rpc-allowlist.txt").includes(`# service-only: app.${signature}`), signature);
+  }
+  for (const signature of helpers) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated,service_role;`), signature);
+    assert.ok(!compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}`), signature);
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`), signature);
+    assert.ok(!read("supabase/rpc-allowlist.txt").includes(`app.${signature.split("(")[0]}(`), signature);
+  }
+  assert.equal((compact.match(/GRANT/g) ?? []).length, gateways.length);
+  // Admission: the B-026 session or the B-025 document token hash; the per-org mutex and lock order are written down once.
+  assert.match(code, /app\.b026_account_actor\(p_session_hash\)/);
+  assert.match(code, /x\.token_hash=p_token_hash/);
+  assert.match(code, /pg_advisory_xact_lock\(hashtextextended\('b065\/stamp-req\/'\|\|p_org::text\|\|'\/'\|\|p_request::text,0\)\);\n END IF;\n PERFORM pg_advisory_xact_lock\(hashtextextended\('b065\/stamp-org\/'\|\|p_org::text,0\)\);\n PERFORM pg_advisory_xact_lock_shared\(hashtextextended\('b065\/issuer-org\/'\|\|p_org::text,0\)\);/);
+  assert.match(sql, /SET LOCAL lock_timeout='5s'/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-065 stamp gateway ACL\/config mismatch/);
+});

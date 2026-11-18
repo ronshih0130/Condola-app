@@ -142,3 +142,14 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # service-only: app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])
 # B-059 RLS helpers (schema app, not PostgREST): authenticated EXECUTE only so the RESTRICTIVE policies can call them.
 # rls-helper: app.b059_scoped_orgs() app.b059_visible_units() app.b059_own_members() app.b059_ticket_visible(uuid)
+
+# B-065 phase B P1 service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-065 stamp probe in scripts/check-function-privileges.sh.
+# service-only: app.b065_stamp_view(text,uuid,boolean)
+# service-only: app.b065_stamp_preview_by_grant(text,uuid,uuid)
+# service-only: app.b065_receipt_stamp(text,uuid,boolean)
+# service-only: app.b065_receipt_stamp_by_grant(text,uuid,uuid)
+# service-only: app.b065_save_stamp(text,uuid,boolean,uuid,text,text,text,text,integer[])
+# service-only: app.b065_save_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,integer[])
+# service-only: app.b065_consent_stamp(text,uuid,boolean,uuid,text,text,text,text,text,integer[])
+# service-only: app.b065_consent_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,text,integer[])

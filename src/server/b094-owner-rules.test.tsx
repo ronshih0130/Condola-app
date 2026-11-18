@@ -5,7 +5,7 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
-import { ownerRulesAvailable, ownerRulesPage } from "./b094-owner-rules";
+import { ownerRulesAvailable, ownerRulesPage, repairLimitState, type RepairLimitLine } from "./b094-owner-rules";
 import { ownerNavigationV3 } from "./nav-v3";
 import { RulesError, RulesLoading, RulesNoPerm, RulesView, repairPolicyHref } from "../components/v3/o/rules/rules";
 import { brandV3OwnerRulesCopy } from "../i18n/lanes/brand-v3-owner-rules";
@@ -26,8 +26,8 @@ const text = (html: string) => html.replace(/<[^>]+>/g, "");
 const ready: OwnerRuleView = { state: "ready", rule: "delegate_notify", revision: 0, changedAt: null };
 const firm = async () => ({ name: "安居物業" }) as never;
 const names = async () => [{ id: P1, name: "信義路 2 樓" }, { id: P2, name: "景興路套房" }, { id: P3, name: "松山路套房" }];
-const enabled = (effectiveMinor: string | null) => ({ state: "enabled" as const, propertyId: "", ownershipId: "", currency: "TWD", minorUnit: 0, defaultMinor: null,
-  defaultSource: "", overrideMinor: null, effectiveMinor, effectiveSource: "", verified: true, snapshot: "" });
+const enabled = (effectiveMinor: string | null, effectiveSource = "property_override", currency = "TWD", minorUnit = 0) => ({ state: "enabled" as const, propertyId: "", ownershipId: "",
+  currency, minorUnit, defaultMinor: null, defaultSource: "", overrideMinor: null, effectiveMinor, effectiveSource, verified: true, snapshot: "" });
 
 test("RO-RULES copy: the approved zh-TW strings (PR-023) and never 收款 or 入帳", () => {
   const zh = brandV3OwnerRulesCopy("zh-TW");
@@ -44,10 +44,10 @@ test("RO-RULES copy: the approved zh-TW strings (PR-023) and never 收款 or 入
 
 test("OWN-34-AC2/AC3: per-property repair limits with 「修改」, three renewal options, the stored one checked, the note; no solid primary", () => {
   const html = render(<RulesView locale="zh-TW" company="安居物業" rule="delegate_unless_lower" revision={3}
-    repairs={[{ propertyId: P1, name: "信義路 2 樓", minor: "5000", currency: "TWD", minorUnit: 0 }, { propertyId: P2, name: "景興路套房", minor: null, currency: "TWD", minorUnit: 0 }]} />);
+    repairs={[{ propertyId: P1, name: "信義路 2 樓", minor: "5000", currency: "TWD", minorUnit: 0, state: "owner" }, { propertyId: P2, name: "景興路套房", minor: null, currency: "TWD", minorUnit: 0, state: "pending" }]} />);
   const t = text(html);
   assert.match(t, /信義路 2 樓・NT\$5,000 以下直接修/);
-  assert.match(t, /景興路套房修改/, "a property without an effective limit shows its name and 「修改」, never a guessed amount");
+  assert.match(t, /景興路套房修改/, "a limit awaiting confirmation shows its name and 「修改」, never a guessed amount");
   assert.equal((html.match(/>修改</g) ?? []).length, 2);
   assert.ok(html.includes(`href="${repairPolicyHref(P1)}"`) && html.includes(`href="${repairPolicyHref(P2)}"`));
   assert.match(t, /交給管理方，只要通知我.*租金不降就交給管理方，要降價才問我.*每次都問我/);
@@ -89,7 +89,7 @@ test("loader: off/forbidden/unavailable pass through; policies off or recovery-o
     policy: async (_s, id) => { seen.push(id); return id === P1 ? enabled("5000") : { state: "recovery_only" }; },
   });
   assert.deepEqual(seen, [P1, P2]);
-  assert.deepEqual(page, { state: "ready", rule: ready, repairs: [{ propertyId: P1, name: "信義路 2 樓", minor: "5000", currency: "TWD", minorUnit: 0 }], company: "安居物業" });
+  assert.deepEqual(page, { state: "ready", rule: ready, repairs: [{ propertyId: P1, name: "信義路 2 樓", minor: "5000", currency: "TWD", minorUnit: 0, state: "owner" }], company: "安居物業" });
   for (const bad of ["unavailable", "busy"] as const)
     assert.deepEqual(await ownerRulesPage(owner, { rule: async () => ready, names, entries: async (_s, ids) => ids,
       policy: async (_s, id) => id === P2 ? { state: bad } : enabled("1") }), { state: "unavailable" });
@@ -173,4 +173,75 @@ test("client bundle: rule-choice reaches no server module (db, pg, node:*) throu
   assert.deepEqual(bad, []);
   assert.ok([...seen].some(f => f.endsWith("b091-owner-rules-values.ts")));
   assert.ok(![...seen].some(f => f.endsWith("b091-owner-rules.ts")), "the server module must not be in the client graph");
+});
+
+// B-113 / R8-OWNRULE, OWN-34-AC6: which limit applies when the owner has not set one (B-021 facts, app a0aa278e).
+const line = (state: RepairLimitLine["state"], minor: string | null, extra: Partial<RepairLimitLine> = {}): RepairLimitLine =>
+  ({ propertyId: P1, name: "景興路套房", minor, currency: "TWD", minorUnit: 2, state, ...extra });
+const rules = (repairs: RepairLimitLine[]) => render(<RulesView locale="zh-TW" company="安居物業" rule="delegate_notify" revision={0} repairs={repairs} />);
+
+test("OWN-34-AC6 copy: verbatim from stories.md § Round 8 and the approved frame; never 收款 or 入帳", () => {
+  const zh = brandV3OwnerRulesCopy("zh-TW");
+  assert.equal(zh.regional("景興路套房", "NT$5,000"), "景興路套房・你還沒設定，目前用預設：NT$5,000 以下直接修");
+  assert.equal(zh.zero("仁愛路 6F"), "仁愛路 6F・每一筆都會先問你");
+  assert.equal(zh.unset("景興路套房"), "景興路套房・還沒設定上限，請先設定，廠商才能送估價");
+  assert.equal(zh.set, "設定");
+  assert.doesNotMatch(zh.regional("a", "b") + zh.zero("c") + zh.unset("d") + zh.set, /收款|入帳|任何維修都會先問你/);
+  const en = brandV3OwnerRulesCopy("en");
+  assert.equal(typeof en.regional("a", "b"), "string");
+  assert.deepEqual(Object.keys(en).sort(), Object.keys(zh).sort());
+});
+
+test("OWN-34-AC6 state: B-021's resolution maps to the four states; 0 is a limit, NULL is not set; confirmations stay name-only", () => {
+  assert.equal(repairLimitState("property_override", "5000"), "owner");
+  assert.equal(repairLimitState("owner_default", "600000"), "owner");
+  assert.equal(repairLimitState("property_override", "0"), "zero");
+  assert.equal(repairLimitState("owner_default", "0"), "zero");
+  assert.equal(repairLimitState("regional_default", "500000"), "regional");
+  assert.equal(repairLimitState("configuration_required", null), "unset");
+  for (const source of ["owner_default_confirmation_required", "legacy_confirmation_required", "", "unknown"]) assert.equal(repairLimitState(source, null), "pending", source);
+  assert.equal(repairLimitState("regional_default", null), "pending", "a regional source without an amount never guesses one");
+  assert.equal(repairLimitState("property_override", null), "pending");
+});
+
+test("OWN-34-AC6 render: the four states, each with its own sentence and link; only 「請先設定」 has a solid 「設定」", () => {
+  const owned = rules([line("owner", "500000", { name: "信義路 2 樓" })]);
+  assert.match(text(owned), /信義路 2 樓・NT\$5,000 以下直接修修改/);
+  assert.doesNotMatch(owned, /owner-primary/);
+  const zero = rules([line("zero", "0", { name: "仁愛路 6F" })]);
+  assert.match(text(zero), /修繕仁愛路 6F・每一筆都會先問你修改續租/);
+  assert.doesNotMatch(text(zero), /NT\$0/, "0 is said as 「每一筆都會先問你」, not an amount");
+  const regional = rules([line("regional", "500000")]);
+  assert.match(text(regional), /景興路套房・你還沒設定，目前用預設：NT\$5,000 以下直接修設定/);
+  assert.match(regional, /<a class="rules-edit" href="\/o\/repair-policy\/[^"]+">設定<\/a>/, "「設定」 is a text link");
+  assert.doesNotMatch(regional, /owner-primary|>修改</);
+  const unset = rules([line("unset", null)]);
+  assert.match(text(unset), /景興路套房・還沒設定上限，請先設定，廠商才能送估價設定/);
+  assert.match(unset, new RegExp(`<a class="owner-action owner-primary" href="${repairPolicyHref(P1).replace(/[/]/g, "\\/")}">設定</a>`));
+  assert.equal((unset.match(/owner-primary/g) ?? []).length, 1);
+  const pending = rules([line("pending", null)]);
+  assert.match(text(pending), /景興路套房修改/);
+  assert.doesNotMatch(text(pending), /NT\$|預設|請先設定|每一筆/);
+  // Mixed page: one line per property, in order, with the matching data-limit.
+  const all = rules([line("owner", "500000", { propertyId: P1, name: "信義路 2 樓" }), line("regional", "500000", { propertyId: P2 }), line("zero", "0", { propertyId: P3, name: "仁愛路 6F" })]);
+  assert.deepEqual([...all.matchAll(/data-limit="([a-z]+)"/g)].map(m => m[1]), ["owner", "regional", "zero"]);
+  assert.doesNotMatch(text(all), /任何維修都會先問你/);
+});
+
+test("OWN-34-AC6 amount: the regional default comes from the line's own amount, currency and minor unit, never a constant", () => {
+  assert.match(text(rules([line("regional", "500000", { minorUnit: 2 })])), /目前用預設：NT\$5,000 以下直接修/);
+  assert.match(text(rules([line("regional", "5000", { minorUnit: 0 })])), /目前用預設：NT\$5,000 以下直接修/);
+  assert.match(text(rules([line("regional", "300000", { minorUnit: 2 })])), /目前用預設：NT\$3,000 以下直接修/);
+  assert.match(text(rules([line("regional", "12345", { currency: "USD", minorUnit: 2 })])), /目前用預設：USD 123\.45 以下直接修/);
+  assert.doesNotMatch(read("src/components/v3/o/rules/rules.tsx") + read("src/server/b094-owner-rules.ts"), /500000|5,000|5000/, "no hard-coded default");
+});
+
+test("OWN-34-AC6 loader: the view's effective source decides each line's state; one property each", async () => {
+  const views: Record<string, ReturnType<typeof enabled>> = {
+    [P1]: enabled("0", "owner_default"), [P2]: enabled("500000", "regional_default", "TWD", 2), [P3]: enabled(null, "configuration_required", "USD", 2),
+  };
+  const page = await ownerRulesPage(owner, { rule: async () => ready, names, firm, entries: async (_s, ids) => ids, policy: async (_s, id) => views[id] });
+  assert.ok(page.state === "ready");
+  assert.deepEqual(page.repairs.map(r => [r.propertyId, r.state, r.minor, r.currency, r.minorUnit]),
+    [[P1, "zero", "0", "TWD", 0], [P2, "regional", "500000", "TWD", 2], [P3, "unset", null, "USD", 2]]);
 });

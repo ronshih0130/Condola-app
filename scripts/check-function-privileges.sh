@@ -608,6 +608,66 @@ BEGIN
   RAISE EXCEPTION 'B-059 restrictive policies missing';
  END IF;
 END $b059$;
+-- B-065 phase B P1 stamp gateways (service-only; writers also lock_timeout=3s), internal helpers with no role EXECUTE,
+-- the IMMUTABLE art check; three private tables with RLS on and no application privileges.
+DO $b065_stamp$
+DECLARE signature text; fn record; role_name text; table_name text; gateway boolean; writer boolean;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b065_stamp_view(text,uuid,boolean)',
+  'app.b065_stamp_preview_by_grant(text,uuid,uuid)',
+  'app.b065_receipt_stamp(text,uuid,boolean)',
+  'app.b065_receipt_stamp_by_grant(text,uuid,uuid)',
+  'app.b065_save_stamp(text,uuid,boolean,uuid,text,text,text,text,integer[])',
+  'app.b065_save_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,integer[])',
+  'app.b065_consent_stamp(text,uuid,boolean,uuid,text,text,text,text,text,integer[])',
+  'app.b065_consent_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,text,integer[])',
+  'app.b065_stamp_version_guard()',
+  'app.b065_stamp_consent_guard()',
+  'app.b065_stamp_inputs(public.vendor_profiles)',
+  'app.b065_inputs_sha256(jsonb)',
+  'app.b065_inputs_fit(jsonb)',
+  'app.b065_art_meta_ok(text,text,text,integer[])',
+  'app.b065_grant_enabled(uuid)',
+  'app.b065_stamp_account(text,uuid,boolean,boolean)',
+  'app.b065_stamp_grant(text,uuid,uuid,boolean)',
+  'app.b065_stamp_locks(uuid,uuid)',
+  'app.b065_stamp_state(uuid,uuid,public.vendor_profiles,text)',
+  'app.b065_stamp_write(text,text,uuid,uuid,uuid,uuid,public.vendor_profiles,uuid,text,text,text,text,text,integer[])'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  gateway:=signature ~ '^app\.b065_(stamp_view|stamp_preview_by_grant|receipt_stamp|receipt_stamp_by_grant|save_stamp|save_stamp_by_grant|consent_stamp|consent_stamp_by_grant)\(';
+  writer:=signature ~ '^app\.b065_(save|consent)_stamp';
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM (CASE WHEN writer THEN ARRAY['search_path=pg_catalog, pg_temp','lock_timeout=3s']
+     ELSE ARRAY['search_path=pg_catalog, pg_temp'] END)
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> gateway
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-065 stamp gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b065_svg_canonical(text)'::regprocedure;
+ IF fn.prosecdef OR fn.provolatile<>'i' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR has_function_privilege('service_role',fn.oid,'EXECUTE') OR has_function_privilege('anon',fn.oid,'EXECUTE')
+  OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-065 stamp gateway ACL/config mismatch: app.b065_svg_canonical(text)';
+ END IF;
+ FOREACH table_name IN ARRAY ARRAY['app.b065_stamp_versions','app.b065_stamp_consents','app.b065_stamp_requests'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=table_name::regclass) THEN
+   RAISE EXCEPTION 'B-065 stamp table RLS is off: %',table_name;
+  END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'B-065 stamp table privilege leaked to % on %',role_name,table_name;
+   END IF;
+  END LOOP;
+ END LOOP;
+END $b065_stamp$;
 SQL
 
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"
