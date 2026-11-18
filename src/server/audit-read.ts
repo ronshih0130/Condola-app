@@ -407,7 +407,7 @@ export function actionKey(action: string, eventType: string | null) {
   return "i_audit_act_insert";
 }
 
-type RawAudit = {
+export type RawAudit = {
   id: string;
   occurred_key: string;
   occurred_at: Date | string;
@@ -462,7 +462,7 @@ export function presentAudit(row: RawAudit, hit: RecordHit | null): AuditView {
   };
 }
 
-const AUDIT_SELECT = `SELECT a.id::text AS id,
+export const AUDIT_SELECT = `SELECT a.id::text AS id,
        to_char(a.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_key,
        a.occurred_at,
        coalesce(nullif(btrim(p.display_name), ''), '') AS actor_name,
@@ -644,7 +644,7 @@ function lookupHit(row: LookupHit): RecordHit {
   return hit;
 }
 
-async function lookupRecords(
+export async function lookupRecords(
   client: Parameters<typeof many>[0],
   orgId: string,
   rows: RawAudit[],
