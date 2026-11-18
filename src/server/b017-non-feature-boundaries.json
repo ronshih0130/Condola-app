@@ -228,8 +228,8 @@
     "sha256": "eefecbedd8e77f35a930ba0d24893d549b562e19ed7f32d957330fb243098e87"
   },
   "src/app/m/account/page.tsx#AccountPage": {
-    "reason": "Account identity and consent bootstrap; independent from organization custom grants; B-073 R5-NOTIFY reads only the org brand flag to replace the reminder form with a link line",
-    "sha256": "a777ceeedcc04644935291246c46836447fbe5be82f9435978ae3127dbe6dea3"
+    "reason": "Account identity and consent bootstrap; independent from organization custom grants; B-073 R5-ACCT reads only the org brand flag to hand the request to AccountV3Page (src/components/v3/m/settings/account-page.tsx), which reads the caller's own account through accountRead (guardEffectiveSession(session, null) first) and posts to today's account actions unchanged",
+    "sha256": "fd06fa85a669b02e23d7e01d1c1289906e8a3f0b0d1bb8999392dd6396d9e558"
   },
   "src/app/signup/firm/page.tsx#FirmPage": {
     "reason": "Account identity and consent bootstrap; independent from organization custom grants",
