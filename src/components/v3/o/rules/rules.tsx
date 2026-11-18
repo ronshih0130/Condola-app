@@ -40,6 +40,22 @@ export function RulesNoPerm({ locale }: { locale: Locale }) {
   </section>;
 }
 
+/**
+ * OWN-34-AC2 / AC6: one sentence per property for the limit that applies now. Not set + regional default → that
+ * default's amount (from the view, never hard-coded) with 「設定」; NT$0 → 「每一筆都會先問你」; no regional default →
+ * 「請先設定」 with a solid 「設定」 (an estimate cannot be filed then); awaiting confirmation → the name only.
+ */
+function repairLine(copy: ReturnType<typeof brandV3OwnerRulesCopy>, line: RepairLimitLine) {
+  const amount = () => ownerEstimateAmount(line.minor as string, line.currency, line.minorUnit);
+  switch (line.state) {
+    case "owner": return line.minor === null ? line.name : copy.limit(line.name, amount());
+    case "regional": return line.minor === null ? line.name : copy.regional(line.name, amount());
+    case "zero": return copy.zero(line.name);
+    case "unset": return copy.unset(line.name);
+    default: return line.name;
+  }
+}
+
 export function RulesView({ locale, company, repairs, rule, revision }: {
   locale: Locale; company: string; repairs: RepairLimitLine[]; rule: RenewalRule; revision: number;
 }) {
@@ -48,9 +64,11 @@ export function RulesView({ locale, company, repairs, rule, revision }: {
     <Title locale={locale} />
     {repairs.length > 0 && <div className="rules-card" data-testid="owner-rules-repairs">
       <h3 className="rules-section">{copy.repairs}</h3>
-      <ul className="rules-lines">{repairs.map(line => <li key={line.propertyId} className="rules-line">
-        <span>{line.minor === null ? line.name : copy.limit(line.name, ownerEstimateAmount(line.minor, line.currency, line.minorUnit))}</span>
-        <Link className="rules-edit" href={repairPolicyHref(line.propertyId)}>{copy.edit}</Link>
+      <ul className="rules-lines">{repairs.map(line => <li key={line.propertyId} className="rules-line" data-limit={line.state}>
+        <span>{repairLine(copy, line)}</span>
+        <Link className={line.state === "unset" ? "owner-action owner-primary" : "rules-edit"} href={repairPolicyHref(line.propertyId)}>
+          {line.state === "regional" || line.state === "unset" ? copy.set : copy.edit}
+        </Link>
       </li>)}</ul>
     </div>}
     <div className="rules-card">
