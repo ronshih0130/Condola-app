@@ -1,0 +1,24 @@
+/* R5-AUDIT (設定 › 操作紀錄, MGT-136 company log): loaded only in the brand_v3 branch of /m/audit. Tokens only. */
+html[data-brand="v2"][data-brand-v3] .v3-audit{ display:grid; gap:16px; min-width:0; max-width:1120px; }
+html[data-brand="v2"][data-brand-v3] .v3-audit :is(p,ol){ margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-card{ display:grid; gap:12px; align-content:start; min-width:0; padding:20px 24px; background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); }
+html[data-brand="v2"][data-brand-v3] .v3-audit-card p{ line-height:1.7; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-filters{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-filters .inp{ min-height:44px; max-width:12em; min-width:0; padding:0 12px; border:1px solid var(--c-border-strong); border-radius:var(--r-sm); background:var(--c-surface); color:var(--c-text); font:inherit; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-range{ display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-audit .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; min-width:44px; padding:10px 16px; border:1px solid var(--c-primary); border-radius:var(--r-btn); background:var(--c-surface); color:var(--c-primary); text-decoration:none; font:inherit; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-audit .btn.txt{ min-width:0; padding:10px 8px; border-color:transparent; background:transparent; color:var(--c-brand-ink); text-decoration:underline; text-underline-offset:3px; }
+html[data-brand="v2"][data-brand-v3] .v3-audit :is(a,button,select,input):focus-visible{ outline:2px solid var(--c-focus); outline-offset:3px; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-list{ display:flex; flex-direction:column; padding:0; list-style:none; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-entry{ padding:12px 0; border-top:1px solid var(--c-divider); line-height:1.6; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-entry:first-child{ border-top:0; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-meta{ display:block; color:var(--c-text-2); font-size:.85em; font-variant-numeric:tabular-nums; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-empty{ display:grid; justify-items:start; gap:4px; padding:12px 0; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-pager{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-audit-skeleton{ display:block; height:20px; border-radius:var(--r-sm); background:var(--c-surface-2); }
+@media (max-width:600px){
+  html[data-brand="v2"][data-brand-v3] .v3-audit-card{ padding:16px; }
+  html[data-brand="v2"][data-brand-v3] .v3-audit-filters .inp{ max-width:none; flex:1 1 100%; }
+  html[data-brand="v2"][data-brand-v3] .v3-audit-range{ flex:1 1 100%; }
+  html[data-brand="v2"][data-brand-v3] .v3-audit-range .inp{ flex:1 1 0; }
+}
