@@ -113,6 +113,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/repairs/reopen/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/reset-flash/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/signup/unit-qr/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/team-security/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/tenant-directory/edit/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/tickets/photos/[id]/route.ts:1 | HTTP handler executed above |
 | src/app/api/tickets/photos/batch/route.ts:1 | Enumerated only; outside representative selection |
