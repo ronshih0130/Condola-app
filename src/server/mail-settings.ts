@@ -65,13 +65,25 @@ export async function orgMailSettings(orgId: string) {
 
 export async function saveOrgMailSettings(
   session: Session,
-  input: { tenantLease: boolean; tenantOverdue: boolean; contactEmail: string; contactPhone: string },
+  input: { tenantLease: boolean | null; tenantOverdue: boolean | null; contactEmail: string; contactPhone: string },
 ) {
   session = await guardEffectiveSession(session, "settings.edit");
   assertPerm(session, "settings.edit");
   const email = input.contactEmail.trim() ? normalizeEmail(input.contactEmail) : null;
   if (input.contactEmail.trim() && !email) throw new FlowError("errors.email");
   const phone = input.contactPhone.trim().slice(0, 40);
+  if (input.tenantLease === null || input.tenantOverdue === null) {
+    // R5-NOTIFY (brand_v3): the contact fields only; the tenant switches are saved on 通知設定 and kept as stored.
+    await query(
+      `UPDATE organizations
+          SET contact_email = $2,
+              contact_phone = NULLIF($3, ''),
+              updated_at = now()
+        WHERE id = $1`,
+      [session.orgId, email, phone],
+    );
+    return;
+  }
   await query(
     `UPDATE organizations
         SET contact_email = $2,
