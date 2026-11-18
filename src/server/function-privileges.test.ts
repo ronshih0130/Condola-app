@@ -785,13 +785,13 @@ test("B-059 (MGT-118) adds two service-only gateways, owner-only flag helper, fo
   const compact = sql.replace(/\s+/g, "");
   const code = sql.replace(/--[^\n]*/g, "");
   assert.deepEqual([...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)/g)].map(m => m[1]),
-    ["b059_flag_on", "b059_scoped_orgs", "b059_visible_units", "b059_own_members", "b059_visible_tickets", "b059_assign_view", "b059_assign_save"]);
+    ["b059_flag_on", "b059_scoped_orgs", "b059_visible_units", "b059_own_members", "b059_ticket_visible", "b059_assign_view", "b059_assign_save"]);
   for (const signature of ["b059_assign_view(uuid,uuid,text,uuid,uuid)", "b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])"]) {
     assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
     assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
   }
-  assert.ok(compact.includes("REVOKEALLONFUNCTIONapp.b059_flag_on(uuid),app.b059_scoped_orgs(),app.b059_visible_units(),app.b059_own_members(),app.b059_visible_tickets()FROMPUBLIC,anon,authenticated,service_role;"));
-  assert.ok(compact.includes("GRANTEXECUTEONFUNCTIONapp.b059_scoped_orgs(),app.b059_visible_units(),app.b059_own_members(),app.b059_visible_tickets()TOauthenticated;"));
+  assert.ok(compact.includes("REVOKEALLONFUNCTIONapp.b059_flag_on(uuid),app.b059_scoped_orgs(),app.b059_visible_units(),app.b059_own_members(),app.b059_ticket_visible(uuid)FROMPUBLIC,anon,authenticated,service_role;"));
+  assert.ok(compact.includes("GRANTEXECUTEONFUNCTIONapp.b059_scoped_orgs(),app.b059_visible_units(),app.b059_own_members(),app.b059_ticket_visible(uuid)TOauthenticated;"));
   assert.equal((code.match(/\bGRANT\b/g) ?? []).length, 3);
   assert.equal((sql.match(/SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 7);
   // Only new tables; RLS on and no grant to any application role.
@@ -803,6 +803,10 @@ test("B-059 (MGT-118) adds two service-only gateways, owner-only flag helper, fo
   assert.equal((code.match(/CREATE POLICY/g) ?? []).length, 2);
   assert.deepEqual([...code.matchAll(/ALTER TABLE ([\w.]+)/g)].map(m => m[1]), ["app.b059_unit_assignments", "app.b059_assign_commands"]);
   assert.doesNotMatch(code, /DROP |ALTER POLICY|DISABLE ROW LEVEL|CREATE OR REPLACE/i);
+  // Codex r1 Part 1: the ticket policy reads every helper through an InitPlan sublink; the photo policy has NO sublink
+  // (42P17 on ticket_attachments) and only per-row O(1) calls.
+  assert.match(code, /ON public\.maintenance_tickets AS RESTRICTIVE TO authenticated\s+USING \(NOT \(org_id = ANY\(\(SELECT app\.b059_scoped_orgs\(\)\)::uuid\[\]\)\)\s+OR coalesce\(unit_id = ANY\(\(SELECT app\.b059_visible_units\(\)\)::uuid\[\]\),false\)\s+OR coalesce\(assigned_member_id = ANY\(\(SELECT app\.b059_own_members\(\)\)::uuid\[\]\),false\)\);/);
+  assert.match(code, /ON public\.ticket_attachments AS RESTRICTIVE TO authenticated\s+USING \(NOT \(org_id = ANY\(app\.b059_scoped_orgs\(\)\)\) OR app\.b059_ticket_visible\(ticket_id\)\);/);
   // The flag seed is OFF and never overwritten; the helpers only ever read the caller's own rows.
   assert.match(sql, /VALUES \('maint_unit_assign', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\)\nON CONFLICT \(key\) DO NOTHING;/);
   assert.match(sql, /JOIN public\.org_members m ON m\.user_id=auth\.uid\(\) AND m\.role='maintenance' AND m\.status='active'/);

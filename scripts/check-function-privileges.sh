@@ -587,7 +587,7 @@ BEGIN
    RAISE EXCEPTION 'B-059 gateway ACL/config mismatch: %', sig;
   END IF;
  END LOOP;
- FOREACH sig IN ARRAY ARRAY['app.b059_scoped_orgs()','app.b059_visible_units()','app.b059_own_members()','app.b059_visible_tickets()','app.b059_flag_on(uuid)'] LOOP
+ FOREACH sig IN ARRAY ARRAY['app.b059_scoped_orgs()','app.b059_visible_units()','app.b059_own_members()','app.b059_ticket_visible(uuid)','app.b059_flag_on(uuid)'] LOOP
   SELECT * INTO STRICT fn FROM pg_proc WHERE oid=sig::regprocedure;
   IF NOT fn.prosecdef OR fn.provolatile<>'s' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
    OR has_function_privilege('anon',fn.oid,'EXECUTE') OR has_function_privilege('service_role',fn.oid,'EXECUTE')

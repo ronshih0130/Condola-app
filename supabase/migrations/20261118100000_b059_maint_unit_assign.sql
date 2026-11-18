@@ -6,8 +6,9 @@
 --  * NEW service-only VOLATILE SECURITY DEFINER gateways app.b059_assign_view / app.b059_assign_save
 --    (search_path=pg_catalog,pg_temp; EXECUTE to service_role only). Admin/manager only (AC1, AC7); the target is a
 --    maintenance member, or a pending maintenance invitation, of the same organization (AC2, GS-24 「邀請中」 rows).
---  * NEW statement-scoped STABLE definer helpers (b017_denied_orgs pattern: no argument, the caller's own rows only,
---    EXECUTE to authenticated so RLS can call them) and two NEW RESTRICTIVE policies: one on
+--  * NEW STABLE definer helpers (b017_denied_orgs pattern: the caller's own rows only, EXECUTE to authenticated so RLS
+--    can call them; on maintenance_tickets each is an InitPlan, once per statement; on ticket_attachments, where a
+--    sublink recurses, per row but O(1)) and two NEW RESTRICTIVE policies: one on
 --    public.maintenance_tickets and one on public.ticket_attachments. With the flag OFF the helpers return an empty
 --    array and every row passes, so every existing query keeps its text and its result (flag-OFF parity).
 --    With the flag ON for the organization, an active maintenance member sees (and can update) only tickets on
@@ -34,6 +35,7 @@ CREATE UNIQUE INDEX b059_unit_assignments_invite_unit_key ON app.b059_unit_assig
 CREATE INDEX b059_unit_assignments_member_idx ON app.b059_unit_assignments (member_id) WHERE member_id IS NOT NULL;
 CREATE INDEX b059_unit_assignments_invitation_idx ON app.b059_unit_assignments (invitation_id) WHERE invitation_id IS NOT NULL;
 CREATE INDEX b059_unit_assignments_unit_idx ON app.b059_unit_assignments (unit_id);
+CREATE INDEX b059_unit_assignments_org_unit_idx ON app.b059_unit_assignments (org_id, unit_id);
 
 -- Every request id is reserved with its outcome: a retry replays the stored result; another actor or payload under
 -- the same id is a conflict and never writes.
@@ -68,7 +70,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 $$;
 
 -- RLS helpers (b017_denied_orgs pattern). No argument: only the caller's (auth.uid()) own memberships, so there is
--- no organization oracle. Each is one statement-scoped initplan in the policies below.
+-- no organization oracle. The policies below call each one inside a scalar sublink, `(SELECT app.fn())`, so each is an
+-- uncorrelated InitPlan: evaluated at most once per statement, never per row (Codex r1 B-059 Part 1). The plpgsql
+-- bodies read each inner helper into a variable once (a STABLE call in a WHERE clause would not be memoised).
 -- The organizations where the caller is an ACTIVE maintenance member and maint_unit_assign is ON. With the platform
 -- row disabled (the seeded default) this is the empty array.
 CREATE FUNCTION app.b059_scoped_orgs() RETURNS uuid[]
@@ -84,42 +88,71 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 $$;
 -- Units assigned to the caller in a scoped organization: rows keyed by the caller's member row, and rows saved while
 -- the caller was still an invitation that the caller has since accepted (GS-24: 邀請中 people can be assigned ahead).
+-- Index use: b059_unit_assignments_member_unit_key / _invite_unit_key (org_id, member_id|invitation_id, unit_id).
 CREATE FUNCTION app.b059_visible_units() RETURNS uuid[]
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
- SELECT coalesce(array_agg(DISTINCT a.unit_id),ARRAY[]::uuid[])
- FROM app.b059_unit_assignments a
- WHERE a.org_id=ANY(app.b059_scoped_orgs())
-  AND (EXISTS (SELECT 1 FROM public.org_members m WHERE m.id=a.member_id AND m.org_id=a.org_id AND m.user_id=auth.uid())
-   OR EXISTS (SELECT 1 FROM public.invitations i WHERE i.id=a.invitation_id AND i.org_id=a.org_id
-     AND i.status='accepted' AND i.accepted_by=auth.uid()))
-$$;
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE orgs uuid[] := app.b059_scoped_orgs(); result uuid[];
+BEGIN
+ IF cardinality(orgs)=0 THEN RETURN ARRAY[]::uuid[]; END IF;
+ SELECT coalesce(array_agg(DISTINCT a.unit_id),ARRAY[]::uuid[]) INTO result FROM (
+  SELECT a.unit_id FROM app.b059_unit_assignments a
+  JOIN public.org_members m ON m.id=a.member_id AND m.org_id=a.org_id AND m.user_id=auth.uid()
+  WHERE a.org_id=ANY(orgs)
+  UNION ALL
+  SELECT a.unit_id FROM app.b059_unit_assignments a
+  JOIN public.invitations i ON i.id=a.invitation_id AND i.org_id=a.org_id AND i.status='accepted' AND i.accepted_by=auth.uid()
+  WHERE a.org_id=ANY(orgs)) a;
+ RETURN result;
+END $$;
 -- The caller's own member rows in scoped organizations (a ticket explicitly assigned to them stays visible, AC5).
 CREATE FUNCTION app.b059_own_members() RETURNS uuid[]
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
- SELECT coalesce(array_agg(m.id),ARRAY[]::uuid[]) FROM public.org_members m
- WHERE m.user_id=auth.uid() AND m.org_id=ANY(app.b059_scoped_orgs())
-$$;
--- Tickets in the caller's scoped organizations that the ticket policy shows them (photo rows follow their ticket).
--- Only rows the caller can already read through the ticket policy, so this is no oracle. Each array is read once.
-CREATE FUNCTION app.b059_visible_tickets() RETURNS uuid[]
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
- WITH v AS (SELECT app.b059_scoped_orgs() orgs, app.b059_visible_units() units, app.b059_own_members() members)
- SELECT coalesce(array_agg(t.id),ARRAY[]::uuid[]) FROM public.maintenance_tickets t CROSS JOIN v
- WHERE t.org_id=ANY(v.orgs)
-  AND (coalesce(t.unit_id=ANY(v.units),false) OR coalesce(t.assigned_member_id=ANY(v.members),false))
-$$;
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE orgs uuid[] := app.b059_scoped_orgs(); result uuid[];
+BEGIN
+ IF cardinality(orgs)=0 THEN RETURN ARRAY[]::uuid[]; END IF;
+ SELECT coalesce(array_agg(m.id),ARRAY[]::uuid[]) INTO result FROM public.org_members m
+ WHERE m.user_id=auth.uid() AND m.org_id=ANY(orgs);
+ RETURN result;
+END $$;
+-- Photo rows (Codex r1 B-059 Part 1): per row, one O(1) indexed check of THIS row's ticket, never an array of tickets.
+-- True when the ticket is on a unit assigned to the caller (member row or accepted invitation; index
+-- b059_unit_assignments_org_unit_idx) or explicitly assigned to the caller (org_members PK). Called by the photo policy
+-- only after the row's org is known to be scoped. Answers only about the caller's own assignment: no oracle beyond
+-- what the ticket policy already shows. Definer: its reads bypass RLS, so it cannot recurse into any policy.
+CREATE FUNCTION app.b059_ticket_visible(p_ticket uuid) RETURNS boolean
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t record;
+BEGIN
+ -- The row's ticket by primary key.
+ SELECT x.org_id, x.unit_id, x.assigned_member_id INTO t FROM public.maintenance_tickets x WHERE x.id=p_ticket;
+ IF NOT FOUND THEN RETURN false; END IF;
+ -- Explicitly assigned to the caller (org_members primary key).
+ IF t.assigned_member_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.org_members m
+   WHERE m.id=t.assigned_member_id AND m.org_id=t.org_id AND m.user_id=auth.uid()) THEN RETURN true; END IF;
+ IF t.unit_id IS NULL THEN RETURN false; END IF;
+ -- The unit's few assignment rows (index b059_unit_assignments_org_unit_idx), each resolved by primary key.
+ RETURN EXISTS (SELECT 1 FROM app.b059_unit_assignments a
+  LEFT JOIN public.org_members m ON m.id=a.member_id AND m.org_id=a.org_id
+  LEFT JOIN public.invitations i ON i.id=a.invitation_id AND i.org_id=a.org_id
+  WHERE a.org_id=t.org_id AND a.unit_id=t.unit_id
+   AND (m.user_id=auth.uid() OR (i.status='accepted' AND i.accepted_by=auth.uid())));
+END $$;
 
 -- MGT-118-AC3/AC4/AC5. Restrictive: it narrows the existing permissive policies for the scoped caller only.
 -- A ticket with no unit (property-level) is visible only when it is explicitly assigned to the caller.
+-- Per row: three array comparisons against InitPlan values. With the flag OFF the first InitPlan is the empty array
+-- and the other two are never executed.
 CREATE POLICY b059_maint_unit_scope ON public.maintenance_tickets AS RESTRICTIVE TO authenticated
  USING (NOT (org_id = ANY((SELECT app.b059_scoped_orgs())::uuid[]))
   OR coalesce(unit_id = ANY((SELECT app.b059_visible_units())::uuid[]),false)
   OR coalesce(assigned_member_id = ANY((SELECT app.b059_own_members())::uuid[]),false));
--- The photo rows of a ticket the caller cannot see (the by-id photo route). No sublink on ticket_attachments (B-017
--- 42P17 note): the STABLE definer calls are per row here; the first is the empty array while the flag is OFF, so
--- the second is never needed then.
+-- The photo rows of a ticket the caller cannot see (the by-id photo route). NO sublink here: on ticket_attachments a
+-- policy sublink, even one that only calls a function, makes the portal policies recurse (42P17 on photo uploads; the
+-- B-017 note; reproduced in Codex r1 testing). So both calls are per row, and both are cheap: the first is the
+-- b017_denied_orgs pattern (the caller's own memberships; the empty array while the flag is OFF, which then decides
+-- the row), the second one indexed lookup of this row's ticket (only for a scoped org).
 CREATE POLICY b059_maint_unit_photo_scope ON public.ticket_attachments AS RESTRICTIVE TO authenticated
- USING (NOT (org_id = ANY(app.b059_scoped_orgs())) OR ticket_id = ANY(app.b059_visible_tickets()));
+ USING (NOT (org_id = ANY(app.b059_scoped_orgs())) OR app.b059_ticket_visible(ticket_id));
 
 -- The single-person shape the two gateways share: an ACTIVE maintenance member of p_org, or a PENDING maintenance
 -- team invitation of p_org (AC2). Names as 團隊 shows them (display name, else email; an invitation by its email).
@@ -284,7 +317,7 @@ REVOKE ALL ON FUNCTION app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[]
 GRANT EXECUTE ON FUNCTION app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[]) TO service_role;
 
 REVOKE ALL ON FUNCTION app.b059_flag_on(uuid), app.b059_scoped_orgs(), app.b059_visible_units(),
- app.b059_own_members(), app.b059_visible_tickets() FROM PUBLIC,anon,authenticated,service_role;
+ app.b059_own_members(), app.b059_ticket_visible(uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION app.b059_scoped_orgs(), app.b059_visible_units(), app.b059_own_members(),
- app.b059_visible_tickets() TO authenticated;
+ app.b059_ticket_visible(uuid) TO authenticated;
 COMMIT;

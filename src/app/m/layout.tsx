@@ -40,9 +40,13 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   const banner = session.kind === "staff" ? await trialBannerFor(session) : null;
-  if (moneyV3 ?? reportV3 ?? notifyV3 ?? await brandV3EnabledForOrg(session.orgId)) {
-    // B-059 (GS-46): the 設定 › 單位分派 row, for admin and manager only while maint_unit_assign is on (fail closed).
-    const nav = { maintAssign: ["admin", "manager"].includes(session.customRole?.nativeRole ?? session.role ?? "")
+  // Each of moneyV3 / reportV3 / notifyV3 is itself this organization's brand_v3 answer (read only on its route), so
+  // the v3 shell is chosen exactly when brand_v3 is ON.
+  const brandV3 = moneyV3 ?? reportV3 ?? notifyV3 ?? await brandV3EnabledForOrg(session.orgId);
+  if (brandV3) {
+    // B-059 (GS-46): the 設定 › 單位分派 row needs brand_v3 AND maint_unit_assign (as its page does), and only for
+    // admin and manager; a failed lookup hides it.
+    const nav = { maintAssign: brandV3 === true && ["admin", "manager"].includes(session.customRole?.nativeRole ?? session.role ?? "")
       ? await maintUnitAssignEnabledForOrg(session.orgId) : false };
     // /api/env accepts native staff roles; its null-key guard refuses assigned custom roles.
     return <ManagerShellV3 areas={areasFor(session, nav)} tabs={tabsFor(session, nav)}

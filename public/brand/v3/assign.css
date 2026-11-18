@@ -37,3 +37,5 @@ html[data-brand="v2"][data-brand-v3] .v3-assign-skeleton.title { width:40%; heig
  html[data-brand="v2"][data-brand-v3] .v3-assign-card, html[data-brand="v2"][data-brand-v3] .v3-assign-units { padding:4px 16px; }
  html[data-brand="v2"][data-brand-v3] .v3-assign-actions .btn { flex:1 1 auto; }
 }
+/* Codex r1 Part 3: checks are frozen while a save is in flight. */
+html[data-brand="v2"][data-brand-v3] .v3-assign-units:disabled .v3-assign-check { cursor:progress; opacity:.7; }

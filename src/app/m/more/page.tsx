@@ -15,7 +15,7 @@ export default async function MorePage() {
   const session = await getSession();
   if (session.kind !== "staff") notFound();
   if (!(await brandV3EnabledForOrg(session.orgId))) notFound();
-  // B-059 (GS-46): the 設定 › 單位分派 row, as in the shell.
+  // B-059 (GS-46): the 設定 › 單位分派 row, as in the shell (brand_v3 is ON here: OFF was a 404 above).
   const nav = { maintAssign: ["admin", "manager"].includes(session.customRole?.nativeRole ?? session.role ?? "")
     ? await maintUnitAssignEnabledForOrg(session.orgId) : false };
   const tabs = tabsFor(session, nav);

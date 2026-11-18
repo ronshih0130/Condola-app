@@ -141,4 +141,4 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # service-only: app.b059_assign_view(uuid,uuid,text,uuid,uuid)
 # service-only: app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])
 # B-059 RLS helpers (schema app, not PostgREST): authenticated EXECUTE only so the RESTRICTIVE policies can call them.
-# rls-helper: app.b059_scoped_orgs() app.b059_visible_units() app.b059_own_members() app.b059_visible_tickets()
+# rls-helper: app.b059_scoped_orgs() app.b059_visible_units() app.b059_own_members() app.b059_ticket_visible(uuid)

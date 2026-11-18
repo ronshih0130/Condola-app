@@ -21,7 +21,7 @@ let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
 let db: Client;
 const VIEW = "app.b059_assign_view(uuid,uuid,text,uuid,uuid)";
 const SAVE = "app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])";
-const HELPERS = ["app.b059_scoped_orgs()", "app.b059_visible_units()", "app.b059_own_members()", "app.b059_visible_tickets()"];
+const HELPERS = ["app.b059_scoped_orgs()", "app.b059_visible_units()", "app.b059_own_members()", "app.b059_ticket_visible(uuid)"];
 const sid: Record<string, string> = {};
 const member: Record<string, string> = {};
 let unitA: string, unitB: string, unitC: string, archivedUnit: string, org2Unit: string, property: string;
@@ -237,7 +237,7 @@ test("flag OFF: view NULL, save disabled, the TS layer says off / 404, nothing w
   });
 });
 
-test("MGT-118-AC3/AC4/AC5: ON scopes maintenance to assigned units plus its own tickets; admin, manager, accountant unaffected; OFF is the unscoped baseline with the same SQL", async () => {
+test("MGT-118-AC3/AC4/AC5: ON scopes maintenance to assigned units plus its own tickets; admin and manager unaffected; OFF is the unscoped baseline with the same SQL", async () => {
   const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
   await save("admin", fixer, [unitA]);
   const ours = [tA, tB, tC, tProperty, tAssigned];
@@ -278,6 +278,139 @@ test("MGT-118-AC3/AC4/AC5: ON scopes maintenance to assigned units plus its own 
   await flag(false);
   assert.deepEqual(await visible(maint()), [...ours].sort());
   assert.equal((await db.query("SELECT count(*)::int n FROM app.b059_unit_assignments WHERE member_id=$1", [fixer])).rows[0].n, 0);
+});
+
+test("MGT-118-AC4 accountant: the ticket list, detail and photo readers answer exactly the same with the flag ON as OFF (access or denial)", async () => {
+  const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
+  await save("admin", fixer, [unitA]);
+  const outcome = async (fn: () => Promise<unknown>) => {
+    try { const value = await fn(); return { ok: Array.isArray(value) ? ids(value as { id: string }[]) : value === null ? null : "row" }; }
+    catch (error) { return { error: (error as { key?: string }).key ?? (error as { code?: string }).code ?? "error" }; }
+  };
+  const read = async () => ({
+    list: await outcome(() => listTickets(accountant())),
+    detailB: await outcome(() => ticketDetail(accountant(), tB)),
+    detailProperty: await outcome(() => ticketDetail(accountant(), tProperty)),
+    photo: await outcome(() => readRepairPhoto(accountant(), attachmentB)),
+  });
+  await flag(false);
+  const off = await read();
+  await flag(true);
+  assert.deepEqual(await read(), off);
+});
+
+test("MGT-118 policy cost: ticket policy = InitPlans once per statement; photo policy = O(1) indexed per-row checks, never a ticket array", async () => {
+  const fixer = member[`${ORG_ID}:${USERS.maintenance}`];
+  await save("admin", fixer, [unitA]);
+  // 150 more tickets (half on the assigned unit) with two photo rows each.
+  const many: string[] = [];
+  for (let i = 0; i < 150; i++) many.push(await ticket(ORG_ID, property, i % 2 ? unitA : unitB, `B059 load ${i}`));
+  const photos = (await db.query(`WITH src AS (SELECT gen_random_uuid() id, t FROM unnest($2::uuid[]) t CROSS JOIN generate_series(1,2) g),
+    f AS (INSERT INTO files(id,org_id,storage_bucket,storage_path,file_name,mime_type,uploaded_by,size_bytes)
+      SELECT src.id,$1::uuid,'ticket-photos-private','org/'||$1::text||'/tickets/'||src.t::text||'/'||src.id::text||'.png','x.png','image/png',$3::uuid,42
+      FROM src RETURNING id)
+    INSERT INTO ticket_attachments(org_id,ticket_id,file_id) SELECT $1::uuid,src.t,f.id FROM f JOIN src ON src.id=f.id RETURNING id`, [ORG_ID, many, USERS.admin])).rowCount;
+  assert.equal(photos, 300);
+  // Test-only invocation counters (this cloned database only). The policies hold each helper by OID, so each helper is
+  // replaced IN PLACE (CREATE OR REPLACE keeps the OID): its original body moves to app.<fn>_impl and the helper becomes
+  // "bump app.<fn>_calls (nextval is never rolled back), then return app.<fn>_impl(...)". Restored at the end.
+  const HELPERS4: [string, string, string, string][] = [
+    ["b059_scoped_orgs", "", "", "uuid[]"], ["b059_visible_units", "", "", "uuid[]"], ["b059_own_members", "", "", "uuid[]"],
+    ["b059_ticket_visible", "p_ticket uuid", "p_ticket", "boolean"]];
+  const originals: Record<string, string> = {};
+  for (const [fn, params, args, returns] of HELPERS4) {
+    const sig = `app.${fn}(${params.replace(/p_\w+ /g, "")})`;
+    originals[fn] = (await db.query(`SELECT pg_get_functiondef($1::regprocedure) d`, [sig])).rows[0].d;
+    await db.query(originals[fn].replace(`FUNCTION app.${fn}(`, `FUNCTION app.${fn}_impl(`));
+    await db.query(`CREATE SEQUENCE app.${fn}_calls;
+      CREATE OR REPLACE FUNCTION app.${fn}(${params}) RETURNS ${returns} LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $f$
+      BEGIN PERFORM nextval('app.${fn}_calls'); RETURN app.${fn}_impl(${args}); END $f$;`);
+  }
+  const names = HELPERS4.map(h => h[0]);
+  const counters = async () => Object.fromEntries(await Promise.all(names.map(async fn =>
+    [fn, Number((await db.query(`SELECT last_value, is_called FROM app.${fn}_calls`)).rows.map(r => r.is_called ? r.last_value : 0)[0])])));
+  const asMaintenance = async <T>(sql: string): Promise<{ rows: T[]; calls: Record<string, number> }> => {
+    const before = await counters();
+    await db.query("BEGIN");
+    try {
+      await db.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','authenticated',true),set_config('app.active_org_id',$2,true),set_config('app.env','live',true)", [USERS.maintenance, ORG_ID]);
+      await db.query("SET LOCAL ROLE authenticated");
+      const rows = (await db.query(sql)).rows as T[];
+      await db.query("RESET ROLE");
+      const after = await counters();
+      return { rows, calls: Object.fromEntries(names.map(fn => [fn, after[fn] - before[fn]]).filter(([, n]) => n)) };
+    } finally { await db.query("ROLLBACK"); }
+  };
+  type Plan = { rows: { "QUERY PLAN": unknown }[] };
+  const planOf = async (sql: string) => JSON.stringify(((await asMaintenance(`EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`)) as Plan).rows[0]["QUERY PLAN"]);
+  const attSql = `SELECT id FROM ticket_attachments WHERE org_id='${ORG_ID}'`, tixSql = `SELECT id FROM maintenance_tickets WHERE org_id='${ORG_ID}'`;
+  // Ticket policy: three uncorrelated InitPlans, each executed once; no correlated SubPlan.
+  const tixPlan = await planOf(tixSql);
+  const inits = [...tixPlan.matchAll(/"Subplan Name":"InitPlan \d+[^"]*"[^}]*?"Actual Loops":(\d+)/g)];
+  assert.equal(inits.length, 3, tixPlan.slice(0, 600));
+  for (const m of inits) assert.equal(Number(m[1]), 1, `InitPlan loops ${m[1]}`);
+  assert.doesNotMatch(tixPlan, /"Subplan Name":"SubPlan/);
+  // Photo policy: no sublink at all (42P17 on ticket_attachments), so no InitPlan and no SubPlan.
+  assert.doesNotMatch(await planOf(attSql), /"Subplan Name"/);
+  // Behaviour is unchanged: maintenance sees the photos of unit A's tickets only (75 tickets × 2).
+  const visibleTickets = new Set((await db.query("SELECT id::text FROM maintenance_tickets WHERE unit_id=$1 AND id = ANY($2::uuid[])", [unitA, many])).rows.map(r => r.id));
+  const seen = (await asMaintenance<{ ticket_id: string }>(`SELECT ticket_id::text FROM ticket_attachments WHERE org_id='${ORG_ID}' AND ticket_id = ANY(ARRAY['${many.join("','")}']::uuid[])`)).rows;
+  assert.equal(seen.length, 150);
+  assert.ok(seen.every(r => visibleTickets.has(r.ticket_id)));
+  // Execution calls (planning may pre-evaluate STABLE calls for estimates: calls(statement) − calls(EXPLAIN only)).
+  const execCalls = async (sql: string) => {
+    const run = await asMaintenance<{ id: string }>(sql), plan = await asMaintenance(`EXPLAIN (COSTS OFF) ${sql}`);
+    const all = new Set([...Object.keys(run.calls), ...Object.keys(plan.calls)]);
+    return { rows: run.rows.length, calls: Object.fromEntries([...all].sort().map(n => [n, (run.calls[n] ?? 0) - (plan.calls[n] ?? 0)])) };
+  };
+  const evaluated = async () => (await db.query<{ n: number }>("SELECT count(*)::int n FROM ticket_attachments WHERE org_id=$1", [ORG_ID])).rows[0].n;
+  const tix = await execCalls(tixSql), att = await execCalls(attSql), attRows = await evaluated();
+  assert.ok(tix.rows >= 75 && att.rows >= 150, `${tix.rows} ${att.rows}`);
+  // Ticket policy: a per-statement constant (the scoped-org InitPlan + one read inside each of the two others).
+  assert.deepEqual(tix.calls, { b059_own_members: 1, b059_scoped_orgs: 3, b059_visible_units: 1 });
+  // Photo policy: exactly one scoped-org check and at most one O(1) ticket check per evaluated row; never an array helper.
+  assert.equal(att.calls.b059_scoped_orgs, attRows);
+  assert.ok(att.calls.b059_ticket_visible <= attRows && att.calls.b059_ticket_visible >= 300, JSON.stringify(att.calls));
+  assert.equal(att.calls.b059_visible_units ?? 0, 0); assert.equal(att.calls.b059_own_members ?? 0, 0);
+  // The per-row check is index-backed, one bounded lookup each: the ticket by primary key, the member by primary key,
+  // the unit's assignment rows by (org_id, unit_id) with their member / invitation by primary key. The statements
+  // below are the function's own (asserted against its body), explained with sequential scans disabled.
+  const norm = (text: string) => text.replace(/\s+/g, " ").trim();
+  const fnBody = norm(originals.b059_ticket_visible);
+  const lookups = [
+    ["SELECT x.org_id, x.unit_id, x.assigned_member_id INTO t FROM public.maintenance_tickets x WHERE x.id=p_ticket",
+      "SELECT x.org_id, x.unit_id, x.assigned_member_id FROM public.maintenance_tickets x WHERE x.id=$1", [many[1]], /maintenance_tickets_pkey/],
+    ["SELECT 1 FROM public.org_members m WHERE m.id=t.assigned_member_id AND m.org_id=t.org_id AND m.user_id=auth.uid()",
+      "SELECT 1 FROM public.org_members m WHERE m.id=$1 AND m.org_id=$2 AND m.user_id=auth.uid()", [fixer, ORG_ID], /org_members_(pkey|org_id_id_key)/],
+    ["EXISTS (SELECT 1 FROM app.b059_unit_assignments a LEFT JOIN public.org_members m ON m.id=a.member_id AND m.org_id=a.org_id LEFT JOIN public.invitations i ON i.id=a.invitation_id AND i.org_id=a.org_id WHERE a.org_id=t.org_id AND a.unit_id=t.unit_id AND (m.user_id=auth.uid() OR (i.status='accepted' AND i.accepted_by=auth.uid())))",
+      "SELECT EXISTS (SELECT 1 FROM app.b059_unit_assignments a LEFT JOIN public.org_members m ON m.id=a.member_id AND m.org_id=a.org_id LEFT JOIN public.invitations i ON i.id=a.invitation_id AND i.org_id=a.org_id WHERE a.org_id=$1 AND a.unit_id=$2 AND (m.user_id=auth.uid() OR (i.status='accepted' AND i.accepted_by=auth.uid())))",
+      [ORG_ID, unitA], /b059_unit_assignments_org_unit_idx/],
+  ] as const;
+  await db.query("BEGIN");
+  try {
+    await db.query("SET LOCAL enable_seqscan = off");
+    await db.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [USERS.maintenance]);
+    for (const [inBody, sql, params, index] of lookups) {
+      assert.ok(fnBody.includes(inBody), `function body changed: ${inBody}`);
+      const plan = (await db.query(`EXPLAIN (COSTS OFF) ${sql}`, [...params])).rows.map(r => r["QUERY PLAN"]).join("\n");
+      assert.match(plan, index, plan);
+      assert.doesNotMatch(plan, /Seq Scan|hashed SubPlan/, plan);
+    }
+  } finally { await db.query("ROLLBACK"); }
+  // Fewer rows: the ticket policy's calls are unchanged; the photo policy's scale with the rows, one each.
+  await db.query("DELETE FROM ticket_attachments WHERE ticket_id = ANY($1::uuid[])", [many]);
+  await db.query("DELETE FROM maintenance_tickets WHERE id = ANY($1::uuid[])", [many]);
+  const tixFew = await execCalls(tixSql), attFew = await execCalls(attSql);
+  assert.deepEqual(tixFew.calls, tix.calls, "ticket policy helper calls do not depend on the number of rows");
+  assert.equal(attFew.calls.b059_scoped_orgs ?? 0, await evaluated());
+  // OFF: the photo policy decides every row on the empty scoped-org array; the ticket check never runs.
+  await flag(false);
+  const off = await execCalls(attSql);
+  assert.equal(off.calls.b059_ticket_visible ?? 0, 0, "OFF never checks a ticket");
+  assert.equal(off.calls.b059_visible_units ?? 0, 0); assert.equal(off.calls.b059_own_members ?? 0, 0);
+  assert.deepEqual((await execCalls(tixSql)).calls, { b059_scoped_orgs: 1 }, "OFF: one scoped-org InitPlan per ticket statement, nothing else");
+  for (const [fn, params] of HELPERS4)
+    await db.query(`${originals[fn]}; DROP FUNCTION app.${fn}_impl(${params.replace(/p_\w+ /g, "")}); DROP SEQUENCE app.${fn}_calls;`);
 });
 
 test("MGT-118 policy baseline: with the flag OFF the policies change no row for any role (compared with the policies dropped)", async () => {

@@ -5,6 +5,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AssignEmpty, AssignError, AssignListView, AssignLoading, AssignNoPerm, AssignNoUnits, ASSIGN_ADD_HREF, assignEditHref } from "../components/v3/m/settings/assign";
 import { AssignFormView, toggleUnit } from "../components/v3/m/settings/assign-form";
+import { createAssignFormController, type AssignSubmitInput } from "../lib/assign-form";
 import { TeamRowActionsCell } from "../components/v3/m/settings/team-actions";
 import { brandV3AssignCopy } from "../i18n/lanes/brand-v3-assign";
 import {
@@ -214,4 +215,133 @@ test("touch targets and tokens: every control is at least 44px; the CSS is scope
     assert.match(selector, /^html\[data-brand="v2"\]\[data-brand-v3\] \.v3-assign/, selector);
   }
   assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ""), /#[0-9a-f]{3,6}\b|rgb\(/i);
+});
+
+/** A submit whose answer the test decides later. */
+function deferredSubmit() {
+  const calls: { input: AssignSubmitInput; resolve: (ok: boolean) => void; reject: (error: Error) => void }[] = [];
+  const submit = (input: AssignSubmitInput) => new Promise<boolean>((resolve, reject) => { calls.push({ input, resolve, reject }); });
+  return { calls, submit };
+}
+
+test("AC8 save lifecycle (controller the form runs): failure keeps checks; unchanged retry reuses the id; a change gets a new id", async () => {
+  const { calls, submit } = deferredSubmit();
+  let done = 0, ids = 0;
+  const c = createAssignFormController({ unitIds: [U1, U2, U3], checked: [U3], target: P1, submit, done: () => { done++; }, newId: () => `id-${++ids}` });
+  assert.deepEqual(c.state().checked, [U3]);
+  assert.equal(c.toggle(U1), true);
+  const first = c.save();
+  assert.equal(c.state().saving, true);
+  assert.deepEqual(calls[0].input, { requestId: "id-1", target: P1, units: [U1, U3] });
+  calls[0].resolve(false);
+  assert.equal(await first, "failed");
+  assert.deepEqual(c.state(), { checked: [U1, U3], saving: false, failed: true });
+  // Unchanged retry: the same request id (the gateway replays it).
+  const retry = c.save();
+  assert.equal(calls[1].input.requestId, "id-1");
+  calls[1].reject(new Error("network"));
+  assert.equal(await retry, "failed");
+  assert.deepEqual(c.state().checked, [U1, U3]);
+  // A change after the failure gets a new id.
+  c.toggle(U2);
+  const changed = c.save();
+  assert.deepEqual(calls[2].input, { requestId: "id-2", target: P1, units: [U1, U2, U3] });
+  calls[2].resolve(true);
+  assert.equal(await changed, "saved");
+  assert.equal(done, 1);
+  assert.equal(c.requestId(), "");
+});
+
+test("AC8 save lifecycle: while a save is pending the checks are frozen and a second save is refused, so no edit is silently dropped", async () => {
+  const { calls, submit } = deferredSubmit();
+  let done = 0;
+  const c = createAssignFormController({ unitIds: [U1, U2], checked: [], target: P1, submit, done: () => { done++; }, newId: () => "only" });
+  c.toggle(U1);
+  const pending = c.save();
+  assert.equal(c.toggle(U2), false, "toggle refused while saving");
+  assert.deepEqual(c.state().checked, [U1]);
+  assert.equal(await c.save(), "busy");
+  assert.equal(calls.length, 1);
+  calls[0].resolve(true);
+  assert.equal(await pending, "saved");
+  assert.deepEqual(calls[0].input.units, c.state().checked, "what was saved is exactly what is shown");
+  assert.equal(done, 1);
+  // The view disables the whole fieldset (every checkbox) while saving.
+  const saving = html(<AssignFormView locale="zh-TW" name="阿明" units={[{ id: U1, label: "1F" }, { id: U2, label: "2F" }]} checked={[U1]} saving failed={false} />);
+  assert.match(saving, /<fieldset class="v3-assign-units" disabled="" aria-disabled="true">/);
+  assert.match(saving, /<form[^>]*aria-busy="true"/);
+  assert.match(saving, /aria-disabled="true" data-testid="assign-save"/);
+});
+
+// Mounted: the real AssignForm in a local headless browser (React event handling, real fieldset disabling). Every
+// request is local; next/navigation is a stub that records router.push. Skips (explicitly) when no browser exists,
+// like vendor-document-ui.test.tsx.
+test("AssignForm mounted: deferred save — pending edits blocked, failure keeps checks and id, change gets a new id, success navigates once", { timeout: 120000 }, async t => {
+  const { build } = await import("esbuild");
+  const { chromium } = await import("@playwright/test");
+  const { existsSync } = await import("node:fs");
+  const system = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  const executablePath = existsSync(chromium.executablePath()) ? undefined : existsSync(system) ? system : null;
+  if (executablePath === null) { t.skip("No local Chromium or Chrome for the mounted form test"); return; }
+  const bundle = await build({
+    stdin: { contents: `
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import { AssignForm } from "./src/components/v3/m/settings/assign-form";
+      window.pushed = []; window.calls = [];
+      window.submit = input => new Promise(resolve => window.calls.push({ input, resolve }));
+      window.mount = () => createRoot(document.getElementById("root")).render(
+        <AssignForm locale="zh-TW" target="${P1}" name="阿明" doneHref="/m/assign" checked={["${U3}"]}
+          units={[{ id: "${U1}", label: "1F" }, { id: "${U2}", label: "2F" }, { id: "${U3}", label: "3F" }]}
+          submit={input => window.submit(input)} />);
+    `, resolveDir: process.cwd(), loader: "tsx" },
+    bundle: true, write: false, platform: "browser", jsx: "automatic", define: { "process.env.NODE_ENV": '"test"' },
+    plugins: [{ name: "next-navigation-stub", setup(b) {
+      b.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: "next-navigation", namespace: "stub" }));
+      b.onLoad({ filter: /.*/, namespace: "stub" }, () => ({ contents: "export const useRouter = () => ({ push: h => window.pushed.push(h), refresh: () => {} });", loader: "js" }));
+    } }],
+  });
+  const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.route("**/*", route => route.request().url() === "http://127.0.0.1/"
+    ? route.fulfill({ contentType: "text/html", body: '<div id="root"></div>' }) : route.abort());
+  await page.goto("http://127.0.0.1/");
+  await page.addScriptTag({ content: bundle.outputFiles[0].text });
+  await page.evaluate(() => (window as unknown as { mount: () => void }).mount());
+  const box = (i: number) => page.locator('[data-testid="assign-unit"]').nth(i);
+  const state = () => page.evaluate(() => {
+    const w = window as unknown as { calls: { input: AssignSubmitInput }[]; pushed: string[] };
+    return { calls: w.calls.map(c => c.input), pushed: [...w.pushed],
+      checked: [...document.querySelectorAll<HTMLInputElement>('[data-testid="assign-unit"]')].map(i => i.checked),
+      disabled: document.querySelector("fieldset")!.disabled, fail: document.querySelector('[data-testid="assign-fail"]')!.textContent };
+  });
+  const answer = (ok: boolean) => page.evaluate(v => { const w = window as unknown as { calls: { resolve: (v: boolean) => void }[] }; w.calls.at(-1)!.resolve(v); }, ok);
+  await box(0).check();
+  await page.click('[data-testid="assign-save"]');
+  let s = await state();
+  assert.equal(s.calls.length, 1); assert.deepEqual(s.calls[0].units, [U1, U3]); assert.equal(s.disabled, true);
+  // A pending save: the boxes are disabled; a click changes nothing and a second 儲存 sends nothing.
+  await box(1).click({ force: true });
+  await page.click('[data-testid="assign-save"]', { force: true });
+  s = await state();
+  assert.deepEqual(s.checked, [true, false, true]); assert.equal(s.calls.length, 1);
+  await answer(false);
+  await page.waitForFunction(() => !document.querySelector("fieldset")!.disabled);
+  s = await state();
+  assert.deepEqual(s.checked, [true, false, true]); assert.equal(s.fail, "沒有存成功，請再試一次。"); assert.deepEqual(s.pushed, []);
+  // Unchanged retry: same request id.
+  await page.click('[data-testid="assign-save"]');
+  s = await state();
+  assert.equal(s.calls.length, 2); assert.equal(s.calls[1].requestId, s.calls[0].requestId);
+  await answer(false);
+  await page.waitForFunction(() => !document.querySelector("fieldset")!.disabled);
+  // A change gets a new id; success navigates back to 單位分派 exactly once.
+  await box(1).check();
+  await page.click('[data-testid="assign-save"]');
+  s = await state();
+  assert.equal(s.calls.length, 3); assert.notEqual(s.calls[2].requestId, s.calls[0].requestId); assert.deepEqual(s.calls[2].units, [U1, U2, U3]);
+  await answer(true);
+  await page.waitForFunction(() => (window as unknown as { pushed: string[] }).pushed.length > 0);
+  assert.deepEqual((await state()).pushed, ["/m/assign"]);
 });
