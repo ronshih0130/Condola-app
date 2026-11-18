@@ -71,7 +71,9 @@ const PROBES = [
   ["SELECT x.org_id, x.unit_id, x.assigned_member_id INTO t FROM public.maintenance_tickets x WHERE x.id=p_ticket",
     "SELECT x.org_id, x.unit_id, x.assigned_member_id FROM public.maintenance_tickets x WHERE x.id=$1", /maintenance_tickets_pkey/],
   ["SELECT m.id INTO me FROM public.org_members m WHERE m.org_id=t.org_id AND m.user_id=auth.uid() AND m.role='maintenance' AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id)",
-    "SELECT m.id FROM public.org_members m WHERE m.org_id=$2 AND m.user_id=$3 AND m.role='maintenance' AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id)", /org_members_org_id_user_id_key/],
+    "SELECT m.id FROM public.org_members m WHERE m.org_id=$2 AND m.user_id=$3 AND m.role='maintenance' AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id)",
+    // Either user-keyed index is an exact caller lookup; the planner picks by version/stats (CI chose org_members_user_idx).
+    /Index (Only )?Scan using (org_members_org_id_user_id_key|org_members_user_idx) on org_members/],
   ["EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=t.org_id AND a.member_id=me AND a.unit_id=t.unit_id)",
     "SELECT EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=$2 AND a.member_id=$4 AND a.unit_id=$5)", /b059_unit_assignments_member_unit_key/],
   ["FOR inv IN SELECT i.id FROM public.invitations i WHERE i.accepted_by=auth.uid() AND i.org_id=t.org_id AND i.status='accepted' LOOP",
