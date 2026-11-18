@@ -39,6 +39,7 @@ import {
 } from "./auth";
 import { BACKUP_COOKIE } from "./backup";
 import { saveMemberEmailPrefs, saveOrgMailSettings } from "./mail-settings";
+import { brandV3EnabledForOrg } from "./brand-v3";
 import { forgotSentLocation, resetFlashCookie } from "./reset-flash";
 import { demoModeEnabled } from "./demo";
 import { closeMonth, reversePayment } from "./domain";
@@ -216,9 +217,12 @@ export async function actionOrgMail(formData: FormData) {
   await requireCurrentConsent();
   try {
     const session = await guardEffectiveSession(await getSession(), "settings.edit");
+    // R5-NOTIFY (MGT-135-AC2): under brand_v3 this form no longer carries the tenant switches (they live on
+    // 通知設定), so the save keeps their stored values instead of reading absent checkboxes as off.
+    const moved = await brandV3EnabledForOrg(session.orgId);
     await saveOrgMailSettings(session, {
-      tenantLease: formData.get("tenantLease") === "on",
-      tenantOverdue: formData.get("tenantOverdue") === "on",
+      tenantLease: moved ? null : formData.get("tenantLease") === "on",
+      tenantOverdue: moved ? null : formData.get("tenantOverdue") === "on",
       contactEmail: text(formData.get("contactEmail")),
       contactPhone: text(formData.get("contactPhone")),
     });

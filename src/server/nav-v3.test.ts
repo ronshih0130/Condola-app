@@ -26,7 +26,7 @@ for (const role of ["admin", "manager", "accountant", "maintenance"] as const) {
     const expectedLinks = role === "maintenance" ? { settings: ["/m/account"] } : {
       properties: propertyLinks,
       money: role === "manager" ? moneyLinks.filter(href => !["/m/bank", "/m/close"].includes(href)) : moneyLinks,
-      settings: role === "admin" ? settingsLinks : role === "manager" ? ["/m/import", "/m/account"] : ["/m/account"],
+      settings: role === "admin" ? settingsLinks : role === "manager" ? ["/m/notify", "/m/import", "/m/account"] : ["/m/account"],
     };
     assert.deepEqual(Object.fromEntries(areas.filter(area => area.links.length).map(area => [area.id, area.links.map(item => item.href)])), expectedLinks);
     const expectedTabs = role === "maintenance" ? ["維修", "設定"] : role === "accountant"
@@ -84,7 +84,10 @@ test("MGT-47-AC4/AC5, PLT-44-AC15: own area and approved sub-page crumbs", () =>
     ["/m/properties", ["物件與租客"]], ["/m/units", ["物件與租客", "單位與房間"]],
     ["/m/payments?filter=x", ["收款", "待確認繳款"]], ["/m/rent", ["收款"]], ["/m/more", ["更多"]],
   ] as const) assert.deepEqual(crumbFor(path, admin), expected);
-  assert.deepEqual(crumbFor("/m/import", staff("manager")), ["設定"]);
+  // R5-NOTIFY (MGT-135-AC1): a manager's settings area now opens on 通知設定, so 資料匯入 is a named sub-page.
+  assert.deepEqual(crumbFor("/m/import", staff("manager")), ["設定", "資料匯入"]);
+  assert.deepEqual(crumbFor("/m/notify", staff("manager")), ["設定", "通知設定"]);
+  assert.equal(areasFor(staff("manager")).find(area => area.id === "settings")?.href, "/m/notify");
   // MGT-138 / R5-OWNVIEW frame: 「設定 › 規則與資料」 on the settings area's own first page.
   assert.deepEqual(crumbFor("/m/settings", admin), ["設定", "規則與資料"]);
   assert.deepEqual(crumbFor("/m/notify", admin), ["設定", "通知設定"]);

@@ -21,8 +21,10 @@ import {
 } from "@/server/auth-actions";
 import { CHALLENGE_COOKIE, listSessions, mfaStatus, peekChallenge } from "@/server/auth";
 import { memberEmailPrefs } from "@/server/mail-settings";
-import { can } from "@/server/perms";
+import { can, hasPersonalReminders } from "@/server/perms";
 import { getSession } from "@/server/session";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { NotifyMovedLine } from "@/components/v3/m/settings/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +38,12 @@ export default async function AccountPage({
   const t = makeT(session.locale);
   const params = await searchParams;
   const showMailPrefs = session.kind === "staff" && (session.role === "admin" || session.role === "manager");
+  // R5-NOTIFY (MGT-135-AC2): under brand_v3 the reminder switches live on 通知設定; this page shows one link line instead.
+  const mailMoved = showMailPrefs && (await brandV3EnabledForOrg(session.orgId));
   const [sessions, factor, mailPrefs] = await Promise.all([
     listSessions(session.userId),
     mfaStatus(session.userId),
-    showMailPrefs ? memberEmailPrefs(session.orgId, session.userId) : Promise.resolve(null),
+    showMailPrefs && !mailMoved ? memberEmailPrefs(session.orgId, session.userId) : Promise.resolve(null),
   ]);
   const profile = session.kind === 'staff' && session.environment === 'live' ? await staffProfileView(session) : {state:'unavailable' as const};
   const profileCopy = staffProfileCopy(session.locale);
@@ -143,7 +147,7 @@ export default async function AccountPage({
               {t("i_save")}
             </button>
           </form>
-        ) : null}
+        ) : mailMoved && hasPersonalReminders(session) ? <NotifyMovedLine locale={session.locale} /> : null}
         <div className="card pad">
           <h3>{t("i_devices")}</h3>
           <form action={actionRevokeOthers}>

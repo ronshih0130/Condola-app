@@ -248,8 +248,11 @@ function settingsMocks(v3: boolean, trace: string[], session: Session) {
     "@/server/consent-gate": { requireCurrentConsent: async () => { trace.push("consent"); return null; } },
     "@/i18n": { makeT: () => (key: string) => key },
     "@/components/ui": { ErrorBanner: box("error"), PageHeader: box("header") },
-    "@/server/auth-actions": { actionOrgMail: "actionOrgMail", actionOwnerPrivacy: "actionOwnerPrivacy" },
-    "@/server/mail-settings": { orgMailSettings: async () => { trace.push("mail"); return { tenantLease: true, tenantOverdue: false, contactEmail: "a@example.invalid", contactPhone: "" }; } },
+    "@/server/auth-actions": { actionOrgMail: "actionOrgMail", actionOwnerPrivacy: "actionOwnerPrivacy", actionBeginMfa: "actionBeginMfa", actionChangePassword: "actionChangePassword",
+      actionConfirmMfa: "actionConfirmMfa", actionDisableMfa: "actionDisableMfa", actionEmailPrefs: "actionEmailPrefs", actionRequireMfa: "actionRequireMfa",
+      actionRevokeOthers: "actionRevokeOthers", actionRevokeSession: "actionRevokeSession" },
+    "@/server/mail-settings": { orgMailSettings: async () => { trace.push("mail"); return { tenantLease: true, tenantOverdue: false, contactEmail: "a@example.invalid", contactPhone: "" }; },
+      memberEmailPrefs: async () => { trace.push("member-prefs"); return { leaseExpiry: true, rentOverdue: false }; } },
     "@/server/perms": perms,
     "@/server/platform": { isPlatformAdmin: () => false },
     "@/server/session": { getSession: async () => session },
@@ -262,7 +265,21 @@ function settingsMocks(v3: boolean, trace: string[], session: Session) {
     "@/server/b056-trial": { trialCardState: async () => null },
     "@/server/b056-trial-rules": { formatTrialDate: () => "", parseTrialPlan: () => null, previewTrialEnd: () => new Date(0) },
     "@/components/b056-trial-confirm": { TrialConfirm: box("trial-confirm") },
-    "@/server/auth": { ownerPrivacy: async () => { trace.push("privacy"); return { showName: true, showPhone: false, name: "x" }; } },
+    "@/server/auth": { ownerPrivacy: async () => { trace.push("privacy"); return { showName: true, showPhone: false, name: "x" }; },
+      // R5-NOTIFY (MGT-135): /m/account reads.
+      CHALLENGE_COOKIE: "challenge", listSessions: async () => { trace.push("sessions"); return [{ id: "d1", user_agent: "UA", ip: "IP" }]; },
+      mfaStatus: async () => { trace.push("mfa"); return { enabled: false, required: false }; }, peekChallenge: async () => null },
+    // R5-NOTIFY (MGT-135) pages: /m/notify and /m/account (flag OFF parity; ON link line).
+    "@/components/v3/m/settings/notify-page": { NotifyV3Page: box("notify-v3-page") },
+    "@/components/v3/m/settings/notify": requireHere("../components/v3/m/settings/notify"),
+    "next/headers": { cookies: async () => ({ get: () => undefined }) },
+    "@/components/pending-submit": { PendingSubmit: box("pending-submit") },
+    "@/i18n/staff-profile": requireHere("../i18n/staff-profile"),
+    "@/server/staff-profile": { staffProfileView: async () => { trace.push("profile"); return { state: "ready", name: "Synthetic", version: "v1" }; } },
+    "@/server/staff-profile-actions": { actionSaveStaffDisplayName: "actionSaveStaffDisplayName" },
+    "@/components/backup-codes": { BackupCodes: box("backup-codes") },
+    "@/components/password-field": { PasswordFields: box("password-fields") },
+    "@/server/backup": { BACKUP_COOKIE: "backup", backupDisplay: () => null },
     // R5-TEAM (MGT-133-AC1): under brand_v3 /m/roles opens 團隊 (b073-team.test.tsx covers it).
     "next/navigation": { redirect: (to: string) => { trace.push(`redirect:${to}`); throw Object.assign(new Error("NEXT_REDIRECT"), { to, trace: [...trace] }); } },
   };
@@ -274,9 +291,10 @@ async function renderPage(source: string, v3: boolean, session: Session, query: 
   return { html, trace: trace.filter(step => step !== "flag") };
 }
 
-test("MGT-138 flag OFF: /m/settings and /m/roles render byte-for-byte as before, same reads in the same order", async () => {
-  for (const file of ["src/app/m/settings/page.tsx", "src/app/m/roles/page.tsx"]) {
-    for (const session of [staff("admin"), staff("admin", "en"), { ...staff("admin"), environment: "sandbox" as const }, staff("manager")])
+test("MGT-138 / MGT-135 flag OFF: /m/settings, /m/roles, /m/notify and /m/account render byte-for-byte as before, same reads in the same order", async () => {
+  // R5-NOTIFY (MGT-135) extends this parity check to /m/notify and /m/account (the pages it changes under brand_v3).
+  for (const file of ["src/app/m/settings/page.tsx", "src/app/m/roles/page.tsx", "src/app/m/notify/page.tsx", "src/app/m/account/page.tsx"]) {
+    for (const session of [staff("admin"), staff("admin", "en"), { ...staff("admin"), environment: "sandbox" as const }, staff("manager"), staff("accountant")])
       for (const query of [{}, { saved: "1", error: "errors.forbidden" }] as Record<string, string>[]) {
         assert.deepEqual(await renderPage(read(file), false, session, query), await renderPage(baseline(file), false, session, query), `${file} ${session.role} ${JSON.stringify(query)}`);
       }
@@ -293,12 +311,38 @@ test("MGT-138 route move (brand_v3 ON): /m/roles has no privacy checkboxes and d
   assert.equal(roles?.to, "/m/team?perms=1#v3-team-perms");
   assert.ok(!roles?.trace?.includes("privacy"));
   const settings = await renderPage(read("src/app/m/settings/page.tsx"), true, staff("admin"));
-  const header = settings.html.indexOf('data-test="header"'), section = settings.html.indexOf('data-test="owner-view-section"'), mail = settings.html.indexOf('data-testid="tenant-lease-mail"');
+  // R5-NOTIFY (MGT-135-AC2): under brand_v3 the mail form keeps its contact fields but not the tenant switches.
+  const header = settings.html.indexOf('data-test="header"'), section = settings.html.indexOf('data-test="owner-view-section"'), mail = settings.html.indexOf('data-testid="org-contact-email"');
   assert.ok(header >= 0 && header < section && section < mail, "lead, then the block, then the rest of today's page");
   assert.ok(settings.html.includes(JSON.stringify({ title: "規則與資料：公司資料、管理費規則，和屋主看得到什麼。" }).replace(/"/g, "&quot;")));
   assert.doesNotMatch(settings.html, /i_nav_settings/);
   for (const id of ["settings-plan", "idv-retain-days", "org-contact-email"]) assert.match(settings.html, new RegExp(`data-testid="${id}"`), id);
   assert.equal((settings.html.match(/data-test="owner-view-section"/g) ?? []).length, 1);
+});
+
+test("MGT-135-AC2 (brand_v3 ON): the old places show one link line to 通知設定 instead of their switches", async () => {
+  // /m/settings: no tenant switches; the contact fields stay; the R5-OWNVIEW side card carries 「提醒租客・在「通知設定」」.
+  const settings = await renderPage(read("src/app/m/settings/page.tsx"), true, staff("admin"));
+  assert.doesNotMatch(settings.html, /tenant-lease-mail|tenant-overdue-mail|i_mail_tenant_lease|i_mail_tenant_overdue/);
+  assert.match(settings.html, /data-testid="org-contact-email"/);
+  const off = await renderPage(read("src/app/m/settings/page.tsx"), false, staff("admin"));
+  assert.match(off.html, /data-testid="tenant-lease-mail"/); assert.match(off.html, /data-testid="tenant-overdue-mail"/);
+  // /m/account: admin and manager see one line linking to /m/notify, no switches, and the prefs are not read.
+  for (const role of ["admin", "manager"] as const) {
+    const on = await renderPage(read("src/app/m/account/page.tsx"), true, staff(role));
+    assert.equal((on.html.match(/data-testid="notify-moved"/g) ?? []).length, 1, role);
+    assert.match(on.html, /提醒信的開關在「<a href="\/m\/notify">通知設定<\/a>」；全公司的兩步驟驗證規則在「團隊」。/);
+    assert.doesNotMatch(on.html, /mail-lease|mail-overdue|i_mail_heading|actionEmailPrefs/);
+    assert.ok(!on.trace.includes("member-prefs"), role);
+    const offAccount = await renderPage(read("src/app/m/account/page.tsx"), false, staff(role));
+    assert.match(offAccount.html, /data-testid="mail-lease"/); assert.doesNotMatch(offAccount.html, /notify-moved/);
+  }
+  for (const role of ["accountant", "maintenance"] as const) {
+    const on = await renderPage(read("src/app/m/account/page.tsx"), true, staff(role));
+    assert.doesNotMatch(on.html, /notify-moved|mail-lease/, role);
+  }
+  // /m/notify under brand_v3 is the new page (not a link line).
+  assert.match((await renderPage(read("src/app/m/notify/page.tsx"), true, staff("manager"))).html, /data-test="notify-v3-page"/);
 });
 
 test("R5-OWNVIEW CSS: v3-scoped, tokens only, ≥44px switch, white focus ring", () => {
