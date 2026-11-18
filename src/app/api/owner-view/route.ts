@@ -13,21 +13,22 @@ const MAX_BODY_BYTES = 1024;
  * saveOwnerView applies settings.edit first); bad body 400; any other failure 500. Nothing is sent to owners.
  */
 export async function POST(request: Request) {
+  // Consent guard first (consent-entrypoints rule), as in /api/owner-repair-decision; then session, origin and body.
+  const denied = await requireCurrentConsent(undefined, "api");
+  if (denied) return denied;
+  let session: Awaited<ReturnType<typeof readSession>>;
+  try {
+    session = await readSession();
+  } catch (error) {
+    logServerError("b073_owner_view_route", error);
+    return new Response(null, { status: 500, headers });
+  }
+  if (!session) return new Response(null, { status: 401, headers });
   if (request.headers.get("origin") !== new URL(request.url).origin) return new Response(null, { status: 403, headers });
   if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return new Response(null, { status: 415, headers });
   // Bound the body before reading it (Content-Length), then again in bytes after reading.
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (!Number.isFinite(declared) || declared > MAX_BODY_BYTES) return new Response(null, { status: 413, headers });
-  let session: Awaited<ReturnType<typeof readSession>>;
-  try {
-    session = await readSession();
-    if (!session) return new Response(null, { status: 401, headers });
-    const denied = await requireCurrentConsent(session, "api");
-    if (denied) return denied;
-  } catch (error) {
-    logServerError("b073_owner_view_route", error);
-    return new Response(null, { status: 500, headers });
-  }
   let input: unknown;
   try {
     const text = await request.text();
