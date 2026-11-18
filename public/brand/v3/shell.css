@@ -117,3 +117,34 @@ html[data-brand="v2"][data-brand-v3] .v3-shell .shell-more-entry svg{ flex:none;
   html[data-brand="v2"][data-brand-v3] .v3-owner-shell .shell-phone-lead{ display:block; padding:16px 20px; margin:0 0 16px; border-radius:var(--r-lg); }
   html[data-brand="v2"][data-brand-v3] .v3-owner-shell .page-title-desk{ font-size:1rem; font-weight:600; color:var(--c-text-2); }
 }
+
+/* R5-OWNVIEW (設定 › 規則與資料 › 屋主看得到什麼, MGT-138): the block and its side card; two columns when there is room. */
+html[data-brand="v2"][data-brand-v3] .v3-ownview{ display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr)); align-items:start; gap:16px; margin:16px 0; max-width:960px; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-card{ display:grid; gap:12px; align-content:start; min-width:0; padding:20px 24px; background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview :is(h2,p,dl,dd){ margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview h2{ font-size:1.125rem; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-desc,
+html[data-brand="v2"][data-brand-v3] .v3-ownview-sub{ color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-row{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0; border-top:1px solid var(--c-border); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-text{ min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-text b{ display:block; font-weight:600; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-sub{ display:block; font-size:.88em; margin-top:2px; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch{ flex:none; display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; padding:0; border:0; background:transparent; cursor:pointer; border-radius:var(--r-btn); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-knob{ position:relative; display:block; width:42px; height:24px; border-radius:var(--r-btn); background:var(--c-border-strong); transition:background-color .15s; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-knob::after{ content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:var(--c-on-primary); transition:transform .15s; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch[aria-checked="true"] .v3-ownview-knob{ background:var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch[aria-checked="true"] .v3-ownview-knob::after{ transform:translateX(18px); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch[aria-disabled="true"]{ cursor:progress; opacity:.6; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch:focus-visible{ outline:2px solid transparent; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch:focus-visible .v3-ownview-knob{ box-shadow:0 0 0 2px var(--c-on-primary),0 0 0 4px var(--c-focus); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-error{ color:var(--c-danger); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-kv > div{ display:flex; justify-content:space-between; gap:16px; padding:8px 0; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-kv dd{ color:var(--c-text); font-weight:600; text-align:end; overflow-wrap:anywhere; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-kv a{ display:inline-flex; align-items:center; min-height:44px; color:var(--c-brand-ink); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview :is(a,.btn):focus-visible{ outline:2px solid var(--c-focus); outline-offset:3px; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview .btn{ justify-self:start; min-height:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-skeleton{ display:block; height:20px; border-radius:var(--r-sm); background:var(--c-surface-2); }
+@media (prefers-reduced-motion:reduce) {
+  html[data-brand="v2"][data-brand-v3] .v3-ownview-knob,
+  html[data-brand="v2"][data-brand-v3] .v3-ownview-knob::after{ transition:none; }
+}

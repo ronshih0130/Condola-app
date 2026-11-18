@@ -112,7 +112,8 @@ export function crumbsForAreas(pathname: string, areas: readonly ManagerAreaV3[]
   const area = areas.find(item => item.id === areaForPath(path)?.id);
   if (!area) return [];
   const sub = area.links.find(item => pathWithin(path, item.href));
-  return [navLabel(area.key, locale), ...(sub && path !== area.href ? [navLabel(sub.key, locale)] : [])];
+  // R5-OWNVIEW frame (MGT-138): 規則與資料 is named under 設定 (「設定 › 規則與資料」) although it is the area's first page.
+  return [navLabel(area.key, locale), ...(sub && (path !== area.href || sub.href === "/m/settings") ? [navLabel(sub.key, locale)] : [])];
 }
 export function crumbFor(pathname: string, session: Session) {
   return crumbsForAreas(pathname, areasFor(session), session.locale);
