@@ -105,6 +105,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/owner-repair-decision/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/owner-repair-override/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/owner-repair-policy/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/owner-view/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/payee/[leaseId]/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/payments/request-status/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/pdf/leases/[id]/route.ts:1 | HTTP handler executed above |
