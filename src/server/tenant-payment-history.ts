@@ -90,3 +90,8 @@ export async function tenantPaymentHistory(s:Session,leaseId:string,options:{vie
   return {state:'ready',lease:{id:leaseId,status:lease.status,currency:lease.currency,canReport,legacyPayeeVisible:options.view==='current'&&tenantPayeeVisible(lease.status,lines.length===0,lines)},bill:{...bill,pending:pendingResult.rows[0]?.pending===true,currency:lease.currency,lines},monthlyDue,reports:result,nextCursor:reports.rows.length>50?encodeCursor(selected[selected.length-1].id):null,...(turn?{turn}:{})};
  }),{orgId:s.orgId,environment:s.environment},{isolation:'repeatable read',readOnly:true});}catch(error){logServerError('tenant_payment_history',error);return unavailable;}
 }
+/**
+ * B-090 RT-HOME reuses these admission rules (session shape, org/session context, lease party) in its own
+ * reader, b090-tenant-home-reader.ts. Exported as they are: this reader's own queries are not changed.
+ */
+export { valid as tenantHistorySessionValid, ctx as TENANT_HISTORY_CONTEXT_SQL, party as TENANT_HISTORY_PARTY_SQL };
