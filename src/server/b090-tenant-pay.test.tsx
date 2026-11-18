@@ -197,7 +197,7 @@ test("TEN-52-AC4: never 收款 or 入帳 on the tenant pay files or rendered pag
   const css = source("public/brand/v3/tenant.css").replace(/\/\*[\s\S]*?\*\//g, "");
   for (const rule of css.split("}").map(r => r.trim()).filter(r => r && !r.startsWith("@media"))) {
     const selector = rule.replace(/^@media[^{]*\{/, "").split("{")[0].trim();
-    assert.ok(/^html\[data-brand="v2"\]\[data-brand-v3\] \.v3-tenant-(home|pay)\b/.test(selector), selector);
+    assert.ok(/^html\[data-brand="v2"\]\[data-brand-v3\] \.v3-tenant-(home|pay|repair|lease)\b/.test(selector), selector);
   }
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgb\(/i, "tokens only");
 });
