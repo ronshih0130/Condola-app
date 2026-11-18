@@ -280,6 +280,8 @@ function settingsMocks(v3: boolean, trace: string[], session: Session) {
     "@/components/backup-codes": { BackupCodes: box("backup-codes") },
     "@/components/password-field": { PasswordFields: box("password-fields") },
     "@/server/backup": { BACKUP_COOKIE: "backup", backupDisplay: () => null },
+    // R5-TEAM (MGT-133-AC1): under brand_v3 /m/roles opens 團隊 (b073-team.test.tsx covers it).
+    "next/navigation": { redirect: (to: string) => { trace.push(`redirect:${to}`); throw Object.assign(new Error("NEXT_REDIRECT"), { to, trace: [...trace] }); } },
   };
 }
 async function renderPage(source: string, v3: boolean, session: Session, query: Record<string, string> = {}) {
@@ -304,10 +306,10 @@ test("MGT-138 / MGT-135 flag OFF: /m/settings, /m/roles, /m/notify and /m/accoun
 });
 
 test("MGT-138 route move (brand_v3 ON): /m/roles has no privacy checkboxes and does not read them; /m/settings opens with the block", async () => {
-  const roles = await renderPage(read("src/app/m/roles/page.tsx"), true, staff("admin"));
-  assert.doesNotMatch(roles.html, /privacy-name|privacy-phone|i_owner_privacy|actionOwnerPrivacy/);
-  assert.match(roles.html, /data-testid="perm-matrix"/);
-  assert.ok(!roles.trace.includes("privacy"));
+  // R5-TEAM (MGT-133-AC1) later moved /m/roles under brand_v3 to 團隊: an admin is redirected before any privacy read.
+  const roles = await renderPage(read("src/app/m/roles/page.tsx"), true, staff("admin")).then(() => null, (error: { to?: string; trace?: string[] }) => error);
+  assert.equal(roles?.to, "/m/team?perms=1#v3-team-perms");
+  assert.ok(!roles?.trace?.includes("privacy"));
   const settings = await renderPage(read("src/app/m/settings/page.tsx"), true, staff("admin"));
   // R5-NOTIFY (MGT-135-AC2): under brand_v3 the mail form keeps its contact fields but not the tenant switches.
   const header = settings.html.indexOf('data-test="header"'), section = settings.html.indexOf('data-test="owner-view-section"'), mail = settings.html.indexOf('data-testid="org-contact-email"');

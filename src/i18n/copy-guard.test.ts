@@ -89,11 +89,20 @@ function withoutVendorDocsIssue(source: string, rel: string) {
   return [...source.matchAll(exact)].length === 1 ? source.replace(exact, '    issue: "", close: "關閉",') : source;
 }
 
+// PR-018 (Ron 2026-11-15, round 5 strings approved as written): the R5-ADD maintenance role description names the
+// manager 「收款」 area (the exempt nav name above). Exactly one line in the R5-TEAM lane only (MGT-133-AC2/AC3).
+const R5_TEAM_LANE = "src/i18n/lanes/brand-v3-r5-team.ts";
+function withoutR5TeamRole(source: string, rel: string) {
+  if (rel !== R5_TEAM_LANE) return source;
+  const exact = /^    roleMaintenance: "處理報修、聯絡租客；看不到收款和報表。",$/gm;
+  return [...source.matchAll(exact)].length === 1 ? source.replace(exact, '    roleMaintenance: "",') : source;
+}
+
 function hitsFor(words: string[]) {
   const hits: string[] = [];
   for (const file of sourceFiles()) {
     const rel = relative(root, file);
-    const text = withoutVendorDocsIssue(withoutApprovedReportRentNames(withoutOwnStatus(withoutManagerAreaName(decode(read(file)), rel), rel), rel), rel);
+    const text = withoutR5TeamRole(withoutVendorDocsIssue(withoutApprovedReportRentNames(withoutOwnStatus(withoutManagerAreaName(decode(read(file)), rel), rel), rel), rel), rel);
     if (file.endsWith(".json")) {
       const data = JSON.parse(text) as Record<string, unknown>;
       for (const [key, value] of Object.entries(data)) {
@@ -334,6 +343,18 @@ test("GS-32 exemption covers exactly one approved line in the vendor-docs lane",
   assert.equal(withoutVendorDocsIssue(lane, VENDOR_DOCS_LANE).includes("收款"), false);
   assert.equal(withoutVendorDocsIssue('    issue: "確認已全額收款並開立", close: "關閉",', "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
   assert.equal(withoutVendorDocsIssue('    other: "確認已全額收款並開立",', VENDOR_DOCS_LANE).includes("收款"), true);
+});
+
+test("PR-018 R5-TEAM exemption covers exactly the approved maintenance role description, in its lane only", () => {
+  const allowed = '    roleMaintenance: "處理報修、聯絡租客；看不到收款和報表。",';
+  assert.equal(withoutR5TeamRole(allowed, R5_TEAM_LANE).includes("收款"), false);
+  for (const source of [allowed + "\n" + allowed, allowed + " // 收款", allowed.replace("roleMaintenance", "other"), 'const text = "收款";', allowed.replace("報表。", "報表和收款。")]) {
+    assert.equal(withoutR5TeamRole(source, R5_TEAM_LANE).includes("收款"), true, source);
+  }
+  assert.equal(withoutR5TeamRole(allowed, "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
+  const lane = read(join(root, R5_TEAM_LANE));
+  assert.equal([...lane.matchAll(/收款/g)].length, 1);
+  assert.equal(withoutR5TeamRole(lane, R5_TEAM_LANE).includes("收款"), false);
 });
 
 // One copy value at a time, read by the TypeScript parser (cooked values: escapes and line continuations resolved).

@@ -17,6 +17,8 @@ const navigationCopy = {
     maintenance: "維修",
     more: "更多",
     roles: "角色權限",
+    // R5-TEAM frame crumb 「設定 › 團隊」 (MGT-133; brand_v3 navigation only).
+    team: "團隊",
     import: "資料匯入",
     navigation: "主要導覽",
     context: "{company}｜{name}（{role}）",
@@ -30,6 +32,7 @@ const navigationCopy = {
     maintenance: "Maintenance",
     more: "More",
     roles: "Role permissions",
+    team: "Team",
     import: "Data import",
     navigation: "Main navigation",
     context: "{company} · {name} ({role})",

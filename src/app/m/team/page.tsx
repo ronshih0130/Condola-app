@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { TeamLoading } from "@/components/v3/m/settings/team";
+import { TeamV3Section } from "@/components/v3/m/settings/team-page";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
@@ -23,7 +27,7 @@ const ROLES: OrgRole[] = ["admin", "manager", "accountant", "maintenance"];
 export default async function TeamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; token?: string; invited?: string }>;
+  searchParams: Promise<{ error?: string; token?: string; invited?: string; add?: string; perms?: string }>;
 }) {
   await requireCurrentConsent(undefined, "page");
   const session = await guardEffectiveSession(await getSession(), "team.manage");
@@ -32,6 +36,13 @@ export default async function TeamPage({
   const legacyInvitesOpen = session.environment !== "live" && teamInvitesAllowedForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
+  // R5-TEAM (MGT-133): under brand_v3 the one 團隊 page (same guard, same invite gate as below). Flag OFF renders
+  // exactly as before.
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    const invites = invitesOpen ? "live" : legacyInvitesOpen ? "legacy" : "closed";
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/settings-team.css" /><Suspense key={`${params.add ?? ""}:${params.perms ?? ""}`} fallback={<TeamLoading locale={session.locale} />}><TeamV3Section session={session} invites={invites} query={params} /></Suspense></>;
+  }
   const [team, factor, usage, tier] = await Promise.all([
     listTeam(session),
     mfaStatus(session.userId),
