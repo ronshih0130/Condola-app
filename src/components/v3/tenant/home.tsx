@@ -37,8 +37,8 @@ export function tenantHomeSentence(headline: TenantHomeHeadline, currency: strin
 export function TenantHomeV3({ view, locale, name, company }: { view: Ready; locale: Locale; name: string; company: string }) {
   const copy = brandV3TenantHomeCopy(locale);
   const { headline } = view;
-  // TEN-54-AC3: drawing 07 follows the payment state only ("nothing to pay"); open-repair cards show alongside it.
-  const nothingToPay = headline.kind === "paid" || headline.kind === "none";
+  // TEN-54-AC3: drawing 07 only when nothing is due AND no card applies (an open repair's card replaces it).
+  const nothingToDo = (headline.kind === "paid" || headline.kind === "none") && view.repairs.length === 0;
   return <section className="v3-tenant-home" data-testid="tenant-home-v3" data-headline={headline.kind}>
     <h1 className="t-home-lead">{tenantHomeSentence(headline, view.currency, locale, name, company)}
       {headline.kind === "paid" ? <> <span className="t-home-ok" data-testid="tenant-home-tick"><CompletionCheck />{tenantPaymentHistoryCopy(locale).confirmed}</span></> : null}
@@ -48,7 +48,7 @@ export function TenantHomeV3({ view, locale, name, company }: { view: Ready; loc
       <div className="t-home-row"><h2>{copy.repairTitle.replace("{title}", repair.title)}</h2><span className="t-home-badge">{copy.steps[repair.step]}</span></div>
       <Link className="t-home-text" href={`/t/repair?id=${encodeURIComponent(repair.id)}`}>{copy.viewProgress}</Link>
     </div>)}
-    {nothingToPay ? <div className="t-home-card t-home-empty" data-testid="tenant-home-empty"><Illustration name="07" /></div> : null}
+    {nothingToDo ? <div className="t-home-card t-home-empty" data-testid="tenant-home-empty"><Illustration name="07" /></div> : null}
   </section>;
 }
 

@@ -129,24 +129,25 @@ test("TEN-54-AC2: a repair card only for an open repair, newest first, with text
   assert.equal((html(ready(view.headline)).match(/tenant-home-repair/g) ?? []).length, 0, "no repair, no card");
 });
 
-test("TEN-54-AC3: nothing to pay shows drawing 07 and no button; open repairs keep their cards", () => {
+test("TEN-54-AC3: nothing due and no card shows drawing 07 and no button; an open repair's card replaces the drawing", () => {
   for (const h of [{ kind: "paid", month: "2026-11" }, { kind: "none", state: "no_invoice" }] as const) {
     const out = html(ready(h));
     assert.match(out, /data-testid="tenant-home-empty"><svg class="v3-illustration" data-v3-illustration="07"/);
     assert.doesNotMatch(out, /<button|<a /);
-    // Codex r1: the drawing follows the payment state only; an open repair's card shows alongside it.
+    // TEN-54-AC3 ("Given nothing is due and no card applies"): a card applies, so no drawing; the card shows.
     const withRepair = html(ready(h, { repairs: [{ id: "r", title: "t", step: "reported" }] }));
-    assert.match(withRepair, /data-v3-illustration="07"/);
+    assert.doesNotMatch(withRepair, /data-v3-illustration/);
     assert.match(withRepair, /<h2>報修・t<\/h2>/);
   }
   assert.doesNotMatch(html(ready({ kind: "due", month: "2026-11", amountMinor: 1, dueOn: "2026-11-05" })), /data-v3-illustration/);
-  // Regression (Codex r1): no payable bill + one open repair → drawing 07, the repair card, and still no button.
+  // Regression, TEN-54-AC3 ("Given nothing is due and no card applies … drawing 07 and no button"): no payable bill
+  // + one open repair → the repair card shows and drawing 07 does NOT; still no button.
   const noBill = tenantHomeHeadline(bill({ state: "nonpayable", balanceMinor: 0 }), facts({ nextDue: null }));
   assert.deepEqual(noBill, { kind: "none", state: "nonpayable" });
   const regression = html(ready(noBill, { repairs: [{ id: "22222222-2222-4222-8222-222222222222", title: "浴室天花板滴水", step: "reported" }] }));
   assert.match(regression, /<h1 class="t-home-lead">目前沒有可付款的已開立帳單。<\/h1>/);
   assert.equal((regression.match(/data-testid="tenant-home-repair"/g) ?? []).length, 1);
-  assert.match(regression, /data-testid="tenant-home-empty"><svg class="v3-illustration" data-v3-illustration="07"/);
+  assert.doesNotMatch(regression, /data-v3-illustration|tenant-home-empty/);
   assert.doesNotMatch(regression, /<button|btn pri|t-home-outline/);
   const drawing = renderToStaticMarkup(<Illustration name="07" />);
   assert.match(drawing, /viewBox="0 0 176 120"/); assert.match(drawing, /aria-hidden="true"/); assert.match(drawing, /focusable="false"/);
