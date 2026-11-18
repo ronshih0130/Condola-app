@@ -136,3 +136,14 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # ACL/config asserted by the B-092 probe in scripts/check-function-privileges.sh.
 # service-only: app.b092_owner_units(uuid,uuid,text,uuid)
 # service-only: app.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)
+
+# B-065 phase B P1 service-only inventory (NOT authenticated RPC allowlist entries).
+# ACL/config asserted by the B-065 stamp probe in scripts/check-function-privileges.sh.
+# service-only: app.b065_stamp_view(text,uuid,boolean)
+# service-only: app.b065_stamp_preview_by_grant(text,uuid,uuid)
+# service-only: app.b065_receipt_stamp(text,uuid,boolean)
+# service-only: app.b065_receipt_stamp_by_grant(text,uuid,uuid)
+# service-only: app.b065_save_stamp(text,uuid,boolean,uuid,text,text,text,text,integer[])
+# service-only: app.b065_save_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,integer[])
+# service-only: app.b065_consent_stamp(text,uuid,boolean,uuid,text,text,text,text,text,integer[])
+# service-only: app.b065_consent_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,text,integer[])
