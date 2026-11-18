@@ -18,6 +18,7 @@ import type { OrgRole, Session } from "./types";
 // B-073 / R5-OWNVIEW (設定 › 規則與資料 › 屋主看得到什麼, MGT-138-AC1…AC4 + route move). Synthetic data only.
 const requireHere = createRequire(import.meta.url);
 const read = (p: string) => readFileSync(p, "utf8");
+const read_ = read;
 const BASE = "5cfeaa71612644697c4474f20bba0b42e074b65e"; // origin/main before this slice
 const baseline = (p: string) => execFileSync("git", ["show", `${BASE}:${p}`], { encoding: "utf8" });
 const ORG = "00000000-0000-4000-8000-000000000001";
@@ -138,36 +139,36 @@ test("client switches: initial render from props, saves through saveOwnerViewAct
 test("MGT-138-AC3 server: a non-admin is forbidden (403) before any read or write; bad input is 400", async () => {
   for (const role of ["manager", "accountant", "maintenance"] as const) {
     const trace: string[] = [];
-    const deps = { read: async () => { trace.push("read"); return { settings: {}, name: "x", tax_id: null }; }, save: async () => { trace.push("save"); } };
+    const deps = { read: async () => { trace.push("read"); return { settings: {}, name: "x", tax_id: null }; }, write: async () => { trace.push("write"); return { showName: true, showPhone: true }; } };
     assert.deepEqual(await saveOwnerView(staff(role), { field: "showName", value: false }, deps), { ok: false, status: 403 });
     assert.deepEqual(await ownerViewRead(staff(role), deps), { state: "forbidden" });
     assert.deepEqual(trace, [], role);
   }
   for (const input of [null, {}, { field: "showEmail", value: true }, { field: "showName", value: "on" }, "showName"]) {
     const trace: string[] = [];
-    assert.deepEqual(await saveOwnerView(staff("admin"), input, { read: async () => { trace.push("read"); return undefined; }, save: async () => { trace.push("save"); } }), { ok: false, status: 400 });
+    assert.deepEqual(await saveOwnerView(staff("admin"), input, { read: async () => { trace.push("read"); return undefined; }, write: async () => { trace.push("write"); return { showName: true, showPhone: true }; } }), { ok: false, status: 400 });
     assert.deepEqual(trace, []);
   }
-  // A forbidden answer from setOwnerPrivacy's own guard (authority changed mid-request) is also a 403.
+  // A forbidden answer from the write's own in-transaction guard (authority changed mid-request) is also a 403.
   assert.deepEqual(await saveOwnerView(staff("admin"), { field: "showName", value: false },
-    { read: async () => ({ settings: {}, name: "x", tax_id: null }), save: async () => { throw new FlowError("errors.forbidden"); } }), { ok: false, status: 403 });
+    { write: async () => { throw new FlowError("errors.forbidden"); } }), { ok: false, status: 403 });
 });
 
-test("MGT-138-AC1/AC2 server: admin saves one switch, both keys go through setOwnerPrivacy, the other value kept", async () => {
-  const saves: unknown[] = [];
-  const save = async (_s: Session, input: unknown) => { saves.push(input); };
-  // Defaults as today's ownerPrivacy: name shown, phone hidden.
-  assert.deepEqual(await saveOwnerView(staff("admin"), { field: "showPhone", value: true }, { read: async () => ({ settings: {}, name: "x", tax_id: null }), save }),
-    { ok: true, privacy: { showName: true, showPhone: true } });
-  assert.deepEqual(await saveOwnerView(staff("admin"), { field: "showName", value: false },
-    { read: async () => ({ settings: { show_tenant_name: true, show_tenant_phone: true, require_2fa: true }, name: "x", tax_id: null }), save }),
-    { ok: true, privacy: { showName: false, showPhone: true } });
-  assert.deepEqual(saves, [{ showName: true, showPhone: true }, { showName: false, showPhone: true }]);
-  for (const input of saves) assert.deepEqual(Object.keys(input as object), ["showName", "showPhone"]);
-  // A failed read or write is a 500 result, never a redirect or a throw.
-  assert.deepEqual(await saveOwnerView(staff("admin"), { field: "showName", value: false }, { read: async () => { throw new Error("db down"); }, save }), { ok: false, status: 500 });
-  assert.deepEqual(await saveOwnerView(staff("admin"), { field: "showName", value: false }, { read: async () => ({ settings: {}, name: "x", tax_id: null }), save: async () => { throw new Error("db down"); } }), { ok: false, status: 500 });
-  assert.equal(saves.length, 2, "no write after a failed read");
+test("MGT-138-AC1/AC2 server: admin saves one switch; only that key is written, no read first", async () => {
+  const writes: unknown[] = [];
+  const read = async () => { throw new Error("the save must not read first"); };
+  const write = async (_s: Session, field: string, value: boolean) => { writes.push([field, value]); return { showName: true, showPhone: value }; };
+  assert.deepEqual(await saveOwnerView(staff("admin"), { field: "showPhone", value: true }, { read, write }), { ok: true, privacy: { showName: true, showPhone: true } });
+  assert.deepEqual(writes, [["showPhone", true]]);
+  // A failed write is a 500 result, never a redirect or a throw.
+  assert.deepEqual(await saveOwnerView(staff("admin"), { field: "showName", value: false }, { write: async () => { throw new Error("db down"); } }), { ok: false, status: 500 });
+  // The single-key statement: a closed key map, jsonb_set on one path, same guard + tx + owner_privacy audit; setOwnerPrivacy unchanged.
+  const own = read_("src/server/b073-owner-view.ts");
+  assert.match(own, /showName: "show_tenant_name", showPhone: "show_tenant_phone"/);
+  assert.match(own, /SET settings = jsonb_set\(coalesce\(settings, '\{\}'::jsonb\), \$2::text\[\], to_jsonb\(\$3::boolean\), true\)/);
+  assert.match(own, /requireEffectivePerm\(client, session, "settings\.edit"\)/);
+  assert.match(own, /writeAudit\(session\.orgId, session\.userId, "owner_privacy", privacy\)/);
+  assert.doesNotMatch(own, /setOwnerPrivacy\(/);
   // The reader: same parse as ownerPrivacy; 統編 only when stored; failure → unavailable.
   assert.deepEqual(await ownerViewRead(staff("admin"), { read: async () => ({ settings: null, name: " 安居物業 ", tax_id: " " }) }),
     { state: "ready", privacy: { showName: true, showPhone: false }, company: { name: "安居物業", taxId: null } });
@@ -175,8 +176,8 @@ test("MGT-138-AC1/AC2 server: admin saves one switch, both keys go through setOw
     { state: "ready", privacy: { showName: false, showPhone: false }, company: { name: "安居物業", taxId: "12345678" } });
   assert.deepEqual(await ownerViewRead(staff("admin"), { read: async () => { throw new Error("db down"); } }), { state: "unavailable" });
   assert.deepEqual(await ownerViewRead(staff("admin"), { read: async () => undefined }), { state: "unavailable" });
-  // The write path is the existing setOwnerPrivacy (show_tenant_name / show_tenant_phone + owner_privacy audit), unchanged.
-  const auth = read("src/server/auth.ts");
+  // setOwnerPrivacy (flag OFF, /m/roles form) is unchanged.
+  const auth = read_("src/server/auth.ts");
   assert.equal(auth.slice(auth.indexOf("export async function setOwnerPrivacy"), auth.indexOf("export async function tenantDisplayNames")),
     baseline("src/server/auth.ts").slice(baseline("src/server/auth.ts").indexOf("export async function setOwnerPrivacy"), baseline("src/server/auth.ts").indexOf("export async function tenantDisplayNames")));
 });

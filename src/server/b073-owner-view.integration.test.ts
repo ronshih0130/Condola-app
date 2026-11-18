@@ -60,3 +60,21 @@ test("MGT-138-AC1/AC2: admin reads and saves; only the two privacy keys change, 
   const added = (await audits(orgId)).map(row => ({ ...row, n: row.n - (auditBefore.find(b => b.action === row.action)?.n ?? 0) })).filter(row => row.n);
   assert.deepEqual(added, [{ action: "auth_events:owner_privacy", n: 2 }]);
 });
+
+test("MGT-138 race fix: sequential single-key saves keep both values; the other key is never rewritten from a stale read", async () => {
+  const { orgId, sessions } = await makeOrg();
+  assert.deepEqual(await saveOwnerView(sessions.admin, { field: "showName", value: false }), { ok: true, privacy: { showName: false, showPhone: false } });
+  assert.deepEqual(await saveOwnerView(sessions.admin, { field: "showPhone", value: true }), { ok: true, privacy: { showName: false, showPhone: true } });
+  assert.deepEqual(await ownerPrivacy(orgId).then(({ showName, showPhone }) => ({ showName, showPhone })), { showName: false, showPhone: true });
+  // Another admin changes the name key directly after this page loaded; saving the phone switch must not touch it.
+  await db.query(`UPDATE organizations SET settings = jsonb_set(settings, '{show_tenant_name}', 'true'::jsonb) WHERE id=$1`, [orgId]);
+  assert.deepEqual(await saveOwnerView(sessions.admin, { field: "showPhone", value: false }), { ok: true, privacy: { showName: true, showPhone: false } });
+  const settings = (await orgRow(orgId)).settings;
+  assert.equal(settings.show_tenant_name, true, "name kept from the concurrent change");
+  assert.equal(settings.show_tenant_phone, false);
+  assert.equal(settings.b073_fixture, "kept");
+  // The audit row has the setOwnerPrivacy shape, with the resulting both-key state.
+  const last = (await db.query<{ new_row: Record<string, unknown> }>(
+    "SELECT new_row FROM audit_log WHERE org_id=$1 AND table_name='auth_events' AND row_id='owner_privacy' ORDER BY id DESC LIMIT 1", [orgId])).rows[0].new_row;
+  assert.deepEqual(last, { event: "owner_privacy", showName: true, showPhone: false });
+});
