@@ -148,6 +148,8 @@ test("TEN-56-AC4/AC5: progress page per status — steps, 你送出的內容, �
     assert.doesNotMatch(out, OMITTED, status);
     assert.doesNotMatch(out, /NT\$|收款|入帳|btn pri|陳師傅/, status);
     if (stage === "cancelled") { assert.doesNotMatch(out, /t-rp-steps/); assert.match(out, /<span class="t-rp-badge">已取消<\/span>/); continue; }
+    // list-style:none drops list semantics in some screen readers: the steps keep an explicit list role.
+    assert.match(out, /<ol class="t-rp-steps" role="list" data-testid="tenant-repair-steps">/, status);
     const steps = [...out.matchAll(/<li class="(done|now|todo)"( aria-current="step")?><i aria-hidden="true"><\/i>([^<]+)<\/li>/g)].map(m => `${m[3]}:${m[1]}${m[2] ? "*" : ""}`);
     const expected: Record<string, string[]> = {
       reported: ["已回報:now*", "已派工:todo", "處理中:todo", "已完成:todo"],

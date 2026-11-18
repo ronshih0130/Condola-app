@@ -99,8 +99,8 @@ test("TEN-56-AC4: a tenant lists and opens only their own lease's repairs; inter
   const elsewhere = await makeOrg();
   const alias = await makeTenant(elsewhere.orgId, alice.userId);
   const cross = await tenantRepairView(alias.s, shared.lease, leak);
-  assert.notEqual(cross.state, "progress");
-  assert.deepEqual(cross.state === "list" ? cross.repairs : [], []);
+  assert.equal(cross.state, "list", "the list, not an error or the progress page");
+  assert.deepEqual(cross.state === "list" && cross.repairs, []);
 });
 
 test("TEN-57-AC1: lease terms (物件／租期／租金／繳租日／押金) come from the tenant's own lease only", async () => {

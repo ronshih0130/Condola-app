@@ -66,7 +66,7 @@ export function TenantRepairProgressV3({ repair, locale, calendar, company, noti
         <h2>{repair.title}</h2>
         {repair.stage === "cancelled" ? <span className="t-rp-badge">{copy.cancelled}</span> : null}
       </div>
-      {repair.steps.length ? <ol className="t-rp-steps" data-testid="tenant-repair-steps">
+      {repair.steps.length ? <ol className="t-rp-steps" role="list" data-testid="tenant-repair-steps">
         {repair.steps.map(step => <li key={step.id} className={step.state} aria-current={step.current ? "step" : undefined}>
           <i aria-hidden="true" />
           {step.date ? copy.stepAt.replace("{step}", copy.steps[step.id]).replace("{date}", formatDate(step.date, locale, calendar, dict)) : copy.steps[step.id]}
