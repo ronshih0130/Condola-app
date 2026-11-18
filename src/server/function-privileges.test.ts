@@ -779,3 +779,18 @@ test("B-092 RO-UNIT adds one service-only single-unit reader with B-093 admissio
   assert.match(read("scripts/check-function-privileges.sh"), /B-092 owner unit ACL\/config mismatch/);
   assert.ok(read("supabase/rpc-allowlist.txt").includes("# service-only: app.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)"));
 });
+
+test("PR-029 / LPQ-21: the chain gate seeds hosted table/sequence defaults and fails on anon/PUBLIC drift", () => {
+  const script = read("scripts/check-function-privileges.sh");
+  assert.match(script, /ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public\n\s+GRANT ALL ON TABLES TO anon, authenticated, service_role;/);
+  assert.match(script, /ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public\n\s+GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;/);
+  assert.match(script, /PR-029 \/ LPQ-21 chain guard/);
+  assert.match(script, /CREATE TABLE public\.pr029_default_priv_probe \(id bigserial PRIMARY KEY\);/);
+  assert.match(script, /expected="default_anon_public=0 default_auth_r=true default_svc_r=true default_auth_S=true default_svc_S=true open_relations=none probe_anon=false probe_public=0 probe_auth=true probe_svc=true"/);
+  assert.match(script, /anon\/PUBLIC table or sequence default-privilege drift after the migration chain/);
+  // The probe table never outlives the check.
+  assert.match(script, /CREATE TABLE public\.pr029_default_priv_probe[\s\S]*?\nROLLBACK;\nSQL/);
+  for (const file of ["supabase/migrations/20261116120000_pr029_default_privileges.sql", "supabase/migrations/20261116150000_lpq21_sequence_grants.sql"]) {
+    assert.ok(existsSync(file), file);
+  }
+});
