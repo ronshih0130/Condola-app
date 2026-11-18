@@ -135,3 +135,4 @@ public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)
 # B-092 service-only inventory (NOT authenticated RPC allowlist entries).
 # ACL/config asserted by the B-092 probe in scripts/check-function-privileges.sh.
 # service-only: app.b092_owner_units(uuid,uuid,text,uuid)
+# service-only: app.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)

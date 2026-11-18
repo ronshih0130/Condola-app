@@ -1,10 +1,15 @@
 import React from "react";
+import Link from "next/link";
 import type { Locale } from "../../../i18n";
 import { brandV3OwnerStateCopy } from "../../../i18n/lanes/brand-v3";
 import { brandV3OwnerUnitsCopy } from "../../../i18n/lanes/brand-v3-owner-units";
 import type { OwnerUnitRow, OwnerUnits } from "../../../server/b092-owner-units";
 import { moneyLabel } from "../../../server/format";
 import { displaySampleName } from "../../../server/sandbox-data";
+
+/** RO-UNIT (OWN-33-AC2): the read-only panel of one space; a room carries `?room=`. */
+export const ownerUnitHref = (row: Pick<OwnerUnitRow, "unitId" | "roomId">) =>
+  `/o/units/${encodeURIComponent(row.unitId)}${row.roomId ? `?room=${encodeURIComponent(row.roomId)}` : ""}`;
 
 /**
  * RO-UNITS (OWN-33-AC1/AC4): 「我的物件」, one line per authorised space: place, tenant (or 「租客」 when the company
@@ -34,11 +39,15 @@ export function OwnerUnitsView({ result, locale }: { result: OwnerUnits; locale:
     <h2>{c.title}</h2>
     <ul className="owner-units-lines">{result.rows.map(row => {
       const status = statusText(row, locale);
-      return <li key={`${row.unitId}:${row.roomId ?? ""}`} className={`owner-units-line owner-units-${row.status}`}>
+      const body = <>
         <span className="owner-units-place">{displaySampleName(`${row.property} ${row.space}`)}</span>
         <span className="owner-units-sub">{row.status === "vacant" ? "—"
           : `${row.tenant === null ? c.tenantHidden : displaySampleName(row.tenant)}・${row.rentMinor && row.currency ? moneyLabel(row.rentMinor, row.currency, locale) : ""}`}</span>
         {status && <span className="owner-units-status">{status}</span>}
+      </>;
+      // RO-UNIT: a leased line opens its read-only panel (whole row, ≥44px); a vacant line stays plain.
+      return <li key={`${row.unitId}:${row.roomId ?? ""}`} className={`owner-units-line owner-units-${row.status}${row.status === "vacant" ? "" : " owner-units-linked"}`}>
+        {row.status === "vacant" ? body : <Link className="owner-units-link" href={ownerUnitHref(row)}>{body}</Link>}
       </li>;
     })}</ul>
   </section>;

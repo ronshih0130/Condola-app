@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261117120000_b092_owner_unit.sql": {
+    addOnly: true,
+    reason: "B-092 RO-UNIT (OWN-33-AC2/AC4; frame 總覽・我的物件・信義路 2 樓; PR-023). One new service-only read gateway app.b092_owner_unit for one authorised space (B-093 admission: env/live tuple, app.b013_actor, PR-015 org-local current-owner predicate; an unauthorised unit or room is errors.forbidden 42501). No table, policy, grant on existing objects, flag or data change.",
+  },
   "supabase/migrations/20261117110000_b092_owner_units.sql": {
     addOnly: true,
     reason: "B-092 OWN-UNITS (OWN-33-AC1/AC4, RO-UNITS; Ron's owner round 2026-11-15; PR-014 closed into this item; OQ-095). One new service-only read gateway app.b092_owner_units (B-093 admission: env/live tuple, app.b013_actor, PR-015 org-local current-owner predicate per property). No table, policy, grant on existing objects, flag or data change.",
