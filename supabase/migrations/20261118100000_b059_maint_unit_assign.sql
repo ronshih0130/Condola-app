@@ -8,13 +8,14 @@
 --    maintenance member, or a pending maintenance invitation, of the same organization (AC2, GS-24 「邀請中」 rows).
 --  * NEW STABLE definer helpers (b017_denied_orgs pattern: the caller's own rows only, EXECUTE to authenticated so RLS
 --    can call them; on maintenance_tickets each is an InitPlan, once per statement; on ticket_attachments, where a
---    sublink recurses, per row but O(1)) and two NEW RESTRICTIVE policies: one on
+--    sublink recurses, per row but O(1) and self-validating), and two NEW RESTRICTIVE policies: one on
 --    public.maintenance_tickets and one on public.ticket_attachments. With the flag OFF the helpers return an empty
 --    array and every row passes, so every existing query keeps its text and its result (flag-OFF parity).
 --    With the flag ON for the organization, an active maintenance member sees (and can update) only tickets on
 --    units assigned to them (AC3), plus any ticket explicitly assigned to them (assigned_member_id, AC5 / MGT-116-AC6).
 --    Admins, managers, accountants, tenants, owners and service_role are never scoped (AC4).
--- No existing table, column, grant, policy, function or data is changed.
+--  * NEW partial index b059_invitations_accepted_by_idx on public.invitations (the caller-first invitation probe).
+-- No existing table, column, grant, policy, function or data is changed (one new index on public.invitations).
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='60s';
@@ -30,12 +31,13 @@ CREATE TABLE app.b059_unit_assignments (
   CHECK ((member_id IS NULL) <> (invitation_id IS NULL)),
   FOREIGN KEY (org_id, unit_id) REFERENCES public.units (org_id, id) ON DELETE CASCADE
 );
-CREATE UNIQUE INDEX b059_unit_assignments_member_unit_key ON app.b059_unit_assignments (org_id, member_id, unit_id) WHERE member_id IS NOT NULL;
-CREATE UNIQUE INDEX b059_unit_assignments_invite_unit_key ON app.b059_unit_assignments (org_id, invitation_id, unit_id) WHERE invitation_id IS NOT NULL;
-CREATE INDEX b059_unit_assignments_member_idx ON app.b059_unit_assignments (member_id) WHERE member_id IS NOT NULL;
-CREATE INDEX b059_unit_assignments_invitation_idx ON app.b059_unit_assignments (invitation_id) WHERE invitation_id IS NOT NULL;
+-- Caller-first keys (Codex r2): the person leads, so b059_ticket_visible's probe (member or invitation, org, unit) is one
+-- exact unique-key lookup, and the same index serves the ON DELETE CASCADE from org_members / invitations.
+CREATE UNIQUE INDEX b059_unit_assignments_member_unit_key ON app.b059_unit_assignments (member_id, org_id, unit_id) WHERE member_id IS NOT NULL;
+CREATE UNIQUE INDEX b059_unit_assignments_invite_unit_key ON app.b059_unit_assignments (invitation_id, org_id, unit_id) WHERE invitation_id IS NOT NULL;
 CREATE INDEX b059_unit_assignments_unit_idx ON app.b059_unit_assignments (unit_id);
-CREATE INDEX b059_unit_assignments_org_unit_idx ON app.b059_unit_assignments (org_id, unit_id);
+-- The caller's own accepted invitations (b059_ticket_visible's caller-first probe; the only index on an existing table).
+CREATE INDEX b059_invitations_accepted_by_idx ON public.invitations (accepted_by, org_id) WHERE status='accepted';
 
 -- Every request id is reserved with its outcome: a retry replays the stored result; another actor or payload under
 -- the same id is a conflict and never writes.
@@ -88,7 +90,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 $$;
 -- Units assigned to the caller in a scoped organization: rows keyed by the caller's member row, and rows saved while
 -- the caller was still an invitation that the caller has since accepted (GS-24: 邀請中 people can be assigned ahead).
--- Index use: b059_unit_assignments_member_unit_key / _invite_unit_key (org_id, member_id|invitation_id, unit_id).
+-- Index use: b059_unit_assignments_member_unit_key / _invite_unit_key (member_id|invitation_id, org_id, unit_id).
 CREATE FUNCTION app.b059_visible_units() RETURNS uuid[]
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE orgs uuid[] := app.b059_scoped_orgs(); result uuid[];
@@ -114,28 +116,39 @@ BEGIN
  WHERE m.user_id=auth.uid() AND m.org_id=ANY(orgs);
  RETURN result;
 END $$;
--- Photo rows (Codex r1 B-059 Part 1): per row, one O(1) indexed check of THIS row's ticket, never an array of tickets.
--- True when the ticket is on a unit assigned to the caller (member row or accepted invitation; index
--- b059_unit_assignments_org_unit_idx) or explicitly assigned to the caller (org_members PK). Called by the photo policy
--- only after the row's org is known to be scoped. Answers only about the caller's own assignment: no oracle beyond
--- what the ticket policy already shows. Definer: its reads bypass RLS, so it cannot recurse into any policy.
+-- Photo rows (Codex r1/r2 B-059 Part 1): per row, a fixed number of primary-key / composite-index probes of THIS row's
+-- ticket, never an array of tickets and never a walk over the unit's other assignees.
+-- Self-validating (r2 BLOCKING): authenticated must hold EXECUTE because a policy expression runs with the querying
+-- role's privileges, so the function cannot trust its call site. It answers true ONLY when the caller (auth.uid()) is
+-- an ACTIVE, not trial-paused (B-056) maintenance member of the ticket's own organization, maint_unit_assign is ON
+-- there (app.b059_flag_on, the same predicate as b059_scoped_orgs), and the ticket is explicitly assigned to that member row or sits on a unit
+-- assigned to that member row (or to an invitation the caller accepted). Everything else (unknown ticket, another
+-- organization, an admin/manager/accountant, a suspended or removed member whose rows remain, the flag OFF) is false,
+-- so a direct call can only confirm a ticket the ticket policy already shows the caller.
+-- Probes, caller first: maintenance_tickets_pkey; org_members_org_id_user_id_key (org_id, user_id) (+ the B-056 pause
+-- predicate, itself keyed by org); app.b059_flag_on
+-- (organizations PK + platform_settings PK); b059_unit_assignments_member_unit_key (member_id, org_id, unit_id);
+-- b059_invitations_accepted_by_idx (accepted_by, org_id) for the caller's own accepted invitations (normally none or
+-- one), each probed by exact key on b059_unit_assignments_invite_unit_key (invitation_id, org_id, unit_id). Definer: its reads bypass RLS, so it cannot recurse into any policy.
 CREATE FUNCTION app.b059_ticket_visible(p_ticket uuid) RETURNS boolean
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE t record;
+DECLARE t record; me uuid; inv uuid;
 BEGIN
- -- The row's ticket by primary key.
  SELECT x.org_id, x.unit_id, x.assigned_member_id INTO t FROM public.maintenance_tickets x WHERE x.id=p_ticket;
  IF NOT FOUND THEN RETURN false; END IF;
- -- Explicitly assigned to the caller (org_members primary key).
- IF t.assigned_member_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.org_members m
-   WHERE m.id=t.assigned_member_id AND m.org_id=t.org_id AND m.user_id=auth.uid()) THEN RETURN true; END IF;
+ SELECT m.id INTO me FROM public.org_members m
+ WHERE m.org_id=t.org_id AND m.user_id=auth.uid() AND m.role='maintenance'
+  AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id);
+ IF me IS NULL OR NOT app.b059_flag_on(t.org_id) THEN RETURN false; END IF;
+ IF t.assigned_member_id=me THEN RETURN true; END IF;
  IF t.unit_id IS NULL THEN RETURN false; END IF;
- -- The unit's few assignment rows (index b059_unit_assignments_org_unit_idx), each resolved by primary key.
- RETURN EXISTS (SELECT 1 FROM app.b059_unit_assignments a
-  LEFT JOIN public.org_members m ON m.id=a.member_id AND m.org_id=a.org_id
-  LEFT JOIN public.invitations i ON i.id=a.invitation_id AND i.org_id=a.org_id
-  WHERE a.org_id=t.org_id AND a.unit_id=t.unit_id
-   AND (m.user_id=auth.uid() OR (i.status='accepted' AND i.accepted_by=auth.uid())));
+ IF EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=t.org_id AND a.member_id=me AND a.unit_id=t.unit_id)
+  THEN RETURN true; END IF;
+ FOR inv IN SELECT i.id FROM public.invitations i WHERE i.accepted_by=auth.uid() AND i.org_id=t.org_id AND i.status='accepted' LOOP
+  IF EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=t.org_id AND a.invitation_id=inv AND a.unit_id=t.unit_id)
+   THEN RETURN true; END IF;
+ END LOOP;
+ RETURN false;
 END $$;
 
 -- MGT-118-AC3/AC4/AC5. Restrictive: it narrows the existing permissive policies for the scoped caller only.

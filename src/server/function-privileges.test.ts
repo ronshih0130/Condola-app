@@ -807,6 +807,16 @@ test("B-059 (MGT-118) adds two service-only gateways, owner-only flag helper, fo
   // (42P17 on ticket_attachments) and only per-row O(1) calls.
   assert.match(code, /ON public\.maintenance_tickets AS RESTRICTIVE TO authenticated\s+USING \(NOT \(org_id = ANY\(\(SELECT app\.b059_scoped_orgs\(\)\)::uuid\[\]\)\)\s+OR coalesce\(unit_id = ANY\(\(SELECT app\.b059_visible_units\(\)\)::uuid\[\]\),false\)\s+OR coalesce\(assigned_member_id = ANY\(\(SELECT app\.b059_own_members\(\)\)::uuid\[\]\),false\)\);/);
   assert.match(code, /ON public\.ticket_attachments AS RESTRICTIVE TO authenticated\s+USING \(NOT \(org_id = ANY\(app\.b059_scoped_orgs\(\)\)\) OR app\.b059_ticket_visible\(ticket_id\)\);/);
+  // Codex r2: the authenticated-executable photo check validates the caller itself before any assignment probe, and the
+  // only object added to an existing table besides the two policies is one partial index on public.invitations.
+  const visible = code.slice(code.indexOf("CREATE FUNCTION app.b059_ticket_visible"), code.indexOf("CREATE POLICY b059_maint_unit_scope"));
+  assert.match(visible, /SELECT m\.id INTO me FROM public\.org_members m\s+WHERE m\.org_id=t\.org_id AND m\.user_id=auth\.uid\(\) AND m\.role='maintenance'\s+AND m\.status='active' AND NOT app\.b056_member_paused\(m\.org_id, m\.user_id\);\s+IF me IS NULL OR NOT app\.b059_flag_on\(t\.org_id\) THEN RETURN false; END IF;/);
+  assert.ok(visible.indexOf("IF me IS NULL") < visible.indexOf("b059_unit_assignments"), "caller validated before any assignment probe");
+  assert.match(visible, /a\.member_id=me AND a\.unit_id=t\.unit_id/);
+  assert.match(visible, /a\.invitation_id=inv AND a\.unit_id=t\.unit_id/);
+  assert.doesNotMatch(visible, /a\.unit_id=t\.unit_id\s*$|LEFT JOIN/m);
+  assert.deepEqual([...code.matchAll(/CREATE (?:UNIQUE )?INDEX (\w+) ON ([\w.]+)/g)].filter(m => !m[2].startsWith("app.")).map(m => `${m[1]}@${m[2]}`),
+    ["b059_invitations_accepted_by_idx@public.invitations"]);
   // The flag seed is OFF and never overwritten; the helpers only ever read the caller's own rows.
   assert.match(sql, /VALUES \('maint_unit_assign', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\)\nON CONFLICT \(key\) DO NOTHING;/);
   assert.match(sql, /JOIN public\.org_members m ON m\.user_id=auth\.uid\(\) AND m\.role='maintenance' AND m\.status='active'/);

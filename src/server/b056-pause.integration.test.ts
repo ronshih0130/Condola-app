@@ -229,7 +229,8 @@ const CLASSIFIED: Record<string, Entry> = {
   "app.b059_scoped_orgs()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "553d2f4807e2c51191ffa79e8eac3e34" },
   "app.b059_visible_units()": { cls: "not_a_caller_grant", active: 0, guarded: 0, fp: "108d7e7642cb478f2e67e47aee017901" },
   "app.b059_own_members()": { cls: "not_a_caller_grant", active: 0, guarded: 0, fp: "14cc72b2b38c6b7e06ef6b3bb8491cf1" },
-  "app.b059_ticket_visible(p_ticket uuid)": { cls: "not_a_caller_grant", active: 0, guarded: 0, fp: "b36ebc75dd9eef26f4d4ceba1a2607d7" },
+  // B-059 r2: the photo check validates the caller itself (an active, unpaused maintenance member of the ticket's org).
+  "app.b059_ticket_visible(p_ticket uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "65f0c277d3b44bbe50e152239076b9c6" },
 };
 // Reachable plpgsql functions that run dynamic SQL. Each was read: the statement is a fixed
 // LOCK TABLE over regclass arguments and can call no function. Pinned, so a change re-opens it.
