@@ -42,11 +42,13 @@ Ron reviews the mockup (step 5) before any implementation (step 7):
 - Existing-page edit: before/after static mockups, each changed element tagged with its purpose and story ID.
 - Copy or small style tweak: annotated screenshot.
 
-## 6. Non-author review (P82, P66; REVIEW-CHECKLIST items 12, 14)
+## 6. Non-author review (P82, P83, P66; REVIEW-CHECKLIST items 12, 14, 15)
 - Any model family other than every author family of the PR (claude / codex / gemini incl. agy) satisfies review. Codex-first is a preference, not a requirement.
 - Before `llm-route review`, derive each PR's author family from git — `Co-Authored-By` trailers, `Authored via llm-route <provider>`, `author rN <provider>`. Never infer family from the branch name. Never reuse one `--author-source` for a mixed-family batch; split mixed batches.
 - Run `/workspace/ops/review-author-check.sh --repo <app> --author-source <src> --prs <list>` or `--range A..B` (use `--range` for unmerged PRs); keep the result with the review receipt.
-- Two FAILs from non-author reviews stop the item → log it in PENDING-RON; no third round without a CEO ruling.
+- Every finding is tagged BLOCKING / SHOULD / NIT and carries a `repro:` field: a failing test, a script, or an exact command and its output showing the defect on the exact reviewed SHA (P83), e.g. `grep` / `psql` / `curl`; for an omission (e.g. a missing `REVOKE EXECUTE FROM PUBLIC`), a command whose output shows the absence (`grep -c 'REVOKE EXECUTE' <file>` → `0`). Findings without one are UNVERIFIED: record them in the receipt or OPEN-QUESTIONS (P69); they do not make the verdict FAIL.
+- A reviewer that lacked needed code or files writes `INCOMPLETE CONTEXT: <missing files>`. That review is INCOMPLETE: re-run it with the missing files as a new call (never resend a call that succeeded). A FAIL verdict with no reproduced BLOCKING finding is also INCOMPLETE. INCOMPLETE reviews do not count toward P66.
+- Two FAILs from non-author reviews, each with a reproduced BLOCKING finding, stop the item → log it in PENDING-RON; no third round without a CEO ruling.
 
 ## 7. Feature flags default OFF
 New flags ship OFF with an expiry set. Flag-OFF table test (REVIEW-CHECKLIST item 13): every new flagged route/page/layout/server action must be listed in `src/server/b073-flag-off-endpoints.test.tsx` (or its successor) before merge. With the flag OFF and with a failing flag lookup, the endpoint must: return 404, read no body or request input, read no data beyond session and consent, perform no write, and write no audit row. Registry-completeness must pass.
