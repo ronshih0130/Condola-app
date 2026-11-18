@@ -227,7 +227,13 @@ test("MGT-136-AC2 SQL: one named field only, never a row snapshot; keyset both w
   assert.doesNotMatch(plain.sql, /to_jsonb\(a\)|a\.\*/);
   assert.equal((plain.sql.match(/a\.(old|new)_row ->> x\.col/g) ?? []).length, 2);
   assert.match(plain.sql, /ORDER BY a\.occurred_at DESC, a\.id DESC/);
-  assert.deepEqual(plain.params, [ORG, Object.keys(PLAIN_FIELDS), 26]);
+  const moneyKeys = Object.keys(PLAIN_FIELDS).filter(key => PLAIN_FIELDS[key] === "money");
+  assert.deepEqual(moneyKeys, ["leases.rent_amount_minor", "leases.deposit_amount_minor"]);
+  assert.deepEqual(plain.params, [ORG, Object.keys(PLAIN_FIELDS), moneyKeys, 26]);
+  // Snapshots are read only through the allow-listed column; currency never comes from a snapshot.
+  assert.deepEqual([...plain.sql.matchAll(/a\.(old|new)_row ->> ([^\s,)]+)/g)].map(m => m[2]), ["x.col", "x.col"]);
+  assert.doesNotMatch(plain.sql, /_row\s*->>?\s*'/);
+  assert.match(plain.sql, /CASE WHEN \(a\.table_name \|\| '\.' \|\| v\.col\) = ANY\(\$3::text\[\]\) THEN btrim\(coalesce\(\s*\(SELECT l\.currency::text FROM leases l WHERE a\.table_name = 'leases' AND l\.org_id = a\.org_id AND l\.id::text = a\.row_id\),\s*\(SELECT o\.default_currency::text FROM organizations o WHERE o\.id = a\.org_id\)/);
   const all = auditV3PageQuery({ ...base, actorId: OTHER, tables: ["units", "rooms"], from: "2026-10-31T16:00:00.000Z", to: "2026-11-15T16:00:00.000Z", cursor: { at: "2026-11-14T07:02:00.000000Z", id: "42" }, direction: "newer" });
   assert.match(all.sql, /a\.actor_user_id = \$2::uuid/); assert.match(all.sql, /a\.table_name = ANY\(\$3::text\[\]\)/);
   assert.match(all.sql, /\(a\.occurred_at, a\.id\) > \(\$6::timestamptz, \$7::bigint\)/); assert.match(all.sql, /ORDER BY a\.occurred_at ASC, a\.id ASC/);
@@ -264,7 +270,8 @@ test("MGT-136-AC5 states: no match → 「找不到符合的紀錄」 + 「清�
   assert.match(none, /<p>找不到符合的紀錄<\/p><a class="btn txt" href="\/m\/audit" data-testid="audit-v3-clear">清除篩選<\/a>/);
   assert.doesNotMatch(none, /audit-v3-list|audit-v3-next/);
   const unfiltered = renderToStaticMarkup(<AuditView locale="zh-TW" page={page({ entries: [] })} />);
-  assert.match(unfiltered, /找不到符合的紀錄/); assert.doesNotMatch(unfiltered, /清除篩選/);
+  // The pair always shows together (MGT-136-AC5); without filters 「清除篩選」 still opens the unfiltered page.
+  assert.match(unfiltered, /<p>找不到符合的紀錄<\/p><a class="btn txt" href="\/m\/audit" data-testid="audit-v3-clear">清除篩選<\/a>/);
   const loading = renderToStaticMarkup(<AuditLoading locale="zh-TW" />);
   assert.match(loading, /aria-busy="true"/); assert.equal((loading.match(/v3-audit-skeleton/g) ?? []).length, 5);
   assert.doesNotMatch(loading, /<form|<a |<select|下一頁/);

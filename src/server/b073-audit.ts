@@ -123,7 +123,6 @@ export function auditV3Href(filters: AuditV3Filters, page: { cursor?: string | n
   const query = params.toString();
   return query ? `${AUDIT_V3_HREF}?${query}` : AUDIT_V3_HREF;
 }
-export const filtered = (filters: AuditV3Filters) => !!(filters.actorId || filters.from || filters.to || filters.item || filters.cursor || filters.before);
 
 export type AuditV3PageInput = {
   orgId: string;
@@ -138,9 +137,12 @@ export type AuditV3PageInput = {
 };
 
 const PLAIN_KEYS = Object.keys(PLAIN_FIELDS);
+const MONEY_KEYS = PLAIN_KEYS.filter(key => PLAIN_FIELDS[key] === "money");
 /**
  * One page with today's columns plus, for a one-field update in PLAIN_FIELDS only, that field's old and new value
- * (and the row's currency code for money). Predicates are appended only when set.
+ * and nothing else from the snapshots. A money field's currency is never read from a snapshot: it is the audited
+ * lease's own currency (same session, same RLS), else the company's default currency, and only for money fields.
+ * Predicates are appended only when set.
  */
 export function auditV3PageQuery(input: AuditV3PageInput) {
   const params: unknown[] = [input.orgId];
@@ -160,20 +162,24 @@ export function auditV3PageQuery(input: AuditV3PageInput) {
   }
   params.push(PLAIN_KEYS);
   const plain = params.length;
+  params.push(MONEY_KEYS);
+  const money = params.length;
   params.push(Math.max(1, Math.min(AUDIT_PAGE_SIZE + 1, Math.floor(input.limit) || 1)));
   const order = newer ? "ASC" : "DESC";
   const sql = `${AUDIT_SELECT},
        v.col AS plain_col,
        v.old_value AS plain_old,
        v.new_value AS plain_new,
-       v.currency AS plain_currency
+       CASE WHEN (a.table_name || '.' || v.col) = ANY($${money}::text[]) THEN btrim(coalesce(
+         (SELECT l.currency::text FROM leases l WHERE a.table_name = 'leases' AND l.org_id = a.org_id AND l.id::text = a.row_id),
+         (SELECT o.default_currency::text FROM organizations o WHERE o.id = a.org_id)
+       )) END AS plain_currency
   FROM audit_log a
   LEFT JOIN profiles p ON p.id = a.actor_user_id
   LEFT JOIN LATERAL (
     SELECT x.col,
            left(a.old_row ->> x.col, 200) AS old_value,
-           left(a.new_row ->> x.col, 200) AS new_value,
-           btrim(coalesce(a.new_row ->> 'currency', a.old_row ->> 'currency')) AS currency
+           left(a.new_row ->> x.col, 200) AS new_value
       FROM (SELECT c.cols[1] AS col, cardinality(c.cols) AS n
               FROM (SELECT array_remove(array_remove(a.changed_cols, 'updated_at'), 'created_at') AS cols) c) x
      WHERE a.action = 'update' AND x.n = 1 AND (a.table_name || '.' || x.col) = ANY($${plain}::text[])

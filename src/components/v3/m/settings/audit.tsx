@@ -5,7 +5,6 @@ import {
   AUDIT_V3_HREF,
   AUDIT_V3_ITEMS,
   auditV3Href,
-  filtered,
   itemLabel,
   type AuditV3Entry,
   type AuditV3Page,
@@ -78,7 +77,7 @@ export function AuditView({ locale, page }: { locale: Locale; page: AuditV3Page 
       {entries.length === 0
         ? <div className="v3-audit-empty" data-testid="audit-v3-empty">
             <p>{c.noMatch}</p>
-            {filtered(filters) ? <a className="btn txt" href={AUDIT_V3_HREF} data-testid="audit-v3-clear">{c.clear}</a> : null}
+            <a className="btn txt" href={AUDIT_V3_HREF} data-testid="audit-v3-clear">{c.clear}</a>
           </div>
         : <ol className="v3-audit-list" data-testid="audit-v3-list">
             {entries.map(entry => <li className="v3-audit-entry" key={entry.key} data-testid="audit-v3-entry">

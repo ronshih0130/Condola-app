@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { query } from "./db";
-import { auditV3Read, type AuditV3Read } from "./b073-audit";
+import { many, query, tx } from "./db";
+import { auditV3Read, auditV3ScreenQuery, type AuditV3Read, type RawAuditV3 } from "./b073-audit";
+import { requireOrgScope } from "./org-guard";
 import { entryText } from "../components/v3/m/settings/audit";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { disposableDbUrl } from "./test-disposable-db";
@@ -38,7 +39,8 @@ const tagOf = (prefix: string) => `${prefix}-${Array.from({ length: 10 }, () => 
 const texts = (read: AuditV3Read) => ready(read).entries.map(entry => entryText("zh-TW", entry));
 
 test("MGT-136-AC2/AC4: an admin sees the company's entries in plain words; only named values; sensitive values masked; never another company's", async () => {
-  const lease = (await query<{ id: string }>("SELECT id::text AS id FROM leases WHERE org_id = $1 ORDER BY id LIMIT 1", [ORG_ID])).rows[0].id;
+  // A TWD lease: the amount's currency is the lease's own, so the expected text follows it.
+  const lease = (await query<{ id: string }>("SELECT id::text AS id FROM leases WHERE org_id = $1 AND btrim(currency::text) = 'TWD' ORDER BY id LIMIT 1", [ORG_ID])).rows[0].id;
   const contact = (await query<{ id: string }>("SELECT id::text AS id FROM contacts WHERE org_id = $1 AND is_tenant ORDER BY id LIMIT 1", [ORG_ID])).rows[0].id;
   const marker = tagOf("rfaudit");
   await insert([
@@ -119,4 +121,57 @@ test("MGT-136-AC2 paging: 25 a page newest first; 下一頁 then 上一頁 retur
   const back = ready(await auditV3Read(admin, { ...filter, before: second.prev! }, { now: NOW }));
   assert.deepEqual(back.entries.map(entry => entry.key), first.entries.map(entry => entry.key));
   assert.equal(back.prev, null); assert.equal(back.next, first.next);
+});
+
+test("MGT-136-AC4 projection: only the allow-listed field's two values leave the database; currency only for money, never from a snapshot", async () => {
+  // A USD lease in the TWD company: the money currency must be the lease's own, not the org default or the planted JPY.
+  const lease = (await query<{ id: string; currency: string }>("SELECT id::text AS id, btrim(currency::text) AS currency FROM leases WHERE org_id = $1 AND btrim(currency::text) <> 'TWD' ORDER BY id LIMIT 1", [ORG_ID])).rows[0];
+  assert.ok(lease, "a non-TWD lease in the seed");
+  const unit = (await query<{ id: string }>("SELECT id::text AS id FROM units WHERE org_id = $1 ORDER BY id LIMIT 1", [ORG_ID])).rows[0].id;
+  const contact = (await query<{ id: string }>("SELECT id::text AS id FROM contacts WHERE org_id = $1 ORDER BY id LIMIT 1", [ORG_ID])).rows[0].id;
+  const tag = tagOf("rfproj");
+  // Every snapshot also carries a planted currency and extra keys; none of them may come back.
+  const extra = { currency: "JPY", phone_e164: "+886912000444", planted_secret: "zzplantedzz", national_id: "A123456789" };
+  let month = "";
+  for (let year = 1990; year < 2019 && !month; year += 1) {
+    const free = await query("SELECT 1 FROM audit_log WHERE org_id = $1 AND occurred_at >= $2::timestamptz AND occurred_at < $3::timestamptz LIMIT 1", [ORG_ID, `${year}-07-01T00:00:00+08:00`, `${year}-08-01T00:00:00+08:00`]);
+    if (!free.rows.length) month = `${year}-07`;
+  }
+  assert.ok(month, "a free month");
+  await insert([
+    { org: ORG_ID, actor: USERS.admin, table: "contacts", rowId: contact, action: "update", at: `${month}-01T02:00:00Z`, changed: ["display_name"], reason: tag,
+      old: { display_name: "舊名", ...extra }, next: { display_name: "新名", ...extra } },
+    { org: ORG_ID, actor: USERS.admin, table: "units", rowId: unit, action: "update", at: `${month}-02T02:00:00Z`, changed: ["label"], reason: tag,
+      old: { label: "2F", ...extra }, next: { label: "2F-1", ...extra } },
+    { org: ORG_ID, actor: USERS.admin, table: "leases", rowId: lease.id, action: "update", at: `${month}-03T02:00:00Z`, changed: ["rent_amount_minor"], reason: tag,
+      old: { rent_amount_minor: 1800000, ...extra }, next: { rent_amount_minor: 1850000, ...extra } },
+  ]);
+  const built = auditV3ScreenQuery({ orgId: ORG_ID, actorId: null, tables: null, from: `${month}-01T00:00:00+08:00`, to: `${month}-28T00:00:00+08:00`,
+    cursor: null, direction: "older", limit: 26 });
+  const [bundle] = await tx(admin.userId, client => many<{ page: RawAuditV3[] }>(client, built.sql, built.params), requireOrgScope(admin));
+  const rows = (typeof bundle.page === "string" ? JSON.parse(bundle.page) : bundle.page) as Record<string, unknown>[];
+  const mine = rows.filter(row => String(row.reason).includes(tag));
+  assert.equal(mine.length, 3);
+  const columns = ["id", "occurred_key", "occurred_at", "actor_name", "has_actor", "table_name", "row_id", "action", "event_type", "changed_cols", "reason",
+    "plain_col", "plain_old", "plain_new", "plain_currency"];
+  for (const row of mine) assert.deepEqual(Object.keys(row).sort(), [...columns].sort(), String(row.table_name));
+  const by = (table: string) => mine.find(row => row.table_name === table)!;
+  assert.deepEqual([by("contacts").plain_col, by("contacts").plain_old, by("contacts").plain_new, by("contacts").plain_currency], ["display_name", "舊名", "新名", null]);
+  assert.deepEqual([by("units").plain_col, by("units").plain_old, by("units").plain_new, by("units").plain_currency], ["label", "2F", "2F-1", null]);
+  // Money: the lease's own currency (not the planted JPY).
+  assert.deepEqual([by("leases").plain_old, by("leases").plain_new, by("leases").plain_currency], ["1800000", "1850000", lease.currency]);
+  const packed = JSON.stringify(mine);
+  for (const secret of ["JPY", "886912000444", "zzplantedzz", "A123456789", "planted_secret", "national_id", "phone_e164"]) assert.equal(packed.includes(secret), false, secret);
+  // A deleted lease falls back to the company's default currency.
+  const gone = randomUUID();
+  await insert([{ org: ORG_ID, actor: USERS.admin, table: "leases", rowId: gone, action: "update", at: `${month}-04T02:00:00Z`, changed: ["deposit_amount_minor"], reason: tag,
+    old: { deposit_amount_minor: 100, ...extra }, next: { deposit_amount_minor: 200, ...extra } }]);
+  const orgCurrency = (await query<{ c: string }>("SELECT btrim(default_currency::text) AS c FROM organizations WHERE id = $1", [ORG_ID])).rows[0].c;
+  const [again] = await tx(admin.userId, client => many<{ page: RawAuditV3[] }>(client, built.sql, built.params), requireOrgScope(admin));
+  const deleted = ((typeof again.page === "string" ? JSON.parse(again.page) : again.page) as Record<string, unknown>[]).find(row => row.row_id === gone)!;
+  assert.equal(deleted.plain_currency, orgCurrency);
+  // The page shows the amount with the trusted currency.
+  const entry = ready(await auditV3Read(admin, { from: `${month}-01`, to: `${month}-28`, item: "lease" }, { now: NOW })).entries.find(e => e.reason.includes(tag) && e.plain?.field === "租金");
+  assert.ok(entry); assert.equal(entry.plain!.to, lease.currency === "USD" ? "US$18,500.00" : entry.plain!.to);
+  assert.notEqual(orgCurrency, lease.currency);
 });
