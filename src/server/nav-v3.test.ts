@@ -85,6 +85,9 @@ test("MGT-47-AC4/AC5, PLT-44-AC15: own area and approved sub-page crumbs", () =>
     ["/m/payments?filter=x", ["收款", "待確認繳款"]], ["/m/rent", ["收款"]], ["/m/more", ["更多"]],
   ] as const) assert.deepEqual(crumbFor(path, admin), expected);
   assert.deepEqual(crumbFor("/m/import", staff("manager")), ["設定"]);
+  // MGT-138 / R5-OWNVIEW frame: 「設定 › 規則與資料」 on the settings area's own first page.
+  assert.deepEqual(crumbFor("/m/settings", admin), ["設定", "規則與資料"]);
+  assert.deepEqual(crumbFor("/m/notify", admin), ["設定", "通知設定"]);
   assert.deepEqual(crumbFor("/m/bank", staff("manager")), ["收款"]);
   assert.deepEqual(crumbFor("/m/noperm", admin), []);
 });

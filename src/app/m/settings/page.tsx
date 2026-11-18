@@ -1,4 +1,9 @@
 // FILE: src/app/m/settings/page.tsx
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { OwnerViewLoading } from "@/components/v3/m/settings/owner-view";
+import { OwnerViewSection } from "@/components/v3/m/settings/page";
+import { brandV3OwnViewCopy } from "@/i18n/lanes/brand-v3-r5-ownview";
 import { upgradeGate } from "@/server/upgrade-gate";
 import { FREE_UNITS } from "@/server/billing";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
@@ -28,6 +33,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const session = await guardEffectiveSession(await getSession(), "settings.edit");
   const gate = await upgradeGate(session, FREE_UNITS);
   const t = makeT(session.locale);
+  // R5-OWNVIEW (MGT-138): under brand_v3 the page opens with the approved lead and 「屋主看得到什麼」; the rest of
+  // the page is unchanged (later R5 slices). Flag OFF renders exactly as before.
+  const v3 = await brandV3EnabledForOrg(session.orgId);
   const mail = can(session, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   const interimOn = session.environment === "live" && (await isPricingInterimEnabled(session.liveOrgId));
   const trial = await trialCardState(session);
@@ -35,7 +43,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const confirmPlan = trial?.offer === "admin" ? parseTrialPlan(query.trial) : null;
   return (
     <>
-      <PageHeader title={t("i_nav_settings")} />
+      {v3 ? <>
+        <PageHeader title={brandV3OwnViewCopy(session.locale).lead} />
+        <Suspense fallback={<OwnerViewLoading locale={session.locale} />}><OwnerViewSection session={session} /></Suspense>
+      </> : <PageHeader title={t("i_nav_settings")} />}
       <PartnerConsentHistory session={session} />
       <PayeeSettings session={session} />
       <ErrorBanner t={t} error={query.error} />

@@ -460,5 +460,8 @@
   "src/server/mf3-deposit-topup.ts#recordDepositTopup": null,
   "src/server/b091-owner-rules.ts#ownerRuleView": null,
   "src/server/b091-owner-rules.ts#setOwnerRule": null,
-  "src/server/b091-owner-rules.ts#staffRuleChanges": "props.view"
+  "src/server/b091-owner-rules.ts#staffRuleChanges": "props.view",
+  "src/server/b073-owner-view.ts#ownerViewRead": "settings.edit",
+  "src/server/b073-owner-view.ts#saveOwnerView": "settings.edit",
+  "src/server/b073-owner-view-actions.ts#saveOwnerViewAction": "settings.edit"
 }
