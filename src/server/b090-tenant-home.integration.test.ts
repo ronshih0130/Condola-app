@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { tenantHomeView } from "./b090-tenant-home";
 import { buildStoredConsent } from "./consent";
+import { confirmPayment } from "./domain";
 import { query } from "./db";
 import { tenantPaymentHistory } from "./tenant-payment-history";
 import { disposableDbUrl } from "./test-disposable-db";
@@ -68,12 +69,23 @@ async function makeLease(o: Org, parties: Tenant[], invoice: { due: string; peri
   return { lease, invoice: id, o };
 }
 type L = Awaited<ReturnType<typeof makeLease>>;
+async function addInvoice(l: L, due: string, period: string, amount: number) {
+  const id = (await query<{ id: string }>(`INSERT INTO invoices (org_id, property_id, lease_id, invoice_number, currency, due_date, period_start, status) VALUES ($1, $2, $3, $4, 'TWD', $5, $6, 'open') RETURNING id::text`,
+    [l.o.orgId, l.o.property, l.lease, randomUUID(), due, period])).rows[0].id;
+  await query(`INSERT INTO invoice_lines (org_id, invoice_id, line_no, charge_type, description, unit_amount_minor, amount_minor) VALUES ($1, $2, 1, 'rent', 'Synthetic rent', $3, $4)`, [l.o.orgId, id, amount, amount]);
+  return id;
+}
+async function manager(orgId: string): Promise<Session> {
+  const userId = await user("manager");
+  await query(`INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, 'manager'::org_role, 'active')`, [orgId, userId]);
+  return { userId, sessionId: await sessionRow(userId), email: "", name: "manager", kind: "staff", role: "manager", orgId, liveOrgId: orgId, environment: "live", locale: "en", calendar: "gregorian", leaseId: null };
+}
 let minute = 0;
 async function report(l: L, t: Tenant, amount: number, status: "submitted" | "rejected" = "submitted") {
-  await query(
+  return (await query<{ id: string }>(
     `INSERT INTO payments (org_id, property_id, lease_id, payer_contact_id, currency, amount_minor, paid_on, method, status, source, submitted_by, submitted_at, rejected_reason)
-     VALUES ($1, $2, $3, $4, 'TWD', $5, '2090-01-10', 'bank_transfer', $6::payment_status, 'tenant_portal', $7, $8::timestamptz, $9)`,
-    [l.o.orgId, l.o.property, l.lease, t.contact, amount, status, t.userId, new Date(Date.UTC(2090, 0, 10, 0, minute++)).toISOString(), status === "rejected" ? "Synthetic reason" : null]);
+     VALUES ($1, $2, $3, $4, 'TWD', $5, '2090-01-10', 'bank_transfer', $6::payment_status, 'tenant_portal', $7, $8::timestamptz, $9) RETURNING id::text`,
+    [l.o.orgId, l.o.property, l.lease, t.contact, amount, status, t.userId, new Date(Date.UTC(2090, 0, 10, 0, minute++)).toISOString(), status === "rejected" ? "Synthetic reason" : null])).rows[0].id;
 }
 async function home(t: Tenant, lease: string) {
   const h = await tenantPaymentHistory(t.s, lease, { view: "current", home: true });
@@ -127,6 +139,34 @@ test("TEN-54-AC1: overdue days follow the property's date; a confirmed (paid) bi
   await query(`UPDATE invoices SET status = 'paid', paid_minor = total_minor WHERE id = $1`, [late.invoice]);
   const paid = await tenantHomeView(t.s, late.lease);
   assert.deepEqual(paid.state === "ready" && paid.headline, { kind: "paid", month: "2020-01" });
+});
+
+test("PLT-51 / TEN-54-AC1: settled through the staff confirmation path; an older paid month beside an open one is never 已繳清", async () => {
+  const o = await makeOrg();
+  const t = await makeTenant(o.orgId);
+  const staff = await manager(o.orgId);
+  const l = await makeLease(o, [t], { due: "2090-02-05", period: "2090-02-01", amount: 1_000_000 });
+  await addInvoice(l, "2090-03-05", "2090-03-01", 1_850_000);
+  // February is reported and confirmed by staff (the app's confirmPayment); March stays open.
+  const feb = await report(l, t, 1_000_000);
+  const reported = await tenantHomeView(t.s, l.lease);
+  assert.deepEqual(reported.state === "ready" && reported.headline, { kind: "partial", month: "2090-02", restMinor: 1_850_000 });
+  await confirmPayment(staff, feb);
+  assert.equal((await query<{ status: string }>(`SELECT status::text FROM invoices WHERE id = $1`, [l.invoice])).rows[0].status, "paid");
+  const f = await home(t, l.lease);
+  assert.deepEqual({ paidMonth: f.paidMonth, nextDue: f.nextDue, pendingMinor: f.pendingMinor }, { paidMonth: "2090-02", nextDue: { month: "2090-03", dueOn: "2090-03-05" }, pendingMinor: 0 });
+  const mixed = await tenantHomeView(t.s, l.lease);
+  assert.equal(mixed.state, "ready");
+  assert.notEqual(mixed.state === "ready" && mixed.headline.kind, "paid", "an older paid invoice next to an open one is not 已繳清");
+  assert.deepEqual(mixed.state === "ready" && mixed.headline, { kind: "due", month: "2090-03", amountMinor: 1_850_000, dueOn: "2090-03-05" }, "March is still owed: 待繳");
+  // March reported and confirmed too: now the whole bill is settled by confirmed payments → 已繳清 with its month.
+  const mar = await report(l, t, 1_850_000);
+  const waiting = await tenantHomeView(t.s, l.lease);
+  assert.deepEqual(waiting.state === "ready" && waiting.headline, { kind: "reported", amountMinor: 1_850_000 });
+  await confirmPayment(staff, mar);
+  const settled = await tenantHomeView(t.s, l.lease);
+  assert.deepEqual(settled.state === "ready" && settled.headline, { kind: "paid", month: "2090-03" });
+  assert.equal(settled.state === "ready" && settled.waiting, false);
 });
 
 test("TEN-54-AC2: repair cards come from the tenant's own selected lease only, open ones only", async () => {

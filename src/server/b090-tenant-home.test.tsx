@@ -66,6 +66,13 @@ test("TEN-54-AC1: one headline per state, verbatim zh-TW sentences", () => {
     assert.deepEqual(h, { kind: "none", state });
   }
   assert.equal(tenantHomeSentence({ kind: "none", state: "unsigned" }, "TWD", "zh-TW", "x", "y"), "合約尚未簽署，帳單尚未開立。");
+  // Codex r1: a positive balance never gives 已繳清, even when the input says "paid" (inconsistent).
+  const odd = tenantHomeHeadline(bill({ state: "paid", balanceMinor: 100 }), facts({ nextDue: null, paidMonth: "2026-11" }));
+  assert.notEqual(odd.kind, "paid");
+  assert.deepEqual(odd, { kind: "none", state: "due" });
+  assert.notEqual(tenantHomeSentence(odd, "TWD", "zh-TW", "x", "y"), tenantHomeSentence({ kind: "none", state: "paid" }, "TWD", "zh-TW", "x", "y"));
+  assert.equal(tenantHomeHeadline(bill({ state: "paid", balanceMinor: 100 }), facts({ paidMonth: "2026-10" })).kind, "due");
+  assert.deepEqual(tenantHomeHeadline(bill({ state: "paid", balanceMinor: 0 }), facts({ nextDue: null, paidMonth: null })), { kind: "none", state: "paid" });
   const en = (h: ReturnType<typeof tenantHomeHeadline>) => tenantHomeSentence(h, "TWD", "en", "Amy", "Anju");
   assert.equal(en({ kind: "due", month: "2026-11", amountMinor: 1_850_000, dueOn: "2026-11-05" }), "Hello Amy, November rent of NT$18,500 is due by Nov 5.");
   assert.equal(en({ kind: "overdue", month: "2026-10", days: 1 }), "October rent is unpaid and 1 day past due.");
@@ -122,14 +129,25 @@ test("TEN-54-AC2: a repair card only for an open repair, newest first, with text
   assert.equal((html(ready(view.headline)).match(/tenant-home-repair/g) ?? []).length, 0, "no repair, no card");
 });
 
-test("TEN-54-AC3: nothing to pay and no card shows drawing 07 and no button", () => {
+test("TEN-54-AC3: nothing to pay shows drawing 07 and no button; open repairs keep their cards", () => {
   for (const h of [{ kind: "paid", month: "2026-11" }, { kind: "none", state: "no_invoice" }] as const) {
     const out = html(ready(h));
     assert.match(out, /data-testid="tenant-home-empty"><svg class="v3-illustration" data-v3-illustration="07"/);
     assert.doesNotMatch(out, /<button|<a /);
-    assert.doesNotMatch(html(ready(h, { repairs: [{ id: "r", title: "t", step: "reported" }] })), /data-v3-illustration/, "a card applies: no drawing");
+    // Codex r1: the drawing follows the payment state only; an open repair's card shows alongside it.
+    const withRepair = html(ready(h, { repairs: [{ id: "r", title: "t", step: "reported" }] }));
+    assert.match(withRepair, /data-v3-illustration="07"/);
+    assert.match(withRepair, /<h2>報修・t<\/h2>/);
   }
   assert.doesNotMatch(html(ready({ kind: "due", month: "2026-11", amountMinor: 1, dueOn: "2026-11-05" })), /data-v3-illustration/);
+  // Regression (Codex r1): no payable bill + one open repair → drawing 07, the repair card, and still no button.
+  const noBill = tenantHomeHeadline(bill({ state: "nonpayable", balanceMinor: 0 }), facts({ nextDue: null }));
+  assert.deepEqual(noBill, { kind: "none", state: "nonpayable" });
+  const regression = html(ready(noBill, { repairs: [{ id: "22222222-2222-4222-8222-222222222222", title: "浴室天花板滴水", step: "reported" }] }));
+  assert.match(regression, /<h1 class="t-home-lead">目前沒有可付款的已開立帳單。<\/h1>/);
+  assert.equal((regression.match(/data-testid="tenant-home-repair"/g) ?? []).length, 1);
+  assert.match(regression, /data-testid="tenant-home-empty"><svg class="v3-illustration" data-v3-illustration="07"/);
+  assert.doesNotMatch(regression, /<button|btn pri|t-home-outline/);
   const drawing = renderToStaticMarkup(<Illustration name="07" />);
   assert.match(drawing, /viewBox="0 0 176 120"/); assert.match(drawing, /aria-hidden="true"/); assert.match(drawing, /focusable="false"/);
   assert.equal((drawing.match(/var\(--c-brand\)/g) ?? []).length, 1);

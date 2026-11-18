@@ -50,16 +50,18 @@ export type TenantHomeHeadline =
 
 /**
  * TEN-54-AC1, first match wins:
- *  1. nothing owed: 已繳清 with the tick only when the bill is settled by confirmed payments (PLT-51); otherwise none;
+ *  1. a zero balance on a bill settled by confirmed payments: 已繳清 with the tick (PLT-51); nothing owed otherwise: none;
+ *     a positive balance never gives 已繳清, even on inconsistent input;
  *  2. the tenant's own waiting reports cover what is owed: 已回報 (clock);
  *  3. past due and nothing paid or reported yet: 逾期;
  *  4. something paid or reported, something still owed: 還差 (owed minus what is waiting);
  *  5. otherwise 待繳.
  */
 export function tenantHomeHeadline(bill: TenantHomeBill, facts: TenantHomeFacts): TenantHomeHeadline {
-  if (bill.balanceMinor <= 0 || !facts.nextDue) {
-    return bill.state === "paid" && facts.paidMonth ? { kind: "paid", month: facts.paidMonth } : { kind: "none", state: bill.state };
-  }
+  // 已繳清 (and its tick) needs an explicit zero balance on a settled bill; inconsistent input never claims it.
+  if (bill.balanceMinor === 0 && bill.state === "paid" && facts.paidMonth) return { kind: "paid", month: facts.paidMonth };
+  if (bill.balanceMinor <= 0) return { kind: "none", state: bill.state };
+  if (!facts.nextDue) return { kind: "none", state: bill.state === "paid" ? "due" : bill.state };
   if (facts.pendingMinor >= bill.balanceMinor) return { kind: "reported", amountMinor: facts.pendingMinor };
   if (bill.overdue && facts.overdue && facts.pendingMinor === 0 && bill.paidMinor === 0) {
     return { kind: "overdue", month: facts.overdue.month, days: facts.overdue.days };
