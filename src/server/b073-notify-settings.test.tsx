@@ -159,7 +159,8 @@ test("client switches: initial render from props; saves through POST /api/notify
 });
 
 type Trace = string[];
-const deps = (trace: Trace) => ({
+const deps = (trace: Trace, v3 = true) => ({
+  v3: async (orgId: string) => { trace.push(`v3:${orgId === ORG}`); return v3; },
   readMine: async (orgId: string, userId: string) => { trace.push(`readMine:${orgId === ORG && userId === USER}`); return { lease_expiry: false }; },
   readTenant: async () => { trace.push("readTenant"); return { email_tenant_rent_overdue: false }; },
   writeMine: async (s: Session, field: string, value: boolean) => { trace.push(`writeMine:${s.userId}:${field}:${value}`); return { leaseExpiry: value, rentOverdue: true }; },
@@ -211,9 +212,30 @@ test("MGT-135-AC4 save: a non-admin is refused (403) for 寄給租客的 and not
   }
   // A forbidden answer from the write's own in-transaction guard, or 42501 from the database, is also a 403.
   assert.deepEqual(await saveNotifySetting(staff("admin"), { block: "tenant", field: "leaseExpiry", value: false },
-    { writeTenant: async () => { throw new FlowError("errors.forbidden"); } }), { ok: false, status: 403 });
+    { v3: async () => true, writeTenant: async () => { throw new FlowError("errors.forbidden"); } }), { ok: false, status: 403 });
   assert.deepEqual(await saveNotifySetting(staff("admin"), { block: "tenant", field: "leaseExpiry", value: false },
-    { writeTenant: async () => { throw Object.assign(new Error("denied"), { code: "42501" }); } }), { ok: false, status: 403 });
+    { v3: async () => true, writeTenant: async () => { throw Object.assign(new Error("denied"), { code: "42501" }); } }), { ok: false, status: 403 });
+});
+
+test("MGT-135 API boundary: brand_v3 OFF for the session's organization → 404 and nothing written (as /api/team-security)", async () => {
+  for (const [role, block] of [["admin", "tenant"], ["admin", "me"], ["manager", "me"]] as const) for (const field of ["leaseExpiry", "rentOverdue"]) {
+    const trace: Trace = [];
+    assert.deepEqual(await saveNotifySetting(staff(role), { block, field, value: false }, deps(trace, false)), { ok: false, status: 404 }, `${role} ${block}`);
+    assert.deepEqual(trace, ["v3:true"], "the flag is read for the session's org; no read or write follows");
+  }
+  // Authority still answers first (403 whatever the flag); a bad body is 400 before the flag is read.
+  for (const role of ["manager", "accountant"] as const) {
+    const trace: Trace = [];
+    assert.deepEqual(await saveNotifySetting(staff(role), { block: "tenant", field: "leaseExpiry", value: false }, deps(trace, false)), { ok: false, status: 403 });
+    assert.deepEqual(trace, []);
+  }
+  const trace: Trace = [];
+  assert.deepEqual(await saveNotifySetting(staff("admin"), { block: "tenant", field: "x", value: false }, deps(trace, false)), { ok: false, status: 400 });
+  assert.deepEqual(trace, []);
+  // A failed flag read is a 500, never a silent ON.
+  assert.deepEqual(await saveNotifySetting(staff("admin"), { block: "tenant", field: "leaseExpiry", value: false },
+    { ...deps([]), v3: async () => { throw new Error("db down"); } }), { ok: false, status: 500 });
+  assert.match(read("src/server/b073-notify-settings.ts"), /\(await import\("\.\/brand-v3"\)\)\.brandV3ReadForOrg\(orgId\)/);
 });
 
 test("MGT-135-AC1/AC3 save: one key per save, no read first; 寄給我的 writes only the caller's own row", async () => {
@@ -221,14 +243,14 @@ test("MGT-135-AC1/AC3 save: one key per save, no read first; 寄給我的 writes
   let trace: Trace = [];
   assert.deepEqual(await saveNotifySetting(staff("admin"), { block: "tenant", field: "rentOverdue", value: false }, { ...deps(trace), ...noRead }),
     { ok: true, block: "tenant", toggles: { leaseExpiry: true, rentOverdue: false } });
-  assert.deepEqual(trace, [`writeTenant:${ORG}:rentOverdue:false`]);
+  assert.deepEqual(trace, ["v3:true", `writeTenant:${ORG}:rentOverdue:false`]);
   for (const role of ["admin", "manager"] as const) {
     trace = [];
     assert.deepEqual(await saveNotifySetting(staff(role), { block: "me", field: "leaseExpiry", value: false, userId: "someone-else" }, { ...deps(trace), ...noRead }),
       { ok: true, block: "me", toggles: { leaseExpiry: false, rentOverdue: true } });
-    assert.deepEqual(trace, [`writeMine:${USER}:leaseExpiry:false`], "the session's own user, never an id from input");
+    assert.deepEqual(trace, ["v3:true", `writeMine:${USER}:leaseExpiry:false`], "the session's own user, never an id from input");
   }
-  assert.deepEqual(await saveNotifySetting(staff("manager"), { block: "me", field: "leaseExpiry", value: false }, { writeMine: async () => { throw new Error("db down"); } }), { ok: false, status: 500 });
+  assert.deepEqual(await saveNotifySetting(staff("manager"), { block: "me", field: "leaseExpiry", value: false }, { v3: async () => true, writeMine: async () => { throw new Error("db down"); } }), { ok: false, status: 500 });
   // The statements: closed key maps, jsonb_set on one path each; org_id + user_id from the session; same tx + guard as R5-OWNVIEW.
   const own = read("src/server/b073-notify-settings.ts");
   assert.match(own, /leaseExpiry: "lease_expiry", rentOverdue: "rent_overdue"/);
@@ -279,6 +301,7 @@ test("MGT-135-AC4 route: same-origin JSON only; non-admin 寄給租客的 → HT
   const ok = await post({ block: "tenant", field: "rentOverdue", value: true });
   assert.equal(ok.status, 200); assert.deepEqual(await ok.json(), { block: "tenant", toggles: ON });
   assert.deepEqual(trace, ["consent:api", "session", { block: "tenant", field: "rentOverdue", value: true }]);
+  save = async () => ({ ok: false, status: 404 }); assert.equal((await post({ block: "me", field: "rentOverdue", value: true })).status, 404);
   save = async () => ({ ok: false, status: 500 }); assert.equal((await post({ block: "me", field: "rentOverdue", value: true })).status, 500);
   save = async () => { throw new Error("boom"); }; trace.length = 0;
   assert.equal((await post({ block: "me", field: "rentOverdue", value: true })).status, 500); assert.ok(trace.includes("logged"));

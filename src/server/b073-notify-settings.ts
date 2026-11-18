@@ -25,8 +25,11 @@ export type NotifyRead =
   | { state: "forbidden" | "unavailable" }
   | { state: "ready"; me: NotifyToggles; tenant: NotifyToggles | null };
 export type NotifySaveInput = { block: NotifyBlock; field: NotifyField; value: boolean };
-/** POST /api/notify-settings answers this as its HTTP status. 403 = not allowed (MGT-135-AC4); 400 = bad input. */
-export type NotifySaveResult = { ok: true; block: NotifyBlock; toggles: NotifyToggles } | { ok: false; status: 400 | 403 | 500 };
+/**
+ * POST /api/notify-settings answers this as its HTTP status. 403 = not allowed (MGT-135-AC4); 400 = bad input;
+ * 404 = brand_v3 OFF for the session's organization (the R5-TEAM /api/team-security convention), nothing written.
+ */
+export type NotifySaveResult = { ok: true; block: NotifyBlock; toggles: NotifyToggles } | { ok: false; status: 400 | 403 | 404 | 500 };
 
 /** The stored key each switch owns (closed sets; never built from input). */
 const MEMBER_KEY: Record<NotifyField, string> = { leaseExpiry: "lease_expiry", rentOverdue: "rent_overdue" };
@@ -82,7 +85,12 @@ async function writeTenant(session: Session, field: NotifyField, value: boolean)
   }, requireOrgScope(session));
 }
 
-type Deps = { readMine?: typeof readMine; readTenant?: typeof readTenant; writeMine?: typeof writeMine; writeTenant?: typeof writeTenant };
+type Deps = {
+  readMine?: typeof readMine; readTenant?: typeof readTenant; writeMine?: typeof writeMine; writeTenant?: typeof writeTenant;
+  /** brand_v3 for the org; a failed read throws (→ 500), never a silent ON or OFF. */
+  v3?: (orgId: string) => Promise<boolean>;
+};
+const readV3 = async (orgId: string) => (await import("./brand-v3")).brandV3ReadForOrg(orgId);
 const forbidden = (error: unknown) => (error instanceof FlowError && error.key === "errors.forbidden")
   || ((error as { code?: string } | null)?.code ?? (error as { cause?: { code?: string } } | null)?.cause?.code) === "42501";
 
@@ -107,7 +115,11 @@ export async function notifySettingsRead(session: Session, deps: Deps = {}): Pro
   }
 }
 
-/** One switch per save: only its key is written. 「寄給租客的」 needs settings.edit; 「寄給我的」 writes the caller's own row. */
+/**
+ * One switch per save: only its key is written. 「寄給租客的」 needs settings.edit; 「寄給我的」 writes the caller's own row.
+ * Order: the body (400), then authority for that block (403, whatever the flag), then brand_v3 for the session's
+ * organization (OFF → 404, nothing written), then the single-key write.
+ */
 export async function saveNotifySetting(session: Session, input: unknown, deps: Deps = {}): Promise<NotifySaveResult> {
   const value = input as Partial<NotifySaveInput> | null;
   if (!value || typeof value !== "object" || !NOTIFY_BLOCKS.includes(value.block as NotifyBlock)
@@ -116,12 +128,12 @@ export async function saveNotifySetting(session: Session, input: unknown, deps: 
   const block = value.block as NotifyBlock, field = value.field as NotifyField;
   try {
     session = await guardEffectiveSession(session, "settings.edit");
-    if (block === "tenant") {
-      assertPerm(session, "settings.edit");
-      return { ok: true, block, toggles: await (deps.writeTenant ?? writeTenant)(session, field, value.value) };
-    }
-    if (!hasPersonalReminders(session)) throw new FlowError("errors.forbidden");
-    return { ok: true, block, toggles: await (deps.writeMine ?? writeMine)(session, field, value.value) };
+    if (block === "tenant") assertPerm(session, "settings.edit");
+    else if (!hasPersonalReminders(session)) throw new FlowError("errors.forbidden");
+    // 通知設定 is a brand_v3 page: the API is closed for an organization without it (flag OFF has no such page).
+    if (!await (deps.v3 ?? readV3)(session.orgId)) return { ok: false, status: 404 };
+    const write = block === "tenant" ? (deps.writeTenant ?? writeTenant) : (deps.writeMine ?? writeMine);
+    return { ok: true, block, toggles: await write(session, field, value.value) };
   } catch (error) {
     if (forbidden(error)) return { ok: false, status: 403 };
     logServerError("b073_notify_save", error);

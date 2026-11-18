@@ -11,7 +11,8 @@ const MAX_BODY_BYTES = 1024;
  * B-073 / R5-NOTIFY (MGT-135): one switch of 通知設定 per request, JSON `{ block: "me" | "tenant", field, value }`.
  * Same-origin only (403); no session 401; consent as other staff APIs; 「寄給租客的」 for a non-admin is HTTP 403
  * (MGT-135-AC4, saveNotifySetting applies settings.edit before any write); 「寄給我的」 writes only the caller's own
- * row and is 403 for roles without personal reminders; bad body 400; any other failure 500. Settings only: nothing
+ * row and is 403 for roles without personal reminders; brand_v3 OFF for the session's organization 404 with nothing
+ * written (as /api/team-security); bad body 400; any other failure 500. Settings only: nothing
  * is sent because of a save (MGT-135-AC3).
  */
 export async function POST(request: Request) {

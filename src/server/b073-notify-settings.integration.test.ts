@@ -10,6 +10,7 @@ import { ENV_COOKIE } from "./org-scope";
 import { sessionTokenHash } from "./session";
 import { notifySettingsRead, saveNotifySetting } from "./b073-notify-settings";
 import { memberEmailPrefs, orgMailSettings, saveOrgMailSettings } from "./mail-settings";
+import { actionOrgMail } from "./auth-actions";
 import { disposableDbUrl } from "./test-disposable-db";
 import type { OrgRole, Session } from "./types";
 
@@ -28,12 +29,14 @@ test.before(async () => {
 test.after(async () => { mock.restoreAll(); globalThis.fetch = realFetch; await db?.end(); assert.equal(fetchCalls, 0); });
 
 const ROLES: OrgRole[] = ["admin", "manager", "accountant", "maintenance"];
-async function makeOrg() {
+/** brand_v3 ON by default (通知設定 is a brand_v3 page); `v3: false` leaves the organization on today's UI. */
+async function makeOrg({ v3 = true }: { v3?: boolean } = {}) {
   const tag = `b073n.${randomUUID()}`;
   const settings = { email_tenant_lease_expiry: true, show_tenant_name: true, b073_fixture: "kept" };
+  const flags = v3 ? { brand_v2: true, brand_v3: true } : {};
   const orgId = (await db.query<{ id: string }>(
-    `INSERT INTO organizations(name,country_code,default_currency,plan_tier,settings,contact_email)
-     VALUES ($1,'TW','TWD','beta',$2::jsonb,'office@example.com') RETURNING id`, [tag, JSON.stringify(settings)])).rows[0].id;
+    `INSERT INTO organizations(name,country_code,default_currency,plan_tier,settings,contact_email,feature_flags)
+     VALUES ($1,'TW','TWD','beta',$2::jsonb,'office@example.com',$3::jsonb) RETURNING id`, [tag, JSON.stringify(settings), JSON.stringify(flags)])).rows[0].id;
   const sessions: Record<string, Session> = {};
   const tokens: Record<string, string> = {};
   for (const role of ROLES) {
@@ -188,4 +191,62 @@ test("MGT-135-AC2: under brand_v3 the 規則與資料 form saves its contact fie
   await saveOrgMailSettings(sessions.admin, { tenantLease: false, tenantOverdue: true, contactEmail: "new-office@example.com", contactPhone: "" });
   const off = (await orgRow(orgId)).settings;
   assert.equal(off.email_tenant_lease_expiry, false); assert.equal(off.email_tenant_rent_overdue, true);
+});
+
+test("MGT-135 API boundary: brand_v3 OFF → 404 for both blocks (direct and HTTP); personal and tenant settings unchanged", async () => {
+  const { orgId, sessions, tokens } = await makeOrg({ v3: false });
+  const before = await orgRow(orgId), prefsBefore = await memberPrefs(orgId), sent = await outbound(), audit = await lastAuditId();
+  for (const [role, block] of [["admin", "tenant"], ["admin", "me"], ["manager", "me"]] as const) {
+    assert.deepEqual(await saveNotifySetting(sessions[role], { block, field: "leaseExpiry", value: false }), { ok: false, status: 404 }, `${role} ${block}`);
+    const res = await post(tokens[role], { block, field: "rentOverdue", value: false });
+    assert.equal(res.status, 404, `${role} ${block} HTTP`); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+  }
+  // Authority still answers first: a manager asking for 寄給租客的 is 403 whatever the flag.
+  assert.equal((await post(tokens.manager, { block: "tenant", field: "leaseExpiry", value: false })).status, 403);
+  assert.deepEqual(await orgRow(orgId), before);
+  assert.deepEqual(await memberPrefs(orgId), prefsBefore);
+  assert.deepEqual(await outbound(), sent);
+  assert.deepEqual(await auditSince(audit), []);
+});
+
+/** Runs the 規則與資料 form action as the given session; it always ends in a redirect (Next's NEXT_REDIRECT). */
+async function submitOrgMail(token: string, fields: Record<string, string>) {
+  cookie = token;
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) form.set(key, value);
+  let location = "";
+  await assert.rejects(() => actionOrgMail(form), (error: unknown) => {
+    location = String((error as { digest?: string }).digest ?? "");
+    return location.startsWith("NEXT_REDIRECT;");
+  });
+  return location.split(";")[2];
+}
+
+test("MGT-135-AC2 actionOrgMail, brand_v3 ON: the form without checkboxes saves the contact fields and keeps the stored tenant switches", async () => {
+  const { orgId, tokens } = await makeOrg();
+  await db.query("UPDATE organizations SET settings = settings || '{\"email_tenant_rent_overdue\": true, \"email_tenant_lease_expiry\": true}'::jsonb WHERE id=$1", [orgId]);
+  const before = await orgRow(orgId), sent = await outbound();
+  assert.equal(await submitOrgMail(tokens.admin, { contactEmail: "v3-office@example.com", contactPhone: "02-1111-1111" }), "/m/settings?saved=1");
+  const after = await orgRow(orgId);
+  assert.deepEqual(after.settings, before.settings, "absent checkboxes do not turn the switches off");
+  assert.equal(after.contact_email, "v3-office@example.com");
+  assert.deepEqual(await orgMailSettings(orgId), { contactEmail: "v3-office@example.com", contactPhone: "02-1111-1111", tenantLease: true, tenantOverdue: true });
+  // Even a stale form that still posts checkbox values does not write them under brand_v3 (they live on 通知設定).
+  assert.equal(await submitOrgMail(tokens.admin, { tenantLease: "on", contactEmail: "v3-office@example.com", contactPhone: "" }), "/m/settings?saved=1");
+  assert.deepEqual((await orgRow(orgId)).settings, before.settings);
+  assert.deepEqual(await outbound(), sent);
+});
+
+test("MGT-135-AC2 actionOrgMail, brand_v3 OFF: checked and unchecked values are written as before", async () => {
+  const { orgId, tokens } = await makeOrg({ v3: false });
+  const before = await orgRow(orgId), sent = await outbound();
+  assert.equal(await submitOrgMail(tokens.admin, { tenantOverdue: "on", contactEmail: "off-office@example.com", contactPhone: "" }), "/m/settings?saved=1");
+  let settings = (await orgRow(orgId)).settings;
+  assert.deepEqual(settings, { ...before.settings, email_tenant_lease_expiry: false, email_tenant_rent_overdue: true });
+  assert.equal((await orgRow(orgId)).contact_email, "off-office@example.com");
+  assert.equal(await submitOrgMail(tokens.admin, { tenantLease: "on", contactEmail: "off-office@example.com", contactPhone: "" }), "/m/settings?saved=1");
+  settings = (await orgRow(orgId)).settings;
+  assert.deepEqual(settings, { ...before.settings, email_tenant_lease_expiry: true, email_tenant_rent_overdue: false });
+  assert.deepEqual(await orgMailSettings(orgId).then(m => [m!.tenantLease, m!.tenantOverdue]), [true, false]);
+  assert.deepEqual(await outbound(), sent);
 });
