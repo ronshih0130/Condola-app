@@ -242,7 +242,8 @@ test("TEN-52-AC4 rule on this slice: no 收款 or 入帳 in the tenant lane, the
   const css = source("public/brand/v3/tenant.css").replace(/\/\*[\s\S]*?\*\//g, "");
   for (const rule of css.split("}").map(r => r.trim()).filter(r => r && !r.startsWith("@media"))) {
     const selector = rule.replace(/^@media[^{]*\{/, "").split("{")[0].trim();
-    assert.ok(selector.startsWith('html[data-brand="v2"][data-brand-v3] .v3-tenant-home'), selector);
+    // B-090 slice 3 adds the 報修 and 我的租約 pages' own scopes (.v3-tenant-repair, .v3-tenant-lease) to the same sheet.
+    assert.ok(/^html\[data-brand="v2"\]\[data-brand-v3\] \.v3-tenant-(home|repair|lease)\b/.test(selector), selector);
   }
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgb\(/i, "tokens only");
 });
