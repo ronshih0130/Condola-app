@@ -1,0 +1,30 @@
+/* R5-ACCT (設定 › 我的帳號, MGT-137): loaded only by /m/account under brand_v3, never by the OFF page. Tokens only. No solid primary. */
+html[data-brand="v2"][data-brand-v3] .v3-acct{ display:grid; gap:16px; margin:16px 0; max-width:960px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr)); align-items:start; gap:16px; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-card{ display:grid; gap:12px; align-content:start; min-width:0; padding:20px 24px; background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); }
+html[data-brand="v2"][data-brand-v3] .v3-acct :is(h2,p){ margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-acct h2{ font-size:1.125rem; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-rows{ display:grid; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-row{ display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:44px; padding:8px 0; border-top:1px solid var(--c-border); }
+html[data-brand="v2"][data-brand-v3] .v3-acct-k{ color:var(--c-text-2); flex:none; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-v{ min-width:0; font-weight:600; text-align:end; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-more > summary{ cursor:pointer; list-style:none; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-more > summary::-webkit-details-marker,
+html[data-brand="v2"][data-brand-v3] .v3-acct-edit > summary::-webkit-details-marker{ display:none; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-more > summary .v3-acct-v::after{ content:""; display:inline-block; width:7px; height:7px; margin-inline-start:10px; border-right:2px solid var(--c-text-2); border-bottom:2px solid var(--c-text-2); transform:translateY(-3px) rotate(45deg); }
+html[data-brand="v2"][data-brand-v3] .v3-acct-more[open] > summary .v3-acct-v::after{ transform:translateY(1px) rotate(-135deg); }
+html[data-brand="v2"][data-brand-v3] .v3-acct-act{ display:inline-flex; align-items:center; padding:2px 12px; border:1px solid var(--c-border-strong); border-radius:var(--r-btn); font-weight:500; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-edit > summary{ list-style:none; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-panel{ display:grid; gap:12px; padding:4px 0 12px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-panel form{ display:grid; gap:8px; justify-items:start; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-panel .inp{ width:100%; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-note{ display:grid; gap:4px; color:var(--c-text-2); font-size:.88em; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-devices{ display:grid; gap:12px; margin:0; padding:0; list-style:none; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-devices li{ display:grid; gap:4px; padding-top:12px; border-top:1px solid var(--c-border); overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-pill{ display:inline-flex; padding:2px; border:1px solid var(--c-border-strong); border-radius:var(--r-btn); font-weight:500; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-pill a{ display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:40px; padding:0 12px; border-radius:var(--r-btn); color:var(--c-text); text-decoration:none; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-pill a[aria-current="true"]{ background:var(--c-surface-2); color:var(--c-brand-ink); font-weight:600; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-foot{ color:var(--c-text-2); font-size:.88em; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-acct :is(a,.btn,summary):focus-visible{ outline:2px solid var(--c-focus); outline-offset:3px; }
+html[data-brand="v2"][data-brand-v3] .v3-acct .btn{ justify-self:start; min-height:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-acct-skeleton{ display:block; height:20px; border-radius:var(--r-sm); background:var(--c-surface-2); }
