@@ -1,12 +1,30 @@
-import type { OwnerViewField, OwnerViewSaveResult } from "../../../../server/b073-owner-view";
+import type { OwnerViewField } from "../../../../server/b073-owner-view";
 import type { OwnerPrivacy } from "../../../../server/privacy";
 
 /**
  * R5-OWNVIEW switch state (MGT-138-AC4). Pure: no server or React imports. `saved` is what the server stored;
- * `shown` is what the switches draw. One save at a time for the whole block (the action writes both keys).
+ * `shown` is what the switches draw. One save at a time for the whole block; each save writes only its own key,
+ * and the answer carries the stored state of both.
  */
 export type OwnerViewState = { saved: OwnerPrivacy; shown: OwnerPrivacy; saving: OwnerViewField | null; error: boolean };
-export type OwnerViewOutcome = OwnerViewSaveResult | "threw";
+export type OwnerViewOutcome = { ok: true; privacy: OwnerPrivacy } | { ok: false; status: number } | "threw";
+export const OWNER_VIEW_API = "/api/owner-view";
+
+/** POST one switch to /api/owner-view. Any non-2xx (403 included) or malformed answer is a failure; a network error is "threw". */
+export async function postOwnerView(field: OwnerViewField, value: boolean, fetcher: typeof fetch = fetch): Promise<OwnerViewOutcome> {
+  let response: Response;
+  try {
+    response = await fetcher(OWNER_VIEW_API, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field, value }) });
+  } catch { return "threw"; }
+  if (!response.ok) return { ok: false, status: response.status };
+  try {
+    const body = await response.json() as { privacy?: { showName?: unknown; showPhone?: unknown } };
+    const privacy = body?.privacy;
+    if (privacy && typeof privacy.showName === "boolean" && typeof privacy.showPhone === "boolean")
+      return { ok: true, privacy: { showName: privacy.showName, showPhone: privacy.showPhone } };
+  } catch { /* malformed */ }
+  return { ok: false, status: response.status };
+}
 
 export function initialOwnerViewState(privacy: OwnerPrivacy): OwnerViewState {
   return { saved: { ...privacy }, shown: { ...privacy }, saving: null, error: false };

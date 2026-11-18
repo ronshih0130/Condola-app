@@ -19,7 +19,7 @@ export type OwnerViewRead =
   | { state: "forbidden" | "unavailable" }
   | { state: "ready"; privacy: OwnerPrivacy; company: OwnerViewCompany };
 export type OwnerViewSaveInput = { field: OwnerViewField; value: boolean };
-/** The action answers a result (it never redirects). 403 = not allowed (MGT-138-AC3); 400 = bad input. */
+/** POST /api/owner-view answers this as its HTTP status. 403 = not allowed (MGT-138-AC3); 400 = bad input. */
 export type OwnerViewSaveResult = { ok: true; privacy: OwnerPrivacy } | { ok: false; status: 400 | 403 | 500 };
 
 type Row = { settings: unknown; name: string | null; tax_id: string | null };
@@ -30,15 +30,28 @@ async function readOrganization(orgId: string): Promise<Row | undefined> {
 /** The settings key each switch owns (closed set; never built from input). */
 const SETTINGS_KEY: Record<OwnerViewField, string> = { showName: "show_tenant_name", showPhone: "show_tenant_phone" };
 
+type AuditWriter = (client: import("pg").Client, session: Session, privacy: OwnerPrivacy) => Promise<void>;
+/**
+ * The same `owner_privacy` audit row `setOwnerPrivacy` writes ({ showName, showPhone }), inside the caller's
+ * transaction. `authenticated` has no INSERT on audit_log, so the insert runs as service_role for that one
+ * statement and the role returns to authenticated (the b109b asService / requireEffectivePerm pattern).
+ */
+const auditOwnerView: AuditWriter = async (client, session, privacy) => {
+  await client.query("SET LOCAL ROLE service_role");
+  await writeAudit(session.orgId, session.userId, "owner_privacy", { showName: privacy.showName, showPhone: privacy.showPhone }, client);
+  // Fixed identifier, never derived from request data; tx() runs fn as authenticated.
+  await client.query("SET LOCAL ROLE authenticated");
+};
+
 /**
  * One atomic statement updates ONLY the changed key (no read-then-write, so the other key is never rewritten
  * from a stale read), under the same settings.edit guard and tx helper as `setOwnerPrivacy`. The audit row is
- * the same `owner_privacy` shape `setOwnerPrivacy` writes ({ showName, showPhone }), from the resulting state.
+ * written in the same transaction from the resulting both-key state, so a failed audit rolls the change back.
  * `setOwnerPrivacy` itself is unchanged and still serves flag OFF (/m/roles form).
  */
-async function writeOwnerViewKey(session: Session, field: OwnerViewField, value: boolean): Promise<OwnerPrivacy> {
+async function writeOwnerViewKey(session: Session, field: OwnerViewField, value: boolean, audit: AuditWriter = auditOwnerView): Promise<OwnerPrivacy> {
   const { tx } = await import("./db");
-  const privacy = await tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => {
     await requireEffectivePerm(client, session, "settings.edit");
     const { rows } = await client.query<{ settings: unknown }>(
       `UPDATE organizations
@@ -48,13 +61,14 @@ async function writeOwnerViewKey(session: Session, field: OwnerViewField, value:
       [session.orgId, [SETTINGS_KEY[field]], value],
     );
     if (!rows[0]) throw new Error("organization not found");
-    return privacyFromSettings(rows[0].settings);
+    const privacy = privacyFromSettings(rows[0].settings);
+    await audit(client, session, privacy);
+    return privacy;
   }, requireOrgScope(session));
-  await writeAudit(session.orgId, session.userId, "owner_privacy", privacy);
-  return privacy;
 }
-type Deps = { read?: typeof readOrganization; write?: typeof writeOwnerViewKey };
-const forbidden = (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden";
+type Deps = { read?: typeof readOrganization; write?: typeof writeOwnerViewKey; audit?: AuditWriter };
+const forbidden = (error: unknown) => (error instanceof FlowError && error.key === "errors.forbidden")
+  || ((error as { code?: string } | null)?.code ?? (error as { cause?: { code?: string } } | null)?.cause?.code) === "42501";
 
 /**
  * The 統編 comes from `organizations.tax_id` (schema column; the app has no editor for it yet), shown only when
@@ -83,7 +97,7 @@ export async function saveOwnerView(session: Session, input: unknown, deps: Deps
   try {
     session = await guardEffectiveSession(session, "settings.edit");
     assertPerm(session, "settings.edit");
-    const privacy = await (deps.write ?? writeOwnerViewKey)(session, value.field as OwnerViewField, value.value);
+    const privacy = await (deps.write ?? writeOwnerViewKey)(session, value.field as OwnerViewField, value.value, deps.audit);
     return { ok: true, privacy };
   } catch (error) {
     if (forbidden(error)) return { ok: false, status: 403 };

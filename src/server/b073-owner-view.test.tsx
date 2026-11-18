@@ -120,20 +120,28 @@ test("MGT-138-AC4 save: a tap flips at once and locks both switches; failure ret
   assert.deepEqual(syncOwnerView(saved, { showName: false, showPhone: false }).shown, { showName: false, showPhone: false });
 });
 
-test("client switches: initial render from props, saves through saveOwnerViewAction (no redirect, no router)", () => {
+test("client switches: initial render from props; saves through POST /api/owner-view (no redirect, no router)", async () => {
   const source = read("src/components/v3/m/settings/owner-view-switches.tsx");
   assert.match(source, /^"use client";/);
-  assert.match(source, /saveOwnerViewAction\(\{ field, value: next\.shown\[field\] \}\)/);
-  assert.doesNotMatch(source, /redirect\(|useRouter|sendMail|from "next\//);
+  assert.match(source, /postOwnerView\(field, next\.shown\[field\]\)/);
+  assert.doesNotMatch(source, /redirect\(|useRouter|sendMail|from "next\/|"use server"|b073-owner-view-actions/);
   const view = requireHere("../components/v3/m/settings/owner-view");
   const state = requireHere("../components/v3/m/settings/owner-view-state");
-  const calls: unknown[] = [];
-  const ui = compile(source, { "../../../../server/b073-owner-view-actions": { saveOwnerViewAction: async (i: unknown) => { calls.push(i); return { ok: true }; } },
-    "./owner-view": view, "./owner-view-state": state });
+  const ui = compile(source, { "./owner-view": view, "./owner-view-state": state });
   const Switches = ui.OwnerViewSwitches as React.FC<{ locale: "zh-TW"; privacy: { showName: boolean; showPhone: boolean } }>;
   const html = renderToStaticMarkup(<Switches locale="zh-TW" privacy={{ showName: false, showPhone: true }} />);
   assert.equal(checked(html, "showName"), "false"); assert.equal(checked(html, "showPhone"), "true");
-  assert.deepEqual(calls, [], "rendering never saves");
+  // postOwnerView: same-origin JSON POST; any non-2xx (403 included) or malformed body fails; a network error is "threw".
+  const calls: [string, RequestInit][] = [];
+  const fake = (status: number, body: unknown = null) => (async (url: string, init: RequestInit) => { calls.push([url, init]);
+    return new Response(body === null ? null : JSON.stringify(body), { status }); }) as unknown as typeof fetch;
+  assert.deepEqual(await state.postOwnerView("showPhone", true, fake(200, { privacy: { showName: true, showPhone: true } })), { ok: true, privacy: { showName: true, showPhone: true } });
+  assert.deepEqual(calls[0][0], "/api/owner-view");
+  assert.equal(calls[0][1].method, "POST"); assert.equal(calls[0][1].body, JSON.stringify({ field: "showPhone", value: true }));
+  assert.deepEqual((calls[0][1].headers as Record<string, string>)["Content-Type"], "application/json");
+  for (const status of [400, 401, 403, 415, 500]) assert.deepEqual(await state.postOwnerView("showName", false, fake(status)), { ok: false, status });
+  assert.deepEqual(await state.postOwnerView("showName", false, fake(200, { privacy: { showName: "no" } })), { ok: false, status: 200 });
+  assert.equal(await state.postOwnerView("showName", false, (async () => { throw new TypeError("offline"); }) as unknown as typeof fetch), "threw");
 });
 
 test("MGT-138-AC3 server: a non-admin is forbidden (403) before any read or write; bad input is 400", async () => {
@@ -167,7 +175,8 @@ test("MGT-138-AC1/AC2 server: admin saves one switch; only that key is written, 
   assert.match(own, /showName: "show_tenant_name", showPhone: "show_tenant_phone"/);
   assert.match(own, /SET settings = jsonb_set\(coalesce\(settings, '\{\}'::jsonb\), \$2::text\[\], to_jsonb\(\$3::boolean\), true\)/);
   assert.match(own, /requireEffectivePerm\(client, session, "settings\.edit"\)/);
-  assert.match(own, /writeAudit\(session\.orgId, session\.userId, "owner_privacy", privacy\)/);
+  assert.match(own, /writeAudit\(session\.orgId, session\.userId, "owner_privacy", \{ showName: privacy\.showName, showPhone: privacy\.showPhone \}, client\)/);
+  assert.match(own, /await audit\(client, session, privacy\);\n    return privacy;\n  \}, requireOrgScope\(session\)\)/);
   assert.doesNotMatch(own, /setOwnerPrivacy\(/);
   // The reader: same parse as ownerPrivacy; 統編 only when stored; failure → unavailable.
   assert.deepEqual(await ownerViewRead(staff("admin"), { read: async () => ({ settings: null, name: " 安居物業 ", tax_id: " " }) }),
@@ -182,19 +191,45 @@ test("MGT-138-AC1/AC2 server: admin saves one switch; only that key is written, 
     baseline("src/server/auth.ts").slice(baseline("src/server/auth.ts").indexOf("export async function setOwnerPrivacy"), baseline("src/server/auth.ts").indexOf("export async function tenantDisplayNames")));
 });
 
-test("MGT-138-AC3 action: consent first, then saveOwnerView with the session; a result, never a redirect", async () => {
-  const source = read("src/server/b073-owner-view-actions.ts");
-  assert.match(source, /^"use server";/);
+test("MGT-138-AC3 route: same-origin JSON only; non-admin → HTTP 403; bad body 400; admin 200 with the stored state", async () => {
+  const source = read("src/app/api/owner-view/route.ts");
   const trace: unknown[] = [];
-  const action = compile(source, {
-    "./consent-gate": { requireCurrentConsent: async () => { trace.push("consent"); return null; } },
-    "./session": { getSession: async () => { trace.push("session"); return staff("manager"); } },
-    "./b073-owner-view": { saveOwnerView: async (s: Session, input: unknown) => { trace.push([s.role, input]); return { ok: false, status: 403 }; } },
-  }).saveOwnerViewAction as (input: unknown) => Promise<unknown>;
-  assert.deepEqual(await action({ field: "showName", value: false }), { ok: false, status: 403 });
-  assert.deepEqual(trace, ["consent", "session", ["manager", { field: "showName", value: false }]]);
-  assert.equal(JSON.parse(read("src/server/b017-entry-permissions.json"))["src/server/b073-owner-view-actions.ts#saveOwnerViewAction"], "settings.edit");
+  let session: Session | null = staff("admin");
+  let save: (s: Session, input: unknown) => Promise<unknown> = saveOwnerView as never;
+  const route = compile(source, {
+    "@/server/consent-gate": { requireCurrentConsent: async (_s: Session, mode: string) => { trace.push(`consent:${mode}`); return null; } },
+    "@/server/session": { readSession: async () => { trace.push("session"); return session; } },
+    "@/server/b073-owner-view": { saveOwnerView: (s: Session, input: unknown) => save(s, input) },
+    "@/server/errors": { logServerError: () => { trace.push("logged"); } },
+  }).POST as (r: Request) => Promise<Response>;
+  const post = (body: unknown, init: { origin?: string | null; type?: string } = {}) => route(new Request("http://localhost/api/owner-view", { method: "POST",
+    headers: { ...(init.origin === null ? {} : { Origin: init.origin ?? "http://localhost" }), "Content-Type": init.type ?? "application/json" },
+    body: typeof body === "string" ? body : JSON.stringify(body) }));
+  for (const origin of ["http://evil.example", null]) {
+    trace.length = 0; const res = await post({ field: "showName", value: false }, { origin });
+    assert.equal(res.status, 403); assert.deepEqual(trace, [], "cross-origin is refused before reading the session");
+  }
+  assert.equal((await post({ field: "showName", value: false }, { type: "text/plain" })).status, 415);
+  for (const role of ["manager", "accountant", "maintenance"] as const) {
+    session = staff(role); const res = await post({ field: "showPhone", value: true });
+    assert.equal(res.status, 403, role); assert.equal(res.headers.get("Cache-Control"), "private, no-store");
+  }
+  session = staff("admin");
+  for (const body of ["{", "null", JSON.stringify({ field: "showEmail", value: true }), JSON.stringify({ field: "showName", value: 1 })]) assert.equal((await post(body)).status, 400, body);
+  save = async (_s, input) => { trace.push(input); return { ok: true, privacy: { showName: true, showPhone: true } }; };
+  trace.length = 0;
+  const ok = await post({ field: "showPhone", value: true });
+  assert.equal(ok.status, 200); assert.deepEqual(await ok.json(), { privacy: { showName: true, showPhone: true } });
+  assert.deepEqual(trace, ["session", "consent:api", { field: "showPhone", value: true }]);
+  save = async () => ({ ok: false, status: 500 }); assert.equal((await post({ field: "showPhone", value: true })).status, 500);
+  save = async () => { throw new Error("boom"); }; trace.length = 0;
+  assert.equal((await post({ field: "showPhone", value: true })).status, 500); assert.ok(trace.includes("logged"));
+  session = null; assert.equal((await post({ field: "showPhone", value: true })).status, 401);
+  assert.equal(JSON.parse(read("src/server/b017-entry-permissions.json"))["src/app/api/owner-view/route.ts#POST"], "settings.edit");
+  assert.doesNotMatch(JSON.stringify(JSON.parse(read("src/server/b017-entry-permissions.json"))), /b073-owner-view-actions/);
   assert.deepEqual(perms.rolesFor("settings.edit"), ["admin"]);
+  // 42501 from the database is also a 403.
+  assert.deepEqual(await saveOwnerView(staff("admin"), { field: "showName", value: true }, { write: async () => { throw Object.assign(new Error("denied"), { code: "42501" }); } }), { ok: false, status: 403 });
 });
 
 // ---- Pages: flag OFF byte-for-byte; ON route move. ----

@@ -2,15 +2,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { Locale } from "../../../../i18n";
 import type { OwnerViewField } from "../../../../server/b073-owner-view";
-import { saveOwnerViewAction } from "../../../../server/b073-owner-view-actions";
 import type { OwnerPrivacy } from "../../../../server/privacy";
 import { OwnerViewSwitchRows } from "./owner-view";
-import { afterToggleSave, initialOwnerViewState, startToggle, syncOwnerView, type OwnerViewOutcome } from "./owner-view-state";
+import { afterToggleSave, initialOwnerViewState, postOwnerView, startToggle, syncOwnerView } from "./owner-view-state";
 
 /**
- * R5-OWNVIEW switches (MGT-138-AC1/AC4): a tap saves at once through saveOwnerViewAction (a result, no redirect).
- * While it saves, both switches ignore taps (the action writes both keys). Failure: back to the saved value with
- * 「沒有存成功，請再試一次。」. Nothing is sent to owners.
+ * R5-OWNVIEW switches (MGT-138-AC1/AC4): a tap saves at once through POST /api/owner-view, which writes only
+ * that switch's key. While it saves, both switches ignore taps. Any non-2xx or network failure: back to the saved
+ * value with 「沒有存成功，請再試一次。」. Nothing is sent to owners.
  */
 export function OwnerViewSwitches({ locale, privacy }: { locale: Locale; privacy: OwnerPrivacy }) {
   const [state, setState] = useState(() => initialOwnerViewState(privacy));
@@ -22,9 +21,7 @@ export function OwnerViewSwitches({ locale, privacy }: { locale: Locale; privacy
     if (!next) return;
     busy.current = true;
     setState(next);
-    let outcome: OwnerViewOutcome;
-    try { outcome = await saveOwnerViewAction({ field, value: next.shown[field] }); }
-    catch { outcome = "threw"; }
+    const outcome = await postOwnerView(field, next.shown[field]);
     setState(current => afterToggleSave(current, outcome));
     busy.current = false;
   }
