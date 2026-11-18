@@ -96,7 +96,7 @@ test("TEN-53-AC4 / AC1: lease-wide waiting total; own last 末五碼 only; the p
   const alice = await makeTenant(o.orgId), bob = await makeTenant(o.orgId), stranger = await makeTenant(o.orgId);
   const shared = await makeLease(o, [alice, bob]);
   const other = await makeLease(o, [stranger]);
-  assert.deepEqual(await pay(alice, shared.lease), { leasePendingMinor: 0, lastLast5: null, today: taipeiToday() }, "nothing stored: no prefill");
+  assert.deepEqual(await pay(alice, shared.lease), { leasePendingMinor: 0, lastLast5: null, today: taipeiToday(), months: [], olderMonths: false }, "nothing stored: no prefill");
   await report(shared, alice, 1_000_000, "submitted", "11111");
   await report(shared, alice, 100, "rejected", "22222");
   await report(shared, alice, 50, "submitted", null);
@@ -166,6 +166,35 @@ test("TEN-52-AC3: 「之前的繳款」 lines are built from the tenant's own re
   assert.deepEqual(view.state === "ready" && view.history.map(h => [h.month, h.status, h.amountMinor, h.reason]), [
     ["2090-02", "rejected", 1_850_000, "Synthetic reason"], ["2090-01", "confirmed", 1_850_000, null],
   ], "a co-tenant's report is not listed as the caller's");
+});
+
+test("TEN-52-AC3: month totals cover every own report (more than one 50-report page); the newest 12 months are listed", async () => {
+  const o = await makeOrg();
+  const alice = await makeTenant(o.orgId), bob = await makeTenant(o.orgId);
+  const l = await makeLease(o, [alice, bob]);
+  // 12 older months, one report each (2089-01 … 2089-12), then February 2090 with 15 reports, then March 2090 with 45.
+  for (let m = 1; m <= 12; m++) await report(l, alice, 10_000 + m, "confirmed", null, `2089-${String(m).padStart(2, "0")}-15`);
+  for (let i = 0; i < 15; i++) await report(l, alice, 100_000, i === 0 ? "rejected" : "confirmed", null, `2090-02-${String(i + 1).padStart(2, "0")}`);
+  for (let i = 0; i < 45; i++) await report(l, alice, 20_000, i % 2 ? "submitted" : "confirmed", null, `2090-03-${String((i % 28) + 1).padStart(2, "0")}`);
+  await report(l, bob, 999_999, "confirmed", null, "2090-02-20");
+  // the old source: the 50 newest reports split February (only 5 of its 15 are on that page)
+  const page = await tenantPaymentHistory(alice.s, l.lease, { view: "current" });
+  assert.equal(page.state === "ready" && page.reports.length, 50);
+  assert.equal(page.state === "ready" && page.reports.filter(r => r.current.paidOn.startsWith("2090-02")).length, 5);
+  const view = await tenantPayView(alice.s, l.lease);
+  assert.equal(view.state, "ready");
+  if (view.state !== "ready") return;
+  assert.equal(view.history.length, 12, "the newest 12 months");
+  assert.deepEqual(view.history.slice(0, 3).map(h => [h.month, h.status, h.amountMinor, h.count, h.reports.length]), [
+    ["2090-03", "submitted", 45 * 20_000, 45, 20], ["2090-02", "confirmed", 14 * 100_000, 15, 15], ["2089-12", "confirmed", 10_012, 1, 1],
+  ], "complete totals for the split month; a co-tenant's report never counts");
+  assert.equal(view.history[11].month, "2089-03");
+  assert.equal(view.olderMonths, true, "2089-01 and 2089-02 exist beyond the list");
+  assert.deepEqual(view.history[1].reports.slice(0, 2).map(r => r.paidOn), ["2090-02-15", "2090-02-14"], "a line's reports, newest 匯款日期 first");
+  // bob sees only his own month
+  const theirs = await tenantPayView(bob.s, l.lease);
+  assert.deepEqual(theirs.state === "ready" && theirs.history.map(h => [h.month, h.amountMinor]), [["2090-02", 999_999]]);
+  assert.equal(theirs.state === "ready" && theirs.olderMonths, false);
 });
 
 test("TEN-52: with tenant_payment_history off the view is 'off' (the existing body renders)", async () => {

@@ -9,7 +9,7 @@ import { historyFlagEnabled, safeMinor, summarizeBill, sumMinor, type BillState 
 import { monthlyDuePeriods, type MonthlyDuePeriod } from './tenant-monthly-due-rules';
 import { localReminderDate } from './reminder-foundation';
 import { tenantHomeFacts, type TenantHomeFacts } from './b090-tenant-home-rules';
-import type { TenantPayFacts } from './b090-tenant-pay-rules';
+import { PAY_HISTORY_MONTHS, PAY_MONTH_REPORTS, payMonthFacts, type PayMonthReportRow, type PayMonthRow, type TenantPayFacts } from './b090-tenant-pay-rules';
 import type { Session } from './types';
 
 export type TenantPaymentReport = { id:string; status:'submitted'|'confirmed'|'rejected'|'reversed'; current:{amountMinor:number;currency:string;paidOn:string}; submittedAt:string; confirmedAt:string|null; rejectionReason:string|null; reversalReason:'unavailable'; original:{state:'unavailable'}|{state:'available';amountMinor:number;currency:string;paidOn:string} };
@@ -90,7 +90,23 @@ export async function tenantPaymentHistory(s:Session,leaseId:string,options:{vie
   if(options.pay===true){
    const leasePending=await c.query<{sum:string}>(`SELECT coalesce(sum(p.amount_minor),0)::text sum FROM public.payments p WHERE p.org_id=$1::uuid AND p.lease_id=$2::uuid AND p.source='tenant_portal' AND p.status='submitted'`,[s.orgId,leaseId]);
    const last=await c.query<{last5:string}>(`SELECT p.payer_account_last5::text last5 FROM public.payments p WHERE ${personal} AND p.payer_account_last5 ~ '^[0-9]{5}$' ORDER BY p.submitted_at DESC,p.id DESC LIMIT 1`,[s.orgId,s.userId,leaseId]);
-   pay={leasePendingMinor:safeMinor(leasePending.rows[0]?.sum??'0'),lastLast5:last.rows[0]?.last5??null,today:localReminderDate(now,lease.timezone)};
+   // TEN-52-AC3 「之前的繳款」: complete per-month aggregates over ALL of the caller's own reports on this lease (month of
+   // 匯款日期), newest PAY_HISTORY_MONTHS months (one more is read only to know older months exist), plus at most
+   // PAY_MONTH_REPORTS rows per shown month for the line's detail. Never derived from the 50-report page above.
+   const own=`WITH own AS (SELECT p.id,p.status::text AS status,p.amount_minor,p.currency::text AS currency,p.paid_on,p.submitted_at,p.rejected_reason,to_char(p.paid_on,'YYYY-MM') AS ym FROM public.payments p WHERE ${personal})`;
+   const order='o.paid_on DESC,o.submitted_at DESC,o.id DESC';
+   const months=await c.query<PayMonthRow>(`${own},months AS (SELECT ym FROM own GROUP BY ym ORDER BY ym DESC LIMIT $4)
+    SELECT o.ym,count(*)::int AS n,count(DISTINCT o.currency)::int AS currencies,coalesce(sum(o.amount_minor) FILTER (WHERE o.status IN ('submitted','confirmed')),0)::text AS counted,
+     bool_or(o.status='submitted') AS any_submitted,bool_or(o.status='confirmed') AS any_confirmed,(array_agg(o.status ORDER BY ${order}))[1] AS newest_status,
+     (array_agg(o.amount_minor::text ORDER BY ${order}))[1] AS newest_amount,(array_agg(o.currency ORDER BY ${order}))[1] AS currency,
+     (array_agg(o.rejected_reason ORDER BY ${order}) FILTER (WHERE o.status='rejected'))[1] AS newest_reason
+    FROM own o JOIN months m ON m.ym=o.ym GROUP BY o.ym ORDER BY o.ym DESC`,[s.orgId,s.userId,leaseId,PAY_HISTORY_MONTHS+1]);
+   const shown=months.rows.slice(0,PAY_HISTORY_MONTHS);
+   const rows=shown.length?await c.query<PayMonthReportRow>(`${own} SELECT x.id::text,x.status,x.amount_minor::text AS amount,x.currency,x.paid_on::text AS paid_on,x.rejected_reason,x.ym
+    FROM (SELECT o.*,row_number() OVER (PARTITION BY o.ym ORDER BY ${order}) AS rn FROM own o WHERE o.ym=ANY($4::text[])) x WHERE x.rn<=$5 ORDER BY x.ym DESC,x.rn`,[s.orgId,s.userId,leaseId,shown.map(m=>m.ym),PAY_MONTH_REPORTS]):{rows:[]};
+   const history=payMonthFacts(shown,rows.rows);
+   if(!history)return unavailable;
+   pay={leasePendingMinor:safeMinor(leasePending.rows[0]?.sum??'0'),lastLast5:last.rows[0]?.last5??null,today:localReminderDate(now,lease.timezone),months:history,olderMonths:months.rows.length>PAY_HISTORY_MONTHS};
   }
   const selected=reports.rows.slice(0,50);
   // Existing service role has SELECT on audit_log. This fixed projection runs only after

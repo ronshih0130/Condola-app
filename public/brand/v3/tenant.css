@@ -75,3 +75,5 @@ html[data-brand="v2"][data-brand-v3] .v3-tenant-pay .t-pay-card.t-pay-alert { co
 html[data-brand="v2"][data-brand-v3] .v3-tenant-pay .t-pay-skel { border-radius:var(--r-lg); background:var(--c-surface-2); }
 html[data-brand="v2"][data-brand-v3] .v3-tenant-pay .t-pay-skel-lead { min-height:72px; }
 html[data-brand="v2"][data-brand-v3] .v3-tenant-pay .t-pay-skel-card { min-height:120px; }
+/* Screen-reader-only error summary (assertive live region) for RT-REPORT; the visible messages sit under each field. */
+html[data-brand="v2"][data-brand-v3] .v3-tenant-pay .t-pay-sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }

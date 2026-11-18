@@ -13,7 +13,7 @@ import { majorText, serverErrorField, type ReportField, type ReportProblem } fro
 import { CompletionCheck } from "../completion-check";
 import { WaitMark } from "../wait-mark";
 import { tenantHomeSentence } from "./home";
-import { PayCopyButton, TenantReportForm, type ReportAction } from "./pay-client";
+import { PayCopyButton, ReportDraftSweep, TenantReportForm, type DraftOwner, type ReportAction } from "./pay-client";
 
 type Ready = Extract<TenantPayView, { state: "ready" }>;
 const money = (minor: number, currency: string, locale: Locale) => moneyLabel(minor, currency, locale);
@@ -89,13 +89,15 @@ export function TenantPayAccountCard({ account, locale, brand }: { account: Tena
 const historyTone = { confirmed: "ok", submitted: "warn", rejected: "warn", reversed: "mute" } as const;
 
 /** TEN-52-AC3: one line per month, newest first; the line opens that month's reports. */
-export function TenantPayHistory({ lines, today, locale }: { lines: PayHistoryLine[]; today: string; locale: Locale }) {
+export function TenantPayHistory({ lines, today, locale, older = false }: { lines: PayHistoryLine[]; today: string; locale: Locale; older?: boolean }) {
   if (!lines.length) return null;
   const copy = brandV3TenantPayCopy(locale), bill = tenantPaymentHistoryCopy(locale);
-  return <div className="t-pay-card" data-testid="tenant-pay-history"><h2>{copy.historyTitle}</h2>
+  // Only the most recent months are listed (complete totals each). Older months exist when `older`; there is no approved
+  // wording or tenant page for them yet, so no link is shown (reported for Ron).
+  return <div className="t-pay-card" data-testid="tenant-pay-history" data-older={older ? "true" : undefined}><h2>{copy.historyTitle}</h2>
     {lines.map(line => {
       const month = payMonthLabel(line.month, today, locale);
-      return <details key={line.month} className="t-pay-hrow" data-month={line.month} data-status={line.status}>
+      return <details key={line.month} className="t-pay-hrow" data-month={line.month} data-status={line.status} data-count={line.count}>
         <summary><span>{month}　<span className="num">{money(line.amountMinor, line.currency, locale)}</span></span>
           <span className={`t-pay-badge t-pay-${historyTone[line.status]}`}>{line.status === "confirmed" ? <CompletionCheck /> : line.status === "submitted" ? <WaitMark /> : null}{copy.history[line.status]}</span></summary>
         {line.status === "rejected" ? <p className="t-pay-reason">{line.reason ? `${bill.rejectionReason}: ${line.reason}` : bill.rejectionReasonUnavailable}</p> : null}
@@ -126,7 +128,8 @@ export function TenantPayV3({ view, locale, place, company, brand }: { view: Rea
       {pay.canReport ? <Link className="t-pay-solid" href="/t/pay?report=1" data-testid="tenant-pay-report">{copy.report}</Link> : null}
     </div>
     {view.account ? <TenantPayAccountCard account={view.account} locale={locale} brand={brand} /> : null}
-    <TenantPayHistory lines={view.history} today={view.today} locale={locale} />
+    <TenantPayHistory lines={view.history} today={view.today} locale={locale} older={view.olderMonths} />
+    <ReportDraftSweep />
   </section>;
 }
 
@@ -140,8 +143,8 @@ function groupedMajor(minor: number, currency: string): string {
  * RT-REPORT 「回報已繳・只報還差的」. Only the not-yet-reported rest can be sent (prefilled and the maximum). When
  * everything is reported there is no form, only the waiting line. 轉帳截圖 is hidden until attachments ship (B-086).
  */
-export function TenantReportV3({ view, locale, company, leaseId, errorKey, renderId, action }: {
-  view: Ready; locale: Locale; company: string; leaseId: string; errorKey: string | undefined; renderId: string; action: ReportAction;
+export function TenantReportV3({ view, locale, company, owner, errorKey, renderId, action }: {
+  view: Ready; locale: Locale; company: string; owner: DraftOwner; errorKey: string | undefined; renderId: string; action: ReportAction;
 }) {
   const copy = brandV3TenantPayCopy(locale), t = makeT(locale);
   const { pay } = view;
@@ -154,13 +157,13 @@ export function TenantReportV3({ view, locale, company, leaseId, errorKey, rende
     <h1 className="t-pay-lead">{copy.formTitle}</h1>
     <TenantPayRedo view={view} locale={locale} />
     <TenantPayWaiting view={view} locale={locale} company={company} />
-    {pay.canReport ? <TenantReportForm key={renderId} action={action} leaseId={leaseId} currency={view.currency} restMinor={pay.restMinor}
+    {pay.canReport ? <TenantReportForm key={renderId} action={action} owner={owner} currency={view.currency} restMinor={pay.restMinor}
       defaults={{ amount: groupedMajor(pay.restMinor, view.currency), paidOn: view.today, last5: view.lastLast5 ?? "", note: "" }}
       lastUsed={view.lastLast5 !== null} needsLast5={view.currency.trim().toUpperCase() === "TWD"}
       serverError={errorKey ? { field: field as ReportField | null, message } : null} messages={messages}
       labels={{ amount: copy.amount, max: copy.max.replace("{amount}", money(pay.restMinor, view.currency, locale)), paidOn: copy.paidOn, last5: copy.last5,
         required: copy.required, lastUsed: copy.lastUsed, note: copy.note, notePlaceholder: copy.notePlaceholder, submit: copy.submit, saving: copy.saving,
-        cancel: copy.cancel, retry: brandV3TenantHomeCopy(locale).retry }} />
+        cancel: copy.cancel, retry: brandV3TenantHomeCopy(locale).retry, errorItem: copy.errorItem }} />
       : <>{errorKey ? <p className="t-pay-alert" role="alert">{message}</p> : null}<Link className="t-pay-text" href="/t/pay">{copy.cancel}</Link></>}
   </section>;
 }
@@ -186,13 +189,13 @@ export function TenantPayError({ locale }: { locale: Locale }) {
 export type TenantPayMode = { report: boolean; errorKey: string | undefined; renderId: string };
 
 /** RT-REPORT opens on 「回報已繳」 (?report=1) or after a failed send (the action bounces back with ?error). */
-export function TenantPayState({ view, locale, place, company, brand, leaseId, mode, action, legacy }: {
-  view: TenantPayView; locale: Locale; place: string; company: string; brand: string; leaseId: string; mode: TenantPayMode; action: ReportAction; legacy: ReactNode;
+export function TenantPayState({ view, locale, place, company, brand, owner, mode, action, legacy }: {
+  view: TenantPayView; locale: Locale; place: string; company: string; brand: string; owner: DraftOwner; mode: TenantPayMode; action: ReportAction; legacy: ReactNode;
 }) {
   if (view.state === "off") return <>{legacy}</>;
   if (view.state === "error") return <TenantPayError locale={locale} />;
   if ((mode.report || mode.errorKey) && (view.pay.canReport || mode.errorKey)) {
-    return <TenantReportV3 view={view} locale={locale} company={company} leaseId={leaseId} errorKey={mode.errorKey} renderId={mode.renderId} action={action} />;
+    return <TenantReportV3 view={view} locale={locale} company={company} owner={owner} errorKey={mode.errorKey} renderId={mode.renderId} action={action} />;
   }
   return <TenantPayV3 view={view} locale={locale} place={place} company={company} brand={brand} />;
 }

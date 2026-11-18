@@ -9,7 +9,7 @@ import ts from "typescript";
 import { brandV3TenantPayCopy } from "../i18n/lanes/brand-v3-tenant-pay";
 import * as formRules from "./b090-tenant-pay-form";
 import { majorText, parseAmountMinor, reportProblems, serverErrorField } from "./b090-tenant-pay-form";
-import { payHistoryLines, tenantPayState, type PayReport, type TenantPayState } from "./b090-tenant-pay-rules";
+import { PAY_HISTORY_MONTHS, payHistoryLines, payMonthFacts, tenantPayState, type PayMonthFacts, type PayMonthRow, type PayReport, type TenantPayState } from "./b090-tenant-pay-rules";
 import { tenantPayView, type TenantPayAccount, type TenantPayView } from "./b090-tenant-pay";
 import type { TenantHomeBill, TenantHomeFacts } from "./b090-tenant-home-rules";
 import type { tenantPaymentHistory } from "./tenant-payment-history";
@@ -17,7 +17,7 @@ import type { Session } from "./types";
 import {
   TenantPayAccountCard, TenantPayError, TenantPayHistory, TenantPayLoading, TenantPayState as PayStateView, TenantPayV3, TenantReportV3, payMonthLabel,
 } from "../components/v3/tenant/pay";
-import { readDraft, reportDraftKey, submitGate } from "../components/v3/tenant/pay-client";
+import { errorNotice, readDraft, reportDraftKey, submitGate, sweepDrafts, writeDraft } from "../components/v3/tenant/pay-client";
 
 // B-090 slice 2 (TEN-52, TEN-53). Stories: hub 07-brand/brand-3.0-1113/stories.md TEN-52/TEN-53; screens RT-PAY, RT-REPORT;
 // frames 「繳款・這個月要繳」 and 「回報已繳・只報還差的」; wording PR-023.
@@ -46,12 +46,13 @@ const state = (b: Partial<TenantHomeBill> = {}, pending = 0, f: Partial<TenantHo
 const account: TenantPayAccount = { kind: "account", holder: "林美華", bank: "台新銀行", bankCode: "812", number: "2048-01-0012345", swift: null, routing: null, payee: "owner" };
 type Ready = Extract<TenantPayView, { state: "ready" }>;
 const ready = (pay: TenantPayState, over: Partial<Ready> = {}): Ready =>
-  ({ state: "ready", currency: "TWD", pay, today: "2026-11-15", lastLast5: null, redo: null, account, history: [], ...over });
+  ({ state: "ready", currency: "TWD", pay, today: "2026-11-15", lastLast5: null, redo: null, account, history: [], olderMonths: false, ...over });
 const payHtml = (view: Ready, locale: "zh-TW" | "en" = "zh-TW") =>
   renderToStaticMarkup(<TenantPayV3 view={view} locale={locale} place="信義路四段 120 號 2 樓" company="安居物業" brand="租多啦" />);
 const noop = async () => {};
+const owner = { userId: "user-a", orgId: "org-1", leaseId: "lease-1" };
 const reportHtml = (view: Ready, errorKey?: string) =>
-  renderToStaticMarkup(<TenantReportV3 view={view} locale="zh-TW" company="安居物業" leaseId="lease-1" errorKey={errorKey} renderId="r" action={noop} />);
+  renderToStaticMarkup(<TenantReportV3 view={view} locale="zh-TW" company="安居物業" owner={owner} errorKey={errorKey} renderId="r" action={noop} />);
 
 test("TEN-52-AC1: lead and the 物件／金額／狀態 card per state; 「回報已繳」 is the only solid button", () => {
   const due = payHtml(ready(state()));
@@ -127,19 +128,32 @@ test("TEN-52-AC2: 「匯到這個帳戶」 with 戶名／銀行（代碼）／�
 
 const rep = (id: string, status: PayReport["status"], paidOn: string, amountMinor: number, reason: string | null = null): PayReport =>
   ({ id, status, paidOn, amountMinor, currency: "TWD", rejectionReason: reason });
+/** What the reader's SQL aggregate yields for one month (over every report), with the month's shown rows. */
+function month(ym: string, all: PayReport[], shown = all): PayMonthFacts {
+  const newest = [...all].sort((a, b) => b.paidOn.localeCompare(a.paidOn))[0];
+  const counted = all.filter(r => r.status === "submitted" || r.status === "confirmed");
+  return { month: ym, count: all.length, countedMinor: counted.reduce((n, r) => n + r.amountMinor, 0), anySubmitted: all.some(r => r.status === "submitted"),
+    anyConfirmed: all.some(r => r.status === "confirmed"), newestStatus: newest.status, newestAmountMinor: newest.amountMinor, currency: "TWD",
+    newestRejectedReason: [...all].sort((a, b) => b.paidOn.localeCompare(a.paidOn)).find(r => r.status === "rejected")?.rejectionReason ?? null, reports: shown };
+}
 
 test("TEN-52-AC3: 「之前的繳款」 one line per month, newest first, in tenant words; the line opens that month's reports", () => {
   const lines = payHistoryLines([
-    rep("a", "confirmed", "2026-10-03", 1_850_000), rep("b", "confirmed", "2026-09-04", 1_850_000),
-    rep("c", "rejected", "2026-08-05", 1_850_000, "金額不符"), rep("d", "submitted", "2026-11-02", 1_500_000),
-    rep("e", "rejected", "2026-07-01", 1_000_000, "舊的"), rep("f", "confirmed", "2026-07-09", 1_850_000),
-    rep("g", "reversed", "2025-12-01", 1_850_000), rep("h", "submitted", "bad", 1),
+    month("2026-11", [rep("d", "submitted", "2026-11-02", 1_500_000)]),
+    month("2026-10", [rep("a", "confirmed", "2026-10-03", 1_850_000)]),
+    month("2026-09", [rep("b", "confirmed", "2026-09-04", 1_850_000)]),
+    month("2026-08", [rep("c", "rejected", "2026-08-05", 1_850_000, "金額不符")]),
+    month("2026-07", [rep("f", "confirmed", "2026-07-09", 1_850_000), rep("e", "rejected", "2026-07-01", 1_000_000, "舊的")]),
+    month("2025-12", [rep("g", "reversed", "2025-12-01", 1_850_000)]),
   ]);
   assert.deepEqual(lines.map(l => [l.month, l.status, l.amountMinor, l.reason]), [
     ["2026-11", "submitted", 1_500_000, null], ["2026-10", "confirmed", 1_850_000, null], ["2026-09", "confirmed", 1_850_000, null],
     ["2026-08", "rejected", 1_850_000, "金額不符"], ["2026-07", "confirmed", 1_850_000, null], ["2025-12", "reversed", 1_850_000, null],
   ]);
-  assert.deepEqual(lines[4].reports.map(r => r.id), ["f", "e"], "a month keeps all its reports, newest first");
+  assert.deepEqual(lines[4].reports.map(r => r.id), ["f", "e"], "a month keeps its reports, newest first");
+  // totals come from the aggregate over every report, even when the month lists only some of them
+  const big = month("2026-06", Array.from({ length: 30 }, (_, i) => rep(`x${i}`, "confirmed", "2026-06-10", 1_000)), []);
+  assert.deepEqual(payHistoryLines([big]).map(l => [l.amountMinor, l.count, l.reports.length]), [[30_000, 30, 0]]);
   const html = renderToStaticMarkup(<TenantPayHistory lines={lines} today="2026-11-15" locale="zh-TW" />);
   assert.match(html, /<h2>之前的繳款<\/h2>/);
   const rows = [...html.matchAll(/<summary><span>([^<]+)<span class="num">([^<]+)<\/span><\/span><span class="t-pay-badge t-pay-([a-z]+)">(?:<span class="v3-(?:check|wait)"[^]*?<\/svg><\/span>)?([^<]+)<\/span><\/summary>/g)]
@@ -151,6 +165,25 @@ test("TEN-52-AC3: 「之前的繳款」 one line per month, newest first, in ten
   assert.match(html, /<p class="t-pay-reason">未通過原因: 金額不符<\/p><ul aria-label="8 月的回報"><li><span><time dateTime="2026-08-05">2026-08-05<\/time>　<span class="num">NT\$18,500<\/span><\/span><span>未通過<\/span><\/li><\/ul>/);
   assert.equal(renderToStaticMarkup(<TenantPayHistory lines={[]} today="2026-11-15" locale="zh-TW" />), "", "no past reports: no card");
   assert.equal(payMonthLabel("2026-03", "2026-11-15", "en"), "March 2026");
+  // older months beyond the listed ones: no link (no approved wording or tenant page for them yet)
+  const older = renderToStaticMarkup(<TenantPayHistory lines={lines} today="2026-11-15" locale="zh-TW" older />);
+  assert.match(older, /data-testid="tenant-pay-history" data-older="true"/);
+  assert.doesNotMatch(older, /<a /);
+  assert.equal(PAY_HISTORY_MONTHS, 12);
+});
+
+test("TEN-52-AC3: the reader's SQL rows are shaped strictly; mixed currencies or unknown statuses are refused", () => {
+  const row = (over: Partial<PayMonthRow> = {}): PayMonthRow => ({ ym: "2026-10", n: 2, currencies: 1, counted: "3700000", any_submitted: false, any_confirmed: true,
+    newest_status: "confirmed", newest_amount: "1850000", currency: "TWD", newest_reason: null, ...over });
+  const r = { id: "a", status: "confirmed", amount: "1850000", currency: "TWD", paid_on: "2026-10-03", rejected_reason: "x", ym: "2026-10" };
+  assert.deepEqual(payMonthFacts([row()], [r, { ...r, ym: "2026-09" }]), [{ month: "2026-10", count: 2, countedMinor: 3_700_000, anySubmitted: false, anyConfirmed: true,
+    newestStatus: "confirmed", newestAmountMinor: 1_850_000, currency: "TWD", newestRejectedReason: null,
+    reports: [{ id: "a", status: "confirmed", amountMinor: 1_850_000, currency: "TWD", paidOn: "2026-10-03", rejectionReason: null }] }]);
+  for (const bad of [row({ currencies: 2 }), row({ newest_status: "deleted" }), row({ ym: "2026-1" }), row({ counted: "1.5" })]) {
+    let out: unknown; try { out = payMonthFacts([bad], []); } catch { out = null; }
+    assert.equal(out, null, JSON.stringify(bad));
+  }
+  assert.equal(payMonthFacts([row()], [{ ...r, currency: "USD" }]), null);
 });
 
 test("TEN-52-AC4: never 收款 or 入帳 on the tenant pay files or rendered page", () => {
@@ -159,7 +192,7 @@ test("TEN-52-AC4: never 收款 or 入帳 on the tenant pay files or rendered pag
     assert.doesNotMatch(source(file), /收款|入帳|收租|代收/, file);
   }
   for (const locale of ["zh-TW", "en"] as const) assert.deepEqual(Object.keys(brandV3TenantPayCopy(locale)).sort(), Object.keys(brandV3TenantPayCopy("zh-TW")).sort());
-  const all = payHtml(ready(state({}, 1_500_000), { history: payHistoryLines([rep("a", "confirmed", "2026-10-03", 1)]) })) + reportHtml(ready(state({}, 1_500_000)));
+  const all = payHtml(ready(state({}, 1_500_000), { history: payHistoryLines([month("2026-10", [rep("a", "confirmed", "2026-10-03", 1)])]) })) + reportHtml(ready(state({}, 1_500_000)));
   assert.doesNotMatch(all, /收款|入帳/);
   const css = source("public/brand/v3/tenant.css").replace(/\/\*[\s\S]*?\*\//g, "");
   for (const rule of css.split("}").map(r => r.trim()).filter(r => r && !r.startsWith("@media"))) {
@@ -200,7 +233,7 @@ test("TEN-53-AC1: the report form — 金額 = the unreported rest (max), 匯款
   assert.doesNotMatch(fresh, /上次填的/);
   assert.match(fresh, /value="18,500"\/><small>最多 NT\$18,500（還沒回報的部分）。/);
   // USD: no 末五碼 field (TWD bank transfers only)
-  assert.doesNotMatch(renderToStaticMarkup(<TenantReportV3 view={ready(tenantPayState(bill({ currency: "USD" }), facts(), { leasePendingMinor: 0 }, true), { currency: "USD" })} locale="zh-TW" company="A" leaseId="l" errorKey={undefined} renderId="r" action={noop} />), /name="last5"/);
+  assert.doesNotMatch(renderToStaticMarkup(<TenantReportV3 view={ready(tenantPayState(bill({ currency: "USD" }), facts(), { leasePendingMinor: 0 }, true), { currency: "USD" })} locale="zh-TW" company="A" owner={owner} errorKey={undefined} renderId="r" action={noop} />), /name="last5"/);
 });
 
 test("TEN-53-AC4: all reported → no form, only the waiting line; ?report=1 when nothing is reportable falls back to 繳款", () => {
@@ -209,7 +242,7 @@ test("TEN-53-AC4: all reported → no form, only the waiting line; ?report=1 whe
   assert.doesNotMatch(html, /<form|tenant-report-submit/);
   assert.match(html, /tenant-pay-wait/);
   const mode = (report: boolean, errorKey?: string) => ({ report, errorKey, renderId: "r" });
-  const view = (v: TenantPayView, m: ReturnType<typeof mode>) => renderToStaticMarkup(<PayStateView view={v} locale="zh-TW" place="p" company="安居物業" brand="租多啦" leaseId="l" mode={m} action={noop} legacy={<b>legacy</b>} />);
+  const view = (v: TenantPayView, m: ReturnType<typeof mode>) => renderToStaticMarkup(<PayStateView view={v} locale="zh-TW" place="p" company="安居物業" brand="租多啦" owner={owner} mode={m} action={noop} legacy={<b>legacy</b>} />);
   assert.match(view(all, mode(true)), /data-testid="tenant-pay-v3"/);
   assert.match(view(ready(state()), mode(true)), /data-testid="tenant-report-v3"/);
   assert.match(view(ready(state()), mode(false)), /data-testid="tenant-pay-v3"/);
@@ -244,15 +277,42 @@ test("TEN-53-AC6: field checks, the server's refusal on its field, failure keeps
   assert.match(over, /送出回報<\/button>/);
   // a non-field failure: the message at the top and the button reads 「再試一次」; the draft restores the values
   const failed = reportHtml(ready(state()), "errors.generic");
-  assert.match(failed, /<p class="t-pay-alert" role="alert" data-testid="tenant-report-failed">沒有完成。請檢查欄位後再試一次。<\/p>/);
+  assert.match(failed, /<p class="t-pay-alert" data-testid="tenant-report-failed">沒有完成。請檢查欄位後再試一次。<\/p>/);
+  // the live region is in the markup from the start and empty, so the text filled in after mount is announced
+  assert.match(failed, /<div class="t-pay-sr" role="alert" aria-live="assertive" aria-atomic="true" data-testid="tenant-report-errors"><\/div>/);
   assert.match(failed, /data-testid="tenant-report-submit">再試一次<\/button>/);
-  assert.equal(reportDraftKey("lease-1"), "condola:b090-report:lease-1");
-  assert.deepEqual(readDraft(JSON.stringify({ amount: "1,000", paidOn: "2026-11-01", last5: "11111", note: "分兩次" })), { amount: "1,000", paidOn: "2026-11-01", last5: "11111", note: "分兩次" });
-  for (const bad of [null, "", "{", JSON.stringify({ amount: 1 }), JSON.stringify({ amount: "x".repeat(501), paidOn: "", last5: "", note: "" })]) assert.equal(readDraft(bad), null);
+  // TEN-53-AC6 draft: bound to tenant + org + lease in the key and the payload; only the four values are stored
+  assert.equal(reportDraftKey(owner), "condola:b090-report:user-a:org-1:lease-1");
+  const v = { amount: "1,000", paidOn: "2026-11-01", last5: "11111", note: "分兩次" };
+  assert.deepEqual(JSON.parse(writeDraft(owner, { ...v, extra: "x" } as typeof v)), { v: 1, userId: "user-a", orgId: "org-1", leaseId: "lease-1", values: v });
+  assert.deepEqual(readDraft(writeDraft(owner, v), owner), v);
+  for (const other of [{ ...owner, userId: "user-b" }, { ...owner, orgId: "org-2" }, { ...owner, leaseId: "lease-2" }]) {
+    assert.equal(readDraft(writeDraft(owner, v), other), null, "another tenant, org or lease never gets this draft");
+  }
+  for (const bad of [null, "", "{", JSON.stringify(v), JSON.stringify({ v: 1, ...owner, values: { ...v, amount: 1 } }), JSON.stringify({ v: 1, ...owner, values: { ...v, note: "x".repeat(501) } })]) assert.equal(readDraft(bad, owner), null);
+  const store = new Map<string, string>([[reportDraftKey(owner), "a"], [reportDraftKey({ ...owner, userId: "user-b" }), "b"], ["condola:payment-request:x", "keep"]]);
+  const storage = { get length() { return store.size; }, key: (i: number) => [...store.keys()][i] ?? null, removeItem: (k: string) => { store.delete(k); } };
+  sweepDrafts(storage, reportDraftKey(owner));
+  assert.deepEqual([...store.keys()], [reportDraftKey(owner), "condola:payment-request:x"], "another account's draft is swept; other keys stay");
+  sweepDrafts(storage, null);
+  assert.deepEqual([...store.keys()], ["condola:payment-request:x"], "繳款 (after a successful send) clears this tenant's draft too");
   const client = source("src/components/v3/tenant/pay-client.tsx");
-  assert.match(client, /if \(serverError && draft\) setValues\(draft\)/, "the draft is read back only after a failed send");
-  assert.match(client, /sessionStorage\.removeItem\(key\)/, "and is removed once read");
+  assert.match(client, /sweepDrafts\(sessionStorage, key\);\s*const draft = readDraft\(sessionStorage\.getItem\(key\), me\);\s*sessionStorage\.removeItem\(key\);\s*if \(serverError && draft\) setValues\(draft\);/,
+    "other drafts are swept, this one is read once, removed, and restored only after a failed send");
+  assert.match(source("src/components/v3/tenant/pay.tsx"), /<ReportDraftSweep \/>/, "繳款 sweeps drafts");
   assert.match(source("src/components/v3/tenant/pay-route.tsx"), /renderId: globalThis\.crypto\.randomUUID\(\)/, "each server render remounts the form");
+});
+
+test("TEN-53-AC6 (a11y): the error summary lists the invalid fields in form order and names the first one to focus", () => {
+  const labels = { amount: "金額", paidOn: "匯款日期", last5: "帳號末五碼", errorItem: brandV3TenantPayCopy("zh-TW").errorItem };
+  assert.deepEqual(errorNotice({ last5: "末五碼請輸入 5 位數字", amount: "金額超過還沒回報的部分。" }, labels, null),
+    { focus: "amount", text: "金額：金額超過還沒回報的部分。 帳號末五碼：末五碼請輸入 5 位數字" });
+  assert.deepEqual(errorNotice({}, labels, "沒有完成。請檢查欄位後再試一次。"), { focus: null, text: "沒有完成。請檢查欄位後再試一次。" });
+  const client = source("src/components/v3/tenant/pay-client.tsx");
+  // focus happens in an effect keyed on the committed notice, not right after setState in the submit handler
+  assert.match(client, /useEffect\(\(\) => \{\s*if \(!notice\) return;\s*if \(notice\.focus\) formRef\.current\?\.querySelector<HTMLInputElement>\(`\[data-field="\$\{notice\.focus\}"\]`\)\?\.focus\(\);/);
+  const submit = client.slice(client.indexOf("function onSubmit"), client.indexOf("const minor = parseAmountMinor"));
+  assert.doesNotMatch(submit, /\.focus\(/);
 });
 
 test("TEN-53-AC6: no double submit — one send per press, and the button is disabled with 「處理中…」 while saving", () => {
@@ -264,10 +324,10 @@ test("TEN-53-AC6: no double submit — one send per press, and the button is dis
     "react-dom": { useFormStatus: () => ({ pending }) }, "next/link": { __esModule: true, default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a> },
     "../../../server/b090-tenant-pay-form": formRules,
   });
-  const labels = { amount: "金額", max: "最多", paidOn: "匯款日期", last5: "帳號末五碼", required: "必填", lastUsed: "上次", note: "備註", notePlaceholder: "例", submit: "送出回報", saving: "處理中…", cancel: "取消", retry: "再試一次" };
+  const labels = { amount: "金額", max: "最多", paidOn: "匯款日期", last5: "帳號末五碼", required: "必填", lastUsed: "上次", note: "備註", notePlaceholder: "例", submit: "送出回報", saving: "處理中…", cancel: "取消", retry: "再試一次", errorItem: "{field}：{message}" };
   const render = (pending: boolean) => {
     const { TenantReportForm } = compile(source("src/components/v3/tenant/pay-client.tsx"), mocks(pending)) as { TenantReportForm: React.FC<Record<string, unknown>> };
-    return renderToStaticMarkup(<TenantReportForm action={noop} leaseId="l" currency="TWD" restMinor={100} defaults={{ amount: "1", paidOn: "2026-11-15", last5: "", note: "" }}
+    return renderToStaticMarkup(<TenantReportForm action={noop} owner={owner} currency="TWD" restMinor={100} defaults={{ amount: "1", paidOn: "2026-11-15", last5: "", note: "" }}
       lastUsed={false} needsLast5 serverError={null} messages={{ amountPositive: "a", overLimit: "b", required: "c", last5: "d" }} labels={labels} />);
   };
   assert.match(render(true), /<button type="submit" class="t-pay-solid" data-testid="tenant-report-submit" disabled="" aria-busy="true">處理中…<\/button>/);
@@ -283,7 +343,8 @@ test("TEN-52 / TEN-53: the view composes the existing readers for the selected l
     state: "ready", lease: { id: "l", status: "active", currency: "TWD", canReport: true, legacyPayeeVisible: true },
     bill: { state: "due", overdue: false, pending: true, balanceMinor: 1_850_000, paidMinor: 0, currency: "TWD", lines: [] }, monthlyDue: [], nextCursor: null,
     reports: [{ id: "r1", status: "rejected", current: { amountMinor: 1_850_000, currency: "TWD", paidOn: "2026-11-02" }, submittedAt: "", confirmedAt: null, rejectionReason: "金額不符", reversalReason: "unavailable", original: { state: "unavailable" } }],
-    turn: { waiting: null, reReport: true }, home: facts(), pay: { leasePendingMinor: 0, lastLast5: "54321", today: "2026-11-15" },
+    turn: { waiting: null, reReport: true }, home: facts(),
+    pay: { leasePendingMinor: 0, lastLast5: "54321", today: "2026-11-15", olderMonths: true, months: [month("2026-11", [rep("r1", "rejected", "2026-11-02", 1_850_000, "金額不符")])] },
   } as unknown as H;
   const asked: unknown[] = [];
   const history = (h: H) => (async (_s: Session, leaseId: string, o: unknown) => { asked.push([leaseId, o]); return h; }) as never;
@@ -296,7 +357,8 @@ test("TEN-52 / TEN-53: the view composes the existing readers for the selected l
   assert.deepEqual(v.account && { ...v.account, number: "x" }, { kind: "account", holder: "林美華", bank: "台新銀行", bankCode: "812", number: "x", swift: null, routing: null, payee: "owner" });
   assert.deepEqual(v.redo, { reason: "金額不符" });
   assert.deepEqual([v.lastLast5, v.today, v.pay.restMinor], ["54321", "2026-11-15", 1_850_000]);
-  assert.deepEqual(v.history.map(l => [l.month, l.status]), [["2026-11", "rejected"]]);
+  assert.deepEqual(v.history.map(l => [l.month, l.status, l.reason]), [["2026-11", "rejected", "金額不符"]], "from the reader's month aggregate");
+  assert.equal(v.olderMonths, true);
   const company = await tenantPayView(session, "l", { history: history(readyHistory), payee: payee({ ...ownerAccount, account: { ...ownerAccount.account, owner_contact_id: null } }) });
   assert.equal(company.state === "ready" && company.account?.kind === "account" && company.account.payee, "company");
   const none = await tenantPayView(session, "l", { history: history(readyHistory), payee: payee({ enabled: true, last5: null, account: null }) });

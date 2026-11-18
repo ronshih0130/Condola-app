@@ -11,7 +11,7 @@ async function TenantPayBody({ session, leaseId, place, company, brand, report, 
   const view = await tenantPayView(session, leaseId);
   // A fresh id per server render remounts the report form after each send, so a failed send restores its draft.
   const mode: TenantPayMode = { report, errorKey, renderId: globalThis.crypto.randomUUID() };
-  return <TenantPayState view={view} locale={session.locale} place={place} company={company} brand={brand} leaseId={leaseId} mode={mode} action={action}
+  return <TenantPayState view={view} locale={session.locale} place={place} company={company} brand={brand} owner={{ userId: session.userId, orgId: session.orgId, leaseId }} mode={mode} action={action}
     legacy={view.state === "off" ? await legacy() : null} />;
 }
 

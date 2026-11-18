@@ -5,8 +5,8 @@ import type { Locale } from "../index";
 // frames 「繳款・這個月要繳」 and 「回報已繳・只報還差的」 (Ron ~12:21 PT, 「全部核准」). New strings are P52 APPROVED
 // as drafted (Ron 2026-11-15 20:44 PT, PENDING-RON PR-023). The lead sentence and the loading/error pair are the
 // RT-HOME lane's (same approved words); the over-limit and last-five messages are the existing B-087 / payment errors.
-// Not from a frame (Mac wording, flagged for Ron in the slice report): `amountPositive`, `monthWithYear`, `reportsIn`;
-// `saving` reuses the existing 「處理中…」. No staff payment words on the tenant side (TEN-52-AC4).
+// Not from a frame (Mac wording, flagged for Ron in the slice report): `amountPositive`, `monthWithYear`, `reportsIn`,
+// `errorItem` (the screen-reader error summary's format); `saving` reuses the existing 「處理中…」. No staff payment words on the tenant side (TEN-52-AC4).
 // EN is a draft translation.
 const copy = {
   "zh-TW": {
@@ -45,6 +45,7 @@ const copy = {
     saving: "處理中…",
     cancel: "取消",
     amountPositive: "請填大於 0 的金額。",
+    errorItem: "{field}：{message}",
   },
   en: {
     place: "Property",
@@ -82,6 +83,7 @@ const copy = {
     saving: "Working…",
     cancel: "Cancel",
     amountPositive: "Enter an amount above 0.",
+    errorItem: "{field}: {message}",
   },
 };
 export type TenantPayCopy = typeof copy["zh-TW"];
