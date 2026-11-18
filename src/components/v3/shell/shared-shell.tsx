@@ -12,7 +12,7 @@ import { ShellIcon } from "./icon";
 export type ShellEntry = { id: string; href: string; label: string; icon: React.ComponentProps<typeof ShellIcon>["name"]; links?: { href: string; label: string }[] };
 export type ShellV3Props = {
   children: ReactNode; areas: ShellEntry[]; tabs: ShellEntry[]; path: string; currentId?: string; moreOn: boolean;
-  locale: Locale; name: string; party: "m" | "o" | "v" | "t"; brand: string; context: string; company: string; title: string; menuContext: string;
+  locale: Locale; name: string; party: "m" | "o" | "v"; brand: string; context: string; company: string; title: string; menuContext: string;
   canSwitchCompany?: boolean; orgMenu?: ReactNode; account?: ReactNode; menuExtra?: ReactNode; banner?: ReactNode;
   buildSha?: string; notification?: ShellEntry; moreEntries?: ShellEntry[];
   /**
@@ -22,7 +22,7 @@ export type ShellV3Props = {
   lead?: string | null;
 };
 
-/** Shared phone/desktop chrome and the single focus-managed menu used by the manager, owner, (B-063) vendor and (B-090) tenant portals. */
+/** Shared phone/desktop chrome and the single focus-managed menu used by the manager, owner and (B-063) vendor portals. */
 export function ShellV3({ children, areas, tabs, path, currentId, moreOn, locale, name, party, brand, context, company, title, menuContext,
   canSwitchCompany, orgMenu, account, menuExtra, banner, buildSha, notification, moreEntries, lead }: ShellV3Props) {
   const t = makeT(locale);
@@ -85,7 +85,7 @@ export function ShellV3({ children, areas, tabs, path, currentId, moreOn, locale
     aria-haspopup="menu" aria-expanded={popup?.kind === "org"} aria-controls={popup?.kind === "org" ? menuId : undefined}
     onClick={event => open("org", event.currentTarget)}>{context}<span aria-hidden="true"> ▾</span></button> : <div className="cap">{context}</div>;
   const bell = notification ? <Link className="shell-bell" data-testid="shell-bell" href={notification.href} aria-label={notification.label}><ShellIcon name="bell" /></Link> : null;
-  return <div data-v3-shell="" className={`v3-shell${party !== "m" ? " v3-owner-shell" : ""}`} data-testid={party === "m" ? "manager-shell-v3" : party === "o" ? "owner-shell-v3" : party === "t" ? "tenant-shell-v3" : "vendor-shell-v3"}>
+  return <div data-v3-shell="" className={`v3-shell${party !== "m" ? " v3-owner-shell" : ""}`} data-testid={party === "m" ? "manager-shell-v3" : party === "o" ? "owner-shell-v3" : "vendor-shell-v3"}>
     <header className="appbar navy"><div className="wm">{brand}</div>{identity}{bell}{avatar}</header>
     <aside className="sidebar">
       <div className="side-head"><div className="wm">{brand}</div>{identity}</div>
