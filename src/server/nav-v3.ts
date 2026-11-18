@@ -7,7 +7,7 @@ import type { CenterAdmission } from "./notification-center";
 import { archiveCopy } from "../i18n/record-archive";
 import { makeT, type Locale } from "../i18n";
 import { brandV3NavigationCopy, brandV3OwnerShellCopy, type NavigationCopyKey } from "../i18n/lanes/brand-v3";
-import { can, noPermHref, type PermKey } from "./perms";
+import { can, hasPersonalReminders, noPermHref, type PermKey } from "./perms";
 import type { Session } from "./types";
 
 type Visibility = PermKey | "any" | "admin";
@@ -49,6 +49,8 @@ function permitted(session: Session, item: NavV3Link) {
   if (item.href === "/m/archive" && session.customRole && !can(session, "props.edit")) return false;
   // 角色權限: the approved design files it under team.manage; the page itself admits settings.edit.
   if (item.href === "/m/roles") return can(session, "team.manage") && can(session, "settings.edit");
+  // 通知設定 (R5-NOTIFY, MGT-135-AC1): everyone with personal reminders (admin, manager); the layout admits them.
+  if (item.href === "/m/notify") return hasPersonalReminders(session);
   if (item.perm === "admin") return session.role === "admin" && !noPermHref(item.href, session);
   if (item.perm === "any") return item.href !== "/m/tickets" || !noPermHref(item.href, session);
   return can(session, item.perm);
@@ -112,8 +114,9 @@ export function crumbsForAreas(pathname: string, areas: readonly ManagerAreaV3[]
   const area = areas.find(item => item.id === areaForPath(path)?.id);
   if (!area) return [];
   const sub = area.links.find(item => pathWithin(path, item.href));
-  // R5-OWNVIEW frame (MGT-138): 規則與資料 is named under 設定 (「設定 › 規則與資料」) although it is the area's first page.
-  return [navLabel(area.key, locale), ...(sub && (path !== area.href || sub.href === "/m/settings") ? [navLabel(sub.key, locale)] : [])];
+  // R5-OWNVIEW frame (MGT-138): 規則與資料 is named under 設定 (「設定 › 規則與資料」) although it is the area's first page;
+  // R5-NOTIFY frame (MGT-135): likewise 「設定 › 通知設定」, which is a manager's first settings page.
+  return [navLabel(area.key, locale), ...(sub && (path !== area.href || sub.href === "/m/settings" || sub.href === "/m/notify") ? [navLabel(sub.key, locale)] : [])];
 }
 export function crumbFor(pathname: string, session: Session) {
   return crumbsForAreas(pathname, areasFor(session), session.locale);

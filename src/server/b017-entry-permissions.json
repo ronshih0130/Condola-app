@@ -463,5 +463,8 @@
   "src/server/b091-owner-rules.ts#staffRuleChanges": "props.view",
   "src/server/b073-owner-view.ts#ownerViewRead": "settings.edit",
   "src/server/b073-owner-view.ts#saveOwnerView": "settings.edit",
-  "src/app/api/owner-view/route.ts#POST": "settings.edit"
+  "src/app/api/owner-view/route.ts#POST": "settings.edit",
+  "src/server/b073-notify-settings.ts#notifySettingsRead": "settings.edit",
+  "src/server/b073-notify-settings.ts#saveNotifySetting": "settings.edit",
+  "src/app/api/notify-settings/route.ts#POST": "settings.edit"
 }

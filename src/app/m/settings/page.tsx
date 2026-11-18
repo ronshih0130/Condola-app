@@ -54,6 +54,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {mail ? (
         <form className="card pad" action={actionOrgMail} style={{ maxWidth: 720, marginBottom: 16 }}>
           <h3>{t("i_mail_org")}</h3>
+          {/* R5-NOTIFY (MGT-135-AC2): under brand_v3 the tenant switches live on 通知設定; the R5-OWNVIEW side-card row
+              「提醒租客・在「通知設定」」 is this page's one link line, and actionOrgMail keeps the stored values. */}
+          {v3 ? null : <>
           <label className="row">
             <input type="checkbox" name="tenantLease" defaultChecked={mail.tenantLease} data-testid="tenant-lease-mail" />
             {t("i_mail_tenant_lease")}
@@ -62,6 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <input type="checkbox" name="tenantOverdue" defaultChecked={mail.tenantOverdue} data-testid="tenant-overdue-mail" />
             {t("i_mail_tenant_overdue")}
           </label>
+          </>}
           <div className="fg">
             <label className="f">{t("i_mail_contact_email")}</label>
             <input className="inp" name="contactEmail" type="email" defaultValue={mail.contactEmail} data-testid="org-contact-email" />

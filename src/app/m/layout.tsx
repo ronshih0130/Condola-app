@@ -8,7 +8,7 @@ import { BUILD_SHA } from "@/build-info";
 import { Sidebar, TaskPanel } from "@/components/chrome";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { demoModeEnabled } from "@/server/demo";
-import { can, noPermHref } from "@/server/perms";
+import { can, hasPersonalReminders, noPermHref } from "@/server/perms";
 import { loadManagerChrome } from "@/server/queries";
 import { getSession } from "@/server/session";
 import { trialBannerFor } from "@/server/b056-trial";
@@ -31,12 +31,15 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   // Exact report page only: nested routes, including export, retain reports.export.
   const reportV3 = routeDenied && /^\/m\/reports\/?$/.test(path) && can(session, "stmt.view")
     ? await brandV3EnabledForOrg(session.orgId) : undefined;
-  const denied = moneyV3 || reportV3 ? null : routeDenied;
+  // R5-NOTIFY (MGT-135-AC1): 設定 › 通知設定 also opens for a manager (寄給我的) under brand_v3; exact route only.
+  const notifyV3 = routeDenied && /^\/m\/notify\/?$/.test(path) && hasPersonalReminders(session)
+    ? await brandV3EnabledForOrg(session.orgId) : undefined;
+  const denied = moneyV3 || reportV3 || notifyV3 ? null : routeDenied;
   if (denied) redirect(denied);
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   const banner = session.kind === "staff" ? await trialBannerFor(session) : null;
-  if (moneyV3 ?? reportV3 ?? await brandV3EnabledForOrg(session.orgId)) {
+  if (moneyV3 ?? reportV3 ?? notifyV3 ?? await brandV3EnabledForOrg(session.orgId)) {
     // /api/env accepts native staff roles; its null-key guard refuses assigned custom roles.
     return <ManagerShellV3 areas={areasFor(session)} tabs={tabsFor(session)}
       locale={session.locale} name={session.name} role={session.role} firm={firm.name}
