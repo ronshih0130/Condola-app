@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261118120000_b123_plan_tier_standard.sql": {
+    addOnly: true,
+    reason: "B-123 / C-plan-2 (Ron 2026-11-18 20:37 PST). Appends 'standard' to public.plan_tier. No table, column default, existing row, policy, grant, function or flag change. No outbound. ADR-112 (new-table default privileges) is not applicable because no table is created.",
+  },
   "supabase/migrations/20261118100000_b059_maint_unit_assign.sql": {
     addOnly: false,
     reason: "B-059 / DO-3 (MGT-118-AC1…AC8; GS-24, GS-46; Round 7 frames 設定・單位分派 and 負責的單位・{名字}). Tier 2. Not add-only: two NEW RESTRICTIVE policies on existing tables (b059_maint_unit_scope on public.maintenance_tickets, b059_maint_unit_photo_scope on public.ticket_attachments) that narrow ticket visibility for active maintenance members of an organization with maint_unit_assign ON; while the flag is OFF (seeded OFF) every row passes and every existing query keeps its text and result. Also NEW: app.b059_unit_assignments and app.b059_assign_commands (RLS on, no application grants; FKs to org_members, invitations and units with ON DELETE CASCADE), the platform_settings seed maint_unit_assign OFF (ON CONFLICT DO NOTHING), service-only VOLATILE definers app.b059_assign_view / app.b059_assign_save (EXECUTE service_role only; request-id idempotency, row locks, audit_log row), the internal app.b059_flag_on (no grant) and four STABLE definer RLS helpers granted to authenticated (b017_denied_orgs pattern, the caller's own rows only): three argument-less ones the ticket policy reads once per statement as InitPlans, and app.b059_ticket_visible(uuid), a self-validating per-row check for the photo policy made of caller-first primary-key / composite-index probes (true only for an active, unpaused maintenance member of the ticket's org with the flag ON; no sublink there: 42P17). Also a new partial index b059_invitations_accepted_by_idx on public.invitations. No existing column, grant, policy, function or data change.",
