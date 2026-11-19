@@ -1,16 +1,74 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { query } from "./db";
 import { generateStatement } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
+import { recordOwnerTransfer } from "./owner-transfers";
 import { statementPreview } from "./statement-preview";
+import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
 import type { Session } from "./types";
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 const admin: Session = { userId:USERS.admin,sessionId:"b008",email:"admin@example.invalid",name:"B008",kind:"staff",role:"admin",orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",locale:"en",calendar:"gregorian",leaseId:null };
 const manager: Session = { ...admin,userId:USERS.manager,role:"manager" };
+
+test("legacy issuance subtracts recorded owner payouts and satisfies the closing CHECK", async () => {
+  // Transfer and issuance commit separately. Keep their ledger, audit and flag writes in a clone.
+  const originalUrl = process.env.DATABASE_URL!;
+  const clone = await cloneTestDatabase();
+  try {
+    process.env.DATABASE_URL = clone.url;
+    const staff = { ...admin, sessionId: randomUUID() };
+    await query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at)
+      VALUES ($1,$2,$3,now()+interval '1 day')`, [staff.sessionId, staff.userId, randomUUID()]);
+    const setFlag = async (key: string, enabled: boolean) => {
+      await query(`INSERT INTO platform_settings(key,value)
+        VALUES ($1,jsonb_build_object('enabled',$2::boolean,'allowed_org_ids',jsonb_build_array($3::text)))
+        ON CONFLICT (key) DO UPDATE SET value=excluded.value`, [key, enabled, ORG_ID]);
+      await query(`UPDATE organizations SET feature_flags=feature_flags || jsonb_build_object($1::text,$2::boolean) WHERE id=$3`,
+        [key, enabled, ORG_ID]);
+    };
+    const month = "2098-06", effectiveDate = `${month}-15`;
+    const owner = (await query<{ owner: string; property: string; minor_unit: number }>(
+      `SELECT po.owner_contact_id AS owner, p.id AS property, cu.minor_unit
+         FROM property_owners po JOIN properties p ON p.id=po.property_id
+         JOIN currencies cu ON cu.code=p.currency
+         JOIN contacts c ON c.id=po.owner_contact_id
+        WHERE po.org_id=$1 AND p.currency='TWD' AND c.is_owner AND c.archived_at IS NULL
+          AND po.effective_from <= $2::date AND (po.effective_to IS NULL OR po.effective_to >= $2::date)
+        ORDER BY p.name,p.id LIMIT 1`, [ORG_ID, effectiveDate],
+    )).rows[0];
+    assert.ok(owner);
+    const amount = "3", amountMinor = Number(amount) * 10 ** owner.minor_unit;
+    await setFlag("owner_transfers", true);
+    const transfer = await recordOwnerTransfer(staff, {
+      requestId: randomUUID(), propertyId: owner.property, ownerId: owner.owner, effectiveDate,
+      amount, reference: "Legacy payout fixture", expectedCurrency: "TWD", expectedMinorUnit: owner.minor_unit,
+    }, { userId: staff.userId, orgId: staff.orgId, liveOrgId: staff.liveOrgId, environment: staff.environment });
+    assert.equal(transfer.state, "recorded");
+
+    await setFlag("billing_previews", false);
+    const issued = await generateStatement(staff, { ownerContactId: owner.owner, month });
+    const stored = (await query(`SELECT payouts_minor, closing_balance_minor,
+        opening_balance_minor + rent_received_minor + other_income_minor
+          - management_fee_minor - expenses_minor - payouts_minor AS expected
+      FROM owner_statements WHERE id=$1`, [issued.statementId])).rows[0];
+    assert.ok(stored);
+    assert.equal(Number(stored.payouts_minor), amountMinor);
+    assert.equal(stored.closing_balance_minor, stored.expected);
+
+    await setFlag("billing_previews", true);
+    const preview = await statementPreview(staff, owner.owner, month);
+    assert.ok(preview);
+    assert.equal(preview.payouts, amountMinor);
+    assert.equal(preview.closing, preview.opening + preview.rent + preview.other - preview.fee - preview.expenseTotal - amountMinor);
+  } finally {
+    try { await clone.cleanup(); } finally { process.env.DATABASE_URL = originalUrl; }
+  }
+});
 
 test("preview is read-only, stale sources block issue and identical sources issue matching frozen amounts", async () => {
   const owner = (await query<{ owner: string; property: string }>(`SELECT po.owner_contact_id::text AS owner,po.property_id::text AS property FROM property_owners po JOIN properties p ON p.id=po.property_id WHERE po.org_id=$1 AND p.currency='TWD' ORDER BY p.name LIMIT 1`,[ORG_ID])).rows[0];

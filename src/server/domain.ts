@@ -2468,7 +2468,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
          expenses_minor, payouts_minor, closing_balance_minor, fee_rule_snapshot, locale,
          einvoice_status, issued_at, issued_by
        ) VALUES (
-         $1,$2,$3,$4,$5,'issued',$6,$7,$8,$9,$10,0,$11,$12::jsonb,$13,'not_applicable',now(),$14
+         $1,$2,$3,$4,$5,'issued',$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,'not_applicable',now(),$15
        ) RETURNING id`,
       [
         session.orgId,
@@ -2481,6 +2481,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
         other,
         fee,
         expenseTotal,
+        calculation.payouts,
         closing,
         JSON.stringify(rule ?? { name: null }),
         session.locale,
