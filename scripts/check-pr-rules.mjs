@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// check-pr-rules.mjs — enforce R2 (no silent test-assertion changes) and R3
-// (typecheck + unit tests pass). Runnable locally and in CI. No extra deps.
+// check-pr-rules.mjs — enforce R2 (no silent test-assertion changes), R3
+// (typecheck + unit tests pass) and R4 (the PR body carries `## Verification`
+// evidence; bug fixes carry red-on-base proof). Runnable locally and in CI.
+// No extra deps. R4 is documented next to its code below.
 //
 // R2 assertion-mutation detection is a parenthesis-depth heuristic: an
 // assertion call is opened when a line matches the assertion detector, and its
@@ -35,8 +37,11 @@ function parseArgs(argv) {
       case '--pr-body': out.prBody = argv[++i]; break;
       case '--pr-body-file': out.prBodyFile = argv[++i]; break;
       case '--diff-file': out.diffFile = argv[++i]; break;
+      case '--pr-title': out.prTitle = argv[++i]; break;
       case '--r2-only': out.r2Only = true; break;
       case '--r3-only': out.r3Only = true; break;
+      case '--r4-only': out.r4Only = true; break;
+      case '--no-r3': out.noR3 = true; break;
       case '-h': case '--help': out.help = true; break;
       default: out._.push(a);
     }
@@ -49,8 +54,10 @@ const args = parseArgs(process.argv.slice(2));
 if (args.help) {
   process.stdout.write(
     'Usage: node scripts/check-pr-rules.mjs [--base <ref>] [--head <ref>]\n' +
-    '  [--pr-body <text>] [--pr-body-file <path>] [--diff-file <path>]\n' +
-    '  [--r2-only] [--r3-only]\n'
+    '  [--pr-body <text>] [--pr-body-file <path>] [--pr-title <text>]\n' +
+    '  [--diff-file <path>] [--r2-only | --r3-only | --r4-only | --no-r3]\n' +
+    'With no rule flag, R2, R3 and R4 all run. --no-r3 runs every rule except\n' +
+    'R3 (gate:pr runs typecheck and test:unit as its own steps).\n'
   );
   process.exit(0);
 }
@@ -112,6 +119,17 @@ function resolvePrBody() {
     if (ev.issue && typeof ev.issue.body === 'string') return ev.issue.body;
   }
   return ''; // missing body == empty
+}
+
+// PR title: only used by R4 to spot a `fix:` conventional-commit title. null
+// means unknown (e.g. a local run before the PR exists); R4 then relies on the
+// body alone.
+function resolvePrTitle() {
+  if (args.prTitle != null) return args.prTitle;
+  if (process.env.PR_TITLE != null && process.env.PR_TITLE !== '') return process.env.PR_TITLE;
+  const ev = readEvent();
+  if (ev && ev.pull_request && typeof ev.pull_request.title === 'string') return ev.pull_request.title;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -340,18 +358,251 @@ function runR3() {
 }
 
 // ---------------------------------------------------------------------------
+// R4 — Verification evidence (Lauren item 3)
+// ---------------------------------------------------------------------------
+// The PR body must prove the change was run, not just describe it.
+//
+// Parsing: HTML comments (<!-- ... -->) outside fenced code blocks are dropped
+// first, fences inside a comment included, so template hints never count. The
+// Verification section starts at a `## Verification` heading (any case)
+// outside a fence and runs to the next
+// `#` or `##` heading outside a fence (### sub-headings and `# comments` inside
+// code blocks stay in the section). Several such headings are read together.
+//
+// PASS needs all of:
+//   1. the section exists;
+//   2. at least one fenced code block (``` or ~~~) in it holds a command line
+//      AND at least one output line. A command line starts with `$ ` or with
+//      npm/npx/node/tsx/bash/git followed by an argument. An output line is any
+//      other non-blank line. Placeholders do not count: a command containing a
+//      `<like-this>` token, or an output line that is only `<...>`, `...`, `…`,
+//      TODO, TBD or "paste output";
+//   3. the word INCONCLUSIVE (upper case) appears nowhere in the section, in
+//      prose or output: an INCONCLUSIVE verdict is not a PASS;
+//   4. bug-fix PRs only (see below): a `Red-On-Base: PASS` line in the section,
+//      no `Red-On-Base:` line with any other value, a fenced block in the
+//      section with a line that invokes the runner itself —
+//      `[$ ][VAR=x ]node [./]scripts/red-on-base.mjs ... --test <t> ... --expect <re>`
+//      (an `echo red-on-base.mjs` does not count) — whose LAST `RED-ON-BASE:`
+//      summary line after that invocation is exactly
+//      `RED-ON-BASE: PASS base=<sha> head=<sha> tests=<n>` (n >= 1), and the
+//      last `RED-ON-BASE:` summary anywhere in the section's code is that PASS
+//      (an earlier FAIL is fine; a later FAIL is not). Pasted output is still
+//      trusted text; CI (item 3-W) can re-run the proof.
+//
+// A PR is a bug fix when any of these holds:
+//   a. the PR title (--pr-title, $PR_TITLE or the GitHub event) is a `fix`
+//      conventional commit: `fix:`, `fix(scope):`, `fix!:` (any case);
+//   b. the body's prose (outside comments and code blocks) has a line starting
+//      `Fix:`, `Fixes:` or `Bug-Fix:` (any case) followed by text (an optional
+//      list marker is allowed);
+//   c. the body's prose has any `Red-On-Base:` line (exact case; the tool's
+//      upper-case `RED-ON-BASE:` summary line in pasted output is not one).
+// When the title is unknown (a local run before the PR exists), only b and c
+// apply; CI passes the title.
+const VERIFICATION_HEADING_RE = /^\s{0,3}##\s+verification\s*#*\s*$/i;
+const SECTION_END_RE = /^\s{0,3}#{1,2}(?:\s|$)/;
+const FENCE_RE = /^\s{0,3}(`{3,}|~{3,})/;
+const COMMAND_RE = /^\s*(?:\$\s+\S|(?:npm|npx|node|tsx|bash|git)\s+\S)/;
+const PLACEHOLDER_TOKEN_RE = /<[A-Za-z][^<>\n]*>/;
+const PLACEHOLDER_LINE_RE = /^\s*(?:<[^<>]*>|\.{3}|…|todo|tbd|paste (?:the )?output(?: here)?)\s*$/i;
+const INCONCLUSIVE_RE = /\bINCONCLUSIVE\b/;
+const FIX_TITLE_RE = /^\s*fix(?:\([^)]*\))?!?:/i;
+const FIX_LINE_RE = /^\s*(?:[-*]|\d+\.)?\s*(?:Fix|Fixes|Bug-Fix):\s*\S/im;
+const RED_ON_BASE_LINE_RE = /^\s*(?:[-*]|\d+\.)?\s*`?Red-On-Base:\s*([^\s`]*)/; // exact case: the tool's own summary line is RED-ON-BASE:
+const RED_ON_BASE_SUMMARY_RE = /^\s*RED-ON-BASE: PASS base=[0-9a-f]{7,40} head=[0-9a-f]{7,40} tests=[1-9]\d*\s*$/;
+const RED_ON_BASE_ANY_SUMMARY_RE = /^\s*RED-ON-BASE:\s/;
+// `$ node scripts/red-on-base.mjs <args>` (optional `$ `, env assignments, ./)
+const RED_ON_BASE_INVOKE_RE = /^\s*(?:\$\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*node\s+(?:\.\/)?scripts\/red-on-base\.mjs(?=\s|$)(.*)$/;
+
+// Drop HTML comments outside fenced code blocks. A comment hides everything up
+// to its `-->`, fences included (as GitHub renders it); `<!--` inside a code
+// block is literal text.
+function stripHtmlComments(body) {
+  const out = [];
+  let fence = null;
+  let inComment = false;
+  for (const line of body.replace(/\r\n?/g, '\n').split('\n')) {
+    if (fence) {
+      out.push(line);
+      const m = FENCE_RE.exec(line);
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length && line.trim() === m[1]) fence = null;
+      continue;
+    }
+    let rest = line;
+    let kept = '';
+    for (;;) {
+      if (inComment) {
+        const close = rest.indexOf('-->');
+        if (close === -1) { rest = ''; break; }
+        rest = rest.slice(close + 3);
+        inComment = false;
+      }
+      const open = rest.indexOf('<!--');
+      if (open === -1) { kept += rest; break; }
+      kept += rest.slice(0, open);
+      rest = rest.slice(open + 4);
+      inComment = true;
+    }
+    if (kept === '' && line !== '' && inComment) continue; // line wholly inside a comment
+    const m = FENCE_RE.exec(kept);
+    if (m) fence = m[1];
+    out.push(kept);
+  }
+  return out.join('\n');
+}
+
+// Returns { found, lines, blocks } for the Verification section(s). blocks are
+// arrays of the lines inside each fenced code block.
+function verificationSection(cleanBody) {
+  const lines = cleanBody.split('\n');
+  const section = [];
+  const blocks = [];
+  let inSection = false;
+  let found = false;
+  let fence = null;
+  let block = null;
+  for (const line of lines) {
+    const m = FENCE_RE.exec(line);
+    if (fence) {
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length && line.trim() === m[1]) {
+        fence = null;
+        if (block) { blocks.push(block); block = null; }
+      } else if (block) {
+        block.push(line);
+      }
+      if (inSection) section.push(line);
+      continue;
+    }
+    if (m) {
+      fence = m[1];
+      if (inSection) { section.push(line); block = []; }
+      continue;
+    }
+    if (VERIFICATION_HEADING_RE.test(line)) { inSection = true; found = true; continue; }
+    if (SECTION_END_RE.test(line)) { inSection = false; continue; }
+    if (inSection) section.push(line);
+  }
+  if (block) blocks.push(block); // unterminated fence runs to the end
+  return { found, lines: section, blocks };
+}
+
+function blockEvidence(block) {
+  const commands = [];
+  const output = [];
+  for (const line of block) {
+    if (!line.trim()) continue;
+    if (COMMAND_RE.test(line)) {
+      if (!PLACEHOLDER_TOKEN_RE.test(line)) commands.push(line.trim());
+      continue;
+    }
+    if (!PLACEHOLDER_LINE_RE.test(line)) output.push(line);
+  }
+  return { commands, output, ok: commands.length > 0 && output.length > 0 };
+}
+
+// Lines of the (comment-free) body that sit outside fenced code blocks.
+function proseLines(cleanBody) {
+  const out = [];
+  let fence = null;
+  for (const line of cleanBody.split('\n')) {
+    const m = FENCE_RE.exec(line);
+    if (fence) {
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length && line.trim() === m[1]) fence = null;
+      continue;
+    }
+    if (m) { fence = m[1]; continue; }
+    out.push(line);
+  }
+  return out;
+}
+
+function isBugFix(cleanBody, title) {
+  const reasons = [];
+  const prose = proseLines(cleanBody);
+  if (title != null && FIX_TITLE_RE.test(title)) reasons.push('title is a fix: conventional commit');
+  if (FIX_LINE_RE.test(prose.join('\n'))) reasons.push('body has a Fix:/Fixes:/Bug-Fix: line');
+  if (prose.some(l => RED_ON_BASE_LINE_RE.test(l))) reasons.push('body has a Red-On-Base: line');
+  return reasons;
+}
+
+function checkVerification(body, title) {
+  const clean = stripHtmlComments(body || '');
+  const sec = verificationSection(clean);
+  const problems = [];
+  if (!sec.found) {
+    return { pass: false, detail: 'PR body has no `## Verification` section', problems: ['add a `## Verification` section with the exact commands you ran and their pasted output'] };
+  }
+  const evidence = sec.blocks.map(blockEvidence);
+  if (!evidence.some(e => e.ok)) {
+    problems.push(sec.blocks.length === 0
+      ? 'Verification has no fenced code block'
+      : 'no fenced code block in Verification holds both a real command line (e.g. `$ npm run gate:pr`) and its pasted output (template placeholders do not count)');
+  }
+  if (sec.lines.some(l => INCONCLUSIVE_RE.test(l))) {
+    problems.push('Verification reports INCONCLUSIVE: an INCONCLUSIVE verdict is not a PASS');
+  }
+  const fixReasons = isBugFix(clean, title);
+  if (fixReasons.length) {
+    const secProse = proseLines(sec.lines.join('\n'));
+    const robLines = secProse.map(l => RED_ON_BASE_LINE_RE.exec(l)).filter(Boolean);
+    const values = robLines.map(m => m[1]);
+    if (!values.includes('PASS')) {
+      problems.push(`bug-fix PR (${fixReasons.join('; ')}) needs a \`Red-On-Base: PASS\` line in Verification`);
+    }
+    const bad = values.filter(v => v !== 'PASS');
+    if (bad.length) problems.push(`Red-On-Base: must be PASS, found: ${bad.map(v => v || '(empty)').join(', ')}`);
+    // A block counts only if a line really invokes the runner (node
+    // scripts/red-on-base.mjs --test ... --expect ...) and the last summary line
+    // after that invocation in the block is a PASS.
+    const pasted = sec.blocks.some(b => b.some((l, i) => {
+      const m = RED_ON_BASE_INVOKE_RE.exec(l);
+      if (!m || !/(?:^|\s)--test\s+\S/.test(m[1]) || !/(?:^|\s)--expect\s+\S/.test(m[1])) return false;
+      const after = b.slice(i + 1).filter(x => RED_ON_BASE_ANY_SUMMARY_RE.test(x));
+      return after.length > 0 && RED_ON_BASE_SUMMARY_RE.test(after[after.length - 1]);
+    }));
+    const summaries = sec.blocks.flat().filter(x => RED_ON_BASE_ANY_SUMMARY_RE.test(x));
+    if (summaries.length && !RED_ON_BASE_SUMMARY_RE.test(summaries[summaries.length - 1])) {
+      problems.push(`the last RED-ON-BASE summary in Verification is not a PASS: ${summaries[summaries.length - 1].trim()}`);
+    }
+    if (!pasted) {
+      problems.push('bug-fix PR needs the pasted run of `node scripts/red-on-base.mjs --test <test> --expect <reason>` in a Verification code block, whose last summary line is `RED-ON-BASE: PASS base=<sha> head=<sha> tests=<n>`');
+    }
+  }
+  if (problems.length) {
+    return { pass: false, detail: `${problems.length} Verification problem(s)`, problems };
+  }
+  const n = evidence.filter(e => e.ok).length;
+  return {
+    pass: true,
+    detail: `Verification has ${n} command block(s) with output${fixReasons.length ? '; bug fix with Red-On-Base: PASS' : ''}`,
+  };
+}
+
+function runR4() {
+  return checkVerification(resolvePrBody(), resolvePrTitle());
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 function main() {
-  if (args.r2Only && args.r3Only) {
-    fail('--r2-only and --r3-only are mutually exclusive');
+  const selectors = [
+    ['--r2-only', args.r2Only], ['--r3-only', args.r3Only],
+    ['--r4-only', args.r4Only], ['--no-r3', args.noR3],
+  ].filter(([, on]) => on).map(([name]) => name);
+  if (selectors.length > 1) {
+    fail(`${selectors.join(' and ')} are mutually exclusive`);
   }
 
-  const doR2 = !args.r3Only;
-  const doR3 = !args.r2Only;
+  const only = args.r2Only || args.r3Only || args.r4Only;
+  const doR2 = only ? !!args.r2Only : true;
+  const doR3 = only ? !!args.r3Only : !args.noR3;
+  const doR4 = only ? !!args.r4Only : true;
 
   let r2Status = 'SKIP';
   let r3Status = 'SKIP';
+  let r4Status = 'SKIP';
   let ok = true;
 
   if (doR2) {
@@ -382,7 +633,20 @@ function main() {
     }
   }
 
-  process.stdout.write(`\nSummary: R2 ${r2Status}, R3 ${r3Status}\n`);
+  if (doR4) {
+    const res = runR4();
+    r4Status = res.pass ? 'PASS' : 'FAIL';
+    if (!res.pass) {
+      ok = false;
+      process.stderr.write(`\nR4 FAIL: ${res.detail}\n`);
+      for (const p of res.problems) process.stderr.write(`  - ${p}\n`);
+      process.stderr.write('See .github/pull_request_template.md and the R4 notes in scripts/check-pr-rules.mjs.\n\n');
+    } else {
+      process.stdout.write(`R4 OK: ${res.detail}\n`);
+    }
+  }
+
+  process.stdout.write(`\nSummary: R2 ${r2Status}, R3 ${r3Status}, R4 ${r4Status}\n`);
   process.exit(ok ? 0 : 1);
 }
 

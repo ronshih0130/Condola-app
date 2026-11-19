@@ -11,6 +11,7 @@ import { brandV3OwnerUnitsCopy } from "../i18n/lanes/brand-v3-owner-units";
 import { ownerUnit, parseOwnerUnit, type OwnerUnitDetail } from "./b092-owner-unit";
 import type { OwnerUnitRow } from "./b092-owner-units";
 import type { Session } from "./types";
+import { FLAG_GATE } from "./flag-gate";
 Object.assign(globalThis, { React });
 
 // B-092 RO-UNIT (OWN-33-AC2/AC4). Synthetic data only.
@@ -130,6 +131,9 @@ function compile(text: string, mocks: Record<string, unknown>) {
   const exports: Record<string, unknown> = {};
   new Function("require", "exports", code)((name: string) => {
     if (name in mocks) return mocks[name];
+    // Lauren 2d: a migrated gate page imports the real page wrapper, compiled with the same mocks.
+    if (name === "@/server/page-flag-gate") return compile(readFileSync("src/server/page-flag-gate.ts", "utf8"), mocks);
+    if (name === "@/server/flag-gate") return { FLAG_GATE };
     if (name === "react" || name === "react/jsx-runtime") return requireHere(name);
     throw new Error(`Unmocked dependency: ${name}`);
   }, exports);

@@ -3,8 +3,7 @@ import { OwnerUnitError, OwnerUnitNoPerm, OwnerUnitView } from "@/components/v3/
 import { ownerUnitHref } from "@/components/v3/owner/units";
 import { ownerUnit } from "@/server/b092-owner-unit";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
-import { requireCurrentConsent } from "@/server/consent-gate";
-import { getSession } from "@/server/session";
+import { withPageFlagGate } from "@/server/page-flag-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +13,12 @@ export const dynamic = "force-dynamic";
  * vacant space (no vacant design yet) are real 404s. Another owner's, an unknown or an unauthorised space is
  * B1-NOPERM in place (as RO-DECIDED / RO-RULES); a failed read is the O-STATES error with a retry to this URL.
  */
-export default async function OwnerUnitRoute({ params, searchParams }: {
+export default withPageFlagGate({
+  flagKey: "brand_v3",
+  flag: async session => brandV3EnabledForOrg(session.orgId),
+}, async ({ params, searchParams }: {
   params: Promise<{ unitId: string }>; searchParams: Promise<{ room?: string | string[] }>;
-}) {
-  await requireCurrentConsent(undefined, "page");
-  const session = await getSession();
-  if (!(await brandV3EnabledForOrg(session.orgId))) notFound();
+}, session) => {
   const { unitId } = await params;
   const { room } = await searchParams;
   const roomId = room ?? null;
@@ -31,4 +30,4 @@ export default async function OwnerUnitRoute({ params, searchParams }: {
   }
   if (result.unit.vacant) notFound();
   return <OwnerUnitView unit={result.unit} locale={session.locale} calendar={session.calendar} />;
-}
+});

@@ -11,6 +11,7 @@ import { DecidedError, DecidedListView, DecidedLoading, DecidedNoPerm, DecidedTi
 import { brandV3OwnerDecidedCopy } from "../i18n/lanes/brand-v3-owner-decided";
 import { Illustration } from "../components/v3/illustrations";
 import type { Session } from "./types";
+import { FLAG_GATE } from "./flag-gate";
 Object.assign(globalThis, { React });
 
 // OWN-35-AC1…AC3 / RO-DECIDED (B-093). Synthetic data only.
@@ -169,6 +170,9 @@ function compile(text: string, mocks: Record<string, unknown>) {
   const exports: Record<string, unknown> = {};
   new Function("require", "exports", code)((name: string) => {
     if (name in mocks) return mocks[name];
+    // Lauren 2d: a migrated gate page imports the real page wrapper, compiled with the same mocks.
+    if (name === "@/server/page-flag-gate") return compile(readFileSync("src/server/page-flag-gate.ts", "utf8"), mocks);
+    if (name === "@/server/flag-gate") return { FLAG_GATE };
     if (name === "react" || name === "react/jsx-runtime") return requireHere(name);
     throw new Error(`Unmocked dependency: ${name}`);
   }, exports);
