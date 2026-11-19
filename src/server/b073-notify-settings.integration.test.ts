@@ -4,6 +4,8 @@ import test, { mock } from "node:test";
 import { Client } from "pg";
 import nextHeaders from "next/headers";
 import { POST } from "@/app/api/notify-settings/route";
+// Lauren 2b: withFlagGate routes take Next's (request, context); context is unused by these routes.
+const ROUTE_CTX = { params: Promise.resolve({}) };
 import { SESSION_COOKIE } from "./auth";
 import { buildStoredConsent } from "./consent";
 import { ENV_COOKIE } from "./org-scope";
@@ -148,7 +150,7 @@ test("MGT-135 atomic single key: a concurrent change to the other key is kept", 
 
 const post = (token: string, body: unknown, origin = "http://localhost") => {
   cookie = token;
-  return POST(new Request("http://localhost/api/notify-settings", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+  return POST(new Request("http://localhost/api/notify-settings", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) }), ROUTE_CTX);
 };
 
 test("MGT-135-AC4 HTTP: non-admins get 403 for 寄給租客的 and cross-origin gets 403, with nothing written", async () => {

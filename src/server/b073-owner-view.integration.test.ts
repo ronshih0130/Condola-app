@@ -4,6 +4,8 @@ import test, { mock } from "node:test";
 import { Client } from "pg";
 import nextHeaders from "next/headers";
 import { POST } from "@/app/api/owner-view/route";
+// Lauren 2b: withFlagGate routes take Next's (request, context); context is unused by these routes.
+const ROUTE_CTX = { params: Promise.resolve({}) };
 import { ownerPrivacy, SESSION_COOKIE } from "./auth";
 import { buildStoredConsent } from "./consent";
 import { ENV_COOKIE } from "./org-scope";
@@ -101,7 +103,7 @@ test("MGT-138 race fix: sequential single-key saves keep both values; the other 
 
 const post = (token: string, body: unknown, origin = "http://localhost") => {
   cookie = token;
-  return POST(new Request("http://localhost/api/owner-view", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+  return POST(new Request("http://localhost/api/owner-view", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) }), ROUTE_CTX);
 };
 
 test("MGT-138 flag OFF: direct save and POST /api/owner-view answer 404 to an admin without changing settings or audits", async () => {

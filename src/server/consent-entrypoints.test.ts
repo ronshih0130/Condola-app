@@ -146,6 +146,22 @@ function bodyOf(symbol: ts.Symbol) {
   }
   assert.fail("Unclassified runtime export: " + symbol.name);
 }
+// Lauren 2b: `export const POST = withFlagGate(spec, handler)`. The wrapper's own handler runs the real
+// requireCurrentConsent(undefined, "api") first (pinned on src/server/flag-gate.ts by the test below). A route export
+// qualifies only through a direct, unaliased call of the real withFlagGate with no deps override (default deps only).
+function flagGateCall(symbol: ts.Symbol) {
+  const declaration = unalias(symbol).valueDeclaration;
+  const init = declaration && ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined;
+  return init && ts.isCallExpression(init) ? init : undefined;
+}
+function assertFlagGatedRoute(call: ts.CallExpression, label: string, typeChecker = checker) {
+  assert.ok(ts.isIdentifier(call.expression) && call.expression.text === "withFlagGate", label + ": only a direct withFlagGate call may wrap a route");
+  const symbol = typeChecker.getSymbolAtLocation(call.expression);
+  const target = symbol && unalias(symbol, typeChecker);
+  assert.ok(target?.name === "withFlagGate" && target.declarations?.some((d) => d.getSourceFile().fileName.endsWith("/server/flag-gate.ts")), label + ": untrusted withFlagGate");
+  assert.equal(call.arguments.length, 2, label + ": production routes must not pass withFlagGate deps");
+  assert.ok(!call.arguments.some(ts.isSpreadElement), label + ": spread arguments hide the deps");
+}
 function assertPayeeAdapter(body: ts.Node, route: boolean, label: string, typeChecker = checker) {
   assert.ok(ts.isBlock(body), label);
   const first = body.statements[0];
@@ -329,6 +345,79 @@ test("adapter definitions reject early bypasses and wrong helpers", () => {
     if (name === "good") assert.doesNotThrow(check); else assert.throws(check, name);
   }
 });
+test("withFlagGate (Lauren 2b) runs the real consent guard first, with the real default deps", () => {
+  const file = program.getSourceFile(resolve("src/server/flag-gate.ts"));
+  assert.ok(file);
+  const defaults = file.statements.flatMap((s) => ts.isVariableStatement(s) ? [...s.declarationList.declarations] : [])
+    .find((d) => ts.isIdentifier(d.name) && d.name.text === "defaultDeps");
+  assert.ok(defaults?.initializer && ts.isObjectLiteralExpression(defaults.initializer), "defaultDeps object");
+  const consent = defaults.initializer.properties.find((p) => p.name?.getText() === "requireCurrentConsent");
+  assert.ok(consent && ts.isShorthandPropertyAssignment(consent), "defaultDeps.requireCurrentConsent is the imported guard");
+  const bound = checker.getShorthandAssignmentValueSymbol(consent);
+  assert.ok(bound && unalias(bound).name === "requireCurrentConsent"
+    && unalias(bound).declarations?.some((d) => d.getSourceFile().fileName.endsWith("/server/consent-gate.ts")), "real consent guard");
+  const fn = file.statements.find((s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === "withFlagGate");
+  assert.ok(fn?.body && fn.parameters.length === 3);
+  const deps = fn.parameters[2];
+  assert.ok(deps.initializer && ts.isIdentifier(deps.initializer) && deps.initializer.text === "defaultDeps", "deps default to defaultDeps");
+  const gated = fn.body.statements.flatMap((s) => ts.isVariableStatement(s) ? [...s.declarationList.declarations] : [])
+    .find((d) => ts.isIdentifier(d.name) && d.name.text === "gated");
+  assert.ok(gated?.initializer && ts.isArrowFunction(gated.initializer) && ts.isBlock(gated.initializer.body), "gated handler");
+  const [first, second] = gated.initializer.body.statements;
+  assert.ok(first && ts.isVariableStatement(first) && first.declarationList.declarations.length === 1, "guard is the first statement");
+  const denied = first.declarationList.declarations[0];
+  assert.ok(ts.isIdentifier(denied.name) && denied.initializer && ts.isAwaitExpression(denied.initializer));
+  const call = denied.initializer.expression;
+  assert.ok(ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression)
+    && ts.isIdentifier(call.expression.expression) && call.expression.name.text === "requireCurrentConsent", "deps.requireCurrentConsent(...)");
+  assert.equal(checker.getSymbolAtLocation(call.expression.expression)?.valueDeclaration, deps, "the deps parameter");
+  assert.deepEqual(call.arguments.map((a) => a.getText()), ["undefined", '"api"']);
+  assert.ok(second && ts.isIfStatement(second) && !second.elseStatement && second.expression.getText() === denied.name.text
+    && ts.isReturnStatement(second.thenStatement) && second.thenStatement.expression?.getText() === denied.name.text, "denial returns first");
+  const last = fn.body.statements[fn.body.statements.length - 1];
+  assert.ok(ts.isReturnStatement(last) && last.expression && ts.isAsExpression(last.expression)
+    && last.expression.expression.getText() === "gated", "withFlagGate returns the gated handler");
+});
+
+test("withFlagGate route classification rejects aliases, impostors, member calls and a deps override", () => {
+  const virtual = resolve("src/app/api/__flag_gate_fixture/route.ts");
+  const code = `
+    import { withFlagGate, withFlagGate as gate } from "@/server/flag-gate";
+    import * as fg from "@/server/flag-gate";
+    const spec = { flagKey: "brand_v3", flag: () => true, tag: "t" };
+    const handler = async () => new Response(null);
+    export const good = withFlagGate(spec, handler);
+    export const aliased = gate(spec, handler);
+    export const member = fg.withFlagGate(spec, handler);
+    export const withDeps = withFlagGate(spec, handler, { requireCurrentConsent: async () => null } as never);
+    export const spread = withFlagGate(...([spec, handler] as const));
+    export const impostor = (() => { const withFlagGate = (_s: unknown, h: unknown) => h; return withFlagGate(spec, handler); })();
+  `;
+  const options: ts.CompilerOptions = { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler, baseUrl: resolve("."), paths: { "@/*": ["src/*"] } };
+  const host = ts.createCompilerHost(options);
+  const original = host.getSourceFile.bind(host);
+  host.getSourceFile = (file, language, onError, fresh) => resolve(file) === virtual
+    ? ts.createSourceFile(virtual, code, language, true) : original(file, language, onError, fresh);
+  const fixtureProgram = ts.createProgram([virtual], options, host);
+  const fixtureChecker = fixtureProgram.getTypeChecker();
+  const file = fixtureProgram.getSourceFile(virtual);
+  assert.ok(file);
+  const call = (name: string) => {
+    const declaration = file.statements.flatMap((s) => ts.isVariableStatement(s) ? [...s.declarationList.declarations] : [])
+      .find((d) => ts.isIdentifier(d.name) && d.name.text === name);
+    let init = declaration?.initializer;
+    // The impostor's call sits inside an IIFE: classify the inner withFlagGate(...) call.
+    if (name === "impostor") init = nodes(init!).find((n): n is ts.CallExpression => ts.isCallExpression(n) && n.expression.getText() === "withFlagGate");
+    assert.ok(init && ts.isCallExpression(init), name);
+    return init;
+  };
+  assert.doesNotThrow(() => assertFlagGatedRoute(call("good"), "good", fixtureChecker));
+  for (const name of ["aliased", "member", "withDeps", "spread", "impostor"]) {
+    assert.throws(() => assertFlagGatedRoute(call(name), name, fixtureChecker), name);
+  }
+});
+
 test("all runtime server exports, routes and protected pages are classified", () => {
   for (const path of paths) {
     const file = program.getSourceFile(path)!;
@@ -370,6 +459,8 @@ test("all runtime server exports, routes and protected pages are classified", ()
         assert.equal(calls.filter((call) => call.expression.getText() === "readSessionOn").length, 1);
         continue;
       }
+      const gate = route ? flagGateCall(symbol) : undefined;
+      if (gate) { assertFlagGatedRoute(gate, label); continue; }
       guarded(bodyOf(symbol)!, route, label);
     }
     if (page) {
