@@ -221,6 +221,38 @@ test("inconclusive (exit 2): SIGTERM to red-on-base mid-run stops the command an
   assert.equal(worktreeCount(), 1);
 });
 
+// Codex r2 BLOCKING: the reviewer's reproduction. A background descendant ignores TERM and redirects its streams, so
+// the shell leader exits on TERM and closes the pipes before the grace ends; the group KILL must still be sent.
+test("inconclusive (exit 2): a TERM-ignoring background descendant that outlives the shell is still killed on timeout", async () => {
+  const pidFile = join(mkdtempSync(join(tmpdir(), "red-on-base-pid-")), "pid");
+  const cmd = `bash -c "trap \\"\\" TERM; echo \\$\\$ > '${pidFile}'; while :; do :; done" </dev/null >/dev/null 2>&1 & wait`;
+  const r = await robAsync(["--test", "add.test.mjs", "--timeout", "1", "--cmd", cmd]);
+  const reaped = reap(pidFile);
+  assert.equal(reaped, "gone", "the background descendant must be stopped before the verdict");
+  assert.equal(r.status, 2, r.out);
+  assert.match(r.out, /^RED-ON-BASE: INCONCLUSIVE /m);
+  assert.match(r.out, /base run timed out after 1s/);
+  assert.equal(r.leftovers, false, "no process left in red-on-base's process group");
+  assert.equal(worktreeCount(), 1);
+});
+
+// A run that finishes normally but leaves a background process in its group: the process is killed before the
+// verdict (and before the worktrees are removed), and the verdict itself is unchanged.
+test("pass (exit 0): background processes left by a finished run are killed, and the verdict stands", async () => {
+  const pidDir = mkdtempSync(join(tmpdir(), "red-on-base-pid-")); // one pid file per side: pid-base, pid-head
+  const pidFile = `${pidDir}/pid-$RED_ON_BASE_SIDE`;
+  const cmd = `node --test {tests}; rc=$?; bash -c "trap \\"\\" TERM; echo \\$\\$ > '${pidFile}'; while :; do :; done" </dev/null >/dev/null 2>&1 & while [ ! -s "${pidFile}" ]; do sleep 0.05; done; exit $rc`;
+  const r = await robAsync(["--test", "add.test.mjs", "--expect", "add must sum", "--cmd", cmd]);
+  const reaped = ["base", "head"].map(side => reap(join(pidDir, `pid-${side}`)));
+  assert.deepEqual(reaped, ["gone", "gone"], "the leftover background process of each side must be stopped");
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /^RED-ON-BASE: PASS /m);
+  assert.match(r.out, /--- base: killed processes left in the run's process group/);
+  assert.match(r.out, /--- head: killed processes left in the run's process group/);
+  assert.equal(r.leftovers, false, "no process left in red-on-base's process group");
+  assert.equal(worktreeCount(), 1);
+});
+
 test("only committed HEAD content runs, and the temporary worktrees are removed", () => {
   writeFileSync(join(dir, "lib.mjs"), BUGGY); // uncommitted revert of the fix must not leak into the head run
   const r = rob(["--test", "add.test.mjs", "--expect", "add must sum"]);

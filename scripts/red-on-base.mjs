@@ -20,7 +20,10 @@
 //   --base     ref to diff against; the base checkout is merge-base(<base>, HEAD).
 //              Default: origin/main.
 //   --timeout  per-run limit in seconds. Default: 600. On timeout the run's
-//              whole process group gets TERM, then KILL after a short grace.
+//              whole process group gets TERM, then KILL after a short grace,
+//              even if the shell itself has already exited. After every run
+//              the group is KILLed and must be empty before the verdict; a
+//              process that left the group (setsid, a daemon) is not tracked.
 //
 // What it does:
 //   1. Resolves HEAD and merge-base(<base>, HEAD). Only committed code is used:
@@ -42,7 +45,8 @@
 //   INCONCLUSIVE  exit 2  not proof either way: bad arguments, unknown ref, a test
 //                         file missing at HEAD, worktree/node_modules setup failure,
 //                         a test path that would be written through a symlink, a
-//                         timeout or killed run, a command that cannot start
+//                         timeout or killed run, a run whose process group is
+//                         still not empty after SIGKILL, a command that cannot start
 //                         (exit 126/127), or a base failure without affirmative
 //                         evidence that the regression test failed: no --expect,
 //                         output showing the test could not load (missing module
@@ -63,6 +67,7 @@ const DEFAULT_CMD = 'npx tsx --test {tests}';
 const LOAD_ERROR_RE = /ERR_MODULE_NOT_FOUND|Cannot find module|Cannot find package|does not provide an export named|ERR_UNKNOWN_FILE_EXTENSION|Transform failed with \d+ error/;
 const TAIL_LINES = 15;
 const KILL_GRACE_MS = 2000; // TERM -> KILL escalation after a timeout
+const GROUP_EMPTY_WAIT_MS = 5000; // how long a KILLed process group may take to empty
 
 const VERDICT_EXIT = { PASS: 0, FAIL: 1, INCONCLUSIVE: 2 };
 
@@ -109,7 +114,7 @@ function tail(text, n) {
 class Inconclusive extends Error {}
 
 // Cleanup state shared with the signal handlers.
-const state = { root: null, created: [], child: null, finished: false };
+const state = { root: null, created: [], pgid: null, finished: false };
 
 function finish(verdict, reason, ctx) {
   if (state.finished) return;
@@ -183,12 +188,31 @@ function copyIntoBase(baseDir, rel, bytes) {
   fs.writeFileSync(dest, bytes, { flag: 'wx' }); // exclusive create: never through a link
 }
 
-function killGroup(child, signal) {
-  try { process.kill(-child.pid, signal); } catch { /* group already gone */ }
+function killGroup(pgid, signal) {
+  try { process.kill(-pgid, signal); return true; } catch { return false; /* group already gone */ }
+}
+const groupAlive = pgid => { try { process.kill(-pgid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// SIGKILL the whole group, then wait until no process is left in it. Returns
+// false if something in the group is still alive after GROUP_EMPTY_WAIT_MS.
+async function emptyGroup(pgid) {
+  const deadline = Date.now() + GROUP_EMPTY_WAIT_MS;
+  while (groupAlive(pgid)) {
+    killGroup(pgid, 'SIGKILL');
+    if (Date.now() > deadline) return false;
+    await sleep(25);
+  }
+  return true;
 }
 
 // Runs the command in its own process group so a timeout can stop the whole
-// tree: TERM to the group, then KILL after KILL_GRACE_MS.
+// tree: TERM to the group, then KILL after KILL_GRACE_MS. The KILL is sent when
+// the grace ends whether or not the shell itself has already exited (Codex r2:
+// a TERM-ignoring background descendant must not outlive the run). Every run,
+// timed out or not, ends with a group-wide KILL and a check that the group is
+// empty before the result is used, so no descendant that stayed in the group
+// survives the verdict or the worktree removal.
 function runSide(label, cwd, command, timeoutSec, verbose) {
   return new Promise(resolve => {
     const started = Date.now();
@@ -199,37 +223,48 @@ function runSide(label, cwd, command, timeoutSec, verbose) {
     let output = '';
     let timedOut = false;
     let spawnError = null;
-    let settled = false;
+    let closed = null; // { status, signal } once the shell is gone and its pipes are closed
+    let escalated = false; // the timeout's KILL has been sent (or no timeout happened)
+    let finishing = false;
     const timers = [];
     const child = spawn('bash', ['-c', command], { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    state.child = child;
+    const pgid = child.pid;
+    state.pgid = pgid;
     const collect = chunk => { if (output.length < 64 * 1024 * 1024) output += chunk.toString('utf8'); };
     child.stdout.on('data', collect);
     child.stderr.on('data', collect);
-    const done = (status, signal) => {
-      if (settled) return;
-      settled = true;
+    const maybeDone = async () => {
+      if (finishing || closed === null || (timedOut && !escalated)) return;
+      finishing = true;
       for (const t of timers) clearTimeout(t);
-      state.child = null;
+      const leftovers = pgid != null && groupAlive(pgid);
+      const groupEmpty = pgid == null ? true : await emptyGroup(pgid);
+      if (groupEmpty) state.pgid = null;
+      const { status, signal } = closed;
       const ms = Date.now() - started;
       process.stdout.write(`--- ${label}: exit=${status == null ? `signal ${signal || 'none'}` : status}${timedOut ? ' (timeout)' : ''} ${ms}ms\n`);
+      if (leftovers) process.stdout.write(`--- ${label}: ${groupEmpty ? 'killed' : 'could not kill'} processes left in the run's process group\n`);
       const shown = verbose ? output.replace(/\s+$/, '').split('\n') : tail(output, TAIL_LINES);
       for (const line of shown) process.stdout.write(`  | ${line}\n`);
-      resolve({ status, signal, timedOut, spawnError, output });
+      resolve({ status, signal, timedOut, spawnError, output, groupEmpty });
     };
-    child.on('error', e => { spawnError = e.message; done(null, null); });
-    child.on('close', (status, signal) => done(status, signal));
+    child.on('error', e => { spawnError = e.message; if (closed === null) closed = { status: null, signal: null }; maybeDone(); });
+    child.on('close', (status, signal) => { if (closed === null) closed = { status, signal }; maybeDone(); });
     timers.push(setTimeout(() => {
       timedOut = true;
-      killGroup(child, 'SIGTERM');
-      timers.push(setTimeout(() => {
-        killGroup(child, 'SIGKILL');
+      killGroup(pgid, 'SIGTERM');
+      // Not cancelled by the shell's close: the grace always ends in a group KILL.
+      setTimeout(() => {
+        killGroup(pgid, 'SIGKILL');
+        escalated = true;
         // If something outside the group still holds the pipes, stop waiting.
         timers.push(setTimeout(() => {
           child.stdout.destroy(); child.stderr.destroy();
-          done(null, 'SIGKILL');
+          if (closed === null) closed = { status: null, signal: 'SIGKILL' };
+          maybeDone();
         }, KILL_GRACE_MS));
-      }, KILL_GRACE_MS));
+        maybeDone();
+      }, KILL_GRACE_MS);
     }, timeoutSec * 1000));
   });
 }
@@ -237,7 +272,7 @@ function runSide(label, cwd, command, timeoutSec, verbose) {
 // Ctrl-C or a kill of this script: stop the running command and still remove
 // the temporary worktrees.
 function onSignal(sig) {
-  if (state.child) killGroup(state.child, 'SIGKILL');
+  if (state.pgid) killGroup(state.pgid, 'SIGKILL');
   if (state.root) removeWorktrees(state.root, state.created);
   finish('INCONCLUSIVE', `interrupted by ${sig}`, {});
   process.exit(VERDICT_EXIT.INCONCLUSIVE);
@@ -330,6 +365,7 @@ async function main() {
     }
 
     const notRun = (side, r) => {
+      if (r.groupEmpty === false) return `${side} run left processes in its process group that survived SIGKILL`;
       if (r.timedOut) return `${side} run timed out after ${opts.timeout}s (process group stopped)`;
       if (r.spawnError) return `${side} run could not start: ${r.spawnError}`;
       if (r.status == null) return `${side} run was killed (signal ${r.signal})`;
