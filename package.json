@@ -24,6 +24,7 @@
     "id:watermark": "tsx scripts/backfill-id-watermarks.ts",
     "cf:build": "opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion",
     "test:worker": "tsx --test --test-timeout=180000 src/server/id-worker.integration.test.ts",
+    "test:preflight": "node --test scripts/preflight-node-major.test.mjs",
     "cf:deploy:staging": "bash scripts/cf-deploy-staging.sh",
     "test:e2e": "node --import tsx scripts/run-e2e.ts",
     "licenses:generate": "node scripts/third-party-licenses.mjs",

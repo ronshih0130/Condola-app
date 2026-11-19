@@ -192,6 +192,30 @@ if [[ ! -f $worker ]]; then
     fail ".open-next/worker.js is missing or is not a regular file: $worker"
 fi
 
+node_pin=$base/.nvmrc
+pin_pattern='^[[:space:]]*v?([0-9]+)'
+node_pattern='^v([0-9]+)\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.+-]+)?$'
+if [[ ! -f $node_pin || ! -r $node_pin ]] ||
+    ! pin_version=$(<"$node_pin") 2>/dev/null ||
+    [[ ! $pin_version =~ $pin_pattern ]]; then
+    fail "node pin unreadable: $node_pin"
+else
+    pin_major=${BASH_REMATCH[1]}
+    pin_major=${pin_major#"${pin_major%%[!0]*}"}
+    pin_major=${pin_major:-0}
+    if ! command -v node >/dev/null 2>&1; then
+        fail "node not found on PATH"
+    elif ! node_version=$(node -v 2>/dev/null) ||
+        [[ ! $node_version =~ $node_pattern ]]; then
+        fail "cannot parse node -v output"
+    else
+        node_major=${BASH_REMATCH[1]}
+        if [[ $node_major != "$pin_major" ]]; then
+            fail "node major $node_major does not match pinned major $pin_major from .nvmrc (node -v: $node_version)"
+        fi
+    fi
+fi
+
 if (( failures > 0 )); then
     exit 1
 fi
