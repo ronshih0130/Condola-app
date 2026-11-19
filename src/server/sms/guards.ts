@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
+import { isIP } from "node:net";
 import type { E164 } from "./transport";
 
 export function normalizeE164(raw: unknown): E164 | null {
@@ -34,8 +35,21 @@ export function maskE164(e164: E164): string {
   return prefix + "•".repeat(e164.length - prefix.length - 2) + e164.slice(-2);
 }
 
-export function numberKey(e164: E164): string {
-  return "smsn_" + createHash("sha256").update(`condola-sms-v1:${e164}`).digest("hex").slice(0, 32);
+function hmac128(secret: string, value: string): string {
+  return createHmac("sha256", secret).update(value).digest("hex").slice(0, 32);
+}
+
+export function numberKey(e164: E164, secret: string): string {
+  return "smsn_" + hmac128(secret, e164);
+}
+
+export function deviceKey(deviceId: string | null, secret: string): string {
+  return deviceId === null ? "smsd_none" : "smsd_" + hmac128(secret, `device:${deviceId}`);
+}
+
+export function ipLiteralOrNull(value: string | null): string | null {
+  // Only bare literals: no ports, brackets, CIDR suffixes, or IPv6 zone IDs.
+  return value !== null && /^[0-9A-Fa-f:.]{1,45}$/.test(value) && isIP(value) !== 0 ? value : null;
 }
 
 // B044-AC-P10: Shared across all purposes.
@@ -46,6 +60,7 @@ export const PER_DEVICE_HOUR = 5;
 export const RESEND_SECONDS = 45;
 
 export type SmsRateRefusal =
+  | "rate_context_missing"
   | "rate_resend_wait"
   | "rate_number_hour"
   | "rate_number_day"
@@ -77,6 +92,6 @@ export function dailyCap(env: Record<string, string | undefined>): number {
   return Math.min(Number(value), SMS_DAILY_SEND_HARD_CAP);
 }
 
-export function costCapBlock(sentToday: number, cap: number): null | "daily_cost_cap" {
-  return sentToday >= cap ? "daily_cost_cap" : null;
+export function costCapBlock(attemptsToday: number, cap: number): null | "daily_cost_cap" {
+  return attemptsToday >= cap ? "daily_cost_cap" : null;
 }

@@ -1,5 +1,10 @@
 // PRINCIPLES 58: Changing this constant requires Ron's approval and a DECISIONS row.
-export const SMS_PURPOSES = ["signup_verification","contract_signing_otp","phone_change_verification","tenant_invite"] as const;
+export const SMS_PURPOSES = [
+  "signup_verification",
+  "contract_signing_otp",
+  "phone_change_verification",
+  "tenant_invite",
+] as const;
 
 export type SmsPurpose = (typeof SMS_PURPOSES)[number];
 

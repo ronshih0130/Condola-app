@@ -2,6 +2,7 @@ import type { SmsPurpose } from "./purposes";
 
 export type E164 = string & { readonly __e164: unique symbol };
 export type SmsTransportMode = "capture" | "live";
+export type SmsVerificationCheck = { status: "captured" | "approved" | "rejected" };
 
 export interface SmsTransport {
   readonly mode: SmsTransportMode;
@@ -11,11 +12,16 @@ export interface SmsTransport {
     purpose: SmsPurpose;
     locale?: "zh-TW" | "en";
   }): Promise<{ status: "captured" | "pending"; providerRef: string | null }>;
+  /** Capture mode does not check the code. Only an "approved" result authorizes verification. */
   checkVerification(input: {
     to: E164;
     purpose: SmsPurpose;
     code: string;
-  }): Promise<{ status: "captured" | "approved" | "rejected" }>;
+  }): Promise<SmsVerificationCheck>;
+}
+
+export function isApproved(result: SmsVerificationCheck): result is { status: "approved" } {
+  return result.status === "approved";
 }
 
 type CaptureSink = (capture: { to: E164; purpose: SmsPurpose; at: number }) => void;
@@ -53,14 +59,21 @@ export function createTwilioVerifyTransport(cfg: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body,
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(10_000),
       });
     } catch {
       throw new Error("twilio_verify_request_failed");
     }
 
-    if (!response.ok) throw new Error(`twilio_verify_http_${response.status}`);
+    const { status, type } = response;
+    if (type === "opaqueredirect" || status === 0 || (status >= 300 && status < 400)) {
+      throw new Error(`twilio_verify_http_${status}`);
+    }
+    // Verify may return 404 for an expired or already-used verification.
+    if (endpoint === "VerificationCheck" && status === 404) return null;
+    if (!response.ok) throw new Error(`twilio_verify_http_${status}`);
+
     try {
       return await response.json();
     } catch {
