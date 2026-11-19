@@ -130,8 +130,8 @@ test("reader/writer: OFF never opens a transaction; P-ACC/P-MNT/portals 403; pin
 
 test("wiring: route under brand_v3 with consent; action checks consent; B-017 map; flag registered; ≥44px targets; no outbound", () => {
   const route = read("src/app/m/properties/[id]/shared-meter/page.tsx");
-  assert.match(route, /await requireCurrentConsent\(undefined, "page"\);/);
-  assert.match(route, /if \(!\(await brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\);/);
+  assert.match(route, /^import \{ withPageFlagGate \} from "@\/server\/page-flag-gate";$/m); // Lauren 2d: withPageFlagGate runs consent(undefined, "page"), getSession and the 404
+  assert.match(route, /^export default withPageFlagGate\(\{\n  flagKey: "brand_v3",\n  flag: async session => brandV3EnabledForOrg\(session\.orgId\),\n\}, /m);
   assert.match(read("src/components/v3/m/shared-meter/page.tsx"), /if \(data\.state === "off"\) notFound\(\);/);
   assert.match(read("src/server/b109-shared-meter-actions.ts"), /^"use server";[\s\S]*await requireCurrentConsent\(\);/);
   const map = JSON.parse(read("src/server/b017-entry-permissions.json")) as Record<string, unknown>;

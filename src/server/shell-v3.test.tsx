@@ -17,6 +17,7 @@ import { brandRoot } from "../lib/brand-root";
 import { RoleAvatar } from "../components/v3/role-avatar";
 import { ShellIcon } from "../components/v3/shell/icon";
 import type { Session } from "./types";
+import { FLAG_GATE } from "./flag-gate";
 
 const requireHere = createRequire(import.meta.url);
 function compile(source: string, mocks: Record<string, unknown>) {
@@ -24,6 +25,9 @@ function compile(source: string, mocks: Record<string, unknown>) {
   const exports: Record<string, unknown> = {};
   new Function("require", "exports", code)((name: string) => {
     if (name in mocks) return mocks[name];
+    // Lauren 2d: a migrated gate page imports the real page wrapper, compiled with the same mocks.
+    if (name === "@/server/page-flag-gate") return compile(readFileSync("src/server/page-flag-gate.ts", "utf8"), mocks);
+    if (name === "@/server/flag-gate") return { FLAG_GATE };
     if (name === "react" || name === "react/jsx-runtime") return requireHere(name);
     if (name.endsWith(".css")) return {};
     throw new Error(`Unmocked dependency: ${name}`);

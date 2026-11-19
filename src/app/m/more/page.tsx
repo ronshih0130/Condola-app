@@ -1,20 +1,17 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
-import { requireCurrentConsent } from "@/server/consent-gate";
-import { getSession } from "@/server/session";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { areasFor, tabsFor, navLabel } from "@/server/nav-v3";
 import { maintUnitAssignEnabledForOrg } from "@/server/b059-maint-unit-assign";
 import { brandV3NavigationCopy } from "@/i18n/lanes/brand-v3";
 import { ShellIcon } from "@/components/v3/shell/icon";
+import { withPageFlagGate } from "@/server/page-flag-gate";
 
 export const dynamic = "force-dynamic";
 
-export default async function MorePage() {
-  await requireCurrentConsent(undefined, "page");
-  const session = await getSession();
-  if (session.kind !== "staff") notFound();
-  if (!(await brandV3EnabledForOrg(session.orgId))) notFound();
+export default withPageFlagGate({
+  flagKey: "brand_v3",
+  flag: async session => session.kind === "staff" && (await brandV3EnabledForOrg(session.orgId)),
+}, async (_props: object, session) => {
   // B-059 (GS-46): the 設定 › 單位分派 row, as in the shell (brand_v3 is ON here: OFF was a 404 above).
   const nav = { maintAssign: ["admin", "manager"].includes(session.customRole?.nativeRole ?? session.role ?? "")
     ? await maintUnitAssignEnabledForOrg(session.orgId) : false };
@@ -33,4 +30,4 @@ export default async function MorePage() {
       </section>)}
     </div>
   </div>;
-}
+});

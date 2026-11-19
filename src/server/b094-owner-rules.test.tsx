@@ -115,7 +115,7 @@ test("RO-MORE / OWN-34-AC1: 授權規則 first in 更多; it replaces the per-pr
 
 test("wiring: the route 404s only when off; the layout passes the live flag; the action repeats consent and the effective-session guard", () => {
   const route = read("src/app/o/rules/page.tsx");
-  assert.match(route, /if \(!\(await brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\);/);
+  assert.match(route, /^export default withPageFlagGate\(\{\n  flagKey: "brand_v3",\n  flag: async session => brandV3EnabledForOrg\(session\.orgId\),\n\}, /m); // Lauren 2d: consent, session and the brand_v3 404 run in withPageFlagGate
   assert.match(route, /if \(\(await ownerRuleViewOnce\(session\)\)\.state === "off"\) notFound\(\);/);
   assert.match(route, /<Suspense fallback=\{<RulesLoading/);
   const layout = read("src/app/o/layout.tsx");
