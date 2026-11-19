@@ -214,6 +214,25 @@ else
             fail "node major $node_major does not match pinned major $pin_major from .nvmrc (node -v: $node_version)"
         fi
     fi
+
+    build_node_stamp=$base/.open-next/build-node-version.txt
+    # Map NUL bytes to an invalid character before Bash can discard them.
+    if [[ ! -f $build_node_stamp || ! -r $build_node_stamp ]] ||
+        ! build_node_version=$(LC_ALL=C tr '\000' '?' 2>/dev/null < "$build_node_stamp"); then
+        fail "build node stamp missing or unreadable: $build_node_stamp (rebuild with npm run cf:build)"
+    else
+        build_node_version=${build_node_version%"${build_node_version##*[![:space:]]}"}
+        if [[ ! $build_node_version =~ $node_pattern ]]; then
+            fail "build node stamp missing or unreadable: $build_node_stamp (rebuild with npm run cf:build)"
+        else
+            build_node_major=${BASH_REMATCH[1]}
+            if [[ $build_node_major != "$pin_major" ]]; then
+                fail "build node major $build_node_major does not match pinned major $pin_major from .nvmrc (stamp: $build_node_version)"
+            else
+                printf 'build node: %s\n' "$build_node_version"
+            fi
+        fi
+    fi
 fi
 
 if (( failures > 0 )); then
