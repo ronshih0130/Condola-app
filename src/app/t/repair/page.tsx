@@ -12,6 +12,8 @@ import { isUuid } from "@/server/repair-rules";
 import { tenantRepairs, ticketDetail } from "@/server/queries";
 import { ticketPhotoRecovery } from "@/server/upload-recovery";
 import type { T } from "@/i18n";
+import { getSession } from "@/server/session";
+import { TenantRepairV3Route } from "@/components/v3/tenant/repair-route";
 
 function repairStatusLabel(status: string, t: T) {
   if (status === "cancelled") return t("i_repair_cancelled_status");
@@ -26,11 +28,19 @@ export default async function RepairPage({
   searchParams: Promise<{ error?: string; done?: string; id?: string; cancel?: string; cancelled?: string }>;
 }) {
   await requireCurrentConsent(undefined, "page");
-  const { session, lease } = await selectedLease();
-  const v3 = await brandV3EnabledForOrg(session.orgId);
+  // B-090 (OQ-107, REVIEW-CHECKLIST 13): the flag is read right after consent and session, before any data read.
+  const current = await getSession();
+  const v3 = await brandV3EnabledForOrg(current.orgId);
+  const { session, lease } = await selectedLease(current);
   const t = makeT(session.locale);
   const params = await searchParams;
   if (!lease) return <p>{t("i_empty")}</p>;
+  // B-090 slice 3, RT-REPAIR read part (TEN-56-AC4/AC5): under brand_v3 the list cards or the own repair's progress,
+  // with today's 新增報修 form, cancel control and thread. brand_v3 OFF: the page below, unchanged.
+  if (v3) {
+    return <TenantRepairV3Route session={session} leaseId={lease.lease_id} company={lease.firm_name} params={params}
+      actions={{ ticket: actionTicket, cancel: actionCancelRepair }} />;
+  }
   const repairs = await tenantRepairs(session, lease.lease_id);
   const selectedId = params.id && isUuid(params.id) ? params.id : "";
   const detail = selectedId ? await ticketDetail(session, selectedId) : null;

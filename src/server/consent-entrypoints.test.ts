@@ -162,6 +162,45 @@ function assertFlagGatedRoute(call: ts.CallExpression, label: string, typeChecke
   assert.equal(call.arguments.length, 2, label + ": production routes must not pass withFlagGate deps");
   assert.ok(!call.arguments.some(ts.isSpreadElement), label + ": spread arguments hide the deps");
 }
+// Lauren 2c: `export default withPageFlagGate(spec, Page)` (src/server/page-flag-gate.ts). The wrapper's gated page runs
+// the real requireCurrentConsent(undefined, "page") first (pinned on page-flag-gate.ts by the test below). A page default
+// export qualifies only through a direct, unaliased call of the real withPageFlagGate with no deps override.
+function pageFlagGateCall(symbol: ts.Symbol) {
+  const declaration = unalias(symbol).valueDeclaration;
+  return declaration && ts.isExportAssignment(declaration) && ts.isCallExpression(declaration.expression) ? declaration.expression : undefined;
+}
+function assertFlagGatedPage(call: ts.CallExpression, label: string, typeChecker = checker) {
+  assert.ok(ts.isIdentifier(call.expression) && call.expression.text === "withPageFlagGate", label + ": only a direct withPageFlagGate call may wrap a page");
+  const symbol = typeChecker.getSymbolAtLocation(call.expression);
+  const target = symbol && unalias(symbol, typeChecker);
+  assert.ok(target?.name === "withPageFlagGate" && target.declarations?.some((d) => d.getSourceFile().fileName.endsWith("/server/page-flag-gate.ts")), label + ": untrusted withPageFlagGate");
+  assert.equal(call.arguments.length, 2, label + ": production pages must not pass withPageFlagGate deps");
+  assert.ok(!call.arguments.some(ts.isSpreadElement), label + ": spread arguments hide the deps");
+  // Lauren 2c r1/r3 (Codex review FAIL #1 and #2; round 3 approved by Ron, PR-045 a): what a scanner reads from the
+  // call must be what runs. Same rule as b017-entrypoints literalSpec / inlineFn: a plain object literal of identifier
+  // keys flagKey and flag (no spread, computed or quoted key, method, accessor, shorthand or duplicate); flagKey a
+  // string literal; flag and Page inline arrow / function expressions written in the call (no identifier at all, so no
+  // binding can be reassigned before the wrapper captures it).
+  const [spec, page] = call.arguments;
+  assert.ok(ts.isObjectLiteralExpression(spec), label + ": spec is not an inline object literal");
+  const seen = new Map<string, ts.PropertyAssignment>();
+  for (const p of spec.properties) {
+    assert.ok(!ts.isSpreadAssignment(p), label + ": spread in spec");
+    assert.ok(!ts.isShorthandPropertyAssignment(p), label + ": shorthand spec key " + p.name.getText());
+    assert.ok(ts.isPropertyAssignment(p), label + ": method or accessor in spec");
+    assert.ok(ts.isIdentifier(p.name), label + ": computed or quoted spec key");
+    assert.ok(["flagKey", "flag"].includes(p.name.text), label + ": unexpected spec key " + p.name.text);
+    assert.ok(!seen.has(p.name.text), label + ": duplicate spec key " + p.name.text);
+    seen.set(p.name.text, p);
+  }
+  const flagKey = seen.get("flagKey");
+  assert.ok(flagKey && ts.isStringLiteral(flagKey.initializer), label + ": spec.flagKey must be a string literal");
+  const flag = seen.get("flag");
+  assert.ok(flag, label + ": spec.flag is missing");
+  const inline = (n: ts.Node) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
+  assert.ok(inline(flag.initializer), label + ": spec.flag must be an inline function written in the call");
+  assert.ok(inline(page), label + ": Page must be an inline function written in the call");
+}
 function assertPayeeAdapter(body: ts.Node, route: boolean, label: string, typeChecker = checker) {
   assert.ok(ts.isBlock(body), label);
   const first = body.statements[0];
@@ -418,6 +457,149 @@ test("withFlagGate route classification rejects aliases, impostors, member calls
   }
 });
 
+test("withPageFlagGate (Lauren 2c) runs the real page-mode consent guard first, then the real getSession, with the real default deps", () => {
+  const file = program.getSourceFile(resolve("src/server/page-flag-gate.ts"));
+  assert.ok(file);
+  const defaults = file.statements.flatMap((s) => ts.isVariableStatement(s) ? [...s.declarationList.declarations] : [])
+    .find((d) => ts.isIdentifier(d.name) && d.name.text === "defaultDeps");
+  assert.ok(defaults?.initializer && ts.isObjectLiteralExpression(defaults.initializer), "defaultDeps object");
+  for (const [property, fileName] of [["requireCurrentConsent", "/server/consent-gate.ts"], ["getSession", "/server/session.ts"]] as const) {
+    const prop = defaults.initializer.properties.find((p) => p.name?.getText() === property);
+    assert.ok(prop && ts.isShorthandPropertyAssignment(prop), `defaultDeps.${property} is the imported function`);
+    const bound = checker.getShorthandAssignmentValueSymbol(prop);
+    assert.ok(bound && unalias(bound).name === property
+      && unalias(bound).declarations?.some((d) => d.getSourceFile().fileName.endsWith(fileName)), `real ${property}`);
+  }
+  const fn = file.statements.find((s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === "withPageFlagGate");
+  assert.ok(fn?.body && fn.parameters.length === 3);
+  const deps = fn.parameters[2];
+  assert.ok(deps.initializer && ts.isIdentifier(deps.initializer) && deps.initializer.text === "defaultDeps", "deps default to defaultDeps");
+  const gated = fn.body.statements.flatMap((s) => ts.isVariableStatement(s) ? [...s.declarationList.declarations] : [])
+    .find((d) => ts.isIdentifier(d.name) && d.name.text === "gated");
+  assert.ok(gated?.initializer && ts.isArrowFunction(gated.initializer) && ts.isBlock(gated.initializer.body), "gated page");
+  const [first, second] = gated.initializer.body.statements;
+  assert.ok(first && ts.isExpressionStatement(first) && ts.isAwaitExpression(first.expression), "the consent guard is the first, awaited statement");
+  const call = first.expression.expression;
+  assert.ok(ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression)
+    && ts.isIdentifier(call.expression.expression) && call.expression.name.text === "requireCurrentConsent", "deps.requireCurrentConsent(...)");
+  assert.equal(checker.getSymbolAtLocation(call.expression.expression)?.valueDeclaration, deps, "the deps parameter");
+  assert.deepEqual(call.arguments.map((a) => a.getText()), ["undefined", '"page"']);
+  assert.ok(second && ts.isVariableStatement(second) && second.declarationList.declarations.length === 1, "session is the second statement");
+  const session = second.declarationList.declarations[0].initializer;
+  assert.ok(session && ts.isAwaitExpression(session) && session.expression.getText() === "deps.getSession()", "await deps.getSession()");
+  const last = fn.body.statements[fn.body.statements.length - 1];
+  assert.ok(ts.isReturnStatement(last) && last.expression && ts.isAsExpression(last.expression)
+    && last.expression.expression.getText() === "gated", "withPageFlagGate returns the gated page");
+});
+
+test("withPageFlagGate page classification accepts only a direct default-export call; rejects aliases, impostors, member calls and a deps override", () => {
+  const dir = resolve("src/app/m/__page_flag_gate_fixture");
+  const imp = `import { withPageFlagGate } from "@/server/page-flag-gate";`;
+  const leak = `async () => { await fetch("x"); return true; }`;
+  // name → [source, expected]: "ok", "unwrapped" (not a gate call: guarded() keeps classifying it), or the rejection RegExp.
+  const cases: Record<string, [string, "ok" | "unwrapped" | RegExp]> = {
+    good: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: s => s !== null }, async (props, session) => [props, session]);`, "ok"],
+    goodFunctionExpressions: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: async function () { return true; } }, async function Page() { return null; });
+      export const other = withPageFlagGate({ flagKey: "maint_unit_assign", flag: async () => true }, async () => null);`, "ok"],
+    unwrapped: [`export default async function Page() { return null; }`, "unwrapped"],
+    aliased: [`import { withPageFlagGate as gate } from "@/server/page-flag-gate";
+      export default gate({ flagKey: "brand_v3", flag: () => true }, async () => null);`, /only a direct withPageFlagGate call/],
+    member: [`import * as pg from "@/server/page-flag-gate";
+      export default pg.withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null);`, /only a direct withPageFlagGate call/],
+    withDeps: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null, { requireCurrentConsent: async () => null } as never);`, /must not pass withPageFlagGate deps/],
+    spread: [`${imp} const args = [{ flagKey: "brand_v3", flag: () => true }, async () => null] as const;
+      export default withPageFlagGate(...args);`, /must not pass withPageFlagGate deps|spread arguments/],
+    impostor: [`const withPageFlagGate = (_s: unknown, p: unknown) => p;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null);`, /untrusted withPageFlagGate/],
+    routeWrapper: [`import { withFlagGate } from "@/server/flag-gate";
+      export default withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t" }, async () => new Response(null));`, /only a direct withPageFlagGate call/],
+    // r3 (Codex r2 BLOCKING, round 3 approved PR-045 a): only inline functions; no identifier, so no reassignment class.
+    forOfFlag: [`${imp} async function gate() { return true; }
+      for ((gate as unknown) of [${leak}]) {}
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`, /spec\.flag must be an inline function written in the call/],
+    forInFlag: [`${imp} async function gate() { return true; }
+      for ((gate as unknown) in { x: 1 }) {}
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`, /spec\.flag must be an inline function written in the call/],
+    destructuredForOfFlag: [`${imp} async function gate() { return true; }
+      for ([gate as unknown] of [[${leak}]]) {}
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`, /spec\.flag must be an inline function written in the call/],
+    forOfPage: [`${imp} async function Page() { return null; }
+      for ((Page as unknown) of [async () => null]) {}
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`, /Page must be an inline function written in the call/],
+    sameFileFunctionFlag: [`${imp} function gate() { return true; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`, /spec\.flag must be an inline function written in the call/],
+    sameFileFunctionPage: [`${imp} async function Page() { return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`, /Page must be an inline function written in the call/],
+    constFlag: [`${imp} const gate = async () => true;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`, /spec\.flag must be an inline function written in the call/],
+    constPage: [`${imp} const Page = async () => null;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`, /Page must be an inline function written in the call/],
+    shorthandFlag: [`${imp} const flag = async () => true;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag }, async () => null);`, /shorthand spec key flag/],
+    castFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: (() => true) as never }, async () => null);`, /spec\.flag must be an inline function written in the call/],
+    parenthesizedPage: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, (async () => null));`, /Page must be an inline function written in the call/],
+    // r1 (Codex r1 BLOCKING repro first): the scanned spec must be the one that runs.
+    specSpread: [`${imp} const overrides: { flag?: () => Promise<boolean> } = { flag: ${leak} };
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, ...overrides }, async () => null);`, /spread in spec/],
+    duplicateFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, flag: ${leak} }, async () => null);`, /duplicate spec key flag/],
+    computedFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, ["flag"]: ${leak} }, async () => null);`, /computed or quoted spec key/],
+    quotedFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", "flag": ${leak} }, async () => null);`, /computed or quoted spec key/],
+    methodFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", async flag() { return true; } }, async () => null);`, /method or accessor in spec/],
+    getterFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", get flag() { return async () => true; } }, async () => null);`, /method or accessor in spec/],
+    unknownKey: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, deps: {} }, async () => null);`, /unexpected spec key deps/],
+    specVariable: [`${imp} const spec = { flagKey: "brand_v3", flag: ${leak} };
+      export default withPageFlagGate(spec, async () => null);`, /spec is not an inline object literal/],
+    specObjectAssign: [`${imp} export default withPageFlagGate(Object.assign({ flagKey: "brand_v3", flag: () => true }, { flag: ${leak} }), async () => null);`, /spec is not an inline object literal/],
+    flagKeyNotLiteral: [`${imp} const key = "brand_v3"; export default withPageFlagGate({ flagKey: key, flag: () => true }, async () => null);`, /flagKey must be a string literal/],
+    flagKeyShorthand: [`${imp} const flagKey = "brand_v3"; export default withPageFlagGate({ flagKey, flag: () => true }, async () => null);`, /shorthand spec key flagKey/],
+    missingFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3" }, async () => null);`, /spec\.flag is missing/],
+    shorthandDefault: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag = () => true }, async () => null);`, /shorthand spec key flag/],
+    importedFlag: [`${imp} import { brandV3EnabledForOrg } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: brandV3EnabledForOrg }, async () => null);`, /spec\.flag must be an inline function written in the call/],
+    importedShorthandFlag: [`${imp} import { brandV3EnabledForOrg as flag } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag }, async () => null);`, /shorthand spec key flag/],
+    reassignedFlag: [`${imp} let gate = async () => true; gate = ${leak};
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`, /spec\.flag must be an inline function written in the call/],
+    pageObjectAssign: [`${imp} async function Page() { return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Object.assign(Page, { x: 1 }));`, /Page must be an inline function written in the call/],
+    reassignedPage: [`${imp} async function Page() { return null; } (Page as unknown) = async () => null;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`, /Page must be an inline function written in the call/],
+    importedPage: [`${imp} import { brandV3EnabledForOrg } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, brandV3EnabledForOrg as never);`, /Page must be an inline function written in the call/],
+  };
+  const virtual = Object.fromEntries(Object.entries(cases).map(([name, [code]]) => [join(dir, name, "page.tsx"), code]));
+  const options: ts.CompilerOptions = { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler, jsx: ts.JsxEmit.Preserve, baseUrl: resolve("."), paths: { "@/*": ["src/*"] } };
+  const host = ts.createCompilerHost(options);
+  const original = host.getSourceFile.bind(host);
+  host.getSourceFile = (file, language, onError, fresh) => virtual[resolve(file)] !== undefined
+    ? ts.createSourceFile(file, virtual[resolve(file)], language, true, ts.ScriptKind.TSX) : original(file, language, onError, fresh);
+  const fixtureProgram = ts.createProgram(Object.keys(virtual), options, host);
+  const fixtureChecker = fixtureProgram.getTypeChecker();
+  const exportCalls = (name: string) => {
+    const file = fixtureProgram.getSourceFile(join(dir, name, "page.tsx"));
+    assert.ok(file, name);
+    const moduleSymbol = fixtureChecker.getSymbolAtLocation(file);
+    assert.ok(moduleSymbol, name);
+    return fixtureChecker.getExportsOfModule(moduleSymbol).map((symbol) => {
+      const target = symbol.flags & ts.SymbolFlags.Alias ? fixtureChecker.getAliasedSymbol(symbol) : symbol;
+      const declaration = target.valueDeclaration;
+      if (symbol.name === "default") return pageFlagGateCall(symbol) ?? (declaration && ts.isExportAssignment(declaration) ? declaration.expression : undefined);
+      const init = declaration && ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined;
+      return init && ts.isCallExpression(init) ? init : undefined;
+    });
+  };
+  for (const [name, [, expected]] of Object.entries(cases)) {
+    const calls = exportCalls(name);
+    if (expected === "unwrapped") { assert.deepEqual(calls, [undefined], name); continue; }
+    for (const call of calls) {
+      assert.ok(call && ts.isCallExpression(call), name);
+      if (expected === "ok") assert.doesNotThrow(() => assertFlagGatedPage(call, name, fixtureChecker), name);
+      else assert.throws(() => assertFlagGatedPage(call, name, fixtureChecker), expected, name);
+    }
+  }
+});
+
 test("all runtime server exports, routes and protected pages are classified", () => {
   for (const path of paths) {
     const file = program.getSourceFile(path)!;
@@ -461,6 +643,8 @@ test("all runtime server exports, routes and protected pages are classified", ()
       }
       const gate = route ? flagGateCall(symbol) : undefined;
       if (gate) { assertFlagGatedRoute(gate, label); continue; }
+      const pageGate = page && key === "default" ? pageFlagGateCall(symbol) : undefined;
+      if (pageGate) { assertFlagGatedPage(pageGate, label); continue; } // Lauren 2c
       guarded(bodyOf(symbol)!, route, label);
     }
     if (page) {
