@@ -184,13 +184,14 @@ function loopCmd() {
   const pidFile = join(mkdtempSync(join(tmpdir(), "red-on-base-pid-")), "pid");
   return { pidFile, cmd: `trap "" TERM; echo $$ > '${pidFile}'; while :; do :; done` };
 }
-function assertGone(pidFile) {
-  const pid = Number(readFileSync(pidFile, "utf8").trim());
-  assert.ok(pid > 0, "the command ran and wrote its pid");
-  let alive = true;
-  try { process.kill(pid, 0); } catch { alive = false; }
-  if (alive) process.kill(pid, "SIGKILL"); // never leave a runaway loop behind, even when this test fails
-  assert.equal(alive, false, `process ${pid} was still running`);
+// Returns whether the command's shell was still running, killing it if so, so a failing test never leaves a
+// runaway loop behind. Called right after the run, before any assertion.
+function reap(pidFile) {
+  let pid = 0;
+  try { pid = Number(readFileSync(pidFile, "utf8").trim()); } catch { return "no pid file"; }
+  try { process.kill(pid, 0); } catch { return "gone"; }
+  process.kill(pid, "SIGKILL");
+  return `process ${pid} was still running`;
 }
 const worktreeCount = () => git(dir, "worktree", "list", "--porcelain").split("\n").filter(l => l.startsWith("worktree ")).length;
 
@@ -198,11 +199,12 @@ const worktreeCount = () => git(dir, "worktree", "list", "--porcelain").split("\
 test("inconclusive (exit 2): a timeout stops a command that ignores TERM, quickly, and removes the worktrees", async () => {
   const { pidFile, cmd } = loopCmd();
   const r = await robAsync(["--test", "add.test.mjs", "--timeout", "0.5", "--cmd", cmd]);
+  const reaped = reap(pidFile);
   assert.equal(r.status, 2, r.out);
   assert.match(r.out, /^RED-ON-BASE: INCONCLUSIVE /m);
   assert.match(r.out, /base run timed out after 0\.5s/);
   assert.ok(r.ms < 15000, `took ${r.ms}ms`);
-  assertGone(pidFile);
+  assert.equal(reaped, "gone", "the command's process must be stopped");
   assert.equal(r.leftovers, false, "no process left in red-on-base's process group");
   assert.equal(worktreeCount(), 1);
 });
@@ -210,10 +212,11 @@ test("inconclusive (exit 2): a timeout stops a command that ignores TERM, quickl
 test("inconclusive (exit 2): SIGTERM to red-on-base mid-run stops the command and still removes the worktrees", async () => {
   const { pidFile, cmd } = loopCmd();
   const r = await robAsync(["--test", "add.test.mjs", "--cmd", cmd], { signalAfterMs: 1500 });
+  const reaped = reap(pidFile);
   assert.equal(r.status, 2, r.out);
   assert.match(r.out, /^RED-ON-BASE: INCONCLUSIVE /m);
   assert.match(r.out, /interrupted by SIGTERM/);
-  assertGone(pidFile);
+  assert.equal(reaped, "gone", "the command's process must be stopped");
   assert.equal(r.leftovers, false, "no process left in red-on-base's process group");
   assert.equal(worktreeCount(), 1);
 });
