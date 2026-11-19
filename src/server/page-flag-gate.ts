@@ -53,7 +53,9 @@ export type FlagGatedPage<Props, Result> = ((props: Props) => Promise<Result>) &
 
 /**
  * Wrap an App Router gate page's default export: consent → session → flag (OFF → notFound()) → Page(props, session).
- * Use it as `export default withPageFlagGate({ flagKey, flag }, Page)`: a direct call, two arguments, no lazy wrapping.
+ * Use it as `export default withPageFlagGate({ flagKey: "…", flag: s => … }, async (props, session) => …)`: a direct
+ * call, two arguments, no lazy wrapping, and `flag` and the page written inline in the call (the consent and B017
+ * entrypoint scanners reject identifiers there, so what they scan is what runs).
  */
 export function withPageFlagGate<Props, Result>(
   spec: PageFlagGateSpec,
