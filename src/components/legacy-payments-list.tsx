@@ -1,9 +1,11 @@
 import { ManagementEmptyState } from "@/components/management-empty-state";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
+import { ProxyOwnerConfirmField } from "@/components/proxy-owner-confirm";
 import { actionReversePayment } from "@/server/auth-actions";
 import { actionConfirmPayment, actionRejectPayment } from "@/server/actions";
 import { moneyLabel } from "@/server/format";
+import { ownerCollectedPaymentIds } from "@/server/payment-request-status";
 import { can, rolesFor } from "@/server/perms";
 import { listPayments } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -13,6 +15,7 @@ import type { Session } from "@/server/types";
 export async function LegacyPaymentsList({ session, error, returnTo }: { session: Session; error?: string; returnTo?: "/m/payments/list" }) {
   const t = makeT(session.locale);
   const rows = await listPayments(session);
+  const ownerCollected = await ownerCollectedPaymentIds(session, rows.filter((r) => r.status === "submitted").map((r) => r.id));
   const canAct = can(session, "pay.record");
   const canReverse = can(session, "pay.reverse");
   const roleLabel: Record<string, string> = {
@@ -82,6 +85,7 @@ export async function LegacyPaymentsList({ session, error, returnTo }: { session
                         <form action={actionConfirmPayment}>
                           <input type="hidden" name="paymentId" value={row.id} />
                           {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+                          {ownerCollected.has(row.id) ? <ProxyOwnerConfirmField required /> : null}
                           <button className="btn sm pri" type="submit" data-testid="confirm-payment">
                             {t("i_confirm_received")}
                           </button>
