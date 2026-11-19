@@ -74,13 +74,13 @@ const PROBES = [
     "SELECT m.id FROM public.org_members m WHERE m.org_id=$2 AND m.user_id=$3 AND m.role='maintenance' AND m.status='active' AND NOT app.b056_member_paused(m.org_id, m.user_id)",
     // Any index scan on org_members: the planner picks among the user/org indexes by version and stats (CI chose
     // org_members_user_idx). The caller-first bound that matters is asserted on the assignment-table probes below.
-    /Index (Only )?Scan using \w+ on org_members/],
+    /Index (Only )?Scan using \w+ on org_members|Bitmap Heap Scan on org_members/],
   ["EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=t.org_id AND a.member_id=me AND a.unit_id=t.unit_id)",
     "SELECT EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=$2 AND a.member_id=$4 AND a.unit_id=$5)", /b059_unit_assignments_member_unit_key/],
   ["FOR inv IN SELECT i.id FROM public.invitations i WHERE i.accepted_by=auth.uid() AND i.org_id=t.org_id AND i.status='accepted' LOOP",
     "SELECT i.id FROM public.invitations i WHERE i.accepted_by=$3 AND i.org_id=$2 AND i.status='accepted'",
     // Any index scan on invitations (CI chose invitations_org_idx over the partial accepted_by index); never a Seq Scan.
-    /Index (Only )?Scan using \w+ on invitations/],
+    /Index (Only )?Scan using \w+ on invitations|Bitmap Heap Scan on invitations/],
   ["EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=t.org_id AND a.invitation_id=inv AND a.unit_id=t.unit_id)",
     "SELECT EXISTS (SELECT 1 FROM app.b059_unit_assignments a WHERE a.org_id=$2 AND a.invitation_id=$6 AND a.unit_id=$5)",
     /b059_unit_assignments_invite_unit_key/],
@@ -111,7 +111,8 @@ async function assertProbePlans(body: string, ticketId: string, memberId: string
       const assignments = planNodes(json).filter(n => n["Relation Name"] === "b059_unit_assignments");
       for (const n of assignments) {
         assert.ok(Number(n["Actual Rows"]) <= 1, `${sql}: ${JSON.stringify(n)}`);
-        const cond = String(n["Index Cond"] ?? "");
+        // A Bitmap Heap Scan carries the key in Recheck Cond (its Bitmap Index Scan child has the Index Cond).
+        const cond = String(n["Index Cond"] ?? n["Recheck Cond"] ?? "");
         assert.ok(/member_id|invitation_id/.test(cond) && /org_id/.test(cond) && /unit_id/.test(cond), `${sql}: not an exact caller-first key ${JSON.stringify(n)}`);
         assert.equal(Number(n["Rows Removed by Filter"] ?? 0), 0, `${sql}: rows filtered away`);
       }
