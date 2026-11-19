@@ -103,8 +103,8 @@ test("helpers: masks, cursor and parser", () => {
 
 test("wiring: route under brand_v3 with consent; link only when the reader admits; B-017 map; no outbound", () => {
   const route = read("src/app/m/tenants/[id]/phone-history/page.tsx");
-  assert.match(route, /await requireCurrentConsent\(undefined, "page"\);/);
-  assert.match(route, /if \(!\(await brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\);/);
+  assert.match(route, /^import \{ withPageFlagGate \} from "@\/server\/page-flag-gate";$/m); // Lauren 2d: withPageFlagGate runs consent(undefined, "page"), getSession and the 404
+  assert.match(route, /^export default withPageFlagGate\(\{\n  flagKey: "brand_v3",\n  flag: async session => brandV3EnabledForOrg\(session\.orgId\),\n\}, /m);
   assert.match(route, /if \(data\.state === "off"\) notFound\(\);/);
   assert.equal((JSON.parse(read("src/server/b017-entry-permissions.json")) as Record<string, unknown>)["src/server/b076a-phone-history.ts#phoneHistory"], "props.view");
   assert.match(read("src/server/b076a-phone-history.ts"), /guardEffectiveSession\(input, "props\.view"\);\n    assertPerm\(session, "props\.view"\);\n    assertPerm\(session, "tenants\.contact"\);/);

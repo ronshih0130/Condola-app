@@ -12,6 +12,7 @@ import { ASSIGN_BODY_LIMIT, maintUnitAssignEnabledForOrg } from "./b059-maint-un
 import { FLAG_GATE } from "./flag-gate";
 import { NOTIFY_BLOCKS } from "./b073-notify-settings";
 import { readCappedJson } from "./read-capped-json";
+import { isUuid } from "./repair-rules";
 
 const requireHere = createRequire(import.meta.url);
 const read = (p: string) => readFileSync(p, "utf8");
@@ -24,6 +25,8 @@ function compile(source: string, mocks: Record<string, unknown> | ((name: string
   new Function("require", "exports", code)((name: string) => {
     // Lauren 2b: migrated routes import the real wrapper, compiled with the same mocks (consent, session, errors).
     if (name === "@/server/flag-gate" && (typeof mocks === "function" || !(name in mocks))) return compile(read("src/server/flag-gate.ts"), mocks);
+    // Lauren 2d: migrated gate pages import the real page wrapper, compiled with the same mocks (consent, session, notFound).
+    if (name === "@/server/page-flag-gate" && (typeof mocks === "function" || !(name in mocks))) return compile(read("src/server/page-flag-gate.ts"), mocks);
     if (typeof mocks === "function") return mocks(name);
     if (name in mocks) return mocks[name];
     if (["react", "react/jsx-runtime"].includes(name)) return requireHere(name);
@@ -94,6 +97,30 @@ function trackPageInput<T>(name: string, value: T, calls: string[]) {
 function assertPageGuardOrder(path: string, source: string,
   expected: string[] = ["requireCurrentConsent", "getSession", "brandV3EnabledForOrg"], nth = 1) {
   const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  // Lauren 2d: a migrated gate page is `export default withPageFlagGate({ flagKey, flag }, page)`. The wrapper runs
+  // requireCurrentConsent(undefined, "page"), getSession(), then the inline flag predicate, then notFound() (its order is
+  // proven at runtime below and in page-flag-gate.test.ts). The predicate may only call flag lookups, in the old order;
+  // several flags in one `&&` predicate share the single notFound(), so they are compared as a prefix of `expected`.
+  const wrapped = file.statements.find(ts.isExportAssignment);
+  if (wrapped && ts.isCallExpression(wrapped.expression) && ts.isIdentifier(wrapped.expression.expression)
+    && wrapped.expression.expression.text === "withPageFlagGate") {
+    const spec = wrapped.expression.arguments[0];
+    assert.ok(spec && ts.isObjectLiteralExpression(spec), `${path}: inline withPageFlagGate spec`);
+    const flag = spec.properties.find(p => p.name?.getText(file) === "flag");
+    assert.ok(flag && ts.isPropertyAssignment(flag) && (ts.isArrowFunction(flag.initializer) || ts.isFunctionExpression(flag.initializer)),
+      `${path}: inline flag predicate`);
+    const flagCalls: string[] = [];
+    const visitFlag = (node: ts.Node): void => {
+      ts.forEachChild(node, visitFlag);
+      if (ts.isCallExpression(node)) flagCalls.push(node.expression.getText(file));
+    };
+    visitFlag(flag.initializer.body);
+    assert.ok(flagCalls.every(call => /^[A-Za-z0-9]+EnabledForOrg$/.test(call)), `${path}: the flag predicate only looks up flags: ${flagCalls}`);
+    const gate = ["requireCurrentConsent", "getSession", ...flagCalls];
+    assert.ok(gate.length >= expected.length, `${path}: ${gate}`);
+    assert.deepEqual(gate.slice(0, expected.length), expected, path);
+    return;
+  }
   const page = file.statements.find(statement => ts.isFunctionDeclaration(statement)
     && statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword));
   assert.ok(page && ts.isFunctionDeclaration(page) && page.body, `${path}: expected a default page function with a body`);
@@ -650,4 +677,219 @@ test("Lauren 2b predicates never reject: brandV3EnabledForOrg and maintUnitAssig
   }
   assert.equal(await brandV3EnabledForOrg(ORG, {}, async () => true, async () => true), true);
   assert.equal(await maintUnitAssignEnabledForOrg(ORG, async () => true), true);
+});
+
+// Lauren 2d (CEO option a; hub 20-build/lauren-1-6/page-gate-proposal.md): the 10 gate pages moved to withPageFlagGate
+// (src/server/page-flag-gate.ts). Proof as in 2b: each scenario runs the pre-migration page source (PAGE_GATE_BASE,
+// origin/main before 2d) and the current source through the same harness, and compares every dependency call in order
+// (consent, session, each flag lookup, every params/searchParams read, every data read or helper call, notFound) and the
+// outcome: the returned element tree (components and data are recording stubs) or the error. Flag OFF must be
+// notFound() with no params/searchParams read and no data read. /t/settlement is not a gate page here (it reads the
+// lease and may redirect before its flag check), so it stays hand-written.
+const PAGE_GATE_BASE = "7150b2f684b91aed1ea5f85423a2d6bfd4bdfc56";
+type GatePage = { path: string; flagKey: string; kind: "staff" | "owner"; item?: true; kindGate?: true; params: Record<string, string> };
+const gatePages: GatePage[] = [
+  { path: "src/app/m/assign/page.tsx", flagKey: "maint_unit_assign", kind: "staff", item: true, params: {} },
+  { path: "src/app/m/assign/[id]/page.tsx", flagKey: "maint_unit_assign", kind: "staff", item: true, params: { id: UNIT } },
+  { path: "src/app/m/leases/[id]/settlement/page.tsx", flagKey: "brand_v3", kind: "staff", params: { id: UNIT } },
+  { path: "src/app/m/more/page.tsx", flagKey: "brand_v3", kind: "staff", kindGate: true, params: {} },
+  { path: "src/app/m/properties/[id]/shared-meter/page.tsx", flagKey: "brand_v3", kind: "staff", params: { id: UNIT } },
+  { path: "src/app/m/tenants/[id]/phone-history/page.tsx", flagKey: "brand_v3", kind: "staff", params: { id: UNIT } },
+  { path: "src/app/o/decided/page.tsx", flagKey: "brand_v3", kind: "owner", params: {} },
+  { path: "src/app/o/leases/[id]/settlement/page.tsx", flagKey: "brand_v3", kind: "owner", kindGate: true, params: { id: UNIT } },
+  { path: "src/app/o/rules/page.tsx", flagKey: "brand_v3", kind: "owner", params: {} },
+  { path: "src/app/o/units/[unitId]/page.tsx", flagKey: "brand_v3", kind: "owner", params: { unitId: UNIT } },
+];
+type PageScenario = {
+  name: string; flagOff?: true; itemOnly?: true; consent?: "redirect"; session?: "redirect" | "throw";
+  brand?: "off" | "v3-throw" | "v2-throw"; item?: "off" | "throw"; otherKind?: true; badId?: true;
+  reads?: unknown; search?: Record<string, string>; role?: string;
+};
+const pageScenarios: PageScenario[] = [
+  { name: "brand_v3 OFF", brand: "off", flagOff: true },
+  { name: "brand_v3 lookup throws (caught in brandV3EnabledForOrg)", brand: "v3-throw", flagOff: true },
+  { name: "brand_v2 lookup throws (caught in brandV3EnabledForOrg)", brand: "v2-throw", flagOff: true },
+  { name: "brand_v3 OFF with query params", brand: "off", search: { after: "2026-11-01", trail: "a", room: "r1" }, flagOff: true },
+  { name: "item flag OFF (brand_v3 ON)", item: "off", flagOff: true, itemOnly: true },
+  { name: "item flag lookup throws (brand_v3 ON)", item: "throw", flagOff: true, itemOnly: true },
+  { name: "the other session kind, brand_v3 OFF", otherKind: true, brand: "off", flagOff: true },
+  { name: "the other session kind, brand_v3 ON", otherKind: true },
+  { name: "consent redirects", consent: "redirect" },
+  { name: "no session (getSession redirects to /login)", session: "redirect" },
+  { name: "session read throws", session: "throw" },
+  { name: "ON, readers return stubs", },
+  { name: "ON, a manager role", role: "manager" },
+  { name: "ON, a bad id", badId: true },
+  { name: "ON, query params", search: { after: "2026-11-01", trail: "a", room: "r1" } },
+  { name: "ON, reader says off", reads: { state: "off" } },
+  { name: "ON, reader says forbidden", reads: { state: "forbidden" } },
+  { name: "ON, reader fails", reads: { state: "error" } },
+  { name: "ON, ready and vacant", reads: { state: "ready", unit: { vacant: true } } },
+  { name: "ON, ready", reads: { state: "ready", unit: { vacant: false, id: UNIT }, rows: [] } },
+];
+
+// Data readers, helpers and components are recording stubs: a call records its name and argument count and returns
+// the scenario's `reads` value (or another stub); a stub is never thenable, so awaiting one resolves to it.
+const pageStubNames = new WeakMap<object, string>();
+function pageStub(name: string, calls: string[], sc: PageScenario): unknown {
+  const stub: unknown = new Proxy(function stub() { /* recording stub */ }, {
+    get(_target, key) {
+      if (key === Symbol.toPrimitive) return () => `«${name}»`;
+      if (typeof key === "symbol" || key === "then") return undefined;
+      return pageStub(`${name}.${key}`, calls, sc);
+    },
+    apply(_target, _this, args: unknown[]) {
+      // Codex 2d r1 SHOULD: record the normalized arguments, not just their count, so a changed id or session is caught.
+      calls.push(`call:${name}(${JSON.stringify(args.map(arg => pageOutcome(arg)))})`);
+      return sc.reads !== undefined ? sc.reads : pageStub(`${name}()`, calls, sc);
+    },
+  });
+  pageStubNames.set(stub as object, name);
+  return stub;
+}
+function pageOutcome(value: unknown, seen = new Set<unknown>()): unknown {
+  if (value === null || typeof value !== "object" && typeof value !== "function") return value;
+  if (pageStubNames.has(value as object)) return `stub:${pageStubNames.get(value as object)}`;
+  if (typeof value === "function") return `fn:${(value as { name: string }).name}`;
+  if (seen.has(value)) return "seen";
+  seen.add(value);
+  if (Array.isArray(value)) return value.map(item => pageOutcome(item, seen));
+  if (React.isValidElement(value)) {
+    const element = value as React.ReactElement<Record<string, unknown>>;
+    return { type: pageOutcome(element.type, seen), key: element.key, props: pageOutcome(element.props, seen) };
+  }
+  return Object.fromEntries(Object.keys(value).sort().map(key => [key, pageOutcome((value as Record<string, unknown>)[key], seen)]));
+}
+
+async function runGatePage(source: string, page: GatePage, sc: PageScenario) {
+  const calls: string[] = [];
+  const kind = sc.otherKind ? (page.kind === "staff" ? "owner" : "staff") : page.kind;
+  const SESSION = { orgId: ORG, kind, role: sc.role ?? "admin", locale: "zh-TW", calendar: "gregorian", customRole: null };
+  const known: Record<string, Record<string, unknown>> = {
+    "@/server/consent-gate": { requireCurrentConsent: async (...args: unknown[]) => {
+      calls.push(`consent:${JSON.stringify(args)}:${args.length}`);
+      if (sc.consent === "redirect") throw new Error("NEXT_REDIRECT /consent");
+      return null;
+    } },
+    "@/server/session": { getSession: async (...args: unknown[]) => {
+      calls.push(`session:${args.length}`);
+      if (sc.session === "redirect") throw new Error("NEXT_REDIRECT /login");
+      if (sc.session === "throw") throw new Error("session boom");
+      return SESSION;
+    } },
+    "@/server/brand-v3": { brandV3EnabledForOrg: (...args: unknown[]) => {
+      calls.push(`flag:${args.length}:${String(args[0])}`);
+      return brandV3EnabledForOrg(args[0] as string, {}, async () => {
+        calls.push("flag:v3");
+        if (sc.brand === "v3-throw") throw new Error("brand_v3 lookup failed");
+        return sc.brand !== "off";
+      }, async () => {
+        calls.push("flag:v2");
+        if (sc.brand === "v2-throw") throw new Error("brand_v2 lookup failed");
+        return true;
+      });
+    } },
+    "@/server/b059-maint-unit-assign": { maintUnitAssignEnabledForOrg: (...args: unknown[]) => {
+      calls.push(`item-flag:${args.length}:${String(args[0])}`);
+      return maintUnitAssignEnabledForOrg(args[0] as string, async () => {
+        calls.push("item-flag:lookup");
+        if (sc.item === "throw") throw new Error("item flag lookup failed");
+        return sc.item !== "off";
+      });
+    } },
+    "@/server/repair-rules": { isUuid: (...args: unknown[]) => { calls.push(`isUuid:${String(args[0])}`); return isUuid(args[0] as string); } },
+    "next/navigation": {
+      notFound: (...args: unknown[]) => { calls.push(`notFound:${args.length}`); throw new Error("NEXT_NOT_FOUND"); },
+      redirect: (...args: unknown[]) => { calls.push(`redirect:${JSON.stringify(args)}`); throw new Error("NEXT_REDIRECT"); },
+    },
+  };
+  const resolve = (name: string): unknown => {
+    if (["react", "react/jsx-runtime"].includes(name)) return requireHere(name);
+    const members = known[name] ?? {};
+    return new Proxy(members, { get(target, key) {
+      if (typeof key === "symbol" || key === "then" || key === "__esModule") return undefined;
+      return Object.prototype.hasOwnProperty.call(target, key) ? target[key] : pageStub(`${name}.${key}`, calls, sc);
+    } });
+  };
+  const exports = compile(source, resolve);
+  calls.length = 0; // module-load reads are not part of a request
+  const params = sc.badId ? Object.fromEntries(Object.keys(page.params).map(key => [key, "not-a-uuid"])) : page.params;
+  let outcome: unknown;
+  try {
+    outcome = { result: pageOutcome(await (exports.default as (props: unknown) => Promise<unknown>)({
+      params: trackPageInput("params", params, calls), searchParams: trackPageInput("searchParams", sc.search ?? {}, calls) })) };
+  } catch (error) {
+    outcome = { error: (error as Error).message };
+  }
+  return { calls, outcome, exports };
+}
+
+test("Lauren 2d withPageFlagGate pages: flag OFF and every other path behave exactly as before the migration", async () => {
+  for (const page of gatePages) {
+    const base = execFileSync("git", ["show", `${PAGE_GATE_BASE}:${page.path}`], { encoding: "utf8" });
+    const head = read(page.path);
+    assert.notEqual(head, base, `${page.path} is migrated`);
+    for (const sc of pageScenarios) {
+      if (sc.itemOnly && !page.item) continue;
+      const label = `${page.path} ${sc.name}`;
+      const before = await runGatePage(base, page, sc), after = await runGatePage(head, page, sc);
+      assert.deepEqual(after.calls, before.calls, `${label}: the same dependency calls in the same order`);
+      assert.deepEqual(after.outcome, before.outcome, `${label}: the same element tree or error`);
+      assert.match(after.calls[0] ?? "", /^consent:\[null,"page"\]:2$/, label);
+      if (sc.flagOff || (sc.otherKind && page.kindGate)) {
+        assert.deepEqual(after.outcome, { error: "NEXT_NOT_FOUND" }, label);
+        assert.equal(after.calls.at(-1), "notFound:0", label);
+        assert.ok(!after.calls.some(call => /^(params|searchParams|call:|isUuid:)/.test(call)), `${label}: ${after.calls.join(",")}`);
+      }
+      if (sc.otherKind && page.kindGate) assert.ok(!after.calls.some(call => call.startsWith("flag")), `${label}: no lookup for the wrong kind`);
+    }
+  }
+});
+
+test("Lauren 2d withPageFlagGate pages: the default export carries FLAG_GATE, the module loads, and the gate is a direct inline call", async () => {
+  const loaded: Record<string, Record<string, unknown>> = {
+    "src/app/m/assign/page.tsx": await import("../app/m/assign/page"),
+    "src/app/m/assign/[id]/page.tsx": await import("../app/m/assign/[id]/page"),
+    "src/app/m/leases/[id]/settlement/page.tsx": await import("../app/m/leases/[id]/settlement/page"),
+    "src/app/m/more/page.tsx": await import("../app/m/more/page"),
+    "src/app/m/properties/[id]/shared-meter/page.tsx": await import("../app/m/properties/[id]/shared-meter/page"),
+    "src/app/m/tenants/[id]/phone-history/page.tsx": await import("../app/m/tenants/[id]/phone-history/page"),
+    "src/app/o/decided/page.tsx": await import("../app/o/decided/page"),
+    "src/app/o/leases/[id]/settlement/page.tsx": await import("../app/o/leases/[id]/settlement/page"),
+    "src/app/o/rules/page.tsx": await import("../app/o/rules/page"),
+    "src/app/o/units/[unitId]/page.tsx": await import("../app/o/units/[unitId]/page"),
+  };
+  assert.deepEqual(Object.keys(loaded).sort(), gatePages.map(page => page.path).sort());
+  for (const page of gatePages) {
+    const compiled = (await runGatePage(read(page.path), page, { name: "load", brand: "off" })).exports;
+    for (const [where, mod] of [["import", loaded[page.path]], ["compiled", compiled]] as const) {
+      const label = `${page.path} (${where})`;
+      assert.equal(mod.dynamic, "force-dynamic", label);
+      assert.equal(typeof mod.default, "function", label);
+      assert.equal((mod.default as Record<symbol, unknown>)[FLAG_GATE], page.flagKey, `${label}: typeof default[FLAG_GATE] === "string"`);
+    }
+    // Source shape: only `export default withPageFlagGate({ flagKey: "<key>", flag: <inline> }, <inline page>)`.
+    const file = ts.createSourceFile(page.path, read(page.path), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const defaults = file.statements.filter(statement => ts.isExportAssignment(statement)
+      || ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.modifiers?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword)));
+    assert.equal(defaults.length, 1, `${page.path}: one default export`);
+    const [statement] = defaults;
+    assert.ok(ts.isExportAssignment(statement) && !statement.isExportEquals, `${page.path}: export default <expression>`);
+    const call = statement.expression;
+    assert.ok(ts.isCallExpression(call) && ts.isIdentifier(call.expression) && call.expression.text === "withPageFlagGate",
+      `${page.path}: a direct withPageFlagGate(...) call`);
+    assert.equal(call.arguments.length, 2, `${page.path}: no deps argument in production`);
+    const [spec, body] = call.arguments;
+    assert.ok(ts.isObjectLiteralExpression(spec), `${page.path}: inline spec`);
+    assert.deepEqual(spec.properties.map(p => ts.isPropertyAssignment(p) ? p.name.getText(file) : `<${ts.SyntaxKind[p.kind]}>`), ["flagKey", "flag"], page.path);
+    const [flagKey, flag] = spec.properties as unknown as [ts.PropertyAssignment, ts.PropertyAssignment];
+    assert.ok(ts.isStringLiteral(flagKey.initializer) && flagKey.initializer.text === page.flagKey, `${page.path}: flagKey`);
+    assert.ok(ts.isArrowFunction(flag.initializer), `${page.path}: inline flag predicate`);
+    assert.ok(ts.isArrowFunction(body), `${page.path}: inline page`);
+    assert.ok(file.statements.some(s => ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) && s.moduleSpecifier.text === "@/server/page-flag-gate"
+      && s.importClause?.namedBindings && ts.isNamedImports(s.importClause.namedBindings)
+      && s.importClause.namedBindings.elements.some(e => e.name.text === "withPageFlagGate" && !e.propertyName)), `${page.path}: imported unaliased`);
+    assert.ok(!/requireCurrentConsent|getSession/.test(read(page.path)), `${page.path}: the wrapper alone runs consent and session`);
+    assert.match(read("ops/flags.yaml"), new RegExp(`^  ${page.flagKey}:$`, "m"), `${page.flagKey} is a registry key`);
+  }
 });

@@ -187,7 +187,8 @@ test("writer: staff only; invalid input never reaches the gateway; statuses map;
 test("wiring: pages exist only under brand_v3; the action checks consent; nothing outbound; touch targets ≥44px", () => {
   for (const page of ["src/app/m/leases/[id]/settlement/page.tsx", "src/app/o/leases/[id]/settlement/page.tsx", "src/app/t/settlement/page.tsx"]) {
     const src = read(page);
-    assert.match(src, /brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\)|!\(await brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\)/);
+    // Lauren 2d: /m and /o settlement are withPageFlagGate gate pages; /t/settlement stays hand-written.
+    assert.match(src, /brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\)|!\(await brandV3EnabledForOrg\(session\.orgId\)\)\) notFound\(\)|^  flag: async session => (?:session\.kind === "owner" && \(await )?brandV3EnabledForOrg\(session\.orgId\)\)?,$/m);
     assert.match(src, /\/brand\/v3\/topup\.css/);
   }
   assert.match(read("src/server/mf3-deposit-topup-actions.ts"), /^"use server";[\s\S]*await requireCurrentConsent\(\);/);
