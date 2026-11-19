@@ -780,6 +780,53 @@ test("B-092 RO-UNIT adds one service-only single-unit reader with B-093 admissio
   assert.ok(read("supabase/rpc-allowlist.txt").includes("# service-only: app.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)"));
 });
 
+test("B-059 (MGT-118) adds two service-only gateways, owner-only flag helper, four authenticated RLS helpers and two restrictive policies; nothing else", () => {
+  const sql = read("supabase/migrations/20261118100000_b059_maint_unit_assign.sql");
+  const compact = sql.replace(/\s+/g, "");
+  const code = sql.replace(/--[^\n]*/g, "");
+  assert.deepEqual([...sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)/g)].map(m => m[1]),
+    ["b059_flag_on", "b059_scoped_orgs", "b059_visible_units", "b059_own_members", "b059_ticket_visible", "b059_assign_view", "b059_assign_save"]);
+  for (const signature of ["b059_assign_view(uuid,uuid,text,uuid,uuid)", "b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])"]) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`), signature);
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`), signature);
+  }
+  assert.ok(compact.includes("REVOKEALLONFUNCTIONapp.b059_flag_on(uuid),app.b059_scoped_orgs(),app.b059_visible_units(),app.b059_own_members(),app.b059_ticket_visible(uuid)FROMPUBLIC,anon,authenticated,service_role;"));
+  assert.ok(compact.includes("GRANTEXECUTEONFUNCTIONapp.b059_scoped_orgs(),app.b059_visible_units(),app.b059_own_members(),app.b059_ticket_visible(uuid)TOauthenticated;"));
+  assert.equal((code.match(/\bGRANT\b/g) ?? []).length, 3);
+  assert.equal((sql.match(/SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS/g) ?? []).length, 7);
+  // Only new tables; RLS on and no grant to any application role.
+  assert.deepEqual([...sql.matchAll(/CREATE TABLE ([\w.]+)/g)].map(m => m[1]), ["app.b059_unit_assignments", "app.b059_assign_commands"]);
+  assert.match(sql, /REVOKE ALL ON app\.b059_unit_assignments, app\.b059_assign_commands FROM PUBLIC, anon, authenticated, service_role;/);
+  // Exactly two new policies, both RESTRICTIVE and only TO authenticated; no ALTER of anything existing.
+  assert.deepEqual([...code.matchAll(/CREATE POLICY (\w+) ON ([\w.]+) AS RESTRICTIVE TO authenticated/g)].map(m => `${m[1]}@${m[2]}`),
+    ["b059_maint_unit_scope@public.maintenance_tickets", "b059_maint_unit_photo_scope@public.ticket_attachments"]);
+  assert.equal((code.match(/CREATE POLICY/g) ?? []).length, 2);
+  assert.deepEqual([...code.matchAll(/ALTER TABLE ([\w.]+)/g)].map(m => m[1]), ["app.b059_unit_assignments", "app.b059_assign_commands"]);
+  assert.doesNotMatch(code, /DROP |ALTER POLICY|DISABLE ROW LEVEL|CREATE OR REPLACE/i);
+  // Codex r1 Part 1: the ticket policy reads every helper through an InitPlan sublink; the photo policy has NO sublink
+  // (42P17 on ticket_attachments) and only per-row O(1) calls.
+  assert.match(code, /ON public\.maintenance_tickets AS RESTRICTIVE TO authenticated\s+USING \(NOT \(org_id = ANY\(\(SELECT app\.b059_scoped_orgs\(\)\)::uuid\[\]\)\)\s+OR coalesce\(unit_id = ANY\(\(SELECT app\.b059_visible_units\(\)\)::uuid\[\]\),false\)\s+OR coalesce\(assigned_member_id = ANY\(\(SELECT app\.b059_own_members\(\)\)::uuid\[\]\),false\)\);/);
+  assert.match(code, /ON public\.ticket_attachments AS RESTRICTIVE TO authenticated\s+USING \(NOT \(org_id = ANY\(app\.b059_scoped_orgs\(\)\)\) OR app\.b059_ticket_visible\(ticket_id\)\);/);
+  // Codex r2: the authenticated-executable photo check validates the caller itself before any assignment probe, and the
+  // only object added to an existing table besides the two policies is one partial index on public.invitations.
+  const visible = code.slice(code.indexOf("CREATE FUNCTION app.b059_ticket_visible"), code.indexOf("CREATE POLICY b059_maint_unit_scope"));
+  assert.match(visible, /SELECT m\.id INTO me FROM public\.org_members m\s+WHERE m\.org_id=t\.org_id AND m\.user_id=auth\.uid\(\) AND m\.role='maintenance'\s+AND m\.status='active' AND NOT app\.b056_member_paused\(m\.org_id, m\.user_id\);\s+IF me IS NULL OR NOT app\.b059_flag_on\(t\.org_id\) THEN RETURN false; END IF;/);
+  assert.ok(visible.indexOf("IF me IS NULL") < visible.indexOf("b059_unit_assignments"), "caller validated before any assignment probe");
+  assert.match(visible, /a\.member_id=me AND a\.unit_id=t\.unit_id/);
+  assert.match(visible, /a\.invitation_id=inv AND a\.unit_id=t\.unit_id/);
+  assert.doesNotMatch(visible, /a\.unit_id=t\.unit_id\s*$|LEFT JOIN/m);
+  assert.deepEqual([...code.matchAll(/CREATE (?:UNIQUE )?INDEX (\w+) ON ([\w.]+)/g)].filter(m => !m[2].startsWith("app.")).map(m => `${m[1]}@${m[2]}`),
+    ["b059_invitations_accepted_by_idx@public.invitations"]);
+  // The flag seed is OFF and never overwritten; the helpers only ever read the caller's own rows.
+  assert.match(sql, /VALUES \('maint_unit_assign', '\{"enabled":false,"allowed_org_ids":\[\]\}'::jsonb\)\nON CONFLICT \(key\) DO NOTHING;/);
+  assert.match(sql, /JOIN public\.org_members m ON m\.user_id=auth\.uid\(\) AND m\.role='maintenance' AND m\.status='active'/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-059 gateway ACL\/config mismatch/);
+  assert.match(read("scripts/check-function-privileges.sh"), /B-059 RLS helper ACL\/config mismatch/);
+  const allow = read("supabase/rpc-allowlist.txt");
+  assert.ok(allow.includes("# service-only: app.b059_assign_view(uuid,uuid,text,uuid,uuid)"));
+  assert.ok(allow.includes("# service-only: app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])"));
+});
+
 test("B-065 phase B P1 adds three revoked append-only tables, eight service-only gateways and internal helpers, migration-owned (VEN-18)", () => {
   const sql = read("supabase/migrations/20261118110000_b065_stamp.sql");
   const code = sql.replace(/--[^\n]*/g, "");

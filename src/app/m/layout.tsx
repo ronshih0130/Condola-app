@@ -1,6 +1,7 @@
 import { shellTodayTitle } from "@/i18n/lanes/brand-v3";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { areasFor, tabsFor } from "@/server/nav-v3";
+import { maintUnitAssignEnabledForOrg } from "@/server/b059-maint-unit-assign";
 import { ManagerShellV3 } from "@/components/v3/shell/manager-shell";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -39,9 +40,16 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   const banner = session.kind === "staff" ? await trialBannerFor(session) : null;
-  if (moneyV3 ?? reportV3 ?? notifyV3 ?? await brandV3EnabledForOrg(session.orgId)) {
+  // Each of moneyV3 / reportV3 / notifyV3 is itself this organization's brand_v3 answer (read only on its route), so
+  // the v3 shell is chosen exactly when brand_v3 is ON.
+  const brandV3 = moneyV3 ?? reportV3 ?? notifyV3 ?? await brandV3EnabledForOrg(session.orgId);
+  if (brandV3) {
+    // B-059 (GS-46): the 設定 › 單位分派 row needs brand_v3 AND maint_unit_assign (as its page does), and only for
+    // admin and manager; a failed lookup hides it.
+    const nav = { maintAssign: brandV3 === true && ["admin", "manager"].includes(session.customRole?.nativeRole ?? session.role ?? "")
+      ? await maintUnitAssignEnabledForOrg(session.orgId) : false };
     // /api/env accepts native staff roles; its null-key guard refuses assigned custom roles.
-    return <ManagerShellV3 areas={areasFor(session)} tabs={tabsFor(session)}
+    return <ManagerShellV3 areas={areasFor(session, nav)} tabs={tabsFor(session, nav)}
       locale={session.locale} name={session.name} role={session.role} firm={firm.name}
       sandbox={session.environment === "sandbox"} showReset={demoModeEnabled() && session.role === "admin"}
       hasLiveCompany={Boolean(session.liveOrgId)}

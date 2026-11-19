@@ -223,6 +223,14 @@ const CLASSIFIED: Record<string, Entry> = {
   "app.b028_center_recipient_valid()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "c9075803e76369df346a2cdc38e3d88c" }, // validates the RECIPIENT of a notification row
   "app.b056_member_paused(p_org uuid, p_user uuid)": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "380a3da2d33fea4952879c16243c83fb" }, // the predicate itself (kept-member lookup)
   "public.fn_org_bootstrap()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "6e55553fa6d14401368d74b850b5806f" }, // inserts the creator's own row with the literal 'active'
+  // B-059 RLS helpers: they only NARROW ticket visibility for an active maintenance member while maint_unit_assign is
+  // ON (restrictive policy); they grant nothing. A paused member stays scoped (is_member already denies them), so the
+  // pause predicate would only weaken the restriction.
+  "app.b059_scoped_orgs()": { cls: "not_a_caller_grant", active: 1, guarded: 0, fp: "553d2f4807e2c51191ffa79e8eac3e34" },
+  "app.b059_visible_units()": { cls: "not_a_caller_grant", active: 0, guarded: 0, fp: "108d7e7642cb478f2e67e47aee017901" },
+  "app.b059_own_members()": { cls: "not_a_caller_grant", active: 0, guarded: 0, fp: "14cc72b2b38c6b7e06ef6b3bb8491cf1" },
+  // B-059 r2: the photo check validates the caller itself (an active, unpaused maintenance member of the ticket's org).
+  "app.b059_ticket_visible(p_ticket uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "65f0c277d3b44bbe50e152239076b9c6" },
 };
 // Reachable plpgsql functions that run dynamic SQL. Each was read: the statement is a fixed
 // LOCK TABLE over regclass arguments and can call no function. Pinned, so a change re-opens it.

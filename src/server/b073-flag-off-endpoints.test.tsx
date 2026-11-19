@@ -7,6 +7,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { brandV3EnabledForOrg } from "./brand-v3";
+import { maintUnitAssignEnabledForOrg } from "./b059-maint-unit-assign";
 import { NOTIFY_BLOCKS } from "./b073-notify-settings";
 import { readCappedJson } from "./read-capped-json";
 
@@ -32,8 +33,18 @@ const cases = [
   { path: "src/app/api/team-security/route.ts", input: { required: true } },
   ...NOTIFY_BLOCKS.map(block => ({ path: "src/app/api/notify-settings/route.ts", input: { block, field: "leaseExpiry", value: true } })),
   { path: "src/app/o/units/[unitId]/page.tsx" },
+  // B-059 (MGT-118): brand_v3 first, then maint_unit_assign (second table below).
+  { path: "src/app/api/maint-unit-assign/route.ts", input: { requestId: UNIT, target: UNIT, units: [UNIT] } },
+  { path: "src/app/m/assign/page.tsx" },
+  { path: "src/app/m/assign/[id]/page.tsx" },
   // B-094 RO-RULES (B-113 / OWN-34-AC6 adds the no-limit lines): brand_v3 OFF or a failed lookup 404s before any rule or limit read.
   { path: "src/app/o/rules/page.tsx" },
+];
+/** Routes behind brand_v3 AND their own flag: with brand_v3 ON, the item flag OFF (or a throwing lookup) is the 404. */
+const itemCases = [
+  { path: "src/app/api/maint-unit-assign/route.ts", input: { requestId: UNIT, target: UNIT, units: [UNIT] }, guard: "maintUnitAssignEnabledForOrg" },
+  { path: "src/app/m/assign/page.tsx", guard: "maintUnitAssignEnabledForOrg" },
+  { path: "src/app/m/assign/[id]/page.tsx", guard: "maintUnitAssignEnabledForOrg" },
 ];
 const encode = (text: string) => new TextEncoder().encode(text);
 function streamed(chunks: Uint8Array[], contentLength?: string, path = "/api/owner-view") {
@@ -76,21 +87,22 @@ function trackPageInput<T>(name: string, value: T, calls: string[]) {
   });
 }
 
-function assertPageGuardOrder(path: string, source: string) {
+function assertPageGuardOrder(path: string, source: string,
+  expected: string[] = ["requireCurrentConsent", "getSession", "brandV3EnabledForOrg"], nth = 1) {
   const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const page = file.statements.find(statement => ts.isFunctionDeclaration(statement)
     && statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword));
   assert.ok(page && ts.isFunctionDeclaration(page) && page.body, `${path}: expected a default page function with a body`);
 
   const calls: string[] = [];
-  let foundNotFound = false;
+  let foundNotFound = false, seen = 0;
   function visit(node: ts.Node): void {
     if (foundNotFound) return;
     // Visit arguments first so a call inside notFound(...) counts before the 404.
     ts.forEachChild(node, visit);
     if (foundNotFound || !ts.isCallExpression(node)) return;
     const callee = node.expression.getText(file);
-    if (callee === "notFound") foundNotFound = true;
+    if (callee === "notFound") foundNotFound = ++seen === nth;
     else calls.push(callee);
   }
   for (const statement of page.body.statements) {
@@ -99,7 +111,7 @@ function assertPageGuardOrder(path: string, source: string) {
   }
 
   assert.ok(foundNotFound, `${path}: expected a notFound() call in the default export`);
-  assert.deepEqual(calls, ["requireCurrentConsent", "getSession", "brandV3EnabledForOrg"], path);
+  assert.deepEqual(calls, expected, path);
 }
 
 test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before API permission or body, unit reads, writes or audit", async () => {
@@ -127,6 +139,7 @@ test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before 
       "@/server/read-capped-json": { readCappedJson: (request: Request) => { calls.push("body"); return readCappedJson(request); } },
       "@/server/errors": { logServerError: record("log") },
       "@/server/b092-owner-unit": { ownerUnit: record("read") },
+      "@/server/b059-maint-unit-assign": { maintUnitAssignEnabledForOrg: record("item-flag"), authorizeAssign: record("permission"), saveAssign: save, ASSIGN_BODY_LIMIT: 96 * 1024 },
       "@/components/v3/owner/unit": {},
       "@/components/v3/owner/units": {},
       "next/navigation": { notFound: () => { calls.push("notFound"); throw new Error("NEXT_NOT_FOUND"); } },
@@ -163,6 +176,57 @@ test("brand_v3-only endpoints: OFF and a throwing lookup both return 404 before 
       }), /^Error: NEXT_NOT_FOUND$/, label);
       // Destructuring binds the tracked values; reading a property or awaiting either records an access.
       assert.deepEqual(calls, ["consent", "session", "flag", "notFound"], label);
+    }
+    assert.deepEqual(lookups, [ORG], label);
+  }
+});
+
+test("brand_v3 + item-flag endpoints: brand_v3 ON with the item flag OFF or its lookup throwing return 404 before permission, body, reads, writes or audit", async () => {
+  for (const { path, input, guard } of itemCases) for (const fail of [false, true]) {
+    const label = `${path} ${fail ? "item lookup failure" : "item flag OFF"}`;
+    const calls: string[] = [], lookups: string[] = [];
+    const record = (name: string) => () => { calls.push(name); };
+    const save = async () => { calls.push("save", "write", "audit"); return { ok: false, status: 404 }; };
+    const brand = { brandV3EnabledForOrg: (orgId: string) => brandV3EnabledForOrg(orgId, {}, async () => { calls.push("flag"); return true; }, async () => true) };
+    const item = { [guard]: (orgId: string) => maintUnitAssignEnabledForOrg(orgId, async id => {
+      calls.push("item-flag"); lookups.push(id);
+      if (fail) throw new Error("item flag lookup failed");
+      return false;
+    }) };
+    const session = { orgId: ORG, kind: "staff", role: "admin" };
+    const source = read(path);
+    const notFound = () => { calls.push("notFound"); throw new Error("NEXT_NOT_FOUND"); };
+    if (input) {
+      const route = compile(source, {
+        "@/server/brand-v3": brand,
+        "@/server/b059-maint-unit-assign": { ...item, authorizeAssign: record("permission"), saveAssign: save, ASSIGN_BODY_LIMIT: 96 * 1024 },
+        "@/server/consent-gate": { requireCurrentConsent: async () => { calls.push("consent"); return null; } },
+        "@/server/session": { readSession: async () => { calls.push("session"); return session; } },
+        "@/server/read-capped-json": { readCappedJson: (request: Request) => { calls.push("body"); return readCappedJson(request); } },
+        "@/server/errors": { logServerError: record("log") },
+      });
+      const { request, calls: stream } = streamed([encode(JSON.stringify(input))], undefined, path.slice("src/app".length, -"/route.ts".length));
+      const response = await (route.POST as (request: Request) => Promise<Response>)(request);
+      assert.equal(response.status, 404, label);
+      assert.equal(request.bodyUsed, false, label);
+      assert.deepEqual(stream, { pulls: 0, cancels: 0 }, label);
+      assert.deepEqual(calls, ["consent", "session", "flag", "item-flag"], label);
+    } else {
+      assertPageGuardOrder(path, source, ["requireCurrentConsent", "getSession", "brandV3EnabledForOrg", guard], 2);
+      const allowed = new Map<string, Record<string, unknown>>([
+        ["@/server/consent-gate", { requireCurrentConsent: async (...args: unknown[]) => {
+          calls.push("consent"); assert.deepEqual(args, [undefined, "page"], label); return null; } }],
+        ["@/server/session", { getSession: async () => { calls.push("session"); return session; } }],
+        ["@/server/brand-v3", brand],
+        ["@/server/b059-maint-unit-assign", item],
+        ["next/navigation", { notFound }],
+      ]);
+      const route = compile(source, (name: string) => recordingDependency(name, calls, allowed.get(name)));
+      const Page = route.default as (props: unknown) => Promise<unknown>;
+      calls.length = 0;
+      await assert.rejects(() => Page({ params: trackPageInput("params", { id: UNIT }, calls), searchParams: trackPageInput("searchParams", {}, calls) }),
+        /^Error: NEXT_NOT_FOUND$/, label);
+      assert.deepEqual(calls, ["consent", "session", "flag", "item-flag", "notFound"], label);
     }
     assert.deepEqual(lookups, [ORG], label);
   }
@@ -283,6 +347,11 @@ test("brand_v3 endpoint registry covers every added route and page importing the
     ts.createSourceFile(path, read(path), ts.ScriptTarget.Latest).statements.some(s =>
       ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) && s.moduleSpecifier.text === "@/server/brand-v3"));
   for (const path of flagged) if (added.has(path)) assert.ok(covered.has(path), `Missing flag-OFF case: ${path}`);
+  // An added route or page behind an item flag as well (B-059 maint_unit_assign) also needs its item-flag case.
+  const itemCovered = new Set(itemCases.map(row => row.path));
+  const itemFlagged = walk("src/app").filter(path => /\/(?:route\.ts|page\.tsx)$/.test(path)).filter(path =>
+    /maintUnitAssignEnabledForOrg\(/.test(read(path)));
+  for (const path of itemFlagged) if (added.has(path)) assert.ok(itemCovered.has(path), `Missing item-flag OFF case: ${path}`);
   // B-090: every tenant page or layout that started reading the flag after TENANT_BASE is in the tenant table above.
   const tenantCovered = new Set<string>(tenantCases.map(row => row.path));
   const importsFlag = (text: string) => /from "@\/server\/brand-v3"/.test(text);

@@ -7,10 +7,14 @@ import type { CenterAdmission } from "./notification-center";
 import { archiveCopy } from "../i18n/record-archive";
 import { makeT, type Locale } from "../i18n";
 import { brandV3NavigationCopy, brandV3OwnerShellCopy, type NavigationCopyKey } from "../i18n/lanes/brand-v3";
+import { brandV3AssignCopy } from "../i18n/lanes/brand-v3-assign";
 import { can, hasPersonalReminders, noPermHref, type PermKey } from "./perms";
 import type { Session } from "./types";
 
-type Visibility = PermKey | "any" | "admin";
+/** "maintAssign": B-059 設定 › 單位分派 (GS-46), native admin or manager, and only while maint_unit_assign is on. */
+type Visibility = PermKey | "any" | "admin" | "maintAssign";
+/** Facts the layout reads for this request; this model itself never reads the database. */
+export type NavV3Extra = { maintAssign?: boolean };
 export type NavV3Link = { key: string; href: string; perm: Visibility };
 export type ManagerAreaV3 = NavV3Link & {
   id: string; icon: "today" | "chat" | "box" | "doc" | "coin" | "tool" | "gear" | "more";
@@ -39,12 +43,16 @@ export const MANAGER_AREAS_V3: readonly ManagerAreaV3[] = [
     link("i_nav_settings", "/m/settings", "settings.edit"), link("v3.team", "/m/team", "team.manage"),
     link("v3.roles", "/m/roles", "team.manage"), link("i_nav_notify", "/m/notify", "settings.edit"),
     link("i_nav_audit", "/m/audit", "admin"), link("i_nav_pricing", "/m/upgrade", "settings.edit"),
-    link("v3.import", "/m/import", "props.edit"), link("i_account", "/m/account", "any"),
+    link("v3.import", "/m/import", "props.edit"), link("assign.nav", "/m/assign", "maintAssign"), link("i_account", "/m/account", "any"),
   ] },
 ];
 
-function permitted(session: Session, item: NavV3Link) {
+function permitted(session: Session, item: NavV3Link, extra: NavV3Extra = {}) {
   if (session.kind !== "staff" || !session.role) return false;
+  if (item.perm === "maintAssign") {
+    const native = session.customRole?.nativeRole ?? session.role;
+    return extra.maintAssign === true && (native === "admin" || native === "manager") && can(session, "props.edit");
+  }
   // The existing archive reader additionally guards props.edit for custom authority.
   if (item.href === "/m/archive" && session.customRole && !can(session, "props.edit")) return false;
   // 角色權限: the approved design files it under team.manage; the page itself admits settings.edit.
@@ -55,9 +63,9 @@ function permitted(session: Session, item: NavV3Link) {
   if (item.perm === "any") return item.href !== "/m/tickets" || !noPermHref(item.href, session);
   return can(session, item.perm);
 }
-export function areasFor(session: Session): ManagerAreaV3[] {
-  return MANAGER_AREAS_V3.filter(area => permitted(session, area)).flatMap(area => {
-    const links = area.links.filter(item => permitted(session, item));
+export function areasFor(session: Session, extra: NavV3Extra = {}): ManagerAreaV3[] {
+  return MANAGER_AREAS_V3.filter(area => permitted(session, area, extra)).flatMap(area => {
+    const links = area.links.filter(item => permitted(session, item, extra));
     return area.links.length && !links.length ? [] : [{ ...area, links, href: links[0]?.href ?? area.href }];
   });
 }
@@ -81,8 +89,8 @@ export function landingV3(session: Session) {
   for (const area of areasFor(session)) if (opens(area.href)) return area.href;
   return "/m/account";
 }
-export function tabsFor(session: Session): ManagerAreaV3[] {
-  const areas = areasFor(session);
+export function tabsFor(session: Session, extra: NavV3Extra = {}): ManagerAreaV3[] {
+  const areas = areasFor(session, extra);
   if (areas.length <= 5) return areas;
   let tabs = areas.slice(0, 4);
   const landing = areas.find(area => area.id === areaForPath(landingV3(session))?.id);
@@ -105,6 +113,7 @@ export function areaForPath(pathname: string): ManagerAreaV3 | null {
 }
 export function navLabel(key: string, locale: Locale) {
   if (key === "archive.archive") return archiveCopy(locale).archive;
+  if (key === "assign.nav") return brandV3AssignCopy(locale).title;
   return key.startsWith("v3.") ? brandV3NavigationCopy(locale)[key.slice(3) as NavigationCopyKey] : makeT(locale)(key);
 }
 /** No invented detail-page titles: only approved area/sub-page names. */

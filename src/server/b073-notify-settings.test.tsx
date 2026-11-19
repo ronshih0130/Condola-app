@@ -368,6 +368,7 @@ test("MGT-135-AC1 /m/notify page and layout: brand_v3 opens it for admin and man
     const Layout = compile(read("src/app/m/layout.tsx"), {
       "@/i18n/lanes/brand-v3": brand, "@/server/brand-v3": { brandV3EnabledForOrg: async () => flag },
       "@/server/nav-v3": { areasFor: () => [], tabsFor: () => [] }, "@/components/v3/shell/manager-shell": { ManagerShellV3: stub },
+      "@/server/b059-maint-unit-assign": { maintUnitAssignEnabledForOrg: async () => false }, // B-059 nav row flag (v3 branch only)
       "next/headers": { headers: async () => ({ get: () => path }), cookies: async () => ({ get: () => undefined }) },
       "next/navigation": { redirect: (href: string) => { throw new Error(href); } }, "@/build-info": { BUILD_SHA: "fixture" },
       "@/components/chrome": { Sidebar: stub, TaskPanel: stub }, "@/server/consent-gate": { requireCurrentConsent: async () => {} },

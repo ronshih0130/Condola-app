@@ -5,6 +5,8 @@ import { demoModeEnabled } from "@/server/demo";
 import { FREE_UNITS } from "@/server/billing";
 import { upgradeGate } from "@/server/upgrade-gate";
 import { teamRead, teamRowActions, type TeamInvites } from "@/server/b073-team";
+import { maintUnitAssignEnabledForOrg } from "@/server/b059-maint-unit-assign";
+import { assignEditHref } from "./assign";
 import type { Session } from "@/server/types";
 import { TeamError, TeamView } from "./team";
 import { TeamRowActionsCell } from "./team-actions";
@@ -32,8 +34,12 @@ export async function TeamV3Section({ session, invites, query }: { session: Sess
   if (panel === "full") {
     try { plans = !(await upgradeGate(session, FREE_UNITS)).redirectTo; } catch { return <TeamError locale={session.locale} />; }
   }
+  // B-059 (GS-24): 「負責的單位」 on maintenance rows (incl. 邀請中 / 暫停) while maint_unit_assign is on (fail closed).
+  const assign = await maintUnitAssignEnabledForOrg(session.orgId);
   return <TeamView locale={session.locale} rows={read.rows} seats={read.seats} panel={panel} permsOpen={query.perms === "1"} plans={plans}
-    rowActions={row => <TeamRowActionsCell locale={session.locale} row={row} actions={teamRowActions(row, { invites, full: read.full })} />}
+    rowActions={row => <TeamRowActionsCell locale={session.locale} row={row} actions={teamRowActions(row, { invites, full: read.full })}
+      assignHref={assign && row.role === "maintenance" && row.status !== "disabled" && (row.memberId ?? row.invitationId)
+        ? assignEditHref((row.memberId ?? row.invitationId) as string) : null} />}
     invite={panel === "add" ? <TeamInviteFlow locale={session.locale} invites={invites} /> : null}
     security={read.security ? <TeamSecuritySwitch locale={session.locale} required={read.security.required} /> : null}
     notice={<>

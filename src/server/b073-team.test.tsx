@@ -301,6 +301,9 @@ async function renderSection(read: Awaited<ReturnType<typeof teamRead>>, query: 
     "./team-actions": { TeamRowActionsCell: box("actions") },
     "./team-invite": { TeamInviteFlow: box("invite-flow") },
     "./team-security-switch": { TeamSecuritySwitch: box("security") },
+    // B-059 (GS-24): the 「負責的單位」 link flag; OFF here (its own test is b059-maint-unit-assign.test.tsx).
+    "@/server/b059-maint-unit-assign": { maintUnitAssignEnabledForOrg: async () => false },
+    "./assign": { assignEditHref: (id: string) => `/m/assign/${id}` },
   }).TeamV3Section as (p: unknown) => Promise<React.ReactElement | null>;
   const element = await Section({ session: staff("admin"), invites, query });
   return { html: element ? renderToStaticMarkup(element) : "", calls };
@@ -336,6 +339,7 @@ test("R5-TEAM row-action cell and invite flow: text actions, today's server acti
     "@/components/team-invite-link-button": { TeamInviteLinkButton: box("link-button") },
     "@/server/auth-actions": { actionMemberActive: "actionMemberActive", actionMemberRole: "actionMemberRole", actionResendInvite: "actionResendInvite", actionRevokeInvite: "actionRevokeInvite" },
     "@/server/perms": perms,
+    "@/i18n/lanes/brand-v3-assign": requireHere("../i18n/lanes/brand-v3-assign"), "next/link": { __esModule: true, default: "a" },
   }).TeamRowActionsCell as React.FC<{ locale: "zh-TW"; row: TeamRowV3; actions: ReturnType<typeof teamRowActions> }>;
   const by = (key: string) => ready.find(row => row.key === key)!;
   const link = renderToStaticMarkup(React.createElement(cell, { locale: "zh-TW", row: by("i1"), actions: { primary: "resend-link", more: ["revoke"] } }));
