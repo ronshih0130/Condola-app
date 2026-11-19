@@ -187,7 +187,10 @@ function loopCmd() {
 function assertGone(pidFile) {
   const pid = Number(readFileSync(pidFile, "utf8").trim());
   assert.ok(pid > 0, "the command ran and wrote its pid");
-  assert.throws(() => process.kill(pid, 0), /ESRCH/, `process ${pid} is still running`);
+  let alive = true;
+  try { process.kill(pid, 0); } catch { alive = false; }
+  if (alive) process.kill(pid, "SIGKILL"); // never leave a runaway loop behind, even when this test fails
+  assert.equal(alive, false, `process ${pid} was still running`);
 }
 const worktreeCount = () => git(dir, "worktree", "list", "--porcelain").split("\n").filter(l => l.startsWith("worktree ")).length;
 

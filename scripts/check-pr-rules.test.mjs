@@ -128,6 +128,11 @@ test("R4 bug-fix evidence needs a real red-on-base.mjs invocation with --expect,
   let r = rules(withRun(block("$ echo red-on-base.mjs", "RED-ON-BASE: PASS base=0123456 head=abcdef0 tests=1")));
   assert.equal(r.status, 1, r.out);
   assert.match(r.out, /needs the pasted run of `node scripts\/red-on-base\.mjs/);
+  // an echo of a full invocation is still not an invocation
+  r = rules(withRun(block("$ echo node scripts/red-on-base.mjs --test a.test.ts --expect boom", PASS_LINE)));
+  assert.equal(r.status, 1, r.out);
+  // the run's own last summary must be PASS: a PASS pasted from elsewhere later does not rescue it
+  assert.equal(rules(withRun(`${block("$ node scripts/red-on-base.mjs --test a.test.ts --expect boom", PASS_LINE, FAIL_LINE)}\n${block("$ cat old-run.log", PASS_LINE)}`)).status, 1);
   // reviewer reproduction: a PASS followed by a later FAIL
   r = rules(withRun(block("$ node scripts/red-on-base.mjs --test a.test.ts --expect boom", PASS_LINE, FAIL_LINE)));
   assert.equal(r.status, 1, r.out);
