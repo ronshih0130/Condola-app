@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Client } from "pg";
 import { stableStringify } from "@/idempotency";
-import { many, maybe } from "./db";
+import { many, maybe, one } from "./db";
 import { FlowError } from "./errors";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { attributePayment, managementFeeMinor, monthBounds } from "./money";
@@ -17,7 +17,7 @@ export type StatementCalculation = {
   properties: Property[]; payments: Array<Payment & { allocations: Array<Allocation & { lines: Charge[]; attributed: { rent: number; utility: number; deposit: number; other: number }; residual: number }>; unallocated: number }>;
   expenses: Expense[]; rule: Rule | null; previous: { id: string; version: string; closing_balance_minor: string } | null;
   propertyAmounts: Array<{ propertyId: string; name: string; rent: number; utility: number; other: number }>;
-  rent: number; other: number; fee: number; expenseTotal: number; opening: number; closing: number; fingerprint: string;
+  rent: number; other: number; fee: number; expenseTotal: number; payouts: number; opening: number; closing: number; fingerprint: string;
 };
 
 /** Read source rows and calculate exactly the amounts used to issue a statement. */
@@ -52,7 +52,18 @@ export async function calculateStatement(client: Client, orgId: string, ownerCon
   const rule = await maybe<Rule>(client, `SELECT fr.id::text,ma.id::text AS agreement_id,ma.xmin::text AS agreement_version,fr.xmin::text AS version,fr.kind::text,fr.hybrid_mode::text,fr.percent_bp,fr.fixed_amount_minor::text,fr.minimum_minor::text,fr.name FROM management_agreements ma JOIN fee_rules fr ON fr.id=ma.fee_rule_id WHERE ma.org_id=$1 AND ma.owner_contact_id=$2 AND (ma.property_id IS NULL OR ma.property_id=ANY($3::uuid[])) AND ma.effective_from <= $4 AND (ma.effective_to IS NULL OR ma.effective_to > $4) ORDER BY ma.property_id NULLS LAST LIMIT 1`, [orgId,ownerContactId,propertyIds,bounds.end]);
   const fee = rule ? managementFeeMinor(rule,rent) : 0;
   const previous = await maybe<StatementCalculation["previous"] & object>(client, `SELECT id::text,xmin::text AS version,closing_balance_minor::text FROM owner_statements WHERE owner_contact_id=$1 AND currency=$2 AND status='issued' AND period_end < $3::date ORDER BY period_end DESC LIMIT 1`, [ownerContactId,currency,bounds.start]);
-  const opening = Number(previous?.closing_balance_minor ?? 0), closing = opening+rent+other-fee-expenseTotal;
-  const data = { orgId, ownerContactId, start:bounds.start,end:bounds.end,currency,properties,payments,expenses,rule,previous,propertyAmounts,rent,other,fee,expenseTotal,opening,closing };
+  const payoutTotal = await one<{ amount: string }>(
+    client,
+    `SELECT coalesce(sum(e.amount_minor),0)::text AS amount
+       FROM public.ledger_transactions t
+       JOIN public.ledger_entries e ON e.org_id=t.org_id AND e.transaction_id=t.id
+      WHERE t.org_id=$1 AND t.source_table='b014_owner_transfer_v1' AND t.kind IN ('owner_payout','reversal')
+        AND t.currency=$3 AND e.currency=t.currency AND e.account='owner_payable' AND e.contact_id=$2
+        AND t.effective_date BETWEEN $4::date AND $5::date`,
+    [orgId,ownerContactId,currency,bounds.start,bounds.end],
+  );
+  const payouts = Number(payoutTotal.amount);
+  const opening = Number(previous?.closing_balance_minor ?? 0), closing = opening+rent+other-fee-expenseTotal-payouts;
+  const data = { orgId, ownerContactId, start:bounds.start,end:bounds.end,currency,properties,payments,expenses,rule,previous,propertyAmounts,rent,other,fee,expenseTotal,payouts,opening,closing };
   return { ...data, fingerprint:createHash("sha256").update(stableStringify(data)).digest("hex") };
 }
