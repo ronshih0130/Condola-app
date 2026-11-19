@@ -126,6 +126,40 @@ function flagGated(node:ts.Node|undefined,name?:string):{flag:ts.ArrowFunction|t
   return flagFn&&handlerFn?{flag:flagFn,handler:handlerFn}:undefined;
 }
 
+// Lauren 2c: `export default withPageFlagGate(spec, Page)` (src/server/page-flag-gate.ts). The wrapper itself runs only
+// consent and session (bootstrap above), then spec.flag, then Page; Page is usually a non-exported function, which the
+// exported-function scan below would skip. So the scan inspects the inline flag predicate and the page (inline, or a
+// function declared in the same file) in that order. A default-export call it cannot resolve this way fails the scan.
+type FnNode=ts.ArrowFunction|ts.FunctionExpression|ts.FunctionDeclaration;
+function pageFlagGated(node:ts.Node,typeChecker=checker):{flag?:FnNode;page?:FnNode}|undefined {
+  if(!ts.isExportAssignment(node)||!ts.isCallExpression(node.expression))return undefined;
+  const call=node.expression;
+  if(!ts.isIdentifier(call.expression)||call.expression.text!=='withPageFlagGate'||call.arguments.length!==2)return {};
+  let symbol=typeChecker.getSymbolAtLocation(call.expression);if(symbol&&symbol.flags&ts.SymbolFlags.Alias)symbol=typeChecker.getAliasedSymbol(symbol);
+  const target=symbol?.valueDeclaration;
+  if(!target||!ts.isFunctionDeclaration(target)||!target.getSourceFile().fileName.endsWith('/server/page-flag-gate.ts'))return {};
+  const [spec,page]=call.arguments;
+  const fnOf=(n:ts.Node|undefined):FnNode|undefined=>{
+    if(n&&(ts.isArrowFunction(n)||ts.isFunctionExpression(n)))return n;
+    if(!n||!ts.isIdentifier(n))return undefined;
+    let ref=typeChecker.getSymbolAtLocation(n);if(ref&&ref.flags&ts.SymbolFlags.Alias)ref=typeChecker.getAliasedSymbol(ref);
+    const d=ref?.valueDeclaration;
+    if(!d||d.getSourceFile()!==node.getSourceFile())return undefined; // same file only: an imported page is not traced here
+    if(ts.isFunctionDeclaration(d)&&d.body)return d;
+    return ts.isVariableDeclaration(d)&&d.initializer&&(ts.isArrowFunction(d.initializer)||ts.isFunctionExpression(d.initializer))?d.initializer:undefined;
+  };
+  const flag=ts.isObjectLiteralExpression(spec)?spec.properties.find(p=>p.name?.getText()==='flag'):undefined;
+  return {flag:flag&&ts.isPropertyAssignment(flag)?fnOf(flag.initializer):undefined,page:fnOf(page)};
+}
+function pageGateFailures(source:ts.SourceFile,typeChecker=checker,resolve:(call:ts.CallExpression)=>ts.Node|undefined=declaration):string[] {
+  const out:string[]=[],file=path.relative(process.cwd(),source.fileName);
+  for(const st of source.statements) { const gated=pageFlagGated(st,typeChecker); if(!gated)continue;
+    if(!gated.flag||!gated.page){out.push(`${file}#default: default export call is not a direct withPageFlagGate(spec, Page) with an inline flag and a same-file page`);continue;}
+    const violations=[...inspect(gated.flag,undefined,resolve).violations,...inspect(gated.page,undefined,resolve).violations];
+    if(violations.length)out.push(`${file}#default: ${violations.slice(0,3).join(', ')}`); }
+  return out;
+}
+
 test('B017 mapped guards precede the first DB call, including null mappings',()=>{
   const failures:string[]=[];
   for(const [id,key] of Object.entries(permissions)) {
@@ -168,6 +202,8 @@ test('B017 every server module, TS/TSX route, page, layout and inline server act
       for(const d of st.declarationList.declarations) { const gated=flagGated(d); if(!gated)continue;
         const violations=[...inspect(gated.flag).violations,...inspect(gated.handler).violations];
         if(violations.length)failures.push(`${file}#${d.name.getText()}: ${violations.slice(0,3).join(', ')}`); }
+    // Lauren 2c: a withPageFlagGate default export's flag predicate and page body; any other default-export call fails.
+    if(isEntry) failures.push(...pageGateFailures(source));
   }
   assert.deepEqual(failures,[]);
 });
@@ -316,6 +352,44 @@ test('R4 inventory rejects late, conditional, wrong/null, indirect and callback-
   ])assert.ok(fixture(body).violations.length,body);
   assert.ok(fixture(`await guardEffectiveSession(s,'props.view'); await helper();`,null).violations.length);
   assert.equal(fixture(`await guardEffectiveSession(s,null); await helper();`,null).violations.length,0);
+});
+
+test('Lauren 2c withPageFlagGate pages: the flag predicate and the page body are scanned; unresolvable wrappers are reported',()=>{
+  const dir=path.resolve('src/app/m/__b017_page_gate_fixture');
+  const head=`import { withPageFlagGate } from "@/server/page-flag-gate"; import { query } from "@/server/db";`;
+  const sources:Record<string,string>={
+    pageReads:`${head} async function Page(){ await query("SELECT secret"); return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, Page);`,
+    inlinePageReads:`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => { await query("SELECT secret"); return null; });`,
+    flagReads:`${head} async function Page(){ return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => { await query("SELECT secret"); return true; } }, Page);`,
+    clean:`${head} const Page = async () => null;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, Page);`,
+    aliased:`import { withPageFlagGate as gate } from "@/server/page-flag-gate";
+      export default gate({ flagKey: "brand_v3", flag: async () => true }, async () => null);`,
+    impostor:`const withPageFlagGate = (_s: unknown, p: unknown) => p;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, async () => null);`,
+    importedPage:`import { withPageFlagGate } from "@/server/page-flag-gate"; import { brandV3EnabledForOrg } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, brandV3EnabledForOrg);`,
+    unwrapped:`export default async function Page(){ return null; }`,
+  };
+  const virtual=Object.fromEntries(Object.entries(sources).map(([name,code])=>[path.join(dir,name,'page.tsx'),code]));
+  const host=ts.createCompilerHost(options),original=host.getSourceFile.bind(host);
+  host.getSourceFile=(file,language,onError,fresh)=>virtual[path.resolve(file)]!==undefined
+    ?ts.createSourceFile(file,virtual[path.resolve(file)],language,true,ts.ScriptKind.TSX):original(file,language,onError,fresh);
+  const fixtures=ts.createProgram([...files,...Object.keys(virtual)],options,host),fixtureChecker=fixtures.getTypeChecker();
+  const resolveIn=(call:ts.CallExpression)=>{let s=fixtureChecker.getSymbolAtLocation(call.expression);if(s&&s.flags&ts.SymbolFlags.Alias)s=fixtureChecker.getAliasedSymbol(s);return s?.valueDeclaration;};
+  const scan=(name:string)=>{
+    const source=fixtures.getSourceFile(path.join(dir,name,'page.tsx'));assert.ok(source,name);
+    const out=pageGateFailures(source,fixtureChecker,resolveIn);
+    assert.ok(out.length<=1,name);
+    return !out.length?(source.statements.some(ts.isExportAssignment)?'clean':'not a gate call')
+      :/not a direct withPageFlagGate/.test(out[0])?'unresolvable':/query@/.test(out[0])?'violation':out[0];
+  };
+  assert.deepEqual(Object.fromEntries(Object.keys(sources).map(name=>[name,scan(name)])),{
+    pageReads:'violation',inlinePageReads:'violation',flagReads:'violation',clean:'clean',
+    aliased:'unresolvable',impostor:'unresolvable',importedPage:'unresolvable',unwrapped:'not a gate call',
+  });
 });
 
 test('R4 reviewed dynamic dispatcher and photo callback retain ordering and semantic keys',()=>{

@@ -162,6 +162,21 @@ function assertFlagGatedRoute(call: ts.CallExpression, label: string, typeChecke
   assert.equal(call.arguments.length, 2, label + ": production routes must not pass withFlagGate deps");
   assert.ok(!call.arguments.some(ts.isSpreadElement), label + ": spread arguments hide the deps");
 }
+// Lauren 2c: `export default withPageFlagGate(spec, Page)` (src/server/page-flag-gate.ts). The wrapper's gated page runs
+// the real requireCurrentConsent(undefined, "page") first (pinned on page-flag-gate.ts by the test below). A page default
+// export qualifies only through a direct, unaliased call of the real withPageFlagGate with no deps override.
+function pageFlagGateCall(symbol: ts.Symbol) {
+  const declaration = unalias(symbol).valueDeclaration;
+  return declaration && ts.isExportAssignment(declaration) && ts.isCallExpression(declaration.expression) ? declaration.expression : undefined;
+}
+function assertFlagGatedPage(call: ts.CallExpression, label: string, typeChecker = checker) {
+  assert.ok(ts.isIdentifier(call.expression) && call.expression.text === "withPageFlagGate", label + ": only a direct withPageFlagGate call may wrap a page");
+  const symbol = typeChecker.getSymbolAtLocation(call.expression);
+  const target = symbol && unalias(symbol, typeChecker);
+  assert.ok(target?.name === "withPageFlagGate" && target.declarations?.some((d) => d.getSourceFile().fileName.endsWith("/server/page-flag-gate.ts")), label + ": untrusted withPageFlagGate");
+  assert.equal(call.arguments.length, 2, label + ": production pages must not pass withPageFlagGate deps");
+  assert.ok(!call.arguments.some(ts.isSpreadElement), label + ": spread arguments hide the deps");
+}
 function assertPayeeAdapter(body: ts.Node, route: boolean, label: string, typeChecker = checker) {
   assert.ok(ts.isBlock(body), label);
   const first = body.statements[0];
@@ -418,6 +433,92 @@ test("withFlagGate route classification rejects aliases, impostors, member calls
   }
 });
 
+test("withPageFlagGate (Lauren 2c) runs the real page-mode consent guard first, then the real getSession, with the real default deps", () => {
+  const file = program.getSourceFile(resolve("src/server/page-flag-gate.ts"));
+  assert.ok(file);
+  const defaults = file.statements.flatMap((s) => ts.isVariableStatement(s) ? [...s.declarationList.declarations] : [])
+    .find((d) => ts.isIdentifier(d.name) && d.name.text === "defaultDeps");
+  assert.ok(defaults?.initializer && ts.isObjectLiteralExpression(defaults.initializer), "defaultDeps object");
+  for (const [property, fileName] of [["requireCurrentConsent", "/server/consent-gate.ts"], ["getSession", "/server/session.ts"]] as const) {
+    const prop = defaults.initializer.properties.find((p) => p.name?.getText() === property);
+    assert.ok(prop && ts.isShorthandPropertyAssignment(prop), `defaultDeps.${property} is the imported function`);
+    const bound = checker.getShorthandAssignmentValueSymbol(prop);
+    assert.ok(bound && unalias(bound).name === property
+      && unalias(bound).declarations?.some((d) => d.getSourceFile().fileName.endsWith(fileName)), `real ${property}`);
+  }
+  const fn = file.statements.find((s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === "withPageFlagGate");
+  assert.ok(fn?.body && fn.parameters.length === 3);
+  const deps = fn.parameters[2];
+  assert.ok(deps.initializer && ts.isIdentifier(deps.initializer) && deps.initializer.text === "defaultDeps", "deps default to defaultDeps");
+  const gated = fn.body.statements.flatMap((s) => ts.isVariableStatement(s) ? [...s.declarationList.declarations] : [])
+    .find((d) => ts.isIdentifier(d.name) && d.name.text === "gated");
+  assert.ok(gated?.initializer && ts.isArrowFunction(gated.initializer) && ts.isBlock(gated.initializer.body), "gated page");
+  const [first, second] = gated.initializer.body.statements;
+  assert.ok(first && ts.isExpressionStatement(first) && ts.isAwaitExpression(first.expression), "the consent guard is the first, awaited statement");
+  const call = first.expression.expression;
+  assert.ok(ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression)
+    && ts.isIdentifier(call.expression.expression) && call.expression.name.text === "requireCurrentConsent", "deps.requireCurrentConsent(...)");
+  assert.equal(checker.getSymbolAtLocation(call.expression.expression)?.valueDeclaration, deps, "the deps parameter");
+  assert.deepEqual(call.arguments.map((a) => a.getText()), ["undefined", '"page"']);
+  assert.ok(second && ts.isVariableStatement(second) && second.declarationList.declarations.length === 1, "session is the second statement");
+  const session = second.declarationList.declarations[0].initializer;
+  assert.ok(session && ts.isAwaitExpression(session) && session.expression.getText() === "deps.getSession()", "await deps.getSession()");
+  const last = fn.body.statements[fn.body.statements.length - 1];
+  assert.ok(ts.isReturnStatement(last) && last.expression && ts.isAsExpression(last.expression)
+    && last.expression.expression.getText() === "gated", "withPageFlagGate returns the gated page");
+});
+
+test("withPageFlagGate page classification accepts only a direct default-export call; rejects aliases, impostors, member calls and a deps override", () => {
+  const dir = resolve("src/app/m/__page_flag_gate_fixture");
+  const sources: Record<string, string> = {
+    good: `import { withPageFlagGate } from "@/server/page-flag-gate";
+      async function Page() { return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`,
+    unwrapped: `export default async function Page() { return null; }`,
+    aliased: `import { withPageFlagGate as gate } from "@/server/page-flag-gate";
+      export default gate({ flagKey: "brand_v3", flag: () => true }, async () => null);`,
+    member: `import * as pg from "@/server/page-flag-gate";
+      export default pg.withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null);`,
+    withDeps: `import { withPageFlagGate } from "@/server/page-flag-gate";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null, { requireCurrentConsent: async () => null } as never);`,
+    spread: `import { withPageFlagGate } from "@/server/page-flag-gate";
+      const args = [{ flagKey: "brand_v3", flag: () => true }, async () => null] as const;
+      export default withPageFlagGate(...args);`,
+    impostor: `const withPageFlagGate = (_s: unknown, p: unknown) => p;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null);`,
+    routeWrapper: `import { withFlagGate } from "@/server/flag-gate";
+      export default withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t" }, async () => new Response(null));`,
+  };
+  const virtual = Object.fromEntries(Object.entries(sources).map(([name, code]) => [join(dir, name, "page.tsx"), code]));
+  const options: ts.CompilerOptions = { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler, jsx: ts.JsxEmit.Preserve, baseUrl: resolve("."), paths: { "@/*": ["src/*"] } };
+  const host = ts.createCompilerHost(options);
+  const original = host.getSourceFile.bind(host);
+  host.getSourceFile = (file, language, onError, fresh) => virtual[resolve(file)] !== undefined
+    ? ts.createSourceFile(file, virtual[resolve(file)], language, true, ts.ScriptKind.TSX) : original(file, language, onError, fresh);
+  const fixtureProgram = ts.createProgram(Object.keys(virtual), options, host);
+  const fixtureChecker = fixtureProgram.getTypeChecker();
+  const defaultCall = (name: string) => {
+    const file = fixtureProgram.getSourceFile(join(dir, name, "page.tsx"));
+    assert.ok(file, name);
+    const moduleSymbol = fixtureChecker.getSymbolAtLocation(file);
+    const symbol = moduleSymbol && fixtureChecker.getExportsOfModule(moduleSymbol).find((s) => s.name === "default");
+    assert.ok(symbol, name);
+    const declaration = (symbol.flags & ts.SymbolFlags.Alias ? fixtureChecker.getAliasedSymbol(symbol) : symbol).valueDeclaration;
+    return declaration && ts.isExportAssignment(declaration) && ts.isCallExpression(declaration.expression) ? declaration.expression : undefined;
+  };
+  const good = defaultCall("good");
+  assert.ok(good);
+  assert.doesNotThrow(() => assertFlagGatedPage(good, "good", fixtureChecker));
+  // An unwrapped page is not a gate call: it keeps the existing guarded() classification.
+  assert.equal(defaultCall("unwrapped"), undefined);
+  for (const name of ["aliased", "member", "withDeps", "spread", "impostor", "routeWrapper"]) {
+    const call = defaultCall(name);
+    assert.ok(call, name);
+    assert.throws(() => assertFlagGatedPage(call, name, fixtureChecker), name);
+  }
+});
+
 test("all runtime server exports, routes and protected pages are classified", () => {
   for (const path of paths) {
     const file = program.getSourceFile(path)!;
@@ -461,6 +562,8 @@ test("all runtime server exports, routes and protected pages are classified", ()
       }
       const gate = route ? flagGateCall(symbol) : undefined;
       if (gate) { assertFlagGatedRoute(gate, label); continue; }
+      const pageGate = page && key === "default" ? pageFlagGateCall(symbol) : undefined;
+      if (pageGate) { assertFlagGatedPage(pageGate, label); continue; } // Lauren 2c
       guarded(bodyOf(symbol)!, route, label);
     }
     if (page) {
