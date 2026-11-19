@@ -110,12 +110,34 @@ function inspect(fn:ts.Node, expected?:string|null, resolve:(call:ts.CallExpress
   return state;
 }
 
+// Lauren 2b: `export const POST = withFlagGate(spec, handler)` (src/server/flag-gate.ts). The wrapper itself runs only
+// consent and session (bootstrap above) and the same-origin check, then spec.flag, then the handler; so the scan
+// inspects the inline flag predicate and the inline handler in that order. Anything else stays unclassifiable.
+function flagGated(node:ts.Node|undefined,name?:string):{flag:ts.ArrowFunction|ts.FunctionExpression;handler:ts.ArrowFunction|ts.FunctionExpression}|undefined {
+  const decl=node&&ts.isVariableStatement(node)?node.declarationList.declarations.find(d=>ts.isIdentifier(d.name)&&(!name||d.name.text===name)):node&&ts.isVariableDeclaration(node)?node:undefined;
+  const call=decl?.initializer;
+  if(!call||!ts.isCallExpression(call)||!ts.isIdentifier(call.expression)||call.expression.text!=='withFlagGate'||call.arguments.length!==2)return undefined;
+  const target=declaration(call);
+  if(!target||!ts.isFunctionDeclaration(target)||!target.getSourceFile().fileName.endsWith('/server/flag-gate.ts'))return undefined;
+  const [spec,handler]=call.arguments;
+  const flag=ts.isObjectLiteralExpression(spec)?spec.properties.find(p=>p.name?.getText()==='flag'):undefined;
+  const fnOf=(n:ts.Node|undefined)=>n&&(ts.isArrowFunction(n)||ts.isFunctionExpression(n))?n:undefined;
+  const flagFn=flag&&ts.isPropertyAssignment(flag)?fnOf(flag.initializer):undefined,handlerFn=fnOf(handler);
+  return flagFn&&handlerFn?{flag:flagFn,handler:handlerFn}:undefined;
+}
+
 test('B017 mapped guards precede the first DB call, including null mappings',()=>{
   const failures:string[]=[];
   for(const [id,key] of Object.entries(permissions)) {
     const [file,name]=id.split('#'),source=program.getSourceFile(file);assert.ok(source,id);
     const fn=source.statements.find(n=>(ts.isFunctionDeclaration(n)||ts.isVariableStatement(n))&&nodes(n).some(x=>ts.isIdentifier(x)&&x.text===name));assert.ok(fn,id);
     if(separateBoundary(file,name,fn))continue;
+    const gated=flagGated(fn,name);
+    if(gated) {
+      const flag=inspect(gated.flag,key),handler=inspect(gated.handler,key),violations=[...flag.violations,...handler.violations];
+      if(violations.length || !handler.guards.has(String(key)))failures.push(`${id} [${key}]: ${violations.slice(0,3).join(', ') || 'missing matching guard'}`);
+      continue;
+    }
     const result=inspect(fn,key);
     if(result.violations.length || !result.guards.has(String(key)))failures.push(`${id} [${key}]: ${result.violations.slice(0,3).join(', ') || 'missing matching guard'}`);
   }
@@ -141,6 +163,11 @@ test('B017 every server module, TS/TSX route, page, layout and inline server act
       const result=inspect(fn);
       if(result.violations.length)failures.push(`${id}: ${result.violations.slice(0,3).join(', ')}`);
     }
+    // Lauren 2b: a withFlagGate export's flag predicate and handler are arrows inside a call, not exported functions.
+    if(isEntry) for(const st of source.statements) if(ts.isVariableStatement(st)&&st.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword))
+      for(const d of st.declarationList.declarations) { const gated=flagGated(d); if(!gated)continue;
+        const violations=[...inspect(gated.flag).violations,...inspect(gated.handler).violations];
+        if(violations.length)failures.push(`${file}#${d.name.getText()}: ${violations.slice(0,3).join(', ')}`); }
   }
   assert.deepEqual(failures,[]);
 });
@@ -159,6 +186,7 @@ function routeExports(source: ts.SourceFile) {
     else if (ts.isVariableStatement(st) && exported) {
       for (const d of st.declarationList.declarations) if (ts.isIdentifier(d.name) && HTTP_METHODS.has(d.name.text))
         out.push({ name: d.name.text, node: st, fn: d.initializer && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) ? d.initializer : undefined });
+      for (const d of st.declarationList.declarations) { const gated = flagGated(d); const entry = out.find(e => e.node === st && ts.isIdentifier(d.name) && e.name === d.name.text); if (gated && entry && !entry.fn) entry.fn = gated.handler; } // Lauren 2b
     } else if (ts.isExportDeclaration(st)) {
       if (!st.exportClause) out.push({ name: '*', node: st });
       else if (ts.isNamedExports(st.exportClause)) for (const e of st.exportClause.elements) if (HTTP_METHODS.has(e.name.text)) out.push({ name: e.name.text, node: st });

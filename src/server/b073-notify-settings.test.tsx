@@ -33,6 +33,8 @@ function compile(source: string, mocks: Record<string, unknown>) {
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const exports: Record<string, unknown> = {};
   new Function("require", "exports", code)((name: string) => {
+    // Lauren 2b: migrated routes import the real wrapper, compiled with the same mocks (consent, session, errors).
+    if (name === "@/server/flag-gate" && !(name in mocks)) return compile(read("src/server/flag-gate.ts"), mocks);
     if (name in mocks) return mocks[name];
     if (["react", "react/jsx-runtime"].includes(name)) return requireHere(name);
     throw new Error(`Unmocked dependency: ${name}`);

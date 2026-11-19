@@ -6,8 +6,10 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
+import { brandV2EnabledForOrg } from "./brand-v2";
 import { brandV3EnabledForOrg } from "./brand-v3";
-import { maintUnitAssignEnabledForOrg } from "./b059-maint-unit-assign";
+import { ASSIGN_BODY_LIMIT, maintUnitAssignEnabledForOrg } from "./b059-maint-unit-assign";
+import { FLAG_GATE } from "./flag-gate";
 import { NOTIFY_BLOCKS } from "./b073-notify-settings";
 import { readCappedJson } from "./read-capped-json";
 
@@ -20,6 +22,8 @@ function compile(source: string, mocks: Record<string, unknown> | ((name: string
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const exports: Record<string, unknown> = {};
   new Function("require", "exports", code)((name: string) => {
+    // Lauren 2b: migrated routes import the real wrapper, compiled with the same mocks (consent, session, errors).
+    if (name === "@/server/flag-gate" && (typeof mocks === "function" || !(name in mocks))) return compile(read("src/server/flag-gate.ts"), mocks);
     if (typeof mocks === "function") return mocks(name);
     if (name in mocks) return mocks[name];
     if (["react", "react/jsx-runtime"].includes(name)) return requireHere(name);
@@ -396,4 +400,237 @@ test("readCappedJson accepts exactly 1024 bytes, rejects invalid JSON and decode
   assert.deepEqual(await readCappedJson(streamed([encode("{")]).request), { ok: false, status: 400 });
   const utf8 = encode('"屋🙂"');
   assert.deepEqual(await readCappedJson(streamed([utf8.slice(0, 2), utf8.slice(2, 6), utf8.slice(6)]).request), { ok: true, value: "屋🙂" });
+});
+
+// Lauren 2b: the four org-flag API routes moved to withFlagGate (src/server/flag-gate.ts). Byte-identical proof: each
+// scenario runs the pre-migration source (GATE_BASE, origin/main before 2b) and the current source through the same
+// harness and compares status, every header, body bytes, the dependency calls in order and the request-stream pulls.
+// Flag OFF (brand_v3 OFF, a throwing brand_v3/brand_v2 lookup caught inside brandV3EnabledForOrg, and for
+// maint-unit-assign the item flag OFF or throwing) must also be a 404 with no body read, permission, save or log.
+const GATE_BASE = "614e952172e641a80d8fd5b952d3f10104f41842";
+const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"];
+const gateRoutes = [
+  { path: "src/app/api/owner-view/route.ts", flagKey: "brand_v3", limit: 1024, input: { field: "showPhone", value: true } },
+  { path: "src/app/api/team-security/route.ts", flagKey: "brand_v3", limit: 1024, input: { required: true } },
+  { path: "src/app/api/notify-settings/route.ts", flagKey: "brand_v3", limit: 1024, input: { block: "tenant", field: "leaseExpiry", value: true } },
+  { path: "src/app/api/maint-unit-assign/route.ts", flagKey: "maint_unit_assign", limit: ASSIGN_BODY_LIMIT, item: true,
+    input: { requestId: UNIT, target: UNIT, units: [UNIT] } },
+] as const;
+type GateRoute = (typeof gateRoutes)[number];
+type GateScenario = {
+  name: string; expect: number; flagOff?: true; itemOnly?: true;
+  consent?: "deny"; session?: "null" | "throw"; origin?: string | null;
+  brand?: "off" | "v3-throw" | "v2-throw"; item?: "off" | "throw";
+  permission?: "deny" | "throw"; contentType?: string | null;
+  body?: (route: GateRoute) => { chunks: Uint8Array[]; contentLength?: string };
+  save?: "fail" | "throw";
+};
+const gateScenarios: GateScenario[] = [
+  { name: "brand_v3 OFF", brand: "off", expect: 404, flagOff: true },
+  { name: "brand_v3 lookup throws (caught in brandV3EnabledForOrg)", brand: "v3-throw", expect: 404, flagOff: true },
+  { name: "brand_v2 lookup throws (caught in brandV3EnabledForOrg)", brand: "v2-throw", expect: 404, flagOff: true },
+  { name: "brand_v3 OFF with a non-JSON type and an oversized declared body", brand: "off", contentType: "text/plain",
+    body: route => ({ chunks: [encode("{")], contentLength: String(route.limit * 4) }), expect: 404, flagOff: true },
+  { name: "item flag OFF (brand_v3 ON)", item: "off", expect: 404, flagOff: true, itemOnly: true },
+  { name: "item flag lookup throws (brand_v3 ON)", item: "throw", expect: 404, flagOff: true, itemOnly: true },
+  { name: "consent denied", consent: "deny", expect: 409 },
+  { name: "session read throws", session: "throw", expect: 500 },
+  { name: "no session", session: "null", expect: 401 },
+  { name: "cross-origin", origin: "http://evil.example", expect: 403 },
+  { name: "no Origin header", origin: null, expect: 403 },
+  { name: "cross-origin with brand_v3 OFF", origin: "http://evil.example", brand: "off", expect: 403 },
+  { name: "permission denied", permission: "deny", expect: 403 },
+  { name: "permission throws", permission: "throw", expect: 500 },
+  { name: "text/plain", contentType: "text/plain", expect: 415 },
+  { name: "no content type", contentType: null, expect: 415 },
+  { name: "declared Content-Length over the cap", body: route => ({ chunks: [encode("{}")], contentLength: String(route.limit + 1) }), expect: 413 },
+  { name: "streamed body over the cap", body: route => ({ chunks: [new Uint8Array(route.limit), new Uint8Array(1)] }), expect: 413 },
+  { name: "invalid JSON", body: () => ({ chunks: [encode("{")] }), expect: 400 },
+  { name: "save refused", save: "fail", expect: 409 },
+  { name: "save throws", save: "throw", expect: 500 },
+  { name: "success (charset parameter)", contentType: "application/json; charset=utf-8", expect: 200 },
+  { name: "success", expect: 200 },
+];
+
+async function runGateRoute(source: string, route: GateRoute, sc: GateScenario) {
+  const calls: string[] = [];
+  const SESSION = { orgId: ORG, kind: "staff", role: "admin" }, AUTH = { orgId: ORG, kind: "staff", role: "admin", authorized: true };
+  const denied = new Response("consent", { status: 409, headers: { "X-Consent": "required" } });
+  const permission = async (...args: unknown[]) => {
+    calls.push(`permission:${args.length}:${args[0] === SESSION}`);
+    if (sc.permission === "throw") throw new Error("permission boom");
+    return sc.permission === "deny" ? null : AUTH;
+  };
+  const save = async (...args: unknown[]) => {
+    calls.push(`save:${args.length}:${args[0] === AUTH}:${JSON.stringify(args[1])}`);
+    if (sc.save === "throw") throw new Error("save boom");
+    if (sc.save === "fail") return { ok: false, status: 409 };
+    return { ok: true, privacy: { showName: true, showPhone: true }, required: true, block: "tenant", toggles: { leaseExpiry: true },
+      status: "saved", units: 1, replayed: false };
+  };
+  const mocks = {
+    "@/server/consent-gate": { requireCurrentConsent: async (...args: unknown[]) => {
+      calls.push(`consent:${JSON.stringify(args)}:${args.length}`); return sc.consent === "deny" ? denied : null; } },
+    "@/server/session": { readSession: async (...args: unknown[]) => {
+      calls.push(`session:${args.length}`);
+      if (sc.session === "throw") throw new Error("session boom");
+      return sc.session === "null" ? null : SESSION;
+    } },
+    "@/server/brand-v3": { brandV3EnabledForOrg: (...args: unknown[]) => {
+      calls.push(`flag:${args.length}:${String(args[0])}`);
+      return brandV3EnabledForOrg(args[0] as string, {}, async () => {
+        calls.push("flag:v3");
+        if (sc.brand === "v3-throw") throw new Error("brand_v3 lookup failed");
+        return sc.brand !== "off";
+      }, async () => {
+        calls.push("flag:v2");
+        if (sc.brand === "v2-throw") throw new Error("brand_v2 lookup failed");
+        return true;
+      });
+    } },
+    "@/server/b073-owner-view": { authorizeSettingsEdit: permission, saveOwnerView: save },
+    "@/server/b073-team": { saveTeamSecurity: save },
+    "@/server/b073-notify-settings": { authorizeNotifySettings: permission, saveNotifySetting: save },
+    "@/server/b059-maint-unit-assign": { ASSIGN_BODY_LIMIT, authorizeAssign: permission, saveAssign: save,
+      maintUnitAssignEnabledForOrg: (...args: unknown[]) => {
+        calls.push(`item-flag:${args.length}:${String(args[0])}`);
+        return maintUnitAssignEnabledForOrg(args[0] as string, async () => {
+          calls.push("item-flag:lookup");
+          if (sc.item === "throw") throw new Error("item flag lookup failed");
+          return sc.item !== "off";
+        });
+      } },
+    "@/server/read-capped-json": { readCappedJson: (request: Request, ...rest: unknown[]) => {
+      calls.push(`body:${rest.length}:${String(rest[0])}`);
+      return readCappedJson(request, ...(rest as [number?]));
+    } },
+    "@/server/errors": { logServerError: (...args: unknown[]) => {
+      calls.push(`log:${args.length}:${String(args[0])}:${(args[1] as Error)?.message}`); } },
+  };
+  const exports = compile(source, mocks);
+  const stream = { pulls: 0, cancels: 0 };
+  const { chunks, contentLength } = sc.body?.(route) ?? { chunks: [encode(JSON.stringify(route.input))] };
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks[stream.pulls++];
+      if (chunk) controller.enqueue(chunk);
+      else controller.close();
+    },
+    cancel() { stream.cancels += 1; },
+  }, { highWaterMark: 0 }); // Don't prefetch independently of the handler.
+  const headers: Record<string, string> = {};
+  if (sc.origin !== null) headers.Origin = sc.origin ?? URL;
+  if (sc.contentType !== null) headers["Content-Type"] = sc.contentType ?? "application/json";
+  if (contentLength !== undefined) headers["Content-Length"] = contentLength;
+  const request = new Request(`${URL}${route.path.slice("src/app".length, -"/route.ts".length)}`,
+    { method: "POST", body, duplex: "half", headers } as RequestInit & { duplex: "half" });
+  const response = await (exports.POST as (request: Request, ctx: unknown) => Promise<Response>)(request, { params: Promise.resolve({}) });
+  const bytes = [...new Uint8Array(await response.arrayBuffer())];
+  return {
+    response: { status: response.status, statusText: response.statusText, headers: [...response.headers], bytes },
+    calls, stream, bodyUsed: request.bodyUsed, exports,
+  };
+}
+
+test("Lauren 2b withFlagGate routes: flag OFF and every flag-ON path answer byte-for-byte as before the migration", async () => {
+  for (const route of gateRoutes) {
+    const base = execFileSync("git", ["show", `${GATE_BASE}:${route.path}`], { encoding: "utf8" });
+    const head = read(route.path);
+    for (const sc of gateScenarios) {
+      if (sc.itemOnly && !("item" in route)) continue;
+      const label = `${route.path} ${sc.name}`;
+      const before = await runGateRoute(base, route, sc), after = await runGateRoute(head, route, sc);
+      assert.deepEqual(after.response, before.response, `${label}: status, headers and body bytes`);
+      assert.deepEqual(after.calls, before.calls, `${label}: the same dependency calls in the same order`);
+      assert.deepEqual([after.stream, after.bodyUsed], [before.stream, before.bodyUsed], `${label}: the same body reads`);
+      assert.equal(after.response.status, sc.expect, label);
+      const gateHeaders = [["cache-control", "private, no-store"], ...(sc.expect === 200 ? [["content-type", "application/json"]] : []), ["vary", "Cookie"]];
+      assert.deepEqual(after.response.headers, sc.consent ? [["content-type", "text/plain;charset=UTF-8"], ["x-consent", "required"]] : gateHeaders, label);
+      if (sc.flagOff) {
+        assert.deepEqual(after.response.bytes, [], label);
+        assert.equal(after.bodyUsed, false, label);
+        assert.deepEqual(after.stream, { pulls: 0, cancels: 0 }, label);
+        assert.ok(!after.calls.some(call => /^(permission|body|save|log):/.test(call)), `${label}: ${after.calls.join(",")}`);
+      }
+    }
+  }
+});
+
+test("Lauren 2b withFlagGate routes: every exported method carries FLAG_GATE, the module loads, and the gate is a direct call", async () => {
+  const loaded: Record<string, Record<string, unknown>> = {
+    "src/app/api/owner-view/route.ts": await import("../app/api/owner-view/route"),
+    "src/app/api/team-security/route.ts": await import("../app/api/team-security/route"),
+    "src/app/api/notify-settings/route.ts": await import("../app/api/notify-settings/route"),
+    "src/app/api/maint-unit-assign/route.ts": await import("../app/api/maint-unit-assign/route"),
+  };
+  // The real module (real wrapper, real dependencies) and the harness-compiled source both carry the metadata.
+  const unwrapped: string[] = [];
+  for (const route of gateRoutes) {
+    const compiled = (await runGateRoute(read(route.path), route, { name: "load", expect: 200 })).exports;
+    for (const [where, mod] of [["import", loaded[route.path]], ["compiled", compiled]] as const) {
+      const label = `${route.path} (${where})`;
+      assert.equal(mod.dynamic, "force-dynamic", label);
+      const handlers = Object.keys(mod).filter(key => typeof mod[key] === "function");
+      assert.ok(handlers.length > 0, label);
+      for (const key of handlers) {
+        assert.ok(HTTP_METHODS.includes(key), `${label}: unexpected runtime export ${key}`);
+        const marker = (mod[key] as Record<symbol, unknown>)[FLAG_GATE];
+        if (typeof marker !== "string") unwrapped.push(`${label}#${key}`);
+        else assert.equal(marker, route.flagKey, `${label}#${key}`);
+      }
+    }
+  }
+  assert.deepEqual(unwrapped, [], "every exported method is wrapped in withFlagGate (typeof handler[FLAG_GATE] === \"string\")");
+  for (const route of gateRoutes) {
+    // Source shape (HANDOFF-MAC lessons r1/r2/r3/B1/B2): only `export const <METHOD> = withFlagGate(spec, handler)`.
+    const file = ts.createSourceFile(route.path, read(route.path), ts.ScriptTarget.Latest, true);
+    for (const statement of file.statements) {
+      assert.ok(!ts.isExportDeclaration(statement), `${route.path}: no export { } / export … from`);
+      assert.ok(!ts.isExportAssignment(statement), `${route.path}: no export default`);
+      assert.ok(!(ts.isExpressionStatement(statement) && ts.isAwaitExpression(statement.expression)), `${route.path}: no top-level await`);
+      const exported = (ts.isFunctionDeclaration(statement) || ts.isVariableStatement(statement))
+        && statement.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
+      if (!exported) continue;
+      assert.ok(!ts.isFunctionDeclaration(statement) || !HTTP_METHODS.includes(statement.name?.text ?? ""), `${route.path}: hand-written method`);
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        const name = declaration.name.getText(file);
+        if (!HTTP_METHODS.includes(name)) continue;
+        const init = declaration.initializer;
+        assert.ok(init && ts.isCallExpression(init) && ts.isIdentifier(init.expression) && init.expression.text === "withFlagGate",
+          `${route.path}#${name}: a direct withFlagGate(...) call`);
+        assert.equal(init.arguments.length, 2, `${route.path}#${name}: no deps argument in production`);
+        const spec = init.arguments[0];
+        assert.ok(ts.isObjectLiteralExpression(spec), `${route.path}#${name}: inline spec`);
+        const prop = (key: string) => spec.properties.find(p => p.name?.getText(file) === key);
+        const sameOrigin = prop("sameOrigin"), flagKey = prop("flagKey");
+        assert.ok(sameOrigin && ts.isPropertyAssignment(sameOrigin) && sameOrigin.initializer.kind === ts.SyntaxKind.TrueKeyword, `${route.path}#${name}: sameOrigin: true`);
+        assert.ok(flagKey && ts.isPropertyAssignment(flagKey) && ts.isStringLiteral(flagKey.initializer) && flagKey.initializer.text === route.flagKey, `${route.path}#${name}: flagKey`);
+      }
+    }
+    assert.match(read("ops/flags.yaml"), new RegExp(`^  ${route.flagKey}:$`, "m"), `${route.flagKey} is a registry key`);
+  }
+});
+
+test("Lauren 2b predicates never reject: brandV3EnabledForOrg and maintUnitAssignEnabledForOrg fail closed to false", async () => {
+  const boom = () => { throw new Error("sync boom"); };
+  const reject = async () => { throw new Error("async boom"); };
+  const hostileEnv = new Proxy({}, { get: boom }) as Record<string, string | undefined>;
+  for (const orgId of [ORG, "", null, undefined, "not-a-uuid"]) {
+    for (const [v3, v2, env] of [[boom, async () => true, {}], [reject, async () => true, {}], [async () => true, boom, {}],
+      [async () => true, reject, {}], [async () => "true", async () => true, {}]] as const) {
+      // Rejection would surface here as a thrown await; the gate's flag catch would turn it into a 404 instead of a 500.
+      assert.equal(await brandV3EnabledForOrg(orgId, env, v3 as never, v2 as never), false, String(orgId));
+    }
+    // With the real brand_v2 predicate (the v2 default): a throwing env read (outside brandV2EnabledForOrg's own try) or a
+    // rejecting brand_v2 lookup is still OFF, because brandV3EnabledForOrg calls v2 inside its try.
+    for (const env of [hostileEnv, {}]) {
+      assert.equal(await brandV3EnabledForOrg(orgId, env, async () => true, (id, e) => brandV2EnabledForOrg(id, e, reject)), false, String(orgId));
+    }
+    for (const lookup of [boom, reject, async () => "true" as never, async () => 1 as never]) {
+      assert.equal(await maintUnitAssignEnabledForOrg(orgId, lookup as never), false, String(orgId));
+    }
+  }
+  assert.equal(await brandV3EnabledForOrg(ORG, {}, async () => true, async () => true), true);
+  assert.equal(await maintUnitAssignEnabledForOrg(ORG, async () => true), true);
 });

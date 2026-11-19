@@ -4,6 +4,8 @@ import test, { mock } from "node:test";
 import { Client } from "pg";
 import nextHeaders from "next/headers";
 import { POST } from "@/app/api/team-security/route";
+// Lauren 2b: withFlagGate routes take Next's (request, context); context is unused by these routes.
+const ROUTE_CTX = { params: Promise.resolve({}) };
 import { SESSION_COOKIE } from "./auth";
 import { buildStoredConsent } from "./consent";
 import { ENV_COOKIE } from "./org-scope";
@@ -117,7 +119,7 @@ test("MGT-133-AC6: after a trial ends (B-056 ON), the kept admin sees the others
 
 const post = (token: string, body: unknown, origin = "http://localhost") => {
   cookie = token;
-  return POST(new Request("http://localhost/api/team-security", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+  return POST(new Request("http://localhost/api/team-security", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) }), ROUTE_CTX);
 };
 
 const V3 = { brand_v2: true, brand_v3: true };
@@ -141,7 +143,7 @@ test("MGT-133-AC7/AC8 HTTP: non-admins 403; admin turns the company 2FA rule on 
   for (const role of ["manager", "accountant", "maintenance"]) {
     assert.equal((await post(tokens[role], { required: true })).status, 403, role);
     cookie = tokens[role];
-    const malformed = await POST(new Request("http://localhost/api/team-security", { method: "POST", headers: { Origin: "http://localhost", "Content-Type": "application/json" }, body: "{" }));
+    const malformed = await POST(new Request("http://localhost/api/team-security", { method: "POST", headers: { Origin: "http://localhost", "Content-Type": "application/json" }, body: "{" }), ROUTE_CTX);
     assert.equal(malformed.status, 403, `${role} malformed body`);
   }
   assert.equal((await post(tokens.admin, { required: true }, "http://evil.example")).status, 403);

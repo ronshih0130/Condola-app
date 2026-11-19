@@ -1,8 +1,6 @@
-import { requireCurrentConsent } from "@/server/consent-gate";
-import { readSession } from "@/server/session";
 import { authorizeNotifySettings, saveNotifySetting } from "@/server/b073-notify-settings";
 import { brandV3EnabledForOrg } from "@/server/brand-v3";
-import { logServerError } from "@/server/errors";
+import { withFlagGate } from "@/server/flag-gate";
 import { readCappedJson } from "@/server/read-capped-json";
 
 export const dynamic = "force-dynamic";
@@ -15,31 +13,21 @@ const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
  * row and is 403 for roles without personal reminders; brand_v3 OFF for the session's organization 404 with nothing
  * written (as /api/team-security); bad body 400; any other failure 500. Settings only: nothing
  * is sent because of a save (MGT-135-AC3).
+ * Consent → session → origin → brand_v3 run in withFlagGate (Lauren 2b; brandV3EnabledForOrg never rejects).
  */
-export async function POST(request: Request) {
-  const denied = await requireCurrentConsent(undefined, "api");
-  if (denied) return denied;
-  let session: Awaited<ReturnType<typeof readSession>>;
-  try {
-    session = await readSession();
-  } catch (error) {
-    logServerError("b073_notify_route", error);
-    return new Response(null, { status: 500, headers });
-  }
-  if (!session) return new Response(null, { status: 401, headers });
-  if (request.headers.get("origin") !== new URL(request.url).origin) return new Response(null, { status: 403, headers });
-  try {
-    if (!await brandV3EnabledForOrg(session.orgId)) return new Response(null, { status: 404, headers });
-    const authorized = await authorizeNotifySettings(session);
-    if (!authorized) return new Response(null, { status: 403, headers });
-    if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return new Response(null, { status: 415, headers });
-    const body = await readCappedJson(request);
-    if (!body.ok) return new Response(null, { status: body.status, headers });
-    const result = await saveNotifySetting(authorized, body.value);
-    if (result.ok) return Response.json({ block: result.block, toggles: result.toggles }, { headers });
-    return new Response(null, { status: result.status, headers });
-  } catch (error) {
-    logServerError("b073_notify_route", error);
-    return new Response(null, { status: 500, headers });
-  }
-}
+export const POST = withFlagGate({
+  flagKey: "brand_v3",
+  flag: session => brandV3EnabledForOrg(session.orgId),
+  tag: "b073_notify_route",
+  headers,
+  sameOrigin: true,
+}, async (request, session) => {
+  const authorized = await authorizeNotifySettings(session);
+  if (!authorized) return new Response(null, { status: 403, headers });
+  if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return new Response(null, { status: 415, headers });
+  const body = await readCappedJson(request);
+  if (!body.ok) return new Response(null, { status: body.status, headers });
+  const result = await saveNotifySetting(authorized, body.value);
+  if (result.ok) return Response.json({ block: result.block, toggles: result.toggles }, { headers });
+  return new Response(null, { status: result.status, headers });
+});
