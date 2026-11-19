@@ -176,6 +176,45 @@ function assertFlagGatedPage(call: ts.CallExpression, label: string, typeChecker
   assert.ok(target?.name === "withPageFlagGate" && target.declarations?.some((d) => d.getSourceFile().fileName.endsWith("/server/page-flag-gate.ts")), label + ": untrusted withPageFlagGate");
   assert.equal(call.arguments.length, 2, label + ": production pages must not pass withPageFlagGate deps");
   assert.ok(!call.arguments.some(ts.isSpreadElement), label + ": spread arguments hide the deps");
+  // Lauren 2c r1 (Codex review FAIL #1): what a scanner reads from the spec must be what runs. Same rule as
+  // b017-entrypoints literalSpec: a plain object literal of identifier keys flagKey and flag, no spread, computed or
+  // quoted key, method, accessor or duplicate; flagKey a string literal; flag and Page inline or same-file functions.
+  const [spec, page] = call.arguments;
+  assert.ok(ts.isObjectLiteralExpression(spec), label + ": spec is not an inline object literal");
+  const seen = new Map<string, ts.PropertyAssignment | ts.ShorthandPropertyAssignment>();
+  for (const p of spec.properties) {
+    assert.ok(!ts.isSpreadAssignment(p), label + ": spread in spec");
+    assert.ok(ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p), label + ": method or accessor in spec");
+    assert.ok(ts.isIdentifier(p.name), label + ": computed or quoted spec key");
+    assert.ok(["flagKey", "flag"].includes(p.name.text), label + ": unexpected spec key " + p.name.text);
+    assert.ok(!seen.has(p.name.text), label + ": duplicate spec key " + p.name.text);
+    assert.ok(!ts.isShorthandPropertyAssignment(p) || !p.objectAssignmentInitializer, label + ": shorthand default in spec");
+    seen.set(p.name.text, p);
+  }
+  const flagKey = seen.get("flagKey");
+  assert.ok(flagKey && ts.isPropertyAssignment(flagKey) && ts.isStringLiteral(flagKey.initializer), label + ": spec.flagKey must be a string literal");
+  const flag = seen.get("flag");
+  assert.ok(flag, label + ": spec.flag is missing");
+  assert.ok(sameFileFunction(ts.isPropertyAssignment(flag) ? flag.initializer : flag, typeChecker), label + ": spec.flag is not an inline function or a same-file, never-reassigned function");
+  assert.ok(sameFileFunction(page, typeChecker), label + ": Page is not an inline function or a same-file, never-reassigned function");
+}
+/** An inline function, or an identifier / shorthand naming a same-file, never-reassigned function declaration or const function. */
+function sameFileFunction(node: ts.Node, typeChecker = checker): boolean {
+  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return true;
+  const symbol = ts.isShorthandPropertyAssignment(node) ? typeChecker.getShorthandAssignmentValueSymbol(node)
+    : ts.isIdentifier(node) ? typeChecker.getSymbolAtLocation(node) : undefined;
+  if (!symbol || symbol.flags & ts.SymbolFlags.Alias) return false; // imported: not traced
+  const file = node.getSourceFile(), declaration = symbol.valueDeclaration;
+  if (!declaration || declaration.getSourceFile() !== file) return false;
+  const targets = nodes(file).flatMap((n) => ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+    && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment ? [n.left]
+    : (ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n))
+      && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(n.operator) ? [n.operand] : []);
+  if (targets.some((t) => nodes(t).some((id) => ts.isIdentifier(id) && typeChecker.getSymbolAtLocation(id) === symbol))) return false;
+  if (ts.isFunctionDeclaration(declaration)) return !!declaration.body;
+  return ts.isVariableDeclaration(declaration) && ts.isVariableDeclarationList(declaration.parent)
+    && (declaration.parent.flags & ts.NodeFlags.Const) !== 0 && !!declaration.initializer
+    && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer));
 }
 function assertPayeeAdapter(body: ts.Node, route: boolean, label: string, typeChecker = checker) {
   assert.ok(ts.isBlock(body), label);
@@ -470,26 +509,54 @@ test("withPageFlagGate (Lauren 2c) runs the real page-mode consent guard first, 
 
 test("withPageFlagGate page classification accepts only a direct default-export call; rejects aliases, impostors, member calls and a deps override", () => {
   const dir = resolve("src/app/m/__page_flag_gate_fixture");
-  const sources: Record<string, string> = {
-    good: `import { withPageFlagGate } from "@/server/page-flag-gate";
-      async function Page() { return null; }
-      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`,
-    unwrapped: `export default async function Page() { return null; }`,
-    aliased: `import { withPageFlagGate as gate } from "@/server/page-flag-gate";
-      export default gate({ flagKey: "brand_v3", flag: () => true }, async () => null);`,
-    member: `import * as pg from "@/server/page-flag-gate";
-      export default pg.withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null);`,
-    withDeps: `import { withPageFlagGate } from "@/server/page-flag-gate";
-      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null, { requireCurrentConsent: async () => null } as never);`,
-    spread: `import { withPageFlagGate } from "@/server/page-flag-gate";
-      const args = [{ flagKey: "brand_v3", flag: () => true }, async () => null] as const;
-      export default withPageFlagGate(...args);`,
-    impostor: `const withPageFlagGate = (_s: unknown, p: unknown) => p;
-      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null);`,
-    routeWrapper: `import { withFlagGate } from "@/server/flag-gate";
-      export default withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t" }, async () => new Response(null));`,
+  const imp = `import { withPageFlagGate } from "@/server/page-flag-gate";`;
+  const leak = `async () => { await fetch("x"); return true; }`;
+  // name → [source, expected]: "ok", "unwrapped" (not a gate call: guarded() keeps classifying it), or the rejection RegExp.
+  const cases: Record<string, [string, "ok" | "unwrapped" | RegExp]> = {
+    good: [`${imp} async function Page() { return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`, "ok"],
+    goodSameFileFlag: [`${imp} const flag = async () => true; function gate() { return true; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag }, async () => null);
+      export const other = withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`, "ok"],
+    unwrapped: [`export default async function Page() { return null; }`, "unwrapped"],
+    aliased: [`import { withPageFlagGate as gate } from "@/server/page-flag-gate";
+      export default gate({ flagKey: "brand_v3", flag: () => true }, async () => null);`, /only a direct withPageFlagGate call/],
+    member: [`import * as pg from "@/server/page-flag-gate";
+      export default pg.withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null);`, /only a direct withPageFlagGate call/],
+    withDeps: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null, { requireCurrentConsent: async () => null } as never);`, /must not pass withPageFlagGate deps/],
+    spread: [`${imp} const args = [{ flagKey: "brand_v3", flag: () => true }, async () => null] as const;
+      export default withPageFlagGate(...args);`, /must not pass withPageFlagGate deps|spread arguments/],
+    impostor: [`const withPageFlagGate = (_s: unknown, p: unknown) => p;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null);`, /untrusted withPageFlagGate/],
+    routeWrapper: [`import { withFlagGate } from "@/server/flag-gate";
+      export default withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t" }, async () => new Response(null));`, /only a direct withPageFlagGate call/],
+    // Codex r1 BLOCKING repro and variants: the scanned spec must be the one that runs.
+    specSpread: [`${imp} const overrides: { flag?: () => Promise<boolean> } = { flag: ${leak} };
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, ...overrides }, async () => null);`, /spread in spec/],
+    duplicateFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, flag: ${leak} }, async () => null);`, /duplicate spec key flag/],
+    computedFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, ["flag"]: ${leak} }, async () => null);`, /computed or quoted spec key/],
+    quotedFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", "flag": ${leak} }, async () => null);`, /computed or quoted spec key/],
+    methodFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", async flag() { return true; } }, async () => null);`, /method or accessor in spec/],
+    unknownKey: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, deps: {} }, async () => null);`, /unexpected spec key deps/],
+    specVariable: [`${imp} const spec = { flagKey: "brand_v3", flag: ${leak} };
+      export default withPageFlagGate(spec, async () => null);`, /spec is not an inline object literal/],
+    specObjectAssign: [`${imp} export default withPageFlagGate(Object.assign({ flagKey: "brand_v3", flag: () => true }, { flag: ${leak} }), async () => null);`, /spec is not an inline object literal/],
+    flagKeyNotLiteral: [`${imp} const key = "brand_v3"; export default withPageFlagGate({ flagKey: key, flag: () => true }, async () => null);`, /flagKey must be a string literal/],
+    missingFlag: [`${imp} export default withPageFlagGate({ flagKey: "brand_v3" }, async () => null);`, /spec\.flag is missing/],
+    importedFlag: [`${imp} import { brandV3EnabledForOrg } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: brandV3EnabledForOrg }, async () => null);`, /spec\.flag is not an inline function/],
+    importedShorthandFlag: [`${imp} import { brandV3EnabledForOrg as flag } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag }, async () => null);`, /spec\.flag is not an inline function/],
+    reassignedFlag: [`${imp} let gate = async () => true; gate = ${leak};
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`, /spec\.flag is not an inline function/],
+    pageObjectAssign: [`${imp} async function Page() { return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Object.assign(Page, { x: 1 }));`, /Page is not an inline function/],
+    reassignedPage: [`${imp} async function Page() { return null; } (Page as unknown) = async () => null;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`, /Page is not an inline function/],
+    importedPage: [`${imp} import { brandV3EnabledForOrg } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, brandV3EnabledForOrg as never);`, /Page is not an inline function/],
   };
-  const virtual = Object.fromEntries(Object.entries(sources).map(([name, code]) => [join(dir, name, "page.tsx"), code]));
+  const virtual = Object.fromEntries(Object.entries(cases).map(([name, [code]]) => [join(dir, name, "page.tsx"), code]));
   const options: ts.CompilerOptions = { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler, jsx: ts.JsxEmit.Preserve, baseUrl: resolve("."), paths: { "@/*": ["src/*"] } };
   const host = ts.createCompilerHost(options);
@@ -498,24 +565,27 @@ test("withPageFlagGate page classification accepts only a direct default-export 
     ? ts.createSourceFile(file, virtual[resolve(file)], language, true, ts.ScriptKind.TSX) : original(file, language, onError, fresh);
   const fixtureProgram = ts.createProgram(Object.keys(virtual), options, host);
   const fixtureChecker = fixtureProgram.getTypeChecker();
-  const defaultCall = (name: string) => {
+  const exportCalls = (name: string) => {
     const file = fixtureProgram.getSourceFile(join(dir, name, "page.tsx"));
     assert.ok(file, name);
     const moduleSymbol = fixtureChecker.getSymbolAtLocation(file);
-    const symbol = moduleSymbol && fixtureChecker.getExportsOfModule(moduleSymbol).find((s) => s.name === "default");
-    assert.ok(symbol, name);
-    const declaration = (symbol.flags & ts.SymbolFlags.Alias ? fixtureChecker.getAliasedSymbol(symbol) : symbol).valueDeclaration;
-    return declaration && ts.isExportAssignment(declaration) && ts.isCallExpression(declaration.expression) ? declaration.expression : undefined;
+    assert.ok(moduleSymbol, name);
+    return fixtureChecker.getExportsOfModule(moduleSymbol).map((symbol) => {
+      const target = symbol.flags & ts.SymbolFlags.Alias ? fixtureChecker.getAliasedSymbol(symbol) : symbol;
+      const declaration = target.valueDeclaration;
+      if (symbol.name === "default") return pageFlagGateCall(symbol) ?? (declaration && ts.isExportAssignment(declaration) ? declaration.expression : undefined);
+      const init = declaration && ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined;
+      return init && ts.isCallExpression(init) ? init : undefined;
+    });
   };
-  const good = defaultCall("good");
-  assert.ok(good);
-  assert.doesNotThrow(() => assertFlagGatedPage(good, "good", fixtureChecker));
-  // An unwrapped page is not a gate call: it keeps the existing guarded() classification.
-  assert.equal(defaultCall("unwrapped"), undefined);
-  for (const name of ["aliased", "member", "withDeps", "spread", "impostor", "routeWrapper"]) {
-    const call = defaultCall(name);
-    assert.ok(call, name);
-    assert.throws(() => assertFlagGatedPage(call, name, fixtureChecker), name);
+  for (const [name, [, expected]] of Object.entries(cases)) {
+    const calls = exportCalls(name);
+    if (expected === "unwrapped") { assert.deepEqual(calls, [undefined], name); continue; }
+    for (const call of calls) {
+      assert.ok(call && ts.isCallExpression(call), name);
+      if (expected === "ok") assert.doesNotThrow(() => assertFlagGatedPage(call, name, fixtureChecker), name);
+      else assert.throws(() => assertFlagGatedPage(call, name, fixtureChecker), expected, name);
+    }
   }
 });
 

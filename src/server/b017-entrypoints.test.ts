@@ -110,17 +110,68 @@ function inspect(fn:ts.Node, expected?:string|null, resolve:(call:ts.CallExpress
   return state;
 }
 
+// Lauren 2c r1 (Codex review FAIL #1): a gate spec the scan reads must be exactly what runs at runtime. So the spec is a
+// plain object literal: only PropertyAssignment / ShorthandPropertyAssignment with an identifier key from the wrapper's
+// known keys, no spread, no computed or quoted key, no method or accessor, no duplicate key, and a shorthand must name a
+// same-file, never-reassigned binding. Anything else is a string reason, which the callers turn into a failure.
+const ROUTE_SPEC_KEYS=new Set(['flagKey','flag','tag','headers','sameOrigin']),PAGE_SPEC_KEYS=new Set(['flagKey','flag']);
+type SpecProp=ts.PropertyAssignment|ts.ShorthandPropertyAssignment;
+// Any identifier inside an assignment target (incl. `(x as T) = …`, destructuring, `x++`) counts; over-matching only rejects.
+function reassigned(file:ts.SourceFile,symbol:ts.Symbol,typeChecker:ts.TypeChecker) {
+  const targets=nodes(file).flatMap(n=>ts.isBinaryExpression(n)&&n.operatorToken.kind>=ts.SyntaxKind.FirstAssignment&&n.operatorToken.kind<=ts.SyntaxKind.LastAssignment?[n.left]
+    :(ts.isPrefixUnaryExpression(n)||ts.isPostfixUnaryExpression(n))&&[ts.SyntaxKind.PlusPlusToken,ts.SyntaxKind.MinusMinusToken].includes(n.operator)?[n.operand]:[]);
+  return targets.some(t=>nodes(t).some(id=>ts.isIdentifier(id)&&typeChecker.getSymbolAtLocation(id)===symbol));
+}
+function sameFileBinding(symbol:ts.Symbol|undefined,file:ts.SourceFile,typeChecker:ts.TypeChecker) {
+  if(symbol&&symbol.flags&ts.SymbolFlags.Alias)return undefined; // imported: not traced here
+  const d=symbol?.valueDeclaration;
+  if(!symbol||!d||d.getSourceFile()!==file||reassigned(file,symbol,typeChecker))return undefined;
+  return d;
+}
+function literalSpec(spec:ts.Expression,keys:Set<string>,typeChecker=checker):Map<string,SpecProp>|string {
+  if(!ts.isObjectLiteralExpression(spec))return 'spec is not an inline object literal';
+  const out=new Map<string,SpecProp>();
+  for(const p of spec.properties) {
+    if(ts.isSpreadAssignment(p))return `spread in spec (${p.getText()})`;
+    if(!ts.isPropertyAssignment(p)&&!ts.isShorthandPropertyAssignment(p))return `method or accessor in spec (${p.name?.getText()})`;
+    if(!ts.isIdentifier(p.name))return `computed or quoted spec key (${p.name.getText()})`;
+    const key=p.name.text;
+    if(!keys.has(key))return `unexpected spec key ${key}`;
+    if(out.has(key))return `duplicate spec key ${key}`;
+    if(ts.isShorthandPropertyAssignment(p)&&(p.objectAssignmentInitializer||!sameFileBinding(typeChecker.getShorthandAssignmentValueSymbol(p),p.getSourceFile(),typeChecker)))
+      return `shorthand spec key ${key} is not a same-file, never-reassigned binding`;
+    out.set(key,p);
+  }
+  return out;
+}
+/** An inline function, or an identifier naming a same-file, never-reassigned function declaration or const function. */
+function sameFileFn(n:ts.Node|undefined,typeChecker=checker):FnNode|undefined {
+  if(!n)return undefined;
+  if(ts.isArrowFunction(n)||ts.isFunctionExpression(n))return n;
+  const symbol=ts.isShorthandPropertyAssignment(n)?typeChecker.getShorthandAssignmentValueSymbol(n):ts.isIdentifier(n)?typeChecker.getSymbolAtLocation(n):undefined;
+  if(!symbol)return undefined;
+  const d=sameFileBinding(symbol,n.getSourceFile(),typeChecker);
+  if(d&&ts.isFunctionDeclaration(d)&&d.body)return d;
+  const constant=d&&ts.isVariableDeclaration(d)&&ts.isVariableDeclarationList(d.parent)&&(d.parent.flags&ts.NodeFlags.Const)!==0;
+  return constant&&d.initializer&&(ts.isArrowFunction(d.initializer)||ts.isFunctionExpression(d.initializer))?d.initializer:undefined;
+}
+type FnNode=ts.ArrowFunction|ts.FunctionExpression|ts.FunctionDeclaration;
+
 // Lauren 2b: `export const POST = withFlagGate(spec, handler)` (src/server/flag-gate.ts). The wrapper itself runs only
 // consent and session (bootstrap above) and the same-origin check, then spec.flag, then the handler; so the scan
 // inspects the inline flag predicate and the inline handler in that order. Anything else stays unclassifiable.
-function flagGated(node:ts.Node|undefined,name?:string):{flag:ts.ArrowFunction|ts.FunctionExpression;handler:ts.ArrowFunction|ts.FunctionExpression}|undefined {
+function flagGated(node:ts.Node|undefined,name?:string,typeChecker=checker):{flag:ts.ArrowFunction|ts.FunctionExpression;handler:ts.ArrowFunction|ts.FunctionExpression}|undefined {
   const decl=node&&ts.isVariableStatement(node)?node.declarationList.declarations.find(d=>ts.isIdentifier(d.name)&&(!name||d.name.text===name)):node&&ts.isVariableDeclaration(node)?node:undefined;
   const call=decl?.initializer;
   if(!call||!ts.isCallExpression(call)||!ts.isIdentifier(call.expression)||call.expression.text!=='withFlagGate'||call.arguments.length!==2)return undefined;
-  const target=declaration(call);
+  let symbol=typeChecker.getSymbolAtLocation(call.expression);if(symbol&&symbol.flags&ts.SymbolFlags.Alias)symbol=typeChecker.getAliasedSymbol(symbol);
+  const target=symbol?.valueDeclaration; // = declaration(call) for the main program
   if(!target||!ts.isFunctionDeclaration(target)||!target.getSourceFile().fileName.endsWith('/server/flag-gate.ts'))return undefined;
   const [spec,handler]=call.arguments;
-  const flag=ts.isObjectLiteralExpression(spec)?spec.properties.find(p=>p.name?.getText()==='flag'):undefined;
+  // Lauren 2c r1: the flag the scan reads must be the one that runs (no spread, computed or duplicate key can replace it).
+  const props=literalSpec(spec,ROUTE_SPEC_KEYS,typeChecker);
+  if(typeof props==='string')return undefined;
+  const flag=props.get('flag');
   const fnOf=(n:ts.Node|undefined)=>n&&(ts.isArrowFunction(n)||ts.isFunctionExpression(n))?n:undefined;
   const flagFn=flag&&ts.isPropertyAssignment(flag)?fnOf(flag.initializer):undefined,handlerFn=fnOf(handler);
   return flagFn&&handlerFn?{flag:flagFn,handler:handlerFn}:undefined;
@@ -128,33 +179,35 @@ function flagGated(node:ts.Node|undefined,name?:string):{flag:ts.ArrowFunction|t
 
 // Lauren 2c: `export default withPageFlagGate(spec, Page)` (src/server/page-flag-gate.ts). The wrapper itself runs only
 // consent and session (bootstrap above), then spec.flag, then Page; Page is usually a non-exported function, which the
-// exported-function scan below would skip. So the scan inspects the inline flag predicate and the page (inline, or a
-// function declared in the same file) in that order. A default-export call it cannot resolve this way fails the scan.
-type FnNode=ts.ArrowFunction|ts.FunctionExpression|ts.FunctionDeclaration;
-function pageFlagGated(node:ts.Node,typeChecker=checker):{flag?:FnNode;page?:FnNode}|undefined {
-  if(!ts.isExportAssignment(node)||!ts.isCallExpression(node.expression))return undefined;
+// exported-function scan below would skip. So the scan inspects the flag predicate and the page in that order. Both
+// must be inline functions or same-file, never-reassigned functions, and the spec must pass literalSpec (r1). In an
+// entry file EVERY `export default <expression>` must be such a call (none exists otherwise): anything else is a
+// failure with its reason, never a silent skip.
+function pageFlagGated(node:ts.Node,typeChecker=checker):{flag:FnNode;page:FnNode}|string|undefined {
+  if(!ts.isExportAssignment(node))return undefined;
   const call=node.expression;
-  if(!ts.isIdentifier(call.expression)||call.expression.text!=='withPageFlagGate'||call.arguments.length!==2)return {};
+  if(!ts.isCallExpression(call))return 'default export expression is not a direct withPageFlagGate(spec, Page) call';
+  if(!ts.isIdentifier(call.expression)||call.expression.text!=='withPageFlagGate')return 'default export call is not a direct withPageFlagGate call';
+  if(call.arguments.length!==2||call.arguments.some(ts.isSpreadElement))return 'withPageFlagGate takes exactly (spec, Page): no deps, no spread';
   let symbol=typeChecker.getSymbolAtLocation(call.expression);if(symbol&&symbol.flags&ts.SymbolFlags.Alias)symbol=typeChecker.getAliasedSymbol(symbol);
   const target=symbol?.valueDeclaration;
-  if(!target||!ts.isFunctionDeclaration(target)||!target.getSourceFile().fileName.endsWith('/server/page-flag-gate.ts'))return {};
-  const [spec,page]=call.arguments;
-  const fnOf=(n:ts.Node|undefined):FnNode|undefined=>{
-    if(n&&(ts.isArrowFunction(n)||ts.isFunctionExpression(n)))return n;
-    if(!n||!ts.isIdentifier(n))return undefined;
-    let ref=typeChecker.getSymbolAtLocation(n);if(ref&&ref.flags&ts.SymbolFlags.Alias)ref=typeChecker.getAliasedSymbol(ref);
-    const d=ref?.valueDeclaration;
-    if(!d||d.getSourceFile()!==node.getSourceFile())return undefined; // same file only: an imported page is not traced here
-    if(ts.isFunctionDeclaration(d)&&d.body)return d;
-    return ts.isVariableDeclaration(d)&&d.initializer&&(ts.isArrowFunction(d.initializer)||ts.isFunctionExpression(d.initializer))?d.initializer:undefined;
-  };
-  const flag=ts.isObjectLiteralExpression(spec)?spec.properties.find(p=>p.name?.getText()==='flag'):undefined;
-  return {flag:flag&&ts.isPropertyAssignment(flag)?fnOf(flag.initializer):undefined,page:fnOf(page)};
+  if(!target||!ts.isFunctionDeclaration(target)||!target.getSourceFile().fileName.endsWith('/server/page-flag-gate.ts'))return 'withPageFlagGate does not resolve to src/server/page-flag-gate.ts';
+  const [spec,pageArg]=call.arguments;
+  const props=literalSpec(spec,PAGE_SPEC_KEYS,typeChecker);
+  if(typeof props==='string')return props;
+  const flagKey=props.get('flagKey'),flagProp=props.get('flag');
+  if(!flagKey||!ts.isPropertyAssignment(flagKey)||!ts.isStringLiteral(flagKey.initializer))return 'spec.flagKey must be a string literal';
+  if(!flagProp)return 'spec.flag is missing';
+  const flag=sameFileFn(ts.isPropertyAssignment(flagProp)?flagProp.initializer:flagProp,typeChecker);
+  if(!flag)return 'spec.flag is not an inline function or a same-file, never-reassigned function';
+  const page=sameFileFn(pageArg,typeChecker);
+  if(!page)return 'Page is not an inline function or a same-file, never-reassigned function';
+  return {flag,page};
 }
 function pageGateFailures(source:ts.SourceFile,typeChecker=checker,resolve:(call:ts.CallExpression)=>ts.Node|undefined=declaration):string[] {
   const out:string[]=[],file=path.relative(process.cwd(),source.fileName);
   for(const st of source.statements) { const gated=pageFlagGated(st,typeChecker); if(!gated)continue;
-    if(!gated.flag||!gated.page){out.push(`${file}#default: default export call is not a direct withPageFlagGate(spec, Page) with an inline flag and a same-file page`);continue;}
+    if(typeof gated==='string'){out.push(`${file}#default: ${gated}`);continue;}
     const violations=[...inspect(gated.flag,undefined,resolve).violations,...inspect(gated.page,undefined,resolve).violations];
     if(violations.length)out.push(`${file}#default: ${violations.slice(0,3).join(', ')}`); }
   return out;
@@ -202,7 +255,7 @@ test('B017 every server module, TS/TSX route, page, layout and inline server act
       for(const d of st.declarationList.declarations) { const gated=flagGated(d); if(!gated)continue;
         const violations=[...inspect(gated.flag).violations,...inspect(gated.handler).violations];
         if(violations.length)failures.push(`${file}#${d.name.getText()}: ${violations.slice(0,3).join(', ')}`); }
-    // Lauren 2c: a withPageFlagGate default export's flag predicate and page body; any other default-export call fails.
+    // Lauren 2c: a withPageFlagGate default export's flag predicate and page body; any other default export fails.
     if(isEntry) failures.push(...pageGateFailures(source));
   }
   assert.deepEqual(failures,[]);
@@ -357,39 +410,105 @@ test('R4 inventory rejects late, conditional, wrong/null, indirect and callback-
 test('Lauren 2c withPageFlagGate pages: the flag predicate and the page body are scanned; unresolvable wrappers are reported',()=>{
   const dir=path.resolve('src/app/m/__b017_page_gate_fixture');
   const head=`import { withPageFlagGate } from "@/server/page-flag-gate"; import { query } from "@/server/db";`;
-  const sources:Record<string,string>={
-    pageReads:`${head} async function Page(){ await query("SELECT secret"); return null; }
-      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, Page);`,
-    inlinePageReads:`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => { await query("SELECT secret"); return null; });`,
-    flagReads:`${head} async function Page(){ return null; }
-      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => { await query("SELECT secret"); return true; } }, Page);`,
-    clean:`${head} const Page = async () => null;
-      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, Page);`,
-    aliased:`import { withPageFlagGate as gate } from "@/server/page-flag-gate";
-      export default gate({ flagKey: "brand_v3", flag: async () => true }, async () => null);`,
-    impostor:`const withPageFlagGate = (_s: unknown, p: unknown) => p;
-      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, async () => null);`,
-    importedPage:`import { withPageFlagGate } from "@/server/page-flag-gate"; import { brandV3EnabledForOrg } from "@/server/brand-v3";
-      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, brandV3EnabledForOrg);`,
-    unwrapped:`export default async function Page(){ return null; }`,
+  const leak=`async () => { await query("SELECT secret"); return true; }`;
+  // [source, expected]: 'clean', 'violation' (an unguarded DB read is reported) or a RegExp for the rejection reason.
+  const cases:Record<string,[string,'clean'|'violation'|RegExp]>={
+    pageReads:[`${head} async function Page(){ await query("SELECT secret"); return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, Page);`,'violation'],
+    inlinePageReads:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => { await query("SELECT secret"); return null; });`,'violation'],
+    flagReads:[`${head} async function Page(){ return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: ${leak} }, Page);`,'violation'],
+    sameFileFlagReads:[`${head} async function gate(){ await query("SELECT secret"); return true; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`,'violation'],
+    shorthandFlagReads:[`${head} const flag = ${leak};
+      export default withPageFlagGate({ flagKey: "brand_v3", flag }, async () => null);`,'violation'],
+    clean:[`${head} const Page = async () => null;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, Page);`,'clean'],
+    // Codex r1 BLOCKING repro: a later spread replaces the scanned `flag` at runtime.
+    specSpread:[`${head} const overrides: { flag?: () => Promise<boolean> } = { flag: ${leak} };
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, ...overrides }, async () => null);`,/^spread in spec/],
+    duplicateFlag:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, flag: ${leak} }, async () => null);`,/^duplicate spec key flag$/],
+    computedFlag:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, ["flag"]: ${leak} }, async () => null);`,/^computed or quoted spec key/],
+    quotedFlag:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", "flag": ${leak} }, async () => null);`,/^computed or quoted spec key/],
+    methodFlag:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", async flag() { await query("SELECT secret"); return true; } }, async () => null);`,/^method or accessor in spec/],
+    getterFlag:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", get flag() { return ${leak}; } }, async () => null);`,/^method or accessor in spec/],
+    extraKey:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, deps: {} }, async () => null);`,/^unexpected spec key deps$/],
+    specCast:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true } as never, async () => null);`,/^spec is not an inline object literal$/],
+    unknownKey:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t" }, async () => null);`,/^unexpected spec key tag$/],
+    specVariable:[`${head} const spec = { flagKey: "brand_v3", flag: ${leak} };
+      export default withPageFlagGate(spec, async () => null);`,/^spec is not an inline object literal$/],
+    specObjectAssign:[`${head} export default withPageFlagGate(Object.assign({ flagKey: "brand_v3", flag: () => true }, { flag: ${leak} }), async () => null);`,/^spec is not an inline object literal$/],
+    flagKeyNotLiteral:[`${head} const key = "brand_v3"; export default withPageFlagGate({ flagKey: key, flag: () => true }, async () => null);`,/^spec\.flagKey must be a string literal$/],
+    missingFlag:[`${head} export default withPageFlagGate({ flagKey: "brand_v3" }, async () => null);`,/^spec\.flag is missing$/],
+    shorthandDefault:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag = () => true }, async () => null);`,/^shorthand spec key flag is not a same-file/],
+    importedFlag:[`${head} import { brandV3EnabledForOrg } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: brandV3EnabledForOrg as never }, async () => null);`,/^spec\.flag is not an inline function/],
+    importedFlagIdentifier:[`${head} import { brandV3EnabledForOrg as flag } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag }, async () => null);`,/^shorthand spec key flag is not a same-file/],
+    reassignedFlag:[`${head} let gate = async () => true; gate = ${leak};
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`,/^spec\.flag is not an inline function/],
+    letFlag:[`${head} let gate = async () => true;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: gate }, async () => null);`,/^spec\.flag is not an inline function/],
+    pageObjectAssign:[`${head} async function Page(){ return null; }
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Object.assign(Page, { x: 1 }));`,/^Page is not an inline function/],
+    pageSpread:[`${head} const rest = [async () => { await query("SELECT secret"); return null; }] as const;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, ...rest);`,/^withPageFlagGate takes exactly \(spec, Page\)/],
+    reassignedPage:[`${head} async function Page(){ return null; } (Page as unknown) = async () => { await query("SELECT secret"); };
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, Page);`,/^Page is not an inline function/],
+    importedPage:[`import { withPageFlagGate } from "@/server/page-flag-gate"; import { brandV3EnabledForOrg } from "@/server/brand-v3";
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, brandV3EnabledForOrg);`,/^Page is not an inline function/],
+    withDeps:[`${head} export default withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null, {} as never);`,/^withPageFlagGate takes exactly \(spec, Page\)/],
+    aliased:[`import { withPageFlagGate as gate } from "@/server/page-flag-gate";
+      export default gate({ flagKey: "brand_v3", flag: async () => true }, async () => null);`,/^default export call is not a direct withPageFlagGate call$/],
+    impostor:[`const withPageFlagGate = (_s: unknown, p: unknown) => p;
+      export default withPageFlagGate({ flagKey: "brand_v3", flag: async () => true }, async () => null);`,/^withPageFlagGate does not resolve/],
+    parenthesized:[`${head} export default (withPageFlagGate({ flagKey: "brand_v3", flag: () => true }, async () => null));`,/^default export expression is not a direct/],
+    defaultArrow:[`${head} export default async () => { await query("SELECT secret"); return null; };`,/^default export expression is not a direct/],
+    unwrapped:[`export default async function Page(){ return null; }`,'clean'],
   };
-  const virtual=Object.fromEntries(Object.entries(sources).map(([name,code])=>[path.join(dir,name,'page.tsx'),code]));
+  const virtual=Object.fromEntries(Object.entries(cases).map(([name,[code]])=>[path.join(dir,name,'page.tsx'),code]));
   const host=ts.createCompilerHost(options),original=host.getSourceFile.bind(host);
   host.getSourceFile=(file,language,onError,fresh)=>virtual[path.resolve(file)]!==undefined
     ?ts.createSourceFile(file,virtual[path.resolve(file)],language,true,ts.ScriptKind.TSX):original(file,language,onError,fresh);
   const fixtures=ts.createProgram([...files,...Object.keys(virtual)],options,host),fixtureChecker=fixtures.getTypeChecker();
   const resolveIn=(call:ts.CallExpression)=>{let s=fixtureChecker.getSymbolAtLocation(call.expression);if(s&&s.flags&ts.SymbolFlags.Alias)s=fixtureChecker.getAliasedSymbol(s);return s?.valueDeclaration;};
-  const scan=(name:string)=>{
+  for(const [name,[,expected]] of Object.entries(cases)) {
     const source=fixtures.getSourceFile(path.join(dir,name,'page.tsx'));assert.ok(source,name);
     const out=pageGateFailures(source,fixtureChecker,resolveIn);
-    assert.ok(out.length<=1,name);
-    return !out.length?(source.statements.some(ts.isExportAssignment)?'clean':'not a gate call')
-      :/not a direct withPageFlagGate/.test(out[0])?'unresolvable':/query@/.test(out[0])?'violation':out[0];
+    if(expected==='clean'){assert.deepEqual(out,[],name);continue;}
+    assert.equal(out.length,1,`${name}: ${out.join(' | ')}`);
+    const reason=out[0].replace(/^[^#]*#default: /,'');
+    if(expected==='violation')assert.match(reason,/query@/,name);
+    else assert.match(reason,expected,name);
+  }
+});
+
+test('Lauren 2c r1: a withFlagGate route spec with a spread, computed, duplicate or unknown key is not classified as gated',()=>{
+  const dir=path.resolve('src/app/api/__b017_route_gate_fixture');
+  const head=`import { withFlagGate } from "@/server/flag-gate"; import { query } from "@/server/db"; const headers = {};`;
+  const leak=`async () => { await query("SELECT secret"); return true; }`;
+  const cases:Record<string,[string,boolean]>={
+    good:[`${head} export const POST = withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t", headers, sameOrigin: true }, async () => new Response(null));`,true],
+    spread:[`${head} const o = { flag: ${leak} }; export const POST = withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t", ...o }, async () => new Response(null));`,false],
+    duplicate:[`${head} export const POST = withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t", flag: ${leak} }, async () => new Response(null));`,false],
+    computed:[`${head} export const POST = withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t", ["flag"]: ${leak} }, async () => new Response(null));`,false],
+    unknown:[`${head} export const POST = withFlagGate({ flagKey: "brand_v3", flag: () => true, tag: "t", extra: 1 }, async () => new Response(null));`,false],
   };
-  assert.deepEqual(Object.fromEntries(Object.keys(sources).map(name=>[name,scan(name)])),{
-    pageReads:'violation',inlinePageReads:'violation',flagReads:'violation',clean:'clean',
-    aliased:'unresolvable',impostor:'unresolvable',importedPage:'unresolvable',unwrapped:'not a gate call',
-  });
+  const virtual=Object.fromEntries(Object.entries(cases).map(([name,[code]])=>[path.join(dir,name,'route.ts'),code]));
+  const host=ts.createCompilerHost(options),original=host.getSourceFile.bind(host);
+  host.getSourceFile=(file,language,onError,fresh)=>virtual[path.resolve(file)]!==undefined
+    ?ts.createSourceFile(file,virtual[path.resolve(file)],language,true):original(file,language,onError,fresh);
+  const fixtures=ts.createProgram([...files,...Object.keys(virtual)],options,host),fixtureChecker=fixtures.getTypeChecker();
+  for(const [name,[,gated]] of Object.entries(cases)) {
+    const source=fixtures.getSourceFile(path.join(dir,name,'route.ts'));assert.ok(source,name);
+    const post=source.statements.filter(ts.isVariableStatement).at(-1);
+    assert.equal(!!flagGated(post,'POST',fixtureChecker),gated,name);
+  }
+  // The real routes keep classifying as gated.
+  for(const f of ['owner-view','team-security','notify-settings','maint-unit-assign']) {
+    const source=program.getSourceFile(`src/app/api/${f}/route.ts`)!;
+    assert.ok(source.statements.some(st=>flagGated(st,'POST')),f);
+  }
 });
 
 test('R4 reviewed dynamic dispatcher and photo callback retain ordering and semantic keys',()=>{
