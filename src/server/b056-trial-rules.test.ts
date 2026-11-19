@@ -91,3 +91,23 @@ test("OQ-B056-13 zero outbound (static): B-056 modules import no mail, LINE, rem
     assert.doesNotMatch(source, /\bfetch\s*\(/, file);
   }
 });
+
+test("B-123: plan_tier gains 'standard' additively (no backfill, no flag, no grant change)", () => {
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20261118120000_b123_plan_tier_standard.sql", import.meta.url),
+    "utf8",
+  );
+  const sql = migration
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "" && !line.trimStart().startsWith("--"))
+    .join("\n");
+
+  assert.equal(
+    sql.replace(/\s+/g, " ").trim(),
+    "ALTER TYPE public.plan_tier ADD VALUE IF NOT EXISTS 'standard';",
+  );
+  assert.doesNotMatch(
+    sql,
+    /\b(?:UPDATE|INSERT|DELETE|DROP|GRANT|REVOKE|POLICY|platform_settings|feature_flags)\b/i,
+  );
+});
