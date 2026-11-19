@@ -1,41 +1,63 @@
 // Lauren item 6: `npm run gate:pr` runs typecheck → lint → check-pr-rules → test:unit, in that order, and stops at
-// the first failure with a nonzero exit. Dry-run hooks keep the test fast and environment-independent.
+// the first failure with a nonzero exit. The script has no skip/dry-run switch; these tests put stub `npm` and
+// `node` executables first on PATH that record each call and fail on demand, so the REAL failure handling runs.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-const run = (env: Record<string, string>, args: string[] = []) =>
-  spawnSync("bash", ["scripts/gate-pr.sh", ...args], { encoding: "utf8", env: { ...process.env, GATE_PR_DRY_RUN: "1", PR_BODY_FILE: "", ...env } });
-const steps = (out: string) => [...out.matchAll(/^== gate:pr \[([^\]]+)\]/gm)].map(m => m[1]);
+function stubs() {
+  const dir = mkdtempSync(join(tmpdir(), "gate-pr-stub-"));
+  const log = join(dir, "calls.log");
+  const stub = (name: string) => {
+    const file = join(dir, name);
+    // Records "<name> <args>" and exits 1 when the call matches $STUB_FAIL (a substring), else 0.
+    writeFileSync(file, `#!/usr/bin/env bash\nline="${name} $*"\nprintf '%s\\n' "$line" >> "${log}"\nif [ -n "\${STUB_FAIL:-}" ] && [[ "$line" == *"$STUB_FAIL"* ]]; then exit 1; fi\nexit 0\n`);
+    chmodSync(file, 0o755);
+  };
+  stub("npm"); stub("node");
+  const body = join(dir, "body.md"); writeFileSync(body, "body\n");
+  return { dir, log, body };
+}
+function run(fail = "", args: string[] = []) {
+  const s = stubs();
+  const r = spawnSync("bash", ["scripts/gate-pr.sh", ...args], { encoding: "utf8",
+    env: { ...process.env, PATH: `${s.dir}:${process.env.PATH}`, PR_BODY_FILE: s.body, STUB_FAIL: fail } });
+  let calls: string[] = [];
+  try { calls = readFileSync(s.log, "utf8").trim().split("\n").filter(Boolean); } catch { calls = []; }
+  return { ...r, calls, body: s.body };
+}
+const ALL = ["npm run -s typecheck", "npm run -s lint", "node scripts/check-pr-rules.mjs", "npm run -s test:unit"];
 
-test("gate:pr runs the four checks in order and passes when all pass", () => {
-  const r = run({});
+test("gate:pr runs the four real commands in order and passes when all pass", () => {
+  const r = run();
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.deepEqual(steps(r.stdout), ["typecheck", "lint", "check-pr-rules", "test:unit"]);
+  assert.equal(r.calls.length, 4, r.calls.join("|"));
+  r.calls.forEach((call, i) => assert.ok(call.startsWith(ALL[i]), `${i}: ${call}`));
   assert.match(r.stdout, /gate:pr PASS/);
 });
 
-test("gate:pr stops at the first failing step with a nonzero exit", () => {
-  for (const [failAt, ran] of [["typecheck", ["typecheck"]], ["lint", ["typecheck", "lint"]],
-    ["check-pr-rules", ["typecheck", "lint", "check-pr-rules"]], ["test:unit", ["typecheck", "lint", "check-pr-rules", "test:unit"]]] as const) {
-    const r = run({ GATE_PR_FAIL_AT: failAt });
-    assert.equal(r.status, 1, failAt);
-    assert.deepEqual(steps(r.stdout), ran, failAt);
-    assert.match(r.stdout, new RegExp(`gate:pr FAIL at ${failAt.replace(":", "\\:")}`));
+test("a failing command stops gate:pr there with exit 1, runs nothing after it, and never prints PASS", () => {
+  for (let i = 0; i < ALL.length; i++) {
+    const r = run(ALL[i]);
+    assert.equal(r.status, 1, ALL[i]);
+    assert.equal(r.calls.length, i + 1, `${ALL[i]}: ${r.calls.join("|")}`);
+    assert.match(r.stdout, /gate:pr FAIL at /);
     assert.doesNotMatch(r.stdout, /gate:pr PASS/);
   }
 });
 
-test("gate:pr passes --base and the PR body to check-pr-rules with --r2-only", () => {
-  const r = run({}, ["--base", "origin/feature", "--pr-body-file", "/tmp/body.md"]);
+test("check-pr-rules gets --base, --head HEAD, --r2-only and the PR body; an unknown argument exits 2", () => {
+  const r = run("", ["--base", "origin/feature"]);
   assert.equal(r.status, 0);
-  const line = r.stdout.split("\n").find(l => l.includes("[check-pr-rules]")) ?? "";
-  assert.match(line, /node scripts\/check-pr-rules\.mjs --base origin\/feature --head HEAD --r2-only --pr-body-file \/tmp\/body\.md$/);
-  assert.equal(run({}, ["--bogus"]).status, 2);
+  assert.equal(r.calls[2], `node scripts/check-pr-rules.mjs --base origin/feature --head HEAD --r2-only --pr-body-file ${r.body}`);
+  assert.equal(run("", ["--bogus"]).status, 2);
 });
 
-test("package.json exposes gate:pr as the script", () => {
-  const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-  assert.equal(pkg.scripts["gate:pr"], "bash scripts/gate-pr.sh");
+test("the script has no skip or dry-run switch, and package.json exposes it as gate:pr", () => {
+  const src = readFileSync("scripts/gate-pr.sh", "utf8");
+  assert.doesNotMatch(src, /DRY_RUN|FAIL_AT|SKIP/);
+  assert.equal(JSON.parse(readFileSync("package.json", "utf8")).scripts["gate:pr"], "bash scripts/gate-pr.sh");
 });
