@@ -241,15 +241,20 @@ test("brand_v3 + item-flag endpoints: brand_v3 ON with the item flag OFF or its 
 // v3 modules are never touched (no v3 data read), the reads are exactly origin/main's plus the one flag lookup, nothing
 // is written or audited, and the flag is read after consent and session (for the page: consent → session → flag first).
 const TENANT_BASE = "a0aa278e3e92732b066fdbd74bd8f7430d76df0b"; // origin/main before the B-090 slice 1 re-land
+const TICKET = "00000000-0000-4000-8000-000000000003"; // a repair on the tenant's lease (B-090 slice 3 cases)
 const tenantCases = [
   { path: "src/app/t/page.tsx", kind: "page", at: ["/t"] },
   { path: "src/app/t/layout.tsx", kind: "layout", at: ["/t", "/t/pay", "/t/id"] },
   // B-090 slice 2 (RT-PAY / RT-REPORT): 繳款, its 回報已繳 form (?report=1) and a bounced send (?report=1&error=…).
   { path: "src/app/t/pay/page.tsx", kind: "page", at: ["/t/pay", "/t/pay?report=1", "/t/pay?report=1&error=errors.generic", "/t/pay?done=1"] },
+  // B-090 slice 3 (RT-REPAIR / RT-LEASE, read parts): 報修 list, one repair's progress (and its cancel step), 我的租約.
+  { path: "src/app/t/repair/page.tsx", kind: "page", at: ["/t/repair", `/t/repair?id=${TICKET}`, `/t/repair?id=${TICKET}&cancel=1`, "/t/repair?done=1"] },
+  { path: "src/app/t/lease/page.tsx", kind: "page", at: ["/t/lease"] },
 ] as const;
 const tenantV3Modules = ["@/components/v3/tenant/home-route", "@/components/v3/tenant/shell", "@/server/b090-tenant-shell",
   "@/server/b090-tenant-home", "@/server/b090-tenant-home-reader",
-  "@/components/v3/tenant/pay-route", "@/server/b090-tenant-pay", "@/server/b090-tenant-pay-reader"];
+  "@/components/v3/tenant/pay-route", "@/server/b090-tenant-pay", "@/server/b090-tenant-pay-reader",
+  "@/components/v3/tenant/repair-route", "@/components/v3/tenant/lease-route", "@/server/b090-tenant-lease-repair"];
 // /t/pay reads its lease through this helper; each side runs its own revision of it, so the helper's reads are counted.
 const TENANT_LEASE_LIB = "src/lib/tenant-lease.ts";
 
@@ -272,7 +277,19 @@ async function runTenantEntry(source: string, kind: "page" | "layout", at: strin
     "@/server/brand-v2": { brandV2EnabledForOrg: read("brand_v2", true) },
     "@/server/line/tenant-entry": { tenantLineEntryEnabled: read("line", true) },
     "@/server/queries": { tenantLeases: read("leases", [lease]), tenantLeaseMoney: read("lease_money", { lease: { rent: "1", deposit: "2", currency: "TWD", status: "active", place: "P 2F" }, dueMinor: 1, paidMinor: 0, currency: "TWD",
-      rentLines: [{ amount: "1" }], depositLines: [], utilityLines: [], otherLines: [] }) },
+      rentLines: [{ amount: "1" }], depositLines: [], utilityLines: [], otherLines: [] }),
+      tenantRepairs: read("repairs", [{ id: TICKET, number: "1", title: "Leak", status: "open", category: "plumbing", created_at: "2026-11-15" }]),
+      ticketDetail: read("ticket_detail", { ticket: { id: TICKET, number: "1", title: "Leak", description: null, status: "open", category: "plumbing" }, comments: [], photos: [], hiddenPhotoCount: 0 }),
+      tenantSignedLeasePdfs: read("signed_pdfs", [{ id: "pdf1", current: true, created_at: "2026-05-01T00:00:00Z" }]) },
+    "@/server/upload-recovery": { ticketPhotoRecovery: read("photo_recovery", null) },
+    "@/server/repair-rules": { isUuid: (v: string) => /^[0-9a-f-]{36}$/.test(v) },
+    "@/lib/repair-labels": { REPAIR_CAT_KEY: { plumbing: "i_cat_plumbing" } },
+    "@/components/repair-thread": { RepairThread: stub("repair-thread") },
+    "@/components/v3/illustrations": { Illustration: stub("illustration") },
+    "@/components/pdf-download-button": { PdfDownloadButton: stub("pdf") },
+    "@/components/first-period-summary": { FirstPeriodSummary: stub("first-period") },
+    "@/i18n/tenant-signed-pdf": { tenantSignedPdfStrings: () => ({ title: "x", notice: "x", current: "x", historical: "x", uploaded: "x", view: "x", download: "x" }) },
+    "@/server/paper-lease-history-time": { signedPdfUploadedAt: () => ({ label: "x" }) },
     "@/server/tenant-payment-history": { tenantPaymentHistory: read("payment_history", { state: "off" }) },
     "@/server/id-docs": { loadLeaseIdCheck: read("id_check", { ready: true }) },
     "@/server/id-sign-gate": { identityRequiredForSigningFor: read("id_required", false) },
@@ -284,15 +301,15 @@ async function runTenantEntry(source: string, kind: "page" | "layout", at: strin
     "@/components/tenant-payment-history": { TenantBillSummary: stub("bill-summary"), TenantPaymentHistory: stub("history") },
     "@/components/brand": { BrandImage: () => null },
     // The report action is passed to the v3 form only: touching it at all counts as a v3 read.
-    "@/server/actions": recordingDependency("v3:@/server/actions", calls, { actionPickLease: "/pick" }),
+    "@/server/actions": recordingDependency("v3:@/server/actions", calls, { actionPickLease: "/pick", actionTicket: "/ticket", actionCancelRepair: "/cancel" }),
     "@/components/v3/wait-mark": { WaitMark: stub("wait-mark") },
     "@/components/dialogs": { PayDialog: stub("pay-dialog") },
-    "@/components/ui": { ErrorBanner: stub("error-banner"), chargeKey: (k: string) => k },
+    "@/components/ui": { ErrorBanner: stub("error-banner"), chargeKey: (k: string) => k, statusClass: (k: string) => k, statusKey: (k: string) => k },
     "@/components/tenant-payee": { TenantPayee: stub("payee") },
     "@/server/pay-note": { tenantPayeeVisible: () => true, unsignedRentNoteKey: () => null },
-    "@/server/format": { moneyLabel: () => "NT$1", electricityMonthLabel: () => "m", signedMoney: () => "NT$1" },
+    "@/server/format": { moneyLabel: () => "NT$1", electricityMonthLabel: () => "m", signedMoney: () => "NT$1", formatDate: () => "d" },
     "@/server/sandbox-data": { displaySampleName: (x: string) => x },
-    "@/i18n": { makeT: () => (key: string) => key },
+    "@/i18n": { makeT: () => (key: string) => key, dictionary: () => ({}) },
     "@/i18n/lanes/reminders": { reminderCopy: () => ({ tenantTitle: "x" }) },
     "@/i18n/tenant-payment-history": { tenantPaymentHistoryCopy: () => ({ unavailable: "x" }) },
     "@/i18n/line-tenant": { lineTenantCopy: () => ({ manage: "x" }) },
