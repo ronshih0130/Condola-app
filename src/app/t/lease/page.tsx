@@ -11,15 +11,24 @@ import { tenantLeaseMoney, tenantSignedLeasePdfs } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { tenantSignedPdfStrings } from "@/i18n/tenant-signed-pdf";
 import { signedPdfUploadedAt } from "@/server/paper-lease-history-time";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { getSession } from "@/server/session";
+import { TenantLeaseV3Route } from "@/components/v3/tenant/lease-route";
 
 export const dynamic = "force-dynamic";
 
 export default async function TenantLeasePage() {
   await requireCurrentConsent(undefined, "page");
-  const { session, lease } = await selectedLease();
+  // B-090 (OQ-107, REVIEW-CHECKLIST 13): the flag is read right after consent and session, before any data read.
+  const current = await getSession();
+  const v3 = await brandV3EnabledForOrg(current.orgId);
+  const { session, lease } = await selectedLease(current);
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
   if (!lease) return <p>{t("i_empty")}</p>;
+  // B-090 slice 3, RT-LEASE read part (TEN-57-AC1): under brand_v3 the 我的租約 terms card, with today's ID check, PDF,
+  // signed copies, first-period summary and firm line kept. brand_v3 OFF: the page below, unchanged.
+  if (v3) return <TenantLeaseV3Route session={session} leaseId={lease.lease_id} />;
   const [money, idCheck, signedPdfs] = await Promise.all([
     tenantLeaseMoney(session, lease.lease_id),
     loadLeaseIdCheck(session, lease.lease_id),
