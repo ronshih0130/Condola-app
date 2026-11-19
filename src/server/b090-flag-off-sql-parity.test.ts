@@ -267,3 +267,166 @@ test("PR-043 / OQ-107 (B-090 slice 2): brand_v3 OFF /t/pay makes origin/main's r
     assert.equal(readFileSync(file, "utf8"), show(PAY_BASE, file), `${file} is origin/main's`);
   }
 });
+
+// ---------- B-090 slice 3: the brand_v3 OFF /t/repair and /t/lease pages make origin/main's reads, with its arguments ----------
+// Same method as /t/pay above: each page and its lease helper run against origin/main's copies with every reader and
+// component recorded with its arguments. The only difference allowed is the one flag lookup, now right after consent and
+// session. Slice 3 changes no shared reader: every reader these pages call (tenantLeases, tenantRepairs, ticketDetail,
+// ticketPhotoRecovery, tenantLeaseMoney, tenantSignedLeasePdfs, loadLeaseIdCheck, identityRequiredForSigningFor) sits in
+// a file that is byte-identical to origin/main's, so its SQL text and parameters are origin/main's.
+const S3_BASE = "df2478e433b09a5c705acd0169111421e47ed32e"; // origin/main before B-090 slice 3 (re-land), after #254
+const S3_PAGES = { repair: "src/app/t/repair/page.tsx", lease: "src/app/t/lease/page.tsx" } as const;
+const s3V3Modules = ["@/components/v3/tenant/repair-route", "@/components/v3/tenant/lease-route", "@/server/b090-tenant-lease-repair"];
+const T_OPEN = "00000000-0000-4000-8000-0000000000e1", T_ASSIGNED = "00000000-0000-4000-8000-0000000000e2", T_CANCELLED = "00000000-0000-4000-8000-0000000000e3";
+const T_OTHER = "00000000-0000-4000-8000-0000000000e9";
+type S3Case = { leases: unknown[]; leaseId: string | null; repairs?: { id: string; number: string; title: string; status: string; category: string }[];
+  money?: unknown; idReady?: boolean; idRequired?: boolean; signed?: unknown[] };
+
+async function runS3Page(pageSource: string, libSource: string, c: S3Case, params: Record<string, unknown>) {
+  const log: unknown[][] = [];
+  const React = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const jsx = (source: string, mocks: (name: string) => unknown) => {
+    const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+    const exports: Record<string, unknown> = {};
+    new Function("require", "exports", code)(mocks, exports);
+    return exports;
+  };
+  const session = { orgId: ORG, userId: USER, kind: "tenant", role: null, locale: "zh-TW", calendar: "gregorian", name: "Synthetic", leaseId: c.leaseId };
+  const record = (name: string, value: unknown) => async (...args: unknown[]) => { log.push([name, ...args]); return value; };
+  const props = (p: Record<string, unknown>) => JSON.stringify(p, (_k, v) => typeof v === "function" ? "fn" : v);
+  const component = (name: string) => function Recorded(p: Record<string, unknown>) {
+    log.push([`render:${name}`, props(p)]);
+    return React.createElement("i", { "data-stub": name });
+  };
+  const recording = (name: string): unknown => new Proxy(() => undefined, { get(_t, key) { log.push([`v3:${name}.${String(key)}`]); return recording(`${name}.${String(key)}`); }, apply() { log.push([`v3:${name}()`]); return undefined; } });
+  const repairs = c.repairs ?? [];
+  const detail = (id: string) => {
+    const r = repairs.find(x => x.id === id) ?? (id === T_OTHER ? { id, number: "9", title: "Other", status: "open", category: "plumbing" } : null);
+    return r ? { ticket: { ...r, description: "Synthetic description", vendor_name: "Synthetic vendor", estimated_cost: "450000" },
+      comments: [{ id: "c1", body: "Reply", internal: false }], photos: [{ id: "f1", name: "p.jpg", internal: false }], hiddenPhotoCount: 0 } : null;
+  };
+  const shared: Record<string, unknown> = {
+    "@/server/session": { getSession: record("session", session) },
+    "@/server/queries": {
+      tenantLeases: record("leases", c.leases),
+      tenantRepairs: record("repairs", repairs),
+      ticketDetail: async (...args: unknown[]) => { log.push(["ticket_detail", ...args]); return detail(String(args[1])); },
+      tenantLeaseMoney: record("lease_money", c.money ?? null),
+      tenantSignedLeasePdfs: record("signed_pdfs", c.signed ?? []),
+    },
+    "next/navigation": { redirect: (to: string) => { log.push(["redirect", to]); throw new Error(`REDIRECT:${to}`); } },
+    "@/server/types": {},
+  };
+  const lib = jsx(libSource, name => { if (name in shared) return shared[name]; throw new Error(`Unmocked lib dependency: ${name}`); });
+  const mocks: Record<string, unknown> = {
+    ...shared,
+    "@/lib/tenant-lease": lib,
+    "@/server/brand-v3": { brandV3EnabledForOrg: async (orgId: string) => { log.push(["flag", orgId]); return false; } },
+    "@/server/consent-gate": { requireCurrentConsent: record("consent", undefined) },
+    "@/i18n": { makeT: () => (key: string, vars?: unknown) => vars ? `${key}:${JSON.stringify(vars)}` : key, dictionary: () => ({ dict: true }) },
+    "next/link": { __esModule: true, default: ({ href, children, ...rest }: { href: string; children: unknown }) => React.createElement("a", { href, ...rest }, children as never) },
+    "@/components/v3/illustrations": { Illustration: component("illustration") },
+    "@/components/repair-thread": { RepairThread: component("repair-thread") },
+    "@/components/ui": { ErrorBanner: component("error-banner"), statusClass: (s: string) => `st-${s}`, statusKey: (s: string) => `status_${s}` },
+    "@/lib/repair-labels": { REPAIR_CAT_KEY: { plumbing: "i_cat_plumbing" } },
+    "@/server/actions": { actionCancelRepair: "/cancel", actionTicket: "/ticket" },
+    "@/server/repair-rules": repairRules,
+    "@/server/upload-recovery": { ticketPhotoRecovery: record("photo_recovery", { recover: true }) },
+    "@/components/pdf-download-button": { PdfDownloadButton: component("pdf") },
+    "@/components/first-period-summary": { FirstPeriodSummary: component("first-period") },
+    "@/server/format": { formatDate: (d: string, l: string, cal: string) => `D(${d},${l},${cal})`, moneyLabel: (m: unknown, cur: string) => `${cur}:${m}` },
+    "@/server/id-docs": { loadLeaseIdCheck: record("id_check", { ready: c.idReady ?? true }) },
+    "@/server/id-sign-gate": { identityRequiredForSigningFor: record("id_required", c.idRequired ?? true) },
+    "@/server/sandbox-data": { displaySampleName: (x: string) => `«${x}»` },
+    "@/i18n/tenant-signed-pdf": { tenantSignedPdfStrings: () => ({ title: "Signed", notice: "n", current: "cur", historical: "old", uploaded: "up", view: "view", download: "dl" }) },
+    "@/server/paper-lease-history-time": { signedPdfUploadedAt: (v: string) => ({ label: `T(${v})` }) },
+    "react": React, "react/jsx-runtime": await import("react/jsx-runtime"),
+  };
+  const page = jsx(pageSource, name => {
+    if (name in mocks) return mocks[name];
+    if (s3V3Modules.includes(name)) return recording(name);
+    throw new Error(`Unmocked page dependency: ${name}`);
+  });
+  log.length = 0; // module loading is not a read
+  let html: string;
+  try {
+    html = renderToStaticMarkup(await (page.default as (p: unknown) => Promise<React.ReactElement>)({ searchParams: Promise.resolve(params) }));
+  } catch (error) { html = `THROWN:${(error as Error).message}`; }
+  return { log, html };
+}
+
+const s3Lease = { lease_id: LEASE, firm_name: "Firm", property_name: "P", unit_label: "2F", room_label: null };
+const s3Other = { ...s3Lease, lease_id: "00000000-0000-4000-8000-0000000000b2" };
+const s3Repairs = [
+  { id: T_OPEN, number: "1", title: "Leak", status: "open", category: "plumbing" },
+  { id: T_ASSIGNED, number: "2", title: "AC", status: "assigned", category: "hvac" },
+  { id: T_CANCELLED, number: "3", title: "Bulb", status: "cancelled", category: "plumbing" },
+];
+const s3Money = { currency: "TWD", lease: { place: "P 2F", start_date: "2026-05-01", end_date: "2027-04-30", rent: "1850000", deposit: "3700000", due_day: 5, firm: "Firm", status: "active", first_period_basis: null } };
+const s3Signed = [{ id: "pdf1", current: true, created_at: "2026-05-01T00:00:00Z" }, { id: "pdf0", current: false, created_at: "2026-04-01T00:00:00Z" }];
+
+async function compareS3(page: string, base: string, cases: S3Case[], paramsList: Record<string, unknown>[]) {
+  const basePage = show(base, page), baseLib = show(base, LEASE_LIB);
+  const headPage = readFileSync(page, "utf8"), headLib = readFileSync(LEASE_LIB, "utf8");
+  let compared = 0, readsSeen = 0;
+  for (const c of cases) for (const params of paramsList) {
+    const label = `${page} ${JSON.stringify([c.leases.length, c.leaseId, c.repairs?.length, Boolean(c.money), c.idReady, c.signed?.length, params])}`;
+    const before = await runS3Page(basePage, baseLib, c, params);
+    const head = await runS3Page(headPage, headLib, c, params);
+    assert.equal(head.html, before.html, `${label}: markup`);
+    assert.deepEqual(head.log.filter(([name]) => name !== "flag"), before.log.filter(([name]) => name !== "flag"), `${label}: reads, components and their arguments`);
+    assert.deepEqual(head.log.filter(([name]) => name === "flag"), [["flag", ORG]], `${label}: exactly one flag lookup`);
+    assert.ok(!head.log.some(([name]) => String(name).startsWith("v3:")), `${label}: no v3 module touched`);
+    assert.deepEqual(head.log.slice(0, 3).map(([name]) => name), ["consent", "session", "flag"], `${label}: consent → session → flag before any data read`);
+    assert.doesNotMatch(head.html, /v3-tenant-(repair|lease)|t-rp-|t-ls-/, label);
+    readsSeen += head.log.filter(([name]) => !["consent", "session", "flag", "leases"].includes(String(name)) && !String(name).startsWith("render:")).length;
+    compared += 1;
+  }
+  assert.equal(compared, cases.length * paramsList.length);
+  assert.ok(readsSeen > 0, "the comparison exercised the page's own readers (not only empty pages)");
+}
+
+test("PR-043 / OQ-107 (B-090 slice 3): brand_v3 OFF /t/repair makes origin/main's reads with origin/main's arguments", async () => {
+  const cases: S3Case[] = [
+    { leases: [], leaseId: null },
+    { leases: [s3Lease, s3Other], leaseId: null },
+    { leases: [s3Lease, s3Other], leaseId: s3Other.lease_id, repairs: s3Repairs },
+    { leases: [s3Lease], leaseId: null, repairs: [] },
+    { leases: [s3Lease], leaseId: null, repairs: s3Repairs },
+  ];
+  const paramsList = [{}, { error: "errors.generic" }, { done: "1" }, { done: "1", id: T_OPEN }, { id: T_OPEN }, { id: T_OPEN, cancel: "1" }, { id: T_ASSIGNED, cancel: "1" },
+    { id: T_ASSIGNED }, { id: T_CANCELLED, cancelled: "1" }, { id: T_OTHER }, { id: "not-a-uuid" }];
+  await compareS3(S3_PAGES.repair, S3_BASE, cases, paramsList);
+});
+
+test("PR-043 / OQ-107 (B-090 slice 3): brand_v3 OFF /t/lease makes origin/main's reads with origin/main's arguments", async () => {
+  const cases: S3Case[] = [
+    { leases: [], leaseId: null },
+    { leases: [s3Lease, s3Other], leaseId: null },
+    { leases: [s3Lease], leaseId: null, money: null },
+    { leases: [s3Lease], leaseId: null, money: s3Money, idReady: true, signed: [] },
+    { leases: [s3Lease], leaseId: null, money: s3Money, idReady: false, idRequired: true, signed: s3Signed },
+    { leases: [s3Lease], leaseId: null, money: s3Money, idReady: false, idRequired: false, signed: s3Signed },
+    { leases: [s3Lease, s3Other], leaseId: s3Other.lease_id, money: s3Money, signed: s3Signed },
+  ];
+  await compareS3(S3_PAGES.lease, S3_BASE, cases, [{}]);
+});
+
+test("PR-043 (B-090 slice 3): no shared reader changes; only the v3 報修 / 我的租約 routes call the slice-3 view", () => {
+  // Every file whose code the OFF pages run (readers, helpers, components) is origin/main's, byte for byte.
+  for (const file of ["src/server/queries.ts", "src/server/upload-recovery.ts", "src/server/id-docs.ts", "src/server/id-sign-gate.ts", "src/server/repair-rules.ts",
+    "src/lib/tenant-lease.ts", "src/lib/repair-labels.ts", "src/components/repair-thread.tsx", "src/components/ui.tsx", "src/components/pdf-download-button.tsx",
+    "src/components/first-period-summary.tsx", "src/components/v3/illustrations.tsx", "src/server/brand-v3.ts", "src/server/session.ts", "src/server/consent-gate.ts",
+    "src/server/actions.ts", "src/server/format.ts", "src/server/sandbox-data.ts", "src/i18n/tenant-signed-pdf.ts", "src/server/paper-lease-history-time.ts"]) {
+    assert.equal(readFileSync(file, "utf8"), show(S3_BASE, file), `${file} is origin/main's`);
+  }
+  const callers = (pattern: string) => grep(pattern).filter(file => !/\.test\.tsx?$/.test(file));
+  assert.deepEqual(callers("tenantRepairView\\("), ["src/components/v3/tenant/repair-route.tsx", "src/server/b090-tenant-lease-repair.ts"]);
+  assert.deepEqual(callers("tenantLeaseView\\("), ["src/components/v3/tenant/lease-route.tsx", "src/server/b090-tenant-lease-repair.ts"]);
+  assert.deepEqual(callers("TenantRepairV3Route"), ["src/app/t/repair/page.tsx", "src/components/v3/tenant/repair-route.tsx"]);
+  assert.deepEqual(callers("TenantLeaseV3Route"), ["src/app/t/lease/page.tsx", "src/components/v3/tenant/lease-route.tsx"]);
+  // The slice-3 view issues no SQL of its own and writes nothing: it only calls the existing readers.
+  const view = readFileSync("src/server/b090-tenant-lease-repair.ts", "utf8");
+  assert.doesNotMatch(view, /from "\.\/db"|\bquery\(|\btx\(|SELECT|INSERT|UPDATE|DELETE|writeAudit/);
+});
