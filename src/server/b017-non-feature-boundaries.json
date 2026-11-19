@@ -355,6 +355,18 @@
     "reason": "Internal: authority/lock helper only; all request callers must guard first and remain scanned through this body",
     "sha256": "293ba54f4b7b50c3a71831731cd21c8ff7246927e340d65063d9def1f835ec4b"
   },
+  "src/server/payment-result-events.ts#lockOwnerPaymentResultContext": {
+    "reason": "Internal: owner authority/lock helper only; all request callers must guard first and remain scanned through this body",
+    "sha256": "53510afeb470d16002b3136907c8d9ce5173668f0e418af7eb1208ead00f25a0"
+  },
+  "src/server/payment-result-events.ts#authorizeOwnerPaymentConfirm": {
+    "reason": "Internal: owner-payment authorization helper only; all request callers must guard first and remain scanned through this body",
+    "sha256": "e406d9e74d2cdc042db607d8d46bb5a27d28b00a37ea8a04e0c85d207eb55077"
+  },
+  "src/server/payment-result-events.ts#ownerElevated": {
+    "reason": "Internal: maps svcOn transaction boundaries onto a savepoint so privileged owner confirmation cannot commit surrounding authenticated work; callers must remain scanned",
+    "sha256": "ce58b62c1276ec488cc4c9f8abfe1cc94236a6436a7025ba99378c444f7cf0bf"
+  },
   "src/server/payee.ts#logPayeeIngress": {
     "reason": "Payee ingress denial audit only; no business data; operation gateways have separate guards",
     "sha256": "8867ba3fafcfaafdaa5c42ef0e5d7f674756e6c58d8924fdfdae485a63d7b5a3"
