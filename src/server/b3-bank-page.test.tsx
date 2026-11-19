@@ -114,7 +114,13 @@ test("OFF page is byte-identical after the v3 fork; existing read order and deci
   // The legacy branches after the matching check are byte-identical; only the condition line now reuses the read value.
   assert.ok(current.includes(now)); assert.equal(current.slice(current.indexOf(now) + now.length), old.slice(old.indexOf(marker) + marker.length));
   assert.match(current, /searchParams: Promise<BankSearchParams>/); assert.doesNotMatch(current, /BankPage\([^\n]*=\s*\{/);
-  for (const file of ["src/server/bank-matching.ts", "src/server/bank-matching-actions.ts"]) assert.equal(source(file), baseline(file));
+  assert.equal(source("src/server/bank-matching-actions.ts"), baseline("src/server/bank-matching-actions.ts"));
+  // B-010 fix-forward (#34 BLK-MAC-02): bank matching changes only by the flag-ON management-collector guard and the
+  // server-attributed confirmation record; with payment results OFF (resultEnabled false) both are skipped.
+  const fixForward = baseline("src/server/bank-matching.ts")
+    .replace("    if (payment.status === \"submitted\") {\n", "    // B-010 CAP-M-35: with payment results ON, bank matching (confirming or\n    // linking an already-confirmed payment) is limited to management-collected\n    // payments; owner-collected ones use the explicit proxy confirmation flow.\n    if (resultEnabled) {\n      const collector = (await client.query<{collector:string}>(`SELECT collector FROM app.b010_payment_collector($1)`,[payment.id])).rows[0];\n      if (!collector || collector.collector !== \"management\") throw fail();\n    }\n    if (payment.status === \"submitted\") {\n")
+    .replace("      await allocateAndLedger(client,payment,session.userId,invoices);\n      const source=resultEnabled", "      await allocateAndLedger(client,payment,session.userId,invoices);\n      if (resultEnabled) await client.query(`SELECT app.b010_record_confirmation($1,false,'bank_match')`,[payment.id]);\n      const source=resultEnabled");
+  assert.equal(source("src/server/bank-matching.ts"), fixForward);
   // The JSON route changes in exactly one way: it forwards a client requestId to decideBankMatch (B009 idempotency, Codex r1).
   assert.equal(source("src/app/api/bank/matching/route.ts"), baseline("src/app/api/bank/matching/route.ts").replace(
     'suggestionId:typeof body.suggestionId === "string" ? body.suggestionId : undefined});',
