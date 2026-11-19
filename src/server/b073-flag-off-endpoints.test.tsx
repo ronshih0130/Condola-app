@@ -739,7 +739,8 @@ function pageStub(name: string, calls: string[], sc: PageScenario): unknown {
       return pageStub(`${name}.${key}`, calls, sc);
     },
     apply(_target, _this, args: unknown[]) {
-      calls.push(`call:${name}(${args.length})`);
+      // Codex 2d r1 SHOULD: record the normalized arguments, not just their count, so a changed id or session is caught.
+      calls.push(`call:${name}(${JSON.stringify(args.map(arg => pageOutcome(arg)))})`);
       return sc.reads !== undefined ? sc.reads : pageStub(`${name}()`, calls, sc);
     },
   });
