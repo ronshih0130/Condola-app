@@ -119,6 +119,29 @@ test("R4 bug-fix PRs need Red-On-Base: PASS and the pasted red-on-base.mjs run",
   assert.equal(rules(body(`${GATE}\n${block("$ git log -1 --format=%s", "fix: something")}`)).status, 0);
 });
 
+// Codex r1 SHOULD 4: the evidence must come from a real runner invocation, and its last verdict must be PASS.
+test("R4 bug-fix evidence needs a real red-on-base.mjs invocation with --expect, and the last summary must be PASS", () => {
+  const withRun = run => body(`${GATE}\nRed-On-Base: PASS\n${run}`);
+  const PASS_LINE = "RED-ON-BASE: PASS base=0123456789ab head=ba9876543210 tests=1";
+  const FAIL_LINE = "RED-ON-BASE: FAIL base=0123456789ab head=ba9876543210 tests=1";
+  // reviewer reproduction: an echo that merely mentions the script name is not an invocation
+  let r = rules(withRun(block("$ echo red-on-base.mjs", "RED-ON-BASE: PASS base=0123456 head=abcdef0 tests=1")));
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /needs the pasted run of `node scripts\/red-on-base\.mjs/);
+  // reviewer reproduction: a PASS followed by a later FAIL
+  r = rules(withRun(block("$ node scripts/red-on-base.mjs --test a.test.ts --expect boom", PASS_LINE, FAIL_LINE)));
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /last RED-ON-BASE summary in Verification is not a PASS/);
+  // ... also when the later FAIL is in a separate block
+  assert.equal(rules(withRun(`${ROB_RUN}\n${block("$ node scripts/red-on-base.mjs --test a.test.ts --expect boom", FAIL_LINE)}`)).status, 1);
+  // an invocation without --expect cannot have produced a PASS
+  assert.equal(rules(withRun(block("$ node scripts/red-on-base.mjs --test a.test.ts", PASS_LINE))).status, 1);
+  // trailing junk on the summary line is not the tool's summary
+  assert.equal(rules(withRun(block("$ node scripts/red-on-base.mjs --test a.test.ts --expect boom", PASS_LINE + " (edited)"))).status, 1);
+  // a FAIL first, then a fixed PASS run, is fine; so are ./ and env-prefixed invocations
+  assert.equal(rules(withRun(block("$ node scripts/red-on-base.mjs --test a.test.ts --expect boom", FAIL_LINE, "$ CI=1 node ./scripts/red-on-base.mjs --test a.test.ts --expect boom", PASS_LINE))).status, 0);
+});
+
 test("rule selection: --r2-only and --r3-only keep their meaning, --no-r3 runs R2 + R4, selectors are exclusive", () => {
   const diff = join(dir, "empty.diff");
   writeFileSync(diff, "");

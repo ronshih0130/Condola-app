@@ -18,13 +18,18 @@ function stubs() {
     chmodSync(file, 0o755);
   };
   stub("npm"); stub("node");
+  // gh stub (not logged to calls.log): `gh pr view --json title` prints $STUB_GH_TITLE, or fails when it is unset,
+  // like gh with no PR for the branch. Any other gh call fails. Keeps the real gh out of these tests.
+  const gh = join(dir, "gh");
+  writeFileSync(gh, `#!/usr/bin/env bash\nprintf '%s\\n' "gh $*" >> "${join(dir, "gh.log")}"\nif [[ "$*" == "pr view --json title"* ]] && [ -n "\${STUB_GH_TITLE:-}" ]; then printf '%s\\n' "$STUB_GH_TITLE"; exit 0; fi\nexit 1\n`);
+  chmodSync(gh, 0o755);
   const body = join(dir, "body.md"); writeFileSync(body, "body\n");
   return { dir, log, body };
 }
 function run(fail = "", args: string[] = [], env: Record<string, string> = {}) {
   const s = stubs();
   const r = spawnSync("bash", ["scripts/gate-pr.sh", ...args], { encoding: "utf8",
-    env: { ...process.env, PATH: `${s.dir}:${process.env.PATH}`, PR_BODY_FILE: s.body, PR_TITLE: "", STUB_FAIL: fail, ...env } });
+    env: { ...process.env, PATH: `${s.dir}:${process.env.PATH}`, PR_BODY_FILE: s.body, PR_TITLE: "", STUB_FAIL: fail, STUB_GH_TITLE: "", ...env } });
   let calls: string[] = [];
   try { calls = readFileSync(s.log, "utf8").trim().split("\n").filter(Boolean); } catch { calls = []; }
   return { ...r, calls, body: s.body };
@@ -67,6 +72,16 @@ test("gate:pr runs R4 via --no-r3 (never --r2-only) and forwards the PR title fr
   const b = run("", [], { PR_TITLE: "feat: z" });
   assert.match(b.calls[2], / --pr-title feat: z$/);
   assert.doesNotMatch(run().calls[2], /--pr-title/);
+});
+
+// Codex r1 SHOULD 5: a body file must not stop gate:pr from finding the PR's own `fix:` title via gh.
+test("gate:pr resolves the PR title independently of the body: --pr-title, then $PR_TITLE, then gh pr view", () => {
+  const viaGh = run("", [], { STUB_GH_TITLE: "fix(b001): bind voided_by" });
+  assert.equal(viaGh.status, 0, viaGh.stdout + viaGh.stderr);
+  assert.equal(viaGh.calls[2], `node scripts/check-pr-rules.mjs --base origin/main --head HEAD --no-r3 --pr-body-file ${viaGh.body} --pr-title fix(b001): bind voided_by`);
+  assert.match(run("", [], { STUB_GH_TITLE: "fix: gh", PR_TITLE: "feat: env" }).calls[2], / --pr-title feat: env$/);
+  assert.match(run("", ["--pr-title", "feat: arg"], { STUB_GH_TITLE: "fix: gh", PR_TITLE: "feat: env" }).calls[2], / --pr-title feat: arg$/);
+  assert.match(run("", ["--pr-body-file", "/dev/null"], { STUB_GH_TITLE: "fix: gh" }).calls[2], /--pr-body-file \/dev\/null --pr-title fix: gh$/);
 });
 
 test("the script has no skip or dry-run switch, and package.json exposes it as gate:pr", () => {

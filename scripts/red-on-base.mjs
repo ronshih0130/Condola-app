@@ -12,10 +12,15 @@
 //              replaced by the shell-quoted test paths; without it the command
 //              runs as given. Default: npx tsx --test {tests}
 //   --expect   regex (JavaScript syntax) the BASE output must match, i.e. the
-//              reason the test is expected to fail without the fix.
+//              reason the test is expected to fail without the fix. REQUIRED for
+//              PASS: a nonzero base exit alone does not show the regression test
+//              ran and failed (the command may have failed before it). Pick text
+//              only the failure prints, e.g. the assertion message; a regex that
+//              also matches the passing head output is rejected as too broad.
 //   --base     ref to diff against; the base checkout is merge-base(<base>, HEAD).
 //              Default: origin/main.
-//   --timeout  per-run limit in seconds. Default: 600.
+//   --timeout  per-run limit in seconds. Default: 600. On timeout the run's
+//              whole process group gets TERM, then KILL after a short grace.
 //
 // What it does:
 //   1. Resolves HEAD and merge-base(<base>, HEAD). Only committed code is used:
@@ -25,32 +30,39 @@
 //      main worktree), the same way our worktrees share node_modules.
 //   3. Copies the HEAD version of each --test file into the base worktree, and
 //      nothing else, then runs --cmd there. Then runs --cmd in the head worktree.
-//   4. Removes both worktrees with `git worktree remove --force`.
+//      The copy never follows symlinks: every parent directory must be a real
+//      directory inside the base worktree (else INCONCLUSIVE), and a symlink at
+//      the destination is unlinked (the link, not its target) before writing.
+//   4. Removes both worktrees with `git worktree remove --force`, also after a
+//      timeout, an error, or SIGINT/SIGTERM/SIGHUP to this script.
 //
 // Verdicts (last line: `RED-ON-BASE: <VERDICT> base=<sha> head=<sha> tests=<n>`):
 //   PASS          exit 0  base run fails for the expected reason AND head run passes.
 //   FAIL          exit 1  base run passes (the test proves nothing), or head run fails.
 //   INCONCLUSIVE  exit 2  not proof either way: bad arguments, unknown ref, a test
 //                         file missing at HEAD, worktree/node_modules setup failure,
-//                         a timeout or killed run, a command that cannot start
-//                         (exit 126/127), or a base failure for another reason:
+//                         a test path that would be written through a symlink, a
+//                         timeout or killed run, a command that cannot start
+//                         (exit 126/127), or a base failure without affirmative
+//                         evidence that the regression test failed: no --expect,
 //                         output showing the test could not load (missing module
-//                         or export, failed transform) — a test that needs the
-//                         new code, not a reproduced bug, even if --expect names
-//                         that error — or output not matching --expect.
+//                         or export, failed transform; even if --expect names it),
+//                         output not matching --expect, or an --expect that also
+//                         matches the passing head output.
 //   Precedence: setup/timeouts > base passes (FAIL) > head fails (FAIL) >
-//   base fails for another reason (INCONCLUSIVE) > PASS.
+//   base failure without that evidence (INCONCLUSIVE) > PASS.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const DEFAULT_CMD = 'npx tsx --test {tests}';
 // The test could not even load on base. A generic SyntaxError is not listed:
 // it can be the bug itself (e.g. a JSON.parse regression).
 const LOAD_ERROR_RE = /ERR_MODULE_NOT_FOUND|Cannot find module|Cannot find package|does not provide an export named|ERR_UNKNOWN_FILE_EXTENSION|Transform failed with \d+ error/;
 const TAIL_LINES = 15;
+const KILL_GRACE_MS = 2000; // TERM -> KILL escalation after a timeout
 
 const VERDICT_EXIT = { PASS: 0, FAIL: 1, INCONCLUSIVE: 2 };
 
@@ -96,7 +108,12 @@ function tail(text, n) {
 
 class Inconclusive extends Error {}
 
+// Cleanup state shared with the signal handlers.
+const state = { root: null, created: [], child: null, finished: false };
+
 function finish(verdict, reason, ctx) {
+  if (state.finished) return;
+  state.finished = true;
   const short = sha => (sha ? sha.slice(0, 12) : 'unknown');
   process.stdout.write(`reason: ${reason}\n`);
   process.stdout.write(`RED-ON-BASE: ${verdict} base=${short(ctx.baseSha)} head=${short(ctx.headSha)} tests=${ctx.tests ? ctx.tests.length : 0}\n`);
@@ -130,37 +147,104 @@ function addWorktree(root, sha, label, created) {
 }
 
 function removeWorktrees(root, created) {
-  for (const dir of created) {
+  while (created.length) {
+    const dir = created.shift();
     const r = git(root, ['worktree', 'remove', '--force', dir]);
     if (!r.ok) process.stderr.write(`red-on-base: warning: could not remove worktree ${dir}: ${r.err}\n`);
   }
   git(root, ['worktree', 'prune']);
 }
 
-function runSide(label, cwd, command, timeoutSec, verbose) {
-  const started = Date.now();
-  // A standalone test run: drop node:test's parent-runner marker so a nested
-  // `node --test` (e.g. when this script itself runs under a test) really runs.
-  const env = { ...process.env, RED_ON_BASE_SIDE: label };
-  delete env.NODE_TEST_CONTEXT;
-  const r = spawnSync('bash', ['-c', command], {
-    cwd,
-    encoding: 'utf8',
-    timeout: timeoutSec * 1000,
-    maxBuffer: 64 * 1024 * 1024,
-    env,
-  });
-  const output = `${r.stdout || ''}${r.stderr || ''}`;
-  const ms = Date.now() - started;
-  const timedOut = !!(r.error && r.error.code === 'ETIMEDOUT');
-  const status = r.status;
-  process.stdout.write(`--- ${label}: exit=${status == null ? `signal ${r.signal || 'none'}` : status}${timedOut ? ' (timeout)' : ''} ${ms}ms\n`);
-  const shown = verbose ? output.replace(/\s+$/, '').split('\n') : tail(output, TAIL_LINES);
-  for (const line of shown) process.stdout.write(`  | ${line}\n`);
-  return { status, signal: r.signal, timedOut, spawnError: r.error && !timedOut ? r.error.message : null, output };
+// Write the HEAD bytes of <rel> into the base worktree without following any
+// symlink the base commit may have at that path or above it.
+function copyIntoBase(baseDir, rel, bytes) {
+  const parts = rel.split('/');
+  if (parts.some(p => p === '' || p === '.' || p === '..')) throw new Inconclusive(`refusing unusual test path: ${rel}`);
+  let dir = baseDir;
+  for (const part of parts.slice(0, -1)) {
+    dir = path.join(dir, part);
+    let st = null;
+    try { st = fs.lstatSync(dir); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    if (st === null) { fs.mkdirSync(dir); continue; }
+    if (!st.isDirectory()) {
+      throw new Inconclusive(`refusing to copy ${rel}: ${path.relative(baseDir, dir)} is a ${st.isSymbolicLink() ? 'symlink' : 'non-directory'} in the base worktree`);
+    }
+  }
+  const dest = path.join(dir, parts[parts.length - 1]);
+  const realBase = fs.realpathSync(baseDir);
+  const realParent = fs.realpathSync(dir);
+  if (realParent !== realBase && !realParent.startsWith(realBase + path.sep)) {
+    throw new Inconclusive(`refusing to copy ${rel}: it resolves outside the base worktree`);
+  }
+  let st = null;
+  try { st = fs.lstatSync(dest); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  if (st && st.isDirectory()) throw new Inconclusive(`refusing to copy ${rel}: it is a directory in the base worktree`);
+  if (st) fs.unlinkSync(dest); // a symlink is removed itself, never followed
+  fs.writeFileSync(dest, bytes, { flag: 'wx' }); // exclusive create: never through a link
 }
 
-function main() {
+function killGroup(child, signal) {
+  try { process.kill(-child.pid, signal); } catch { /* group already gone */ }
+}
+
+// Runs the command in its own process group so a timeout can stop the whole
+// tree: TERM to the group, then KILL after KILL_GRACE_MS.
+function runSide(label, cwd, command, timeoutSec, verbose) {
+  return new Promise(resolve => {
+    const started = Date.now();
+    // A standalone test run: drop node:test's parent-runner marker so a nested
+    // `node --test` (e.g. when this script itself runs under a test) really runs.
+    const env = { ...process.env, RED_ON_BASE_SIDE: label };
+    delete env.NODE_TEST_CONTEXT;
+    let output = '';
+    let timedOut = false;
+    let spawnError = null;
+    let settled = false;
+    const timers = [];
+    const child = spawn('bash', ['-c', command], { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    state.child = child;
+    const collect = chunk => { if (output.length < 64 * 1024 * 1024) output += chunk.toString('utf8'); };
+    child.stdout.on('data', collect);
+    child.stderr.on('data', collect);
+    const done = (status, signal) => {
+      if (settled) return;
+      settled = true;
+      for (const t of timers) clearTimeout(t);
+      state.child = null;
+      const ms = Date.now() - started;
+      process.stdout.write(`--- ${label}: exit=${status == null ? `signal ${signal || 'none'}` : status}${timedOut ? ' (timeout)' : ''} ${ms}ms\n`);
+      const shown = verbose ? output.replace(/\s+$/, '').split('\n') : tail(output, TAIL_LINES);
+      for (const line of shown) process.stdout.write(`  | ${line}\n`);
+      resolve({ status, signal, timedOut, spawnError, output });
+    };
+    child.on('error', e => { spawnError = e.message; done(null, null); });
+    child.on('close', (status, signal) => done(status, signal));
+    timers.push(setTimeout(() => {
+      timedOut = true;
+      killGroup(child, 'SIGTERM');
+      timers.push(setTimeout(() => {
+        killGroup(child, 'SIGKILL');
+        // If something outside the group still holds the pipes, stop waiting.
+        timers.push(setTimeout(() => {
+          child.stdout.destroy(); child.stderr.destroy();
+          done(null, 'SIGKILL');
+        }, KILL_GRACE_MS));
+      }, KILL_GRACE_MS));
+    }, timeoutSec * 1000));
+  });
+}
+
+// Ctrl-C or a kill of this script: stop the running command and still remove
+// the temporary worktrees.
+function onSignal(sig) {
+  if (state.child) killGroup(state.child, 'SIGKILL');
+  if (state.root) removeWorktrees(state.root, state.created);
+  finish('INCONCLUSIVE', `interrupted by ${sig}`, {});
+  process.exit(VERDICT_EXIT.INCONCLUSIVE);
+}
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => onSignal(sig));
+
+async function main() {
   let opts;
   const ctx = {};
   try {
@@ -171,7 +255,8 @@ function main() {
   }
   if (opts.help) {
     const src = fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n');
-    process.stdout.write(src.slice(1, 20).map(l => l.replace(/^\/\/ ?/, '')).join('\n') + '\n');
+    const end = src.findIndex(l => l.startsWith('import '));
+    process.stdout.write(src.slice(1, end).map(l => l.replace(/^\/\/ ?/, '')).join('\n') + '\n');
     return;
   }
   ctx.tests = opts.tests;
@@ -186,8 +271,9 @@ function main() {
   const top = git(process.cwd(), ['rev-parse', '--show-toplevel']);
   if (!top.ok) { finish('INCONCLUSIVE', `not inside a git repository: ${top.err}`, ctx); return; }
   const root = top.out;
+  state.root = root;
 
-  const created = [];
+  const created = state.created;
   try {
     const head = git(root, ['rev-parse', '--verify', 'HEAD^{commit}']);
     if (!head.ok) throw new Inconclusive(`cannot resolve HEAD: ${head.err}`);
@@ -240,28 +326,27 @@ function main() {
     for (const rel of rels) {
       const blob = spawnSync('git', ['-C', root, 'show', `${ctx.headSha}:${rel}`]);
       if (blob.status !== 0) throw new Inconclusive(`could not read ${rel} at HEAD`);
-      const dest = path.join(baseDir, rel);
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, blob.stdout);
+      copyIntoBase(baseDir, rel, blob.stdout);
     }
-
-    const base = runSide('base', baseDir, command, opts.timeout, opts.verbose);
-    if (expectRe) {
-      const hits = base.output.split('\n').filter(l => expectRe.test(l)).slice(0, 3);
-      for (const h of hits) process.stdout.write(`  base matches --expect: ${h.trim()}\n`);
-      if (!hits.length && expectRe.test(base.output)) process.stdout.write('  base matches --expect (across lines)\n');
-    }
-    const headRun = runSide('head', headDir, command, opts.timeout, opts.verbose);
 
     const notRun = (side, r) => {
-      if (r.timedOut) return `${side} run timed out after ${opts.timeout}s`;
+      if (r.timedOut) return `${side} run timed out after ${opts.timeout}s (process group stopped)`;
       if (r.spawnError) return `${side} run could not start: ${r.spawnError}`;
       if (r.status == null) return `${side} run was killed (signal ${r.signal})`;
       if (r.status === 126 || r.status === 127) return `${side} command could not run (exit ${r.status}: not found or not executable)`;
       return null;
     };
-    const setup = notRun('base', base) || notRun('head', headRun);
-    if (setup) { finish('INCONCLUSIVE', setup, ctx); return; }
+    const base = await runSide('base', baseDir, command, opts.timeout, opts.verbose);
+    const baseNotRun = notRun('base', base);
+    if (baseNotRun) { finish('INCONCLUSIVE', baseNotRun, ctx); return; }
+    if (expectRe) {
+      const hits = base.output.split('\n').filter(l => expectRe.test(l)).slice(0, 3);
+      for (const h of hits) process.stdout.write(`  base matches --expect: ${h.trim()}\n`);
+      if (!hits.length && expectRe.test(base.output)) process.stdout.write('  base matches --expect (across lines)\n');
+    }
+    const headRun = await runSide('head', headDir, command, opts.timeout, opts.verbose);
+    const headNotRun = notRun('head', headRun);
+    if (headNotRun) { finish('INCONCLUSIVE', headNotRun, ctx); return; }
     if (base.status === 0) { finish('FAIL', 'base run passed: the test does not reproduce the bug without the fix', ctx); return; }
     if (headRun.status !== 0) { finish('FAIL', `head run failed (exit ${headRun.status}): the fix does not make the test pass`, ctx); return; }
     const loadError = LOAD_ERROR_RE.exec(base.output);
@@ -269,11 +354,19 @@ function main() {
       finish('INCONCLUSIVE', `base run failed because the test could not load (${loadError[0]}), not because it reproduced the bug: write the regression test against code that exists on base`, ctx);
       return;
     }
-    if (expectRe && !expectRe.test(base.output)) {
+    if (!expectRe) {
+      finish('INCONCLUSIVE', `base run failed (exit ${base.status}) and head passed, but without --expect nothing shows the regression test itself failed on base: pass --expect '<failure reason>'`, ctx);
+      return;
+    }
+    if (!expectRe.test(base.output)) {
       finish('INCONCLUSIVE', `base run failed, but its output does not match --expect /${opts.expect}/ (unrelated failure)`, ctx);
       return;
     }
-    finish('PASS', `base red${expectRe ? ' for the expected reason' : ''} (exit ${base.status}), head green`, ctx);
+    if (expectRe.test(headRun.output)) {
+      finish('INCONCLUSIVE', `--expect /${opts.expect}/ also matches the passing head output, so it does not identify the failure: use text only the failure prints`, ctx);
+      return;
+    }
+    finish('PASS', `base red for the expected reason (exit ${base.status}), head green`, ctx);
   } catch (e) {
     if (e instanceof Inconclusive) finish('INCONCLUSIVE', e.message, ctx);
     else finish('INCONCLUSIVE', `setup error: ${e && e.message ? e.message : e}`, ctx);
@@ -282,4 +375,4 @@ function main() {
   }
 }
 
-main();
+main().catch(e => finish('INCONCLUSIVE', `setup error: ${e && e.message ? e.message : e}`, {}));
