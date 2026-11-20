@@ -27,18 +27,50 @@ async function flagsOn(orgId: string, keys: readonly SmsFlag[]): Promise<boolean
   }
 }
 
-export function smsOtpFlagOn(orgId: string): Promise<boolean> {
-  return flagsOn(orgId, ["sms_otp"]);
+export async function smsOtpFlagOn(
+  orgId: string | null | undefined,
+  lookup: typeof flagsOn = flagsOn,
+): Promise<boolean> {
+  if (!orgId) return false;
+  try {
+    return (await lookup(orgId, ["sms_otp"])) === true;
+  } catch {
+    return false;
+  }
 }
 
-export function signupVerificationFlagOn(orgId: string): Promise<boolean> {
-  return flagsOn(orgId, ["signup_verification"]);
+export async function signupVerificationFlagOn(
+  orgId: string | null | undefined,
+  lookup: typeof flagsOn = flagsOn,
+): Promise<boolean> {
+  if (!orgId) return false;
+  try {
+    return (await lookup(orgId, ["signup_verification"])) === true;
+  } catch {
+    return false;
+  }
 }
 
-export function tenantInviteFlagOn(orgId: string): Promise<boolean> {
-  return flagsOn(orgId, ["tenant_invite"]);
+export async function tenantInviteFlagOn(
+  orgId: string | null | undefined,
+  lookup: typeof flagsOn = flagsOn,
+): Promise<boolean> {
+  if (!orgId) return false;
+  try {
+    return (await lookup(orgId, ["tenant_invite"])) === true;
+  } catch {
+    return false;
+  }
 }
 
-export function signupRouteFlagsOn(orgId: string): Promise<boolean> {
-  return flagsOn(orgId, ["sms_otp", "signup_verification"]);
+export async function signupRouteFlagsOn(
+  orgId: string | null | undefined,
+  lookup: typeof flagsOn = flagsOn,
+): Promise<boolean> {
+  if (!orgId) return false;
+  try {
+    return (await lookup(orgId, ["sms_otp", "signup_verification"])) === true;
+  } catch {
+    return false;
+  }
 }
