@@ -96,3 +96,19 @@ Newly added tests are always allowed. Enforced by `scripts/check-pr-rules.mjs`.
 `npm run typecheck` (`tsc --noEmit`) and `npm run test:unit` must pass on every PR. These two gates — and only these two — are what `scripts/check-pr-rules.mjs` enforces for R3; the script does no schema/SQL inspection and never runs `test:rls`.
 
 When a change touches schema, RLS, or SQL, `npm run test:rls` is also required. That conditional gate is real, but it is enforced by hosted CI / gate scripts, not by `check-pr-rules.mjs`. So: `check-pr-rules.mjs` green means typecheck + unit are green — it is not a substitute for running `test:rls` on schema/RLS/SQL changes.
+
+## 16. Rule Table — repeat mistakes become checks (Lauren item 1)
+When a mistake class shows up a second time (a reviewer FAIL, a revert, a CI break), the fix PR also adds a check (type, lint or test) that fails on the past bug, and a row here. One row per mistake class:
+
+- **ID** `RT-NN`, never reused. **Mistake class**: what goes wrong, in one line. **Encodes**: where it happened (PR `#N`, a receipt path, or a rule/§ reference).
+- **ENFORCER**: the check, as a backticked repo path to the test or script that catches it. Do not add `none` rows: a repeat without a check is a gap to close, not a row.
+- **Proof-Fails-On**: a backticked commit, reachable from `main`, that still has the bug. **Expect**: a backticked regex that only the failure prints (`\|` for a literal `|` inside the table).
+- The PR that adds or changes a row runs `node scripts/red-on-base.mjs --base <Proof-Fails-On> --test '<ENFORCER>' --expect '<Expect>'` (with the table's `\|` written back as a plain `|`, e.g. RT-01 runs `--expect 'DRY_RUN|FAIL_AT|SKIP'`), pastes the run in `## Verification` (it must end in `RED-ON-BASE: PASS`: red on the past bug, green on head), and the reviewer checks it. Removing a row needs a `Spec-Change:` line.
+- **Format:** this file has exactly one `## Rule Table` section (this one) and one table in it, one row per line, with leading and trailing `|`. Rows elsewhere are not part of the table.
+
+**This table is documentation, not an automatic PR check** (Ron 2026-11-20, PENDING-RON PR-049 option b): `scripts/check-pr-rules.mjs` does not parse it. Enforcement is (1) the weekly box routine (hub `20-build/lauren-1-6/rule-table-weekly-routine-DRAFT.md`), which re-proves every row and looks for repeats with no row, and (2) Lauren 3-W, where CI re-runs each row's `red-on-base.mjs` proof from the row's own cells. Until 3-W lands, the reviewer of the PR that adds or changes a row is the check.
+
+| ID | Mistake class | Encodes | ENFORCER | Proof-Fails-On | Expect |
+|---|---|---|---|---|---|
+| RT-01 | A local PR gate grows a switch that skips or fakes a check | Lauren 6 r1 BLOCKING, hub `20-build/lauren-1-6/item6-review-codex.md` (#255) | `scripts/gate-pr.test.ts` | `d7471dd1` | `DRY_RUN\|FAIL_AT\|SKIP` |
+| RT-02 | A timeout or cleanup path leaves a test process running after the verdict | Lauren 3 r1 BLOCKING 3 and r2 BLOCKING (twice), hub `20-build/lauren-1-6/item3-review-codex.md` (#259) | `scripts/red-on-base.test.mjs` | `3912a1dd` | `was still running` |
