@@ -279,7 +279,23 @@ test("content and files: only explicitly 處理後, approved photos and document
     { id: issued, kind: "completion_statement", docNo: await seeded(issued), status: "issued", totalMinor: "5200" },
     { id: voided, kind: "completion_statement", docNo: await seeded(voided), status: "voided", totalMinor: "5300" }]);
   // Only document totals: no estimate, expense, confirmed cost, buyer or tenant data.
-  assert.doesNotMatch(JSON.stringify(raw), /林雅婷|0912|內部備註|description|buyer|receipt_title|phone|estimate|expense|cost|items|unit_price/);
+  const assertNoShareLeaks = (payload: unknown) => {
+    const jsonWithoutUuids = JSON.stringify(payload).replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+      "",
+    );
+    assert.doesNotMatch(
+      jsonWithoutUuids,
+      /林雅婷|0912|內部備註|description|buyer|receipt_title|phone|estimate|expense|cost|items|unit_price/,
+    );
+  };
+
+  const uuidOnly = { photos: [{ id: "1801e622-381d-49fd-984a-ef7fe9d50912" }] };
+  assertNoShareLeaks(uuidOnly);
+  assert.throws(() => assertNoShareLeaks({ ...uuidOnly, note: "0912-345-678" }), {
+    code: "ERR_ASSERTION",
+  });
+  assertNoShareLeaks(raw);
   const token = shareToken(url);
   assert.match(String((await loadSharePhoto(token, after))?.storage_path), new RegExp(`^org/${f.org}/tickets/${f.ticket}/`));
   for (const [label, id] of [["untagged", untagged], ["before", before], ["unapproved", unapproved], ["tenant", tenant], ["foreign", foreign],
