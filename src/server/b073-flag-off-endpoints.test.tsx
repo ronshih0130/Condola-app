@@ -69,6 +69,111 @@ function streamed(chunks: Uint8Array[], contentLength?: string, path = "/api/own
   return { request: new Request(`${URL}${path}`, init), calls };
 }
 
+// B-044 is intentionally not in gateRoutes: signup_verification is not registered yet.
+function compileSmsFlags(lookup: (keys: string[]) => unknown) {
+  return compile(read("src/server/sms/flags.ts"), {
+    "@/server/repair-rules": { isUuid },
+    "@/server/db": {
+      svc: (_role: unknown, run: (client: unknown) => unknown) => run({
+        async query(_sql: string, [orgId, keys]: [string, string[]]) {
+          assert.equal(orgId, ORG);
+          return { rows: lookup(keys) };
+        },
+      }),
+    },
+  }) as unknown as typeof import("./sms/flags");
+}
+
+test("B-044 SMS flag readers require strict true and signup requires both of its flags", async () => {
+  for (const enabled of [undefined, null, false, "true", 1, true]) {
+    const flags = compileSmsFlags(keys => enabled === undefined ? [] : keys.map(key => ({ key, enabled })));
+    for (const reader of [flags.smsOtpFlagOn, flags.signupVerificationFlagOn, flags.tenantInviteFlagOn, flags.signupRouteFlagsOn]) {
+      assert.equal(await reader(ORG), enabled === true);
+    }
+  }
+  for (const only of ["sms_otp", "signup_verification", "tenant_invite"]) {
+    const flags = compileSmsFlags(keys => keys.map(key => ({ key, enabled: key === only })));
+    assert.equal(await flags.signupRouteFlagsOn(ORG), false, only);
+    if (only === "tenant_invite") assert.equal(await flags.tenantInviteFlagOn(ORG), true);
+  }
+  const broken = compileSmsFlags(() => { throw new Error("lookup failed"); });
+  assert.equal(await broken.tenantInviteFlagOn(ORG), false);
+});
+
+function compileSignupRoute(lookup: (keys: string[]) => unknown) {
+  const effects: string[] = [];
+  const inputs: unknown[] = [];
+  const post = compile(read("src/app/api/signup-verification/route.ts"), {
+    "@/server/consent-gate": { requireCurrentConsent: async () => null },
+    "@/server/session": { readSession: async () => ({ orgId: ORG, userId: UNIT }) },
+    "@/server/errors": { logServerError: () => effects.push("log") },
+    "@/server/read-capped-json": { readCappedJson },
+    "@/server/sms/flags": {
+      ...compileSmsFlags(lookup),
+      tenantInviteFlagOn: async () => { effects.push("tenant_invite"); return true; },
+    },
+    "@/server/sms/request-otp": {
+      createAuditLogSmsLedger: () => { effects.push("ledger"); return {}; },
+      auditLogSmsAudit: () => effects.push("audit"),
+      requestSmsOtp: async (input: unknown) => {
+        effects.push("request");
+        inputs.push(input);
+        return { ok: true, status: "captured", mode: "capture" };
+      },
+    },
+    "@/server/sms/transport": {
+      selectTransport: () => { effects.push("transport"); return { transport: { mode: "capture" } }; },
+    },
+  }).POST as ((request: Request) => Promise<Response>) & { readonly [FLAG_GATE]: string };
+  return { post, effects, inputs };
+}
+
+test("B-044 signup verification is wrapped and fails closed before body or side effects", async () => {
+  for (const invalid of [false, undefined, null, "true", "throw"] as const) {
+    for (const disabled of ["sms_otp", "signup_verification"]) {
+      const lookups: string[][] = [];
+      const { post, effects } = compileSignupRoute(keys => {
+        lookups.push(keys);
+        if (invalid === "throw") throw new Error("lookup failed");
+        return keys.flatMap<{ key: string; enabled: boolean | null | "true" }>(key => key !== disabled ? [{ key, enabled: true }]
+          : invalid === undefined ? [] : [{ key, enabled: invalid }]);
+      });
+      assert.equal(post[FLAG_GATE], "signup_verification");
+      const { request, calls } = streamed([encode("{}")], undefined, "/api/signup-verification");
+      const response = await post(request);
+      assert.equal(response.status, 404);
+      assert.equal(await response.text(), "");
+      assert.equal(request.bodyUsed, false);
+      assert.deepEqual(calls, { pulls: 0, cancels: 0 });
+      assert.deepEqual(lookups, [["sms_otp", "signup_verification"]]);
+      assert.deepEqual(effects, []);
+    }
+  }
+});
+
+test("B-044 admitted signup requests force the server purpose and never consult tenant_invite", async () => {
+  const lookups: string[][] = [];
+  const { post, effects, inputs } = compileSignupRoute(keys => {
+    lookups.push(keys);
+    return keys.map(key => ({ key, enabled: key !== "tenant_invite" }));
+  });
+  const to = "+12025550123";
+  const { request } = streamed([encode(JSON.stringify({
+    purpose: "tenant_invite", to, deviceId: "device-1", requestId: "signup-1",
+  }))], undefined, "/api/signup-verification");
+  request.headers.set("x-forwarded-for", "192.0.2.1");
+  const response = await post(request);
+  assert.equal(response.status, 202);
+  assert.deepEqual(await response.json(), { ok: true, status: "captured", mode: "capture" });
+  assert.deepEqual(lookups, [["sms_otp", "signup_verification"]]);
+  assert.deepEqual(inputs, [{
+    purpose: "signup_verification", orgId: ORG, actorUserId: UNIT, ip: "192.0.2.1",
+    to, deviceId: "device-1", requestId: "signup-1",
+  }]);
+  assert.deepEqual(effects, ["transport", "ledger", "request"]);
+});
+
+
 function recordingDependency(name: string, calls: string[], allowed?: Record<string, unknown>): unknown {
   return new Proxy(() => undefined, {
     get(_target, key) {
