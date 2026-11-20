@@ -38,7 +38,7 @@ const ALL = ["npm run -s typecheck", "npm run -s lint", "node scripts/check-pr-r
 
 test("gate:pr runs the four real commands in order and passes when all pass", () => {
   const r = run();
-  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr); // 6-W red-case demo: an existing assertion edited without a Spec-Change line
   assert.equal(r.calls.length, 4, r.calls.join("|"));
   r.calls.forEach((call, i) => assert.ok(call.startsWith(ALL[i]), `${i}: ${call}`));
   assert.match(r.stdout, /gate:pr PASS/);
