@@ -114,7 +114,7 @@ function tail(text, n) {
 class Inconclusive extends Error {}
 
 // Cleanup state shared with the signal handlers.
-const state = { root: null, created: [], pgid: null, finished: false };
+const state = { root: null, created: [], pgid: null, finished: false, interrupting: false };
 
 function finish(verdict, reason, ctx) {
   if (state.finished) return;
@@ -241,11 +241,13 @@ function runSide(label, cwd, command, timeoutSec, verbose) {
       const groupEmpty = pgid == null ? true : await emptyGroup(pgid);
       if (groupEmpty) state.pgid = null;
       const { status, signal } = closed;
-      const ms = Date.now() - started;
-      process.stdout.write(`--- ${label}: exit=${status == null ? `signal ${signal || 'none'}` : status}${timedOut ? ' (timeout)' : ''} ${ms}ms\n`);
-      if (leftovers) process.stdout.write(`--- ${label}: ${groupEmpty ? 'killed' : 'could not kill'} processes left in the run's process group\n`);
-      const shown = verbose ? output.replace(/\s+$/, '').split('\n') : tail(output, TAIL_LINES);
-      for (const line of shown) process.stdout.write(`  | ${line}\n`);
+      if (!state.interrupting) {
+        const ms = Date.now() - started;
+        process.stdout.write(`--- ${label}: exit=${status == null ? `signal ${signal || 'none'}` : status}${timedOut ? ' (timeout)' : ''} ${ms}ms\n`);
+        if (leftovers) process.stdout.write(`--- ${label}: ${groupEmpty ? 'killed' : 'could not kill'} processes left in the run's process group\n`);
+        const shown = verbose ? output.replace(/\s+$/, '').split('\n') : tail(output, TAIL_LINES);
+        for (const line of shown) process.stdout.write(`  | ${line}\n`);
+      }
       resolve({ status, signal, timedOut, spawnError, output, groupEmpty });
     };
     child.on('error', e => { spawnError = e.message; if (closed === null) closed = { status: null, signal: null }; maybeDone(); });
@@ -271,10 +273,12 @@ function runSide(label, cwd, command, timeoutSec, verbose) {
 
 // Ctrl-C or a kill of this script: stop the running command and still remove
 // the temporary worktrees.
-function onSignal(sig) {
-  if (state.pgid) killGroup(state.pgid, 'SIGKILL');
-  if (state.root) removeWorktrees(state.root, state.created);
+async function onSignal(sig) {
+  if (state.interrupting) return;
+  state.interrupting = true;
   finish('INCONCLUSIVE', `interrupted by ${sig}`, {});
+  if (state.pgid != null) await emptyGroup(state.pgid);
+  if (state.root) removeWorktrees(state.root, state.created);
   process.exit(VERDICT_EXIT.INCONCLUSIVE);
 }
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => onSignal(sig));
@@ -373,6 +377,7 @@ async function main() {
       return null;
     };
     const base = await runSide('base', baseDir, command, opts.timeout, opts.verbose);
+    if (state.interrupting) return;
     const baseNotRun = notRun('base', base);
     if (baseNotRun) { finish('INCONCLUSIVE', baseNotRun, ctx); return; }
     if (expectRe) {
@@ -381,6 +386,7 @@ async function main() {
       if (!hits.length && expectRe.test(base.output)) process.stdout.write('  base matches --expect (across lines)\n');
     }
     const headRun = await runSide('head', headDir, command, opts.timeout, opts.verbose);
+    if (state.interrupting) return;
     const headNotRun = notRun('head', headRun);
     if (headNotRun) { finish('INCONCLUSIVE', headNotRun, ctx); return; }
     if (base.status === 0) { finish('FAIL', 'base run passed: the test does not reproduce the bug without the fix', ctx); return; }
@@ -407,7 +413,7 @@ async function main() {
     if (e instanceof Inconclusive) finish('INCONCLUSIVE', e.message, ctx);
     else finish('INCONCLUSIVE', `setup error: ${e && e.message ? e.message : e}`, ctx);
   } finally {
-    removeWorktrees(root, created);
+    if (!state.interrupting) removeWorktrees(root, created);
   }
 }
 
