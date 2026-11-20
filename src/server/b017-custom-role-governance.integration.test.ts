@@ -483,6 +483,26 @@ test("custom_roles registry pins default OFF and all runtime/platform/org gates"
   for(const field of ["owner: Ron","default: false","ring: internal","expires_at:","global_kill:","org_override:","CUSTOM_ROLES_ORG_ALLOWLIST","platform_settings.custom_roles.enabled","organizations.feature_flags.custom_roles","strict boolean true"])assert.ok(registry.includes(field),field);
 });
 
+
+// After the monthly-rent advisory lock, current writeMonthlyRent re-checks both
+// posting flags (BLK-MAC-02, B-010 fix-forward). The 80b0d6a baseline stops at
+// the lock and goes straight to leaseVisible. Insert those two reads into a
+// baseline capture so the comparison stays exact when the locks were taken.
+function withB010PostLockFlagRecheck(baseline: {result: unknown; trace: unknown[]; connections: number}) {
+  const billing="SELECT (SELECT value FROM platform_settings WHERE key='billing_previews') AS value, feature_flags FROM organizations WHERE id=$1";
+  const posting="SELECT (SELECT value FROM platform_settings WHERE key='monthly_rent_posting') AS value, feature_flags FROM organizations WHERE id=$1";
+  const lock="SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))";
+  const trace=baseline.trace.slice();
+  const idx=trace.findIndex(entry => {
+    const row=entry as unknown[];
+    return row[0]===lock && Array.isArray(row[1]) && String((row[1] as unknown[])[1] ?? "").startsWith("monthly-rent:");
+  });
+  if (idx<0) return baseline;
+  const orgId=((trace[idx] as unknown[])[1] as unknown[])[0];
+  trace.splice(idx+1,0,[billing,[orgId]],[posting,[orgId]]);
+  return {...baseline,trace};
+}
+
 test("complete OFF session and member request SQL/parameters/results match 80b0d6a",async()=>{
   await flag(false);delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
   const files:string[]=[];
@@ -514,7 +534,13 @@ test("complete OFF session and member request SQL/parameters/results match 80b0d
       await capture(async()=>{const loaded=await oldSession.readSessionOn(db);return oldQueries.listPayments(loaded.session!);}),
     );
     const invalid={leaseId:randomUUID(),month:"2028-03",requestId:randomUUID(),expectedDigest:"0".repeat(64)};
-    assert.deepEqual(await capture(()=>writeMonthlyRent(admin,invalid)),await capture(()=>oldWriter.writeMonthlyRent(admin,invalid)));
+    // B-010 fix-forward (BLK-MAC-02): after the issuance locks, writeMonthlyRent
+    // re-reads billing_previews and monthly_rent_posting. The 80b0d6a baseline
+    // does not. Results stay the same. When those flags are OFF the locks are
+    // never taken and the traces stay identical.
+    const currentRent=await capture(()=>writeMonthlyRent(admin,invalid));
+    const baselineRent=await capture(()=>oldWriter.writeMonthlyRent(admin,invalid));
+    assert.deepEqual(currentRent,withB010PostLockFlagRecheck(baselineRent));
     assert.deepEqual(await capture(()=>bankBoard(admin)),await capture(()=>oldBank.bankBoard(admin)));
     const sandboxLoad={seedSample:false,session:{...admin,environment:"sandbox" as const,needsSandbox:true,consent:buildStoredConsent("signup")}};
     await completeSession(sandboxLoad); // Provision once; compare the same complete request next.
