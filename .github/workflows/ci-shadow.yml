@@ -284,8 +284,8 @@ jobs:
 
       # Lauren 6-W: the same PR gate as hosted ci.yml, `npm run gate:pr`
       # (typecheck -> lint -> check-pr-rules R2 + R4 -> test:unit), with the PR
-      # body, title and base from scripts/ci-pr-context.mjs (the PR whose merge
-      # commit is HEAD; on a dispatched branch, its open PR). The read-only token
+      # body, title and base from scripts/ci-pr-context.mjs (the PR merged as
+      # HEAD, found in the GitHub API; on a dispatched branch, that branch's PR). The read-only token
       # goes to the context step only. nice leaves CPU for interactive work
       # (NODE_OPTIONS rejects --test-concurrency).
       - name: PR context for gate:pr
