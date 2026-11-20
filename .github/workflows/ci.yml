@@ -63,10 +63,21 @@ jobs:
       - run: npm ci
       - name: Install PDF raster tools
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
-      - run: npm run typecheck
-      - run: npm run lint
+      # Lauren 6-W: hosted CI and the Mac shadow (ci-shadow.yml) run the same PR gate,
+      # `npm run gate:pr` (scripts/gate-pr.sh: typecheck -> lint -> check-pr-rules R2 + R4 ->
+      # test:unit). scripts/ci-pr-context.mjs finds the PR (this pull_request, or the PR whose
+      # merge commit is HEAD) and writes its body, title and base; the read-only workflow token
+      # is given to that step only. A run with no PR behind HEAD fails there.
+      - name: PR context for gate:pr
+        env:
+          GH_API_TOKEN: ${{ github.token }}
+        run: node scripts/ci-pr-context.mjs "$RUNNER_TEMP/pr-context"
+      - name: PR gate (npm run gate:pr)
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/pr-context"
+          PR_TITLE="$(cat "$ctx/title")" PR_BODY_FILE="$ctx/body.md" npm run gate:pr -- --base "$(cat "$ctx/base")"
       - run: npm run copy:check
-      - run: npm run test:unit
       - name: Apply schema and seed
         run: |
           sudo apt-get update

@@ -12,7 +12,8 @@
 #   The PR title (R4 spots `fix:` titles) comes from --pr-title, else $PR_TITLE, else `gh pr view --json title`
 #   when gh is available, independently of where the body came from.
 # There is no skip or dry-run switch: every step always runs (tests use stub npm/node executables on PATH).
-# This does not replace scripts/gate.sh (full/release gate) and is not wired into any workflow.
+# This does not replace scripts/gate.sh (full/release gate). Hosted ci.yml and the Mac shadow ci-shadow.yml run it
+# (Lauren 6-W) with the PR body, title and base from scripts/ci-pr-context.mjs.
 set -uo pipefail
 
 base="origin/main"
