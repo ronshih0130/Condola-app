@@ -12,10 +12,13 @@
 // title and body, and no commit subject is trusted):
 //   - pull_request: the event's PR number, re-read from /pulls/N. Base = HEAD^1
 //     (the checked-out merge commit's first parent, i.e. the base branch).
-//   - push, or workflow_dispatch on the default branch: the PR associated with
-//     HEAD (/commits/HEAD/pulls) that was merged with merge_commit_sha == HEAD.
-//     This covers merge, squash and rebase merges and any commit subject.
-//     Base = HEAD^1 (the branch before the merge).
+//   - push: the PR associated with HEAD (/commits/HEAD/pulls) that was merged
+//     with merge_commit_sha == HEAD (merge, squash and rebase merges, any
+//     subject). Base = the event's `before`, the branch tip before this push,
+//     so a rebase merge of several commits is checked as a whole (Codex 6-W r2).
+//   - workflow_dispatch on the default branch: the same PR, but only when HEAD
+//     is a two-parent merge commit (base HEAD^1); a squash or rebase commit has
+//     no recorded "before", so the run fails with a message instead of guessing.
 //   - workflow_dispatch on another branch: the PR associated with HEAD whose head
 //     branch is the dispatched branch (open first, so a branch that merged
 //     another PR into itself still gets its own PR; a re-run after the branch
@@ -37,7 +40,7 @@ export class ContextError extends Error {}
 const pick = (pr, base, how) => ({ number: pr.number, title: pr.title || '', body: pr.body || '', base, how });
 
 // Pure resolution, with every input injected (tests stub them).
-// io: { eventName, event, headSha, firstParent, branch, repo, getJson(urlPath) }
+// io: { eventName, event, headSha, firstParent, parentCount, branch, repo, getJson(urlPath) }
 export async function resolveContext(io) {
   const { eventName, event } = io;
   const needParent = () => { if (!io.firstParent) throw new ContextError('HEAD has no first parent (checkout needs fetch-depth: 0)'); return io.firstParent; };
@@ -70,7 +73,18 @@ export async function resolveContext(io) {
   if (merged.length !== 1) {
     throw new ContextError(`${eventName} of ${sha}: expected one PR merged as this commit, found ${merged.length}; the PR rules need a PR body`);
   }
-  return pick(merged[0], needParent(), `PR #${merged[0].number} merged as HEAD`);
+  const pr = merged[0];
+  if (eventName === 'push') {
+    const before = event && event.before;
+    if (typeof before !== 'string' || !/^[0-9a-f]{40}$/.test(before) || /^0+$/.test(before)) {
+      throw new ContextError(`push of ${sha}: the event has no usable "before" commit to diff the whole push against`);
+    }
+    return pick(pr, before, `PR #${pr.number} merged as HEAD; base = push before`);
+  }
+  if (io.parentCount !== 2) {
+    throw new ContextError(`workflow_dispatch of ${sha} on ${defaultBranch}: HEAD is not a two-parent merge commit (PR #${pr.number} was squash- or rebase-merged), so the PR's base cannot be derived; use the push run of that merge`);
+  }
+  return pick(pr, needParent(), `PR #${pr.number} merged as HEAD (merge commit)`);
 }
 
 // A just-pushed commit can briefly answer 422 on /commits/<sha>/pulls; 422 and
@@ -109,6 +123,7 @@ async function main() {
     event,
     headSha: git(['rev-parse', 'HEAD']),
     firstParent: git(['rev-parse', '--verify', '--quiet', 'HEAD^1']),
+    parentCount: Math.max(0, git(['rev-list', '--parents', '-n', '1', 'HEAD']).split(/\s+/).filter(Boolean).length - 1),
     branch: process.env.GITHUB_REF_NAME || '',
     repo: process.env.GITHUB_REPOSITORY || '',
     getJson: makeGetJson({ token: process.env.GH_API_TOKEN || '', apiUrl: process.env.GITHUB_API_URL || 'https://api.github.com' }),

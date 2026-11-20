@@ -1,9 +1,9 @@
 // Lauren 6-W: scripts/ci-pr-context.mjs ties a CI run to its PR so `npm run gate:pr` gets the PR body and title,
 // the same way in hosted CI (pull_request, push) and in the Mac shadow (push to main, workflow_dispatch).
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -37,21 +37,61 @@ test("pull_request: the PR is re-read from the API, so a re-run after a body fix
   await assert.rejects(() => resolveContext(io({ eventName: "pull_request", firstParent: "", event: { pull_request: { number: 7 } }, api: { [`/repos/${REPO}/pulls/7`]: pr(7) } })), /fetch-depth: 0/);
 });
 
-test("push and dispatch on main: the PR merged as HEAD, for merge, squash, rebase and custom subjects (Codex 6-W r1 BLOCKING 1)", async () => {
-  for (const eventName of ["push", "workflow_dispatch"]) {
-    // the association list also holds the PR whose branch contained HEAD before; only the one merged as HEAD counts
-    const x = io({ eventName, api: { [assoc]: [pr(300, { state: "closed", merged_at: "2026-11-19T00:00:00Z", merge_commit_sha: "c".repeat(40) }), mergedAs(301)] } });
-    assert.deepEqual(await resolveContext(x), { number: 301, title: "PR 301", body: "## Verification\nbody 301", base: PARENT, how: "PR #301 merged as HEAD" });
-    assert.deepEqual(x.calls, [assoc]);
+test("push: the PR merged as HEAD, for merge, squash, rebase and custom subjects; base is the push's before (Codex 6-W r1 BLOCKING 1, r2)", async () => {
+  const BEFORE = "c".repeat(40);
+  // the association list also holds the PR whose branch contained HEAD before; only the one merged as HEAD counts
+  const x = io({ event: { before: BEFORE, repository: { default_branch: "main" } },
+    api: { [assoc]: [pr(300, { state: "closed", merged_at: "2026-11-19T00:00:00Z", merge_commit_sha: "d".repeat(40) }), mergedAs(301)] } });
+  assert.deepEqual(await resolveContext(x), { number: 301, title: "PR 301", body: "## Verification\nbody 301", base: BEFORE, how: "PR #301 merged as HEAD; base = push before" });
+  assert.deepEqual(x.calls, [assoc]);
+  for (const before of [undefined, "0".repeat(40), "short"]) {
+    await assert.rejects(() => resolveContext(io({ event: { before }, api: { [assoc]: [mergedAs(301)] } })), /no usable "before" commit/, String(before));
   }
   // no PR merged as HEAD (a direct push), or two: fail, the PR rules need a PR body
-  await assert.rejects(() => resolveContext(io({ api: { [assoc]: [] } })), /push of a{12}: expected one PR merged as this commit, found 0/);
-  await assert.rejects(() => resolveContext(io({ api: { [assoc]: [pr(302)] } })), /found 0/);
-  await assert.rejects(() => resolveContext(io({ api: { [assoc]: [mergedAs(303), mergedAs(304)] } })), /found 2/);
+  await assert.rejects(() => resolveContext(io({ event: { before: BEFORE }, api: { [assoc]: [] } })), /push of a{12}: expected one PR merged as this commit, found 0/);
+  await assert.rejects(() => resolveContext(io({ event: { before: BEFORE }, api: { [assoc]: [pr(302)] } })), /found 0/);
+  await assert.rejects(() => resolveContext(io({ event: { before: BEFORE }, api: { [assoc]: [mergedAs(303), mergedAs(304)] } })), /found 2/);
   await assert.rejects(() => resolveContext(io({ eventName: "schedule" })), /unsupported event schedule/);
-  // a default branch other than main is read from the event
-  const dev = io({ eventName: "workflow_dispatch", branch: "dev", event: { repository: { default_branch: "dev" } }, api: { [assoc]: [mergedAs(305)] } });
-  assert.equal((await resolveContext(dev)).number, 305);
+});
+
+test("dispatch on the default branch: only a two-parent merge commit (base HEAD^1); a squash or rebase commit fails with a message", async () => {
+  const x = io({ eventName: "workflow_dispatch", parentCount: 2, api: { [assoc]: [mergedAs(305)] } });
+  assert.deepEqual(await resolveContext(x), { number: 305, title: "PR 305", body: "## Verification\nbody 305", base: PARENT, how: "PR #305 merged as HEAD (merge commit)" });
+  for (const parentCount of [1, 0, undefined]) {
+    await assert.rejects(() => resolveContext(io({ eventName: "workflow_dispatch", parentCount, api: { [assoc]: [mergedAs(305)] } })),
+      /HEAD is not a two-parent merge commit \(PR #305 was squash- or rebase-merged\)/);
+  }
+  // the default branch is read from the event
+  const dev = io({ eventName: "workflow_dispatch", parentCount: 2, branch: "dev", event: { repository: { default_branch: "dev" } }, api: { [assoc]: [mergedAs(306)] } });
+  assert.equal((await resolveContext(dev)).number, 306);
+});
+
+// Codex 6-W r2 BLOCKING: a two-commit rebase merge O -> A' (assertion change) -> B' (code). The push's before (O)
+// makes check-pr-rules R2 see both commits; HEAD^1 (A') would hide A'.
+test("a two-commit rebase push: R2 run on the resolved base sees the first commit's assertion change", async () => {
+  const repo = mkdtempSync(join(tmpdir(), "ci-ctx-rebase-"));
+  const g = (...a) => spawnSync("git", ["-C", repo, ...a], { encoding: "utf8" });
+  g("init", "-q", "-b", "main"); g("config", "user.email", "t@example.com"); g("config", "user.name", "t");
+  mkdirSync(join(repo, "scripts")); mkdirSync(join(repo, "src"));
+  copyFileSync("scripts/check-pr-rules.mjs", join(repo, "scripts/check-pr-rules.mjs"));
+  writeFileSync(join(repo, "src/a.test.ts"), "import assert from 'node:assert';\nassert.equal(1 + 1, 2);\n");
+  writeFileSync(join(repo, "src/a.ts"), "export const a = 1;\n");
+  g("add", "-A"); g("commit", "-qm", "O");
+  const O = g("rev-parse", "HEAD").stdout.trim();
+  writeFileSync(join(repo, "src/a.test.ts"), "import assert from 'node:assert';\nassert.equal(1 + 1, 3);\n");
+  g("commit", "-qam", "A' (assertion change)");
+  writeFileSync(join(repo, "src/a.ts"), "export const a = 2;\n");
+  g("commit", "-qam", "B' (code)");
+  const HEAD2 = g("rev-parse", "HEAD").stdout.trim(), A = g("rev-parse", "HEAD^1").stdout.trim();
+  const ctx = await resolveContext(io({ headSha: HEAD2, firstParent: A, event: { before: O },
+    api: { [`/repos/${REPO}/commits/${HEAD2}/pulls`]: [mergedAs(320, HEAD2)] } }));
+  assert.equal(ctx.base, O);
+  const r2 = base => spawnSync("node", ["scripts/check-pr-rules.mjs", "--r2-only", "--base", base, "--head", "HEAD", "--pr-body", ""], { cwd: repo, encoding: "utf8" });
+  const seen = r2(ctx.base);
+  assert.equal(seen.status, 1, seen.stdout + seen.stderr);
+  assert.match(seen.stdout + seen.stderr, /R2 FAIL: 1 existing-test assertion change/);
+  // the r2 defect, for contrast: HEAD^1 as base hides the change
+  assert.equal(r2(A).status, 0);
 });
 
 test("dispatch on a branch: that branch's own PR, even when HEAD merged another PR into it or the branch moved on (Codex 6-W r1 BLOCKING 2, SHOULD 5)", async () => {
