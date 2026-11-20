@@ -42,11 +42,16 @@ test("ROC dates follow the configured TW jurisdiction; a US profile refuses the 
     await db.query(`UPDATE organizations SET country_code='US',jurisdiction_id=$2,default_currency='USD' WHERE id=$1`, [ORG_ID, ca]);
     // Organization-scoped footprint of every table an import can write.
     const footprint = async () => (await db.query(`SELECT
-      (SELECT count(*) FROM properties WHERE org_id=$1) properties, (SELECT count(*) FROM units WHERE org_id=$1) units,
-      (SELECT count(*) FROM rooms WHERE org_id=$1) rooms, (SELECT count(*) FROM contacts WHERE org_id=$1) contacts,
-      (SELECT count(*) FROM property_owners WHERE org_id=$1) owners, (SELECT count(*) FROM leases WHERE org_id=$1) leases,
-      (SELECT count(*) FROM lease_parties WHERE org_id=$1) parties, (SELECT count(*) FROM lease_charges WHERE org_id=$1) charges,
-      (SELECT count(*) FROM audit_log WHERE org_id=$1) audits, (SELECT count(*) FROM import_jobs WHERE org_id=$1) import_jobs,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM properties t WHERE t.org_id=$1) properties,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM units t WHERE t.org_id=$1) units,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM rooms t WHERE t.org_id=$1) rooms,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM contacts t WHERE t.org_id=$1) contacts,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM property_owners t WHERE t.org_id=$1) owners,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM leases t WHERE t.org_id=$1) leases,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM lease_parties t WHERE t.org_id=$1) parties,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM lease_charges t WHERE t.org_id=$1) charges,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM audit_log t WHERE t.org_id=$1) audits,
+      (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM import_jobs t WHERE t.org_id=$1) import_jobs,
       (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM listing_terms t WHERE t.org_id=$1) listing_terms`, [ORG_ID])).rows[0];
     for (const mode of [previewImport, commitImportBatch]) {
       const before = await footprint();
