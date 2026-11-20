@@ -73,13 +73,20 @@ export async function resolveContext(io) {
   return pick(merged[0], needParent(), `PR #${merged[0].number} merged as HEAD`);
 }
 
-export function makeGetJson({ token, fetchImpl = globalThis.fetch, apiUrl = 'https://api.github.com' }) {
+// A just-pushed commit can briefly answer 422 on /commits/<sha>/pulls; 422 and
+// 5xx are retried a few times before failing.
+export function makeGetJson({ token, fetchImpl = globalThis.fetch, apiUrl = 'https://api.github.com', retries = 3, delayMs = 3000 }) {
   return async urlPath => {
     const call = auth => fetchImpl(`${apiUrl}${urlPath}`, {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'condola-ci-pr-context', ...(auth ? { Authorization: `Bearer ${auth}` } : {}) },
     });
-    let res = await call(token);
-    if (token && (res.status === 401 || res.status === 403)) res = await call(null);
+    let res;
+    for (let attempt = 0; ; attempt++) {
+      res = await call(token);
+      if (token && (res.status === 401 || res.status === 403)) res = await call(null);
+      if (res.ok || !(res.status === 422 || res.status >= 500) || attempt >= retries) break;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
     if (!res.ok) throw new ContextError(`GitHub API ${urlPath.split('?')[0]}: HTTP ${res.status}`);
     return res.json();
   };

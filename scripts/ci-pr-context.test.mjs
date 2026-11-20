@@ -84,7 +84,16 @@ test("API reads send the token when set, retry without it on 401/403, and fail o
   };
   assert.deepEqual(await makeGetJson({ token: "t0k", fetchImpl })("/repos/a/b/pulls/1"), { number: 1 });
   assert.deepEqual(seen, [["https://api.github.com/repos/a/b/pulls/1", "Bearer t0k"], ["https://api.github.com/repos/a/b/pulls/1", null]]);
-  await assert.rejects(() => makeGetJson({ token: "", fetchImpl: async () => ({ ok: false, status: 500 }) })("/x?y=1"), /GitHub API \/x: HTTP 500/);
+  let n = 0;
+  await assert.rejects(() => makeGetJson({ token: "", delayMs: 1, fetchImpl: async () => { n++; return { ok: false, status: 500 }; } })("/x?y=1"), /GitHub API \/x: HTTP 500/);
+  assert.equal(n, 4, "a 5xx is retried three times");
+  // a just-pushed commit's 422 clears on retry; a 404 is not retried
+  n = 0;
+  const flaky = async () => (++n < 3 ? { ok: false, status: 422 } : { ok: true, status: 200, json: async () => [{ number: 2 }] });
+  assert.deepEqual(await makeGetJson({ token: "", delayMs: 1, fetchImpl: flaky })("/c/pulls"), [{ number: 2 }]);
+  n = 0;
+  await assert.rejects(() => makeGetJson({ token: "", delayMs: 1, fetchImpl: async () => { n++; return { ok: false, status: 404 }; } })("/p"), /HTTP 404/);
+  assert.equal(n, 1);
 });
 
 test("the CLI writes body, title and base from the API, sends the token only as a header, prints no token, and writes nothing on failure", async () => {
