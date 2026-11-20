@@ -289,3 +289,75 @@ test("B-004: with the global setting OFF the tenant route exposes nothing and re
     if (saved !== undefined) await query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='tenant_signed_pdf'`, [saved]);
   }
 });
+
+test("B-004: with the organization flag absent the tenant route exposes nothing and records no download", async () => {
+  const holder = await person(true);
+  const own = await version(ORG_ID, holder.contact);
+  token = holder.token;
+  leaseCookie = own.lease;
+  try {
+    await query(`UPDATE organizations SET feature_flags = coalesce(feature_flags,'{}'::jsonb) - 'tenant_signed_pdf' WHERE id = $1`, [ORG_ID]);
+    const response = await call(own.pdf);
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("content-type")?.includes("application/pdf"), false);
+    assert.equal(await response.text(), "Not found");
+    assert.equal((await downloads(own.pdf)).rows.length, 0);
+  } finally {
+    await query(`UPDATE organizations SET feature_flags = coalesce(feature_flags,'{}'::jsonb) || '{"tenant_signed_pdf":true}'::jsonb WHERE id = $1`, [ORG_ID]);
+  }
+});
+
+test("B-004: with a non-boolean organization flag the tenant route exposes nothing and records no download", async () => {
+  const holder = await person(true);
+  const own = await version(ORG_ID, holder.contact);
+  token = holder.token;
+  leaseCookie = own.lease;
+  try {
+    await query(`UPDATE organizations SET feature_flags = coalesce(feature_flags,'{}'::jsonb) || '{"tenant_signed_pdf":"yes"}'::jsonb WHERE id = $1`, [ORG_ID]);
+    const response = await call(own.pdf);
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("content-type")?.includes("application/pdf"), false);
+    assert.equal(await response.text(), "Not found");
+    assert.equal((await downloads(own.pdf)).rows.length, 0);
+  } finally {
+    await query(`UPDATE organizations SET feature_flags = coalesce(feature_flags,'{}'::jsonb) || '{"tenant_signed_pdf":true}'::jsonb WHERE id = $1`, [ORG_ID]);
+  }
+});
+
+test("B-004: with the global setting row missing the tenant route exposes nothing and records no download", async () => {
+  const holder = await person(true);
+  const own = await version(ORG_ID, holder.contact);
+  token = holder.token;
+  leaseCookie = own.lease;
+  const saved = (await query<{ value: string | null }>(`SELECT value::text AS value FROM platform_settings WHERE key='tenant_signed_pdf'`)).rows[0]?.value;
+  try {
+    await query(`DELETE FROM platform_settings WHERE key='tenant_signed_pdf'`);
+    const response = await call(own.pdf);
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("content-type")?.includes("application/pdf"), false);
+    assert.equal(await response.text(), "Not found");
+    assert.equal((await downloads(own.pdf)).rows.length, 0);
+  } finally {
+    if (saved !== undefined) {
+      await query(`INSERT INTO platform_settings(key, value) VALUES ('tenant_signed_pdf', $1::jsonb)`, [saved]);
+    }
+  }
+});
+
+test("B-004: with a non-boolean global setting the tenant route exposes nothing and records no download", async () => {
+  const holder = await person(true);
+  const own = await version(ORG_ID, holder.contact);
+  token = holder.token;
+  leaseCookie = own.lease;
+  const saved = (await query<{ value: string | null }>(`SELECT value::text AS value FROM platform_settings WHERE key='tenant_signed_pdf'`)).rows[0]?.value;
+  try {
+    await query(`UPDATE platform_settings SET value='"yes"'::jsonb WHERE key='tenant_signed_pdf'`);
+    const response = await call(own.pdf);
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("content-type")?.includes("application/pdf"), false);
+    assert.equal(await response.text(), "Not found");
+    assert.equal((await downloads(own.pdf)).rows.length, 0);
+  } finally {
+    if (saved !== undefined) await query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='tenant_signed_pdf'`, [saved]);
+  }
+});
