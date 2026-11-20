@@ -610,3 +610,21 @@ flags:
     global_kill: "platform_settings.maint_unit_assign requires boolean true enabled and an allowed_org_ids array containing the organization; missing or malformed is OFF (seeded OFF by 20261118100000_b059_maint_unit_assign.sql)"
     org_override: "organizations.feature_flags.maint_unit_assign must be boolean true; the 設定 › 單位分派 pages, the 團隊 「負責的單位」 link and POST /api/maint-unit-assign also need effective brand_v3"
     activation: "B-059 / DO-3 (MGT-118): admin/manager assign units to maintenance people; while ON for an organization its active maintenance members see only tickets on assigned units (plus tickets explicitly assigned to them) through the RESTRICTIVE policy b059_maint_unit_scope; admins, managers and accountants are unaffected. OFF: pages and API 404, the policy passes every row, every ticket read is unchanged; app.b059_* gateways return NULL / disabled. 0 outbound. First ON = Ron's 4 internal orgs after non-author QA 0 blockers + CEO exact-SHA GO; rollback = platform_settings / org override to OFF (rows kept). Turn this OFF before brand_v3, or assignments stay in force with no page to change them"
+
+  tenant_mobile_required:
+    owner: PE
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.tenant_mobile_required enabled must be boolean true and allowed_org_ids must be an array including this organization; missing row or malformed value is OFF (src/server/b3-tenants.ts TENANTS_ADMISSION_SQL, coalesce false)"
+    org_override: "organizations.feature_flags.tenant_mobile_required must be boolean true"
+    activation: "Brand 3.0 R2-TEN (app #171/#172): gates only the 缺手機 chip/lead on the v3 tenants list; contact fields stay gated by the contact permission. Registered doc-only (QA batch re-review 11/15, 低優先); no platform_settings row is seeded, so it is OFF everywhere. Hosted activation needs a per-flag QA verdict and CEO exact-SHA GO, other organizations Tier 3; 0 real outbound; rollback = platform_settings / org override to OFF. Owner and expiry are assumptions pending Ron"
+
+  today_dash_vacant:
+    owner: PE
+    expires_at: "2026-12-31T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "no platform_settings row; effective only while today_dash is ON for the organization (app.b042_flag_on), so today_dash OFF disables it"
+    org_override: "organizations.feature_flags.today_dash_vacant must be boolean true; missing or non-boolean is OFF (src/server/b3-rental-turns.ts rentalGates, coalesce false)"
+    activation: "Brand 3.0 今天 rental-turn reader (app #156): adds the vacant-unit turn section. Registered doc-only (QA batch re-review 11/15, 低優先); OFF everywhere. Hosted activation only with today_dash, per-flag QA verdict and CEO exact-SHA GO, other organizations Tier 3; 0 real outbound; rollback = org override to OFF. Owner and expiry are assumptions pending Ron"
