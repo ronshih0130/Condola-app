@@ -304,6 +304,9 @@ test("/m/payments and /m/rent OFF render byte-identical legacy markup; ON render
       "@/server/monthly-billing-plan": { monthlyBillingAvailable: read(false) },
       "@/i18n/monthly-billing-preview": { monthlyBillingCopy: () => ({ title: "Preview" }) },
       "@/server/manual-reminders": { manualRemindersEnabled: read(false) }, "@/server/money": { taipeiToday: () => "2026-11-14" },
+      // B-010 fix-forward: with payment results OFF no row is owner-collected, so the proxy-owner field never renders.
+      "@/components/proxy-owner-confirm": { ProxyOwnerConfirmField: () => { throw new Error("OFF renders proxy-owner field"); } },
+      "@/server/payment-request-status": { ownerCollectedPaymentIds: async () => new Set<string>() },
     };
     Object.assign(mocks, { "@/components/legacy-payments-list": compile(source("src/components/legacy-payments-list.tsx"), mocks) });
     const trees: string[] = [];

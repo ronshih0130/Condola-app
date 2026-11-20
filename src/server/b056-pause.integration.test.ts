@@ -197,7 +197,8 @@ const CLASSIFIED: Record<string, Entry> = {
   "app.is_member(p_org uuid)": { cls: "predicate", active: 2, guarded: 2, fp: "430fa5cba030081d3367d6598626569d" },
   "app.has_role(p_org uuid, p_roles org_role[])": { cls: "predicate", active: 1, guarded: 1, fp: "6a9bbafd11b9a457f432ef41ab165ff9" },
   "app.b008_capture_first_period(p_lease uuid, p_prorate boolean)": { cls: "predicate", active: 1, guarded: 1, fp: "ed679a6e23c0e1fb39ca6264e699c62a" },
-  "app.b010_confirmation_audit(p_payment uuid)": { cls: "predicate", active: 1, guarded: 1, fp: "1d0d7bb091ad3b5257b2c705599f1a8d" },
+  // B-010 fix-forward 20261119120000: the unpinned (uuid) audit is dropped; the org/env-pinned replacement keeps the predicate.
+  "app.b010_confirmation_audit(p_payment uuid, p_org uuid, p_environment text)": { cls: "predicate", active: 1, guarded: 1, fp: "bb9c33abeef248bbed0265ce6710e77f" },
   "app.b010_lock_payment_context(p_org uuid, p_live_org uuid, p_environment text, p_session uuid, p_lease uuid, p_role text)": { cls: "predicate", active: 2, guarded: 2, fp: "9600806a7e93671ea946750db8462aa6" },
   "app.b015_edit_context(p_org uuid, p_live uuid, p_env text, p_session uuid)": { cls: "predicate", active: 2, guarded: 2, fp: "4da089b8c46a3256b52c344d0964e2f9" },
   "app.b017_denied_orgs(p_floor text)": { cls: "predicate", active: 2, guarded: 2, fp: "fccd8cab37895a591ec1524073d5abf0" },
