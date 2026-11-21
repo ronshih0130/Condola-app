@@ -261,7 +261,7 @@ test("proxy popup is needed exactly for staff with owner collection", () => {
 });
 
 test("proxy confirmation label matches the required text", () => {
-  assert.equal(PROXY_CONFIRM_LABEL, "代屋主確認已繳款");
+  assert.equal(PROXY_CONFIRM_LABEL, "代屋主確認收款", "L2 proxy confirm label is not the MGT-120 wording");
 });
 
 test("proxy confirmation parser accepts only the four explicit values", () => {
