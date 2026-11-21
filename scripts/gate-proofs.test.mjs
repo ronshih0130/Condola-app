@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { shellWords, parseRunArgs, parseRuleTable, main, ProofError, ALLOWED_CMDS } from './gate-proofs.mjs';
+import { shellWords, parseRunArgs, parseRuleTable, main, ProofError, ALLOWED_CMDS, ciCommand } from './gate-proofs.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const AGENTS = fs.readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
@@ -33,6 +33,22 @@ test('parseRunArgs mirrors red-on-base flags, allows only listed --cmd values', 
   assert.throws(() => parseRunArgs('--expect e'), /no --test/);
   assert.throws(() => parseRunArgs('--test t --expect e --bogus'), /unsupported argument/);
   assert.throws(() => parseRunArgs('--test t --expect e --timeout 1e9'), /--timeout/);
+});
+
+test('an option-looking --test value is rejected, so it cannot become --base or --cmd once forwarded (Codex 3-W r1)', () => {
+  // The two reproductions from the r1 review, verbatim in substance.
+  assert.throws(() => parseRunArgs("--test scripts/gate-pr.test.ts --test '--base' d7471dd1 --expect 'DRY_RUN|FAIL_AT|SKIP'"), /not a plain repo-relative test path/);
+  assert.throws(() => parseRunArgs("--test scripts/gate-pr.test.ts --test '--cmd' 'if true; then echo X; fi' --expect X"), /unsupported shell character|not a plain repo-relative/);
+  assert.throws(() => parseRunArgs("--test scripts/gate-pr.test.ts --test '--cmd' 'echo_X' --expect X"), /not a plain repo-relative test path/);
+  for (const bad of ['-x', '../a.test.ts', 'a/../../b.test.ts', '/abs/a.test.ts']) {
+    assert.throws(() => parseRunArgs(`--test '${bad}' --expect e`), /not a plain repo-relative test path/, bad);
+  }
+});
+
+test('the DB wrapper command runs this checkout\'s copy by absolute path; other commands pass through', () => {
+  assert.equal(ciCommand('bash scripts/red-on-base-db.sh {tests}', '/w/r'), "bash '/w/r/scripts/red-on-base-db.sh' {tests}");
+  assert.equal(ciCommand('bash scripts/red-on-base-db.sh {tests}', "/w/it's"), "bash '/w/it'\\''s/scripts/red-on-base-db.sh' {tests}");
+  assert.equal(ciCommand('node --test {tests}', '/w/r'), 'node --test {tests}');
 });
 
 test('parseRuleTable reads the real AGENTS.md table and unescapes \\|', () => {
@@ -100,7 +116,7 @@ test('a bug-fix PR re-runs its pasted proof against the gate base, not the paste
   const s = stubIo(['PASS']);
   const body = tmpBody(FIX_BODY(`--base origin/pe/old --test src/server/x.integration.test.ts --cmd "bash scripts/red-on-base-db.sh {tests}" --expect "current outstanding balance above"`));
   assert.equal(main(['--base', 'abc1234', '--pr-body-file', body, '--pr-title', 'fix: x'], s.io), 0);
-  assert.deepEqual(s.calls.at(-1), ['--base', 'abc1234', '--test', 'src/server/x.integration.test.ts', '--expect', 'current outstanding balance above', '--cmd', 'bash scripts/red-on-base-db.sh {tests}']);
+  assert.deepEqual(s.calls.at(-1), ['--base', 'abc1234', '--test', 'src/server/x.integration.test.ts', '--expect', 'current outstanding balance above', '--cmd', `bash '${path.join(ROOT, 'scripts/red-on-base-db.sh')}' {tests}`]);
   assert.ok(s.out.some(l => /pasted --base origin\/pe\/old replaced by abc1234/.test(l)));
 });
 
@@ -159,6 +175,9 @@ test('end to end: a real fix passes; a pasted PASS for a test that is green on b
   fs.writeFileSync(path.join(dir, 'add.mjs'), 'export const add = (a, b) => a + b;\n');
   fs.writeFileSync(path.join(dir, 'add.test.mjs'), "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from './add.mjs';\ntest('add', () => assert.equal(add(2, 2), 4, 'add is broken'));\n");
   fs.writeFileSync(path.join(dir, 'other.test.mjs'), "import { test } from 'node:test';\ntest('fine', () => {});\n");
+  // Stand-in for scripts/red-on-base-db.sh (no database here): it runs the tests
+  // in its current directory, the side's checkout.
+  fs.writeFileSync(path.join(dir, 'scripts', 'red-on-base-db.sh'), '#!/usr/bin/env bash\n[ -f add.mjs ] || exit 3\nexec node --test "$@"\n');
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), table(`| RT-01 | add subtracts | #1 | \`add.test.mjs\` | \`${bug.slice(0, 8)}\` | \`add is broken\` |`));
   git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'fix');
   const run = text => spawnSync(process.execPath, ['scripts/gate-proofs.mjs', '--base', bug, '--pr-body-file', tmpBody(text), '--pr-title', 'fix: add'], { cwd: dir, encoding: 'utf8' });
@@ -172,4 +191,16 @@ test('end to end: a real fix passes; a pasted PASS for a test that is green on b
   const wrongReason = run(FIX_BODY(`--test add.test.mjs --cmd 'node --test {tests}' --expect 'not what fails'`));
   assert.equal(wrongReason.status, 1);
   assert.match(wrongReason.stdout, /FAIL pr-run-1: RED-ON-BASE: INCONCLUSIVE/);
+  // Two test files are forwarded as two --test flags.
+  const two = run(FIX_BODY(`--test add.test.mjs other.test.mjs --cmd 'node --test {tests}' --expect 'add is broken'`));
+  assert.equal(two.status, 0, two.stdout + two.stderr);
+  assert.match(two.stdout, /--test add\.test\.mjs --test other\.test\.mjs/);
+  // The DB wrapper exists only in the fix commit (base predates it, as with 3-W
+  // itself): CI runs head's copy in the base checkout, against base's code.
+  const wrapped = run(FIX_BODY(`--test add.test.mjs --cmd "bash scripts/red-on-base-db.sh {tests}" --expect 'add is broken'`));
+  assert.equal(wrapped.status, 0, wrapped.stdout + wrapped.stderr);
+  assert.match(wrapped.stdout, /PASS pr-run-1: RED-ON-BASE: PASS/);
+  // PASS needs base red for the expected reason: base's own add.mjs ran (a
+  // missing wrapper would be exit 127, an inconclusive verdict).
+  assert.match(wrapped.stdout, /base: exit=1/);
 });

@@ -26,7 +26,9 @@
 //      PR's base in CI), so the proof is red on what the PR merges into. --cmd
 //      must be one of ALLOWED_CMDS; integration tests use
 //      `bash scripts/red-on-base-db.sh {tests}` (a fresh disposable database per
-//      side, built from that side's own schema). Env assignments before `node`
+//      side, built from that side's own schema; CI runs this checkout's copy of
+//      the wrapper on both sides, since base may predate it). Test values must
+//      be plain repo-relative paths, forwarded one `--test` each. Env assignments before `node`
 //      on the pasted line are not re-applied.
 //
 // A PR that is not a bug fix re-runs only the Rule Table. The re-run is the
@@ -47,6 +49,18 @@ export const ALLOWED_CMDS = [
   'node --test {tests}',
   'bash scripts/red-on-base-db.sh {tests}',
 ];
+// The DB wrapper is new in 3-W and red-on-base copies only test files into the
+// base checkout, so CI runs THIS checkout's wrapper by absolute path on both
+// sides; the wrapper works on its current directory (each side's own checkout,
+// schema and seed), never on its own location (Codex 3-W r1).
+const DB_CMD = 'bash scripts/red-on-base-db.sh {tests}';
+const shQuote = s => `'${s.replace(/'/g, `'\\''`)}'`;
+export function ciCommand(cmd, repoRoot = REPO_ROOT) {
+  return cmd === DB_CMD ? `bash ${shQuote(path.join(repoRoot, 'scripts/red-on-base-db.sh'))} {tests}` : cmd;
+}
+// A test value must be a plain repo-relative path: an option-looking value
+// (`--test '--base' x`) would be read as a runner option once forwarded.
+const TEST_PATH_RE = /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/;
 
 // Shell words, in a strict subset of bash: unquoted runs of safe characters,
 // '...' (literal) and "..." (\ escapes only $ ` " \ as bash does; an unescaped
@@ -107,6 +121,9 @@ export function parseRunArgs(argText) {
       case '--test':
         out.tests.push(value());
         while (i + 1 < argv.length && !argv[i + 1].startsWith('--')) out.tests.push(argv[++i]);
+        for (const t of out.tests) {
+          if (!TEST_PATH_RE.test(t) || t.split('/').includes('..')) throw new ProofError(`--test value ${JSON.stringify(t)} is not a plain repo-relative test path`);
+        }
         break;
       case '--expect': out.expect = value(); break;
       case '--cmd': out.cmd = value(); break;
@@ -258,8 +275,10 @@ export function main(argv = process.argv.slice(2), io = defaultIo()) {
         return;
       }
       if (parsed.pastedBase && parsed.pastedBase !== opts.base) io.log(`gate:proofs [${label}] note: pasted --base ${parsed.pastedBase} replaced by ${opts.base}`);
-      const a = ['--base', opts.base, '--test', ...parsed.tests, '--expect', parsed.expect];
-      if (parsed.cmd) a.push('--cmd', parsed.cmd);
+      // One --test per file and every value right after its flag, so no value
+      // can be read as an option.
+      const a = ['--base', opts.base, ...parsed.tests.flatMap(t => ['--test', t]), '--expect', parsed.expect];
+      if (parsed.cmd) a.push('--cmd', ciCommand(parsed.cmd));
       if (parsed.timeout) a.push('--timeout', parsed.timeout);
       results.push({ label, ...runRedOnBase(label, a, io) });
     });
