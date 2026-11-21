@@ -1,3 +1,5 @@
+import { ownStatusCopy } from "../i18n/lanes/brand-v3-own-status";
+
 export type Collector = "management" | "owner";
 
 export type ConfirmActor =
@@ -103,7 +105,10 @@ export function needsProxyPopup(
   return collector === "owner" && actor.kind === "staff";
 }
 
-export const PROXY_CONFIRM_LABEL = "代屋主確認已繳款";
+// MGT-120-AC1 / Brand 3.0 screens.md M-PROXY (QA B010 L2): the same approved
+// wording as the brand-v3 sheet title (proxyTitle). It lives in the own-status
+// lane, the only file where the copy guard allows that collection word (PR-016).
+export const PROXY_CONFIRM_LABEL = ownStatusCopy("zh-TW").proxyTitle;
 
 export function readProxyOwnerConfirmed(value: unknown): boolean {
   return value === true || value === "true" || value === "1" || value === "on";
