@@ -5,19 +5,21 @@ import { notFound } from "next/navigation";
 import { requestPrefs } from "@/server/session";
 import { pricingInterimCopy } from "@/i18n/pricing-interim";
 import { PricingApplyForm } from "@/components/pricing-apply-form";
-import { isPricingInterimGloballyEnabled } from "@/server/pricing-interim";
+import { canAccessPricingApply } from "@/server/pricing-interim";
 
 // PLT-30: public B-045 apply route. Per Q-C / C3, there is no "old" public
 // apply form — the old paid CTA pointed logged-in staff at /m/settings and
 // anonymous visitors at /signup. This page is no longer always-rendered for
-// anonymous visitors. Per CEO ruling 2026-11-12 03:45 PST it is now gated on
-// the global pricing_interim flag (fail-closed):
-//   - Flag OFF (global enabled !== true) => notFound() server-side (a real
-//     404, NOT a redirect; submits are gated separately in the action file).
-//   - Flag ON (enabled === true) => existing public form, reachable to
-//     logged-out visitors who arrive via the 「或聯絡我們申請付費」 link on a
-//     flag-ON page. We do not require login.
-// C3 public cutover still needs Ron's own-words GO before the prod flag goes ON.
+// anonymous visitors. Per CEO ruling 2026-11-12 03:45 PST it is gated via
+// canAccessPricingApply (fail-closed):
+//   - Flag OFF => 404 (notFound() server-side, a real 404, NOT a redirect;
+//     submits are gated separately in the action file).
+//   - Internal-only ON (enabled === true + org allowlist, public not true) =>
+//     only an allowlisted staff live-org session sees the form; an anonymous
+//     GET is a 404.
+//   - Public mode (enabled === true AND public === true) keeps the current
+//     public form for logged-out visitors (PLT-30, no login required).
+// C3 / Q-C: do not set public:true without Ron's own-words GO.
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -35,7 +37,7 @@ export default async function PricingApplyPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  if (!(await isPricingInterimGloballyEnabled())) {
+  if (!(await canAccessPricingApply())) {
     notFound();
   }
 

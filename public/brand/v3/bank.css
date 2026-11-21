@@ -1,0 +1,40 @@
+/* R1-BANK only: loaded by the v3 branch, never by the OFF page. */
+html[data-brand="v2"][data-brand-v3] .v3-bank { display:grid; gap:20px; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-bank :is(h1,h3,p) { margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-bank :is(button,a,summary) { min-height:44px; min-width:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank .btn { border-radius:var(--r-btn); border:1px solid var(--c-brand-ink); background:transparent; color:var(--c-brand-ink); padding:10px 16px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank .btn.pri { background:var(--c-brand-ink); color:var(--c-surface); }
+html[data-brand="v2"][data-brand-v3] .v3-bank :is(.v3-bank-month,.v3-bank-toolbar,.v3-bank-chips,.v3-bank-actions) { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-month { justify-content:center; font-weight:700; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-month a { display:grid; place-items:center; color:var(--c-brand-ink); font-size:24px; text-decoration:none; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-lead { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding:24px; background:var(--c-tint-soft); border-radius:var(--r-lg); }
+html[data-brand="v2"][data-brand-v3] .v3-bank-lead h1 { font-size:clamp(24px,2.4vw,32px); line-height:1.5; margin-bottom:10px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-upload { flex:0 0 auto; max-width:100%; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-upload form { margin-top:12px; max-width:340px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-chips { padding:20px 24px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-chips .btn { border-color:var(--c-border); }
+html[data-brand="v2"][data-brand-v3] .v3-bank-chips [aria-current] { background:var(--c-tint-soft); border-color:var(--c-brand-ink); }
+html[data-brand="v2"][data-brand-v3] .v3-bank-rows { list-style:none; margin:0; padding:0; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-rows > li { border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .v3-bank-row { display:grid; grid-template-columns:minmax(120px,1fr) minmax(100px,.8fr) minmax(0,1.8fr) minmax(150px,1.2fr); align-items:center; gap:16px; padding:20px 24px; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-labels { color:var(--c-text-2); padding-block:10px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-sub { display:block; font-size:14px; line-height:1.6; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-bank-amount { font-variant-numeric:tabular-nums; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-text { border:0; background:transparent; color:var(--c-brand-ink); cursor:pointer; text-decoration:underline; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-panel { background:var(--c-surface-2); border-top:1px solid var(--c-border); padding:24px; display:grid; gap:16px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-toolbar { justify-content:space-between; padding:16px 24px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-panel .v3-bank-toolbar { padding:0; }
+html[data-brand="v2"][data-brand-v3] .v3-bank fieldset { border:0; padding:0; margin:0; min-width:0; display:grid; gap:16px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank legend { margin-bottom:12px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-option { display:flex; gap:12px; align-items:flex-start; padding-block:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank input[type="radio"] { margin-top:6px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank [role="alert"] { color:var(--c-danger); }
+html[data-brand="v2"][data-brand-v3] .v3-bank-empty { padding:24px; }
+html[data-brand="v2"][data-brand-v3] .v3-bank-skeleton { min-height:100px; border-radius:var(--r-lg); background:var(--c-surface-2); }
+@media (max-width:1000px) {
+ html[data-brand="v2"][data-brand-v3] .v3-bank-lead { flex-direction:column; }
+ html[data-brand="v2"][data-brand-v3] .v3-bank-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+ html[data-brand="v2"][data-brand-v3] .v3-bank-labels { display:none; }
+ html[data-brand="v2"][data-brand-v3] .v3-bank-amount { text-align:right; }
+ html[data-brand="v2"][data-brand-v3] .v3-bank-row > :nth-child(3), html[data-brand="v2"][data-brand-v3] .v3-bank-actions { grid-column:1 / -1; }
+}

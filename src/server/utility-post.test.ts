@@ -612,9 +612,11 @@ test("statement calculation preserves original positive-prefixed credit attribut
     if(sql.includes("FROM payment_allocations a"))return {rows:[{id:"allocation",version:"1",amount_minor:"5000",invoice_id:"invoice",invoice_version:"1",invoice_status:"paid"}]};
     if(sql.includes("FROM invoice_lines WHERE"))return {rows:[{id:"u",version:"1",charge_type:"utility",amount_minor:"4000",description:"utility",service_period:null,quantity:"1",unit_amount_minor:"4000"},{id:"c",version:"1",charge_type:"credit",amount_minor:"1000",description:"沖銷電費 synthetic",service_period:null,quantity:"1",unit_amount_minor:"1000"}]};
     if(sql.includes("FROM expenses")||sql.includes("FROM management_agreements")||sql.includes("FROM owner_statements"))return {rows:[]};
+    if(sql.includes("FROM public.ledger_transactions t"))return {rows:[{amount:"0"}]};
     throw Error("Unexpected statement query");
   }} as unknown as Client;
   const statement=await calculateStatement(fake,"org","owner","2026-11");
+  assert.deepEqual([statement.payouts,statement.closing],[0,statement.rent+statement.other-statement.fee-statement.expenseTotal]);
   assert.deepEqual(statement.payments[0].allocations[0].attributed,{rent:0,utility:4000,deposit:0,other:0});
   assert.equal(statement.payments[0].allocations[0].residual,1000);
   assert.equal(statement.propertyAmounts[0].utility,4000);

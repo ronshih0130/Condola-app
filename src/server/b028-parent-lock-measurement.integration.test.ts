@@ -87,9 +87,13 @@ function define() {
   });
 }
 
-/** Holder runs `first` and keeps its transaction open for HOLD_MS; the waiter
- * then runs `second` with a bounded lock_timeout while an observer samples the
- * waiter's backend. Both transactions roll back so each scenario is isolated. */
+/** Holder runs `first` and keeps its transaction open; the waiter then runs
+ * `second` with a bounded lock_timeout while an observer samples the waiter's
+ * backend. For blocked scenarios the holder is only held for HOLD_MS *after* a
+ * genuine `Lock` wait on the holder is observed (so a loaded runner cannot
+ * release the parent before, or mistake a null-wait_event blockers-only row for,
+ * a real wait); unblocked scenarios keep the plain timed hold. Both transactions
+ * roll back so each scenario is isolated. */
 async function measure(scenario: string, parent: string, first: string, second: string, expectBlocked: boolean, lockTimeoutMs = LOCK_TIMEOUT_MS, holdMs = HOLD_MS) {
   const holder = await connect(), waiter = await connect(), observer = await connect();
   try {
@@ -104,7 +108,10 @@ async function measure(scenario: string, parent: string, first: string, second: 
     let done = false;
     const started = performance.now();
     const pending = statements[second].run(waiter).then(() => "ok", (error: { code?: string }) => `error:${error.code ?? "unknown"}`).finally(() => { done = true; });
-    const release = new Promise<void>(resolve => setTimeout(() => { holder.query("ROLLBACK").then(() => resolve(), () => resolve()); }, holdMs));
+    // Blocked scenarios defer the hold until a real Lock wait on the holder is
+    // seen; unblocked scenarios start the timed hold immediately (no wait expected).
+    const startRelease = () => new Promise<void>(resolve => setTimeout(() => { holder.query("ROLLBACK").then(() => resolve(), () => resolve()); }, holdMs));
+    let release: Promise<void> | null = expectBlocked ? null : startRelease();
     const samples: Sample[] = [];
     while (!done) {
       const sample = (await observer.query<Sample>(`SELECT a.wait_event_type,a.wait_event,pg_blocking_pids($1) blockers,
@@ -113,13 +120,17 @@ async function measure(scenario: string, parent: string, first: string, second: 
         (SELECT json_agg(json_build_object('locktype',l.locktype,'relation',l.relation::regclass::text,'mode',l.mode) ORDER BY l.relation::regclass::text)
            FROM pg_locks l WHERE l.pid=$1 AND l.granted AND l.locktype='tuple') tuple_locks
         FROM pg_stat_activity a WHERE a.pid=$1`, [waiterPid])).rows[0];
-      if (!done && sample && sample.blockers.length) samples.push(sample);
+      // A blockers-only row with a null wait_event is not enough: only a genuine
+      // `Lock` wait counts toward firstBlockedSample / observedBlocked / blockedByHolder.
+      const lockWait = Boolean(sample && sample.blockers.length && sample.wait_event_type === "Lock");
+      if (!done && lockWait) samples.push(sample);
+      if (expectBlocked && !release && sample && sample.blockers.includes(holderPid) && sample.wait_event_type === "Lock") release = startRelease();
       if (performance.now() - started > lockTimeoutMs + 5000) throw new Error(`${scenario}: waiter exceeded the bound`);
       await new Promise(resolve => setTimeout(resolve, POLL_MS));
     }
     const outcome = await pending;
     const elapsedMs = Math.round(performance.now() - started);
-    await release;
+    if (release) await release; else await holder.query("ROLLBACK").catch(() => {});
     await waiter.query("ROLLBACK");
     const blockerPids = [...new Set(samples.flatMap(s => s.blockers))];
     const m: Measurement = {
@@ -207,9 +218,9 @@ test("server version recorded", async () => {
 
 function assertBlocked(m: Measurement) {
   assert.equal(m.outcome, "ok", `${m.scenario}: ${m.outcome}`);
-  assert.ok(m.observedBlocked, `${m.scenario}: waiter never observed blocked`);
+  assert.ok(m.observedBlocked, `${m.scenario}: waiter never observed blocked on a Lock wait`);
   assert.ok(m.blockedByHolder, `${m.scenario}: blockers ${JSON.stringify(m.blockerPids)} ≠ holder`);
-  assert.equal(m.firstBlockedSample?.wait_event_type, "Lock");
+  assert.equal(m.firstBlockedSample?.wait_event_type, "Lock", `${m.scenario}: first blocked sample wait_event_type ${JSON.stringify(m.firstBlockedSample?.wait_event_type ?? null)} ≠ Lock (no genuine lock wait observed)`);
   assert.ok(m.elapsedMs >= m.holdMs * 0.75, `${m.scenario}: ${m.elapsedMs}ms < hold`);
   assert.ok(m.elapsedMs < m.lockTimeoutMs, `${m.scenario}: ${m.elapsedMs}ms reached lock_timeout`);
 }

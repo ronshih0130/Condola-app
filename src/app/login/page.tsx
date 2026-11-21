@@ -13,7 +13,7 @@ import { actionResendSignup } from "@/server/signup-actions";
 import { CHALLENGE_COOKIE, peekChallenge } from "@/server/auth";
 import { appFooterText, footerHasProductLine } from "@/line-copy";
 import { demoModeEnabled, lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
-import { roleHome } from "@/server/perms";
+import { roleHomeForSession } from "@/server/role-home-v3";
 import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function LoginPage({
   const v2 = brandV2Enabled();
   const demoLine = showDemoLineCopy(null);
   const loginFooter = appFooterText(t("i_login_footer"), demoLine);
-  if (session && params.step !== "backup") redirect(roleHome(session.kind, session.role));
+  if (session && params.step !== "backup") redirect(await roleHomeForSession(session));
   const jar = await cookies();
   const challenge = params.step === "2fa" || params.step === "enroll" ? await peekChallenge(jar.get(CHALLENGE_COOKIE)?.value ?? "") : null;
   const backup = params.step === "backup" ? backupDisplay(jar.get(BACKUP_COOKIE)?.value) : null;

@@ -13,10 +13,23 @@ import { ACCOUNTS, signIn } from "./session";
 
 const ORIGIN = "http://127.0.0.1:43133";
 const databaseUrl = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE).href;
-if (process.env.DEMO_MODE !== "true" || process.env.B002_PRIVATE_HTTP_CONFIG !== "1" ||
-    !process.env.CRON_SECRET || ["demo-cron", "not-the-local-cron-secret"].includes(process.env.CRON_SECRET) ||
-    !process.env.ID_DOC_ENCRYPTION_KEY || !process.env.ID_DOC_HMAC_KEY || !process.env.ID_DOC_SIGNING_SECRET) {
-  throw new Error("B002 requires the dedicated local private test configuration");
+// Same private-config predicate as before: the dedicated local run must have
+// DEMO_MODE / B002_PRIVATE_HTTP_CONFIG / a real CRON_SECRET / the ID_DOC_* keys.
+const privateConfigMissing =
+  process.env.DEMO_MODE !== "true" || process.env.B002_PRIVATE_HTTP_CONFIG !== "1" ||
+  !process.env.CRON_SECRET || ["demo-cron", "not-the-local-cron-secret"].includes(process.env.CRON_SECRET) ||
+  !process.env.ID_DOC_ENCRYPTION_KEY || !process.env.ID_DOC_HMAC_KEY || !process.env.ID_DOC_SIGNING_SECRET;
+// ci-shadow is the self-hosted runner with no B002 private config. Match it by
+// the exact workflow name only; hosted ubuntu CI never matches this string.
+const underCiShadow = process.env.GITHUB_WORKFLOW === "CI shadow (self-hosted)";
+if (privateConfigMissing) {
+  if (underCiShadow) {
+    // Explicit, report-visible skip instead of a module-load throw: this spec
+    // needs the dedicated local private B002 config, which is absent here.
+    test.skip(true, "B002 needs the dedicated local private B002 configuration, which is not present on the ci-shadow runner");
+  } else {
+    throw new Error("B002 requires the dedicated local private test configuration");
+  }
 }
 
 class SafeDbError extends Error {

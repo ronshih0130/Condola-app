@@ -34,9 +34,11 @@ export const ERRORS: Record<string, string> = {
   "errors.roomLease": "i_room_lease_exists",
   "errors.paymentState": "i_pay_state",
   "errors.proxyOwnerConfirmRequired": "i_forbidden",
+  // P52 approved by Ron 2026-11-15 20:44 PT (PENDING-RON PR-023); #181 proxy key removed by revert.
   "errors.matchState": "i_match_state",
   "errors.currency": "i_currency",
   "errors.amountTooHigh": "i_amount_high",
+  "errors.amountOverUnreported": "i_amount_over_unreported", // B-087 TEN-53-AC4 copy (Ron-approved stories, 2026-11-15)
   "errors.email": "i_email",
   "errors.emailTaken": "i_email_taken",
   "errors.teamInvitesSoon": "i_team_invites_soon",
@@ -45,6 +47,13 @@ export const ERRORS: Record<string, string> = {
   "errors.phone": "i_phone",
   "errors.meter": "i_meter",
   "errors.utilityMethod": "i_utility_method_skip",
+  // B-109b posting blocks (a config spanning units / a whole unit; missing or estimated readings; an archived or
+  // missing selected room; 平均分攤 under a revision). No approved
+  // sentence yet: the generic text until P52 copy exists; the key itself is the status.
+  "errors.sharedMeterUnits": "i_generic",
+  "errors.sharedMeterReadings": "i_generic",
+  "errors.sharedMeterRooms": "i_generic",
+  "errors.sharedMeterMode": "i_generic",
   "errors.utilityState": "i_utility_state",
   "errors.utilityOverlap": "i_utility_overlap",
   "errors.utilityPeriod": "i_utility_period",

@@ -143,12 +143,91 @@ test("B-026 vendor estimate submission and manager comparison", async t => {
       const file = "src/app/v/[token]/page.tsx";
       // B-035 (#83) adds a strictly flag-gated "Continue in LINE" entry to this page. Strip exactly
       // those reviewed additions; everything else must still equal the B-026 baseline byte for byte.
-      const withoutB035 = (source: string) => source
+      // B-085 part 2 / app #180 adds the brand_v3 V-TOKEN shell and notification resolver.
+      // Strip only its exact reviewed imports, reads, wrapper and call-site changes before B-035.
+      // B-101 (VEN-31 vendor LINE sign-in) adds a gated entry to the V-TOKEN shell; strip exactly those lines too.
+      // B-105 (vendor_job_v3 RV case) adds two imports, one gated case read and one early case return; strip exactly those.
+      // B-097 (vendor close / RV report) adds one import name and one report prop on the ready case view; strip exactly those.
+      const withoutReviewedAdditions = (source: string) => source
+        // PLT-52-AC9/AC10 (GS-62, GS-63): the ON-only relay read and prop.
+        .replace('import { loadVendorCaseRelay, relayForPage } from "@/server/b3-vendor-case-relay";\n', "")
+        .replace(`    // PLT-52-AC9/AC10: relay only for an open case, read again with the turn in one snapshot (null draws none).
+    const relay = vendorCase.state === "ready" && vendorCaseStage(vendorCase.value) === "open"
+      ? relayForPage(await loadVendorCaseRelay(token), vendorCaseReportReady(vendorCase.value)) : null;
+`, "")
+        .replace(' report={vendorCaseReportReady(vendorCase.value)} relay={relay} /> :', ' report={vendorCaseReportReady(vendorCase.value)} /> :')
+        .replace('import { loadVendorCase, vendorCaseReportReady, vendorCaseStage } from "@/server/b105-vendor-case";\n',
+          'import { loadVendorCase, vendorCaseStage } from "@/server/b105-vendor-case";\n')
+        .replace('estimates={vendorCase.value.estimates} report={vendorCaseReportReady(vendorCase.value)} /> :',
+          'estimates={vendorCase.value.estimates} /> :')
+        .replace('import { loadVendorCase, vendorCaseStage } from "@/server/b105-vendor-case";\n', "")
+        .replace('import { VendorCaseView } from "@/components/v3/vendor/vendor-case";\n', "")
+        .replace(`  // B-105: the RV case replaces the V-TOKEN job content only when vendor_job_v3 admits this shared link.
+  const vendorCase = tokenBrand && job.vendorLink?.sharingApproved ? await loadVendorCase(token) : null;
+`, "")
+        .replace(`  if (tokenBrand && vendorCase) {
+    const heading = [tokenBrand.property, job.title].filter(Boolean).join("・") || t("i_vendor_page_title");
+    const caseView = vendorCase.state === "ready" ? <VendorCaseView locale={prefs.locale} token={token} heading={heading}
+      company={vendorCase.value.company} stage={vendorCaseStage(vendorCase.value)} presetDate={null}
+      scheduledOn={vendorCase.value.scheduledOn} ownerWaitVersion={vendorCase.value.ownerWaitVersion}
+      estimates={vendorCase.value.estimates} /> : <VendorCaseView locale={prefs.locale} token={token} heading={heading}
+      company="" stage="unavailable" presetDate={null} scheduledOn={null} ownerWaitVersion={null} estimates={false} />;
+    const caseMatch = await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;
+    return <VendorTokenShell locale={prefs.locale} context={tokenBrand} notificationHref={notificationEntry?.href ?? null}
+      loginEntry={caseMatch} title={job.title} address={job.address} window={job.window} status=""
+      reported={false} canReport={false} caseView={caseView}>{null}</VendorTokenShell>;
+  }
+`, "")
+        .replace('import { VendorLineMatchEntry } from "@/components/v3/vendor/line-match-entry";\n', "")
+        .replace('  const matchEntry = tokenBrand && await vendorLineEntryEnabled(token, true) ? <VendorLineMatchEntry token={token} /> : null;\n', "")
+        .replace(/\n +loginEntry=\{matchEntry\}/, "")
+        .replace('import type { ReactNode } from "react";\n', "")
+        .replace('import { VendorTokenShell } from "@/components/v3/vendor/token-shell";\n', "")
+        .replace('import { vendorTokenBrand } from "@/server/vendor-token-brand";\n', "")
+        .replace('import { VendorNotificationCenterEntry, resolveVendorNotificationEntry } from "@/components/notification-center-entry";\n',
+          'import { VendorNotificationCenterEntry } from "@/components/notification-center-entry";\n')
+        .replace('import { vendorLinkCopy } from "@/i18n/lanes/vendor-link";\n', "")
+        .replace(`  const tokenBrand = await vendorTokenBrand(token, !job.vendorLink || job.vendorLink.sharingApproved);
+  // Legacy VendorLinkDetails hides its notification child until sharing is approved.
+  const notificationEntry = tokenBrand && (!job.vendorLink || job.vendorLink.sharingApproved)
+    ? await resolveVendorNotificationEntry(token) : null;
+`, "")
+        .replace('  const showLine = !tokenBrand && await vendorLineEntryEnabled(token);\n',
+          '  const showLine = await vendorLineEntryEnabled(token);\n')
+        .replace(`  function wrapTokenPage(content: ReactNode) {
+    if (!tokenBrand) return content;
+    const reported = job!.reported || vendorState?.currentEvent === "vendor_completion_submitted";
+    const shared = !job!.vendorLink || job!.vendorLink.sharingApproved;
+    const writable = !job!.vendorLink || job!.vendorLink.capability === "write";
+    const statusKey = {
+      open: "i_st_open", triaged: "i_st_triaged", assigned: "i_st_assigned", in_progress: "i_st_progress",
+      on_hold: "i_st_hold", resolved: "i_st_resolved", closed: "i_st_closed", cancelled: "i_st_cancelled",
+    }[tokenBrand.status];
+    return <VendorTokenShell locale={prefs.locale} context={tokenBrand}
+      notificationHref={notificationEntry?.href ?? null}
+      title={job!.title} address={job!.address} window={job!.window}
+      status={reported ? t("i_vendor_reported_awaiting_company")
+        : !shared ? vendorLinkCopy(prefs.locale).waiting : !writable ? t("i_vlink_read_only")
+        : vendorState?.locked ? t("i_vendor_pending_owner_approval")  : statusKey ? t(statusKey) : t("i_vlink_status")}
+      reported={reported} canReport={shared && writable && !vendorState?.locked && !reported}>
+      {content}
+    </VendorTokenShell>;
+  }
+`, "")
+        .replace('    return wrapTokenPage(\n      <VendorLinkDetails\n', '    return (\n      <VendorLinkDetails\n')
+        .replace('  return wrapTokenPage(\n    <div className="card pad"', '  return (\n    <div className="card pad"')
+        .replaceAll('{tokenBrand ? null : lineEntry ? <><VendorNotificationCenterEntry token={token} locale={prefs.locale} />{lineEntry}</>',
+          '{lineEntry ? <><VendorNotificationCenterEntry token={token} locale={prefs.locale} />{lineEntry}</>')
         .replace('import { vendorLineEntryEnabled } from "@/server/line/vendor-entry";\n', "")
         .replace('import { VendorLineEntry } from "./vendor-line-entry";\n', "")
-        .replace(/  \/\/ B-035: only while[^\n]*\n  const showLine = [^\n]*\n  const lineEntry = showLine\n[^\n]*\n[^\n]*\n/, "")
+        .replace(`  // B-035: only while every strict vendor LINE gate is ON. OFF keeps the original child slot, so even useId output is unchanged.
+  const showLine = await vendorLineEntryEnabled(token);
+  const lineEntry = showLine
+    ? <VendorLineEntry token={token} copy={{ label: t("i_vendor_line_continue"), hint: t("i_vendor_line_hint"), failed: t("i_vendor_line_failed") }} />
+    : null;
+`, "")
         .replace(/\{lineEntry \? <><VendorNotificationCenterEntry token=\{token\} locale=\{prefs\.locale\} \/>\{lineEntry\}<\/>\n\s*: (<VendorNotificationCenterEntry token=\{token\} locale=\{prefs\.locale\} \/>)\}/g, "$1");
-      assert.equal(withoutB035(readFileSync(file, "utf8")), execFileSync("git", ["show", `4c3f3f7:${file}`], { encoding: "utf8" }));
+      assert.equal(withoutReviewedAdditions(readFileSync(file, "utf8")), execFileSync("git", ["show", `4c3f3f7:${file}`], { encoding: "utf8" }));
       await on();
     });
     await t.test("manager page estimate OFF retains baseline query count and transactions", async () => {

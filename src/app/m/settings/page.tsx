@@ -1,4 +1,9 @@
 // FILE: src/app/m/settings/page.tsx
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { OwnerViewLoading } from "@/components/v3/m/settings/owner-view";
+import { OwnerViewSection } from "@/components/v3/m/settings/page";
+import { brandV3OwnViewCopy } from "@/i18n/lanes/brand-v3-r5-ownview";
 import { upgradeGate } from "@/server/upgrade-gate";
 import { FREE_UNITS } from "@/server/billing";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
@@ -16,21 +21,32 @@ import { isPricingInterimEnabled } from "@/server/pricing-interim";
 import { UsageCard } from "@/components/usage-card";
 import { commercialTier } from "@/server/seats";
 import { countActiveUnits } from "@/server/sandbox";
+import { trialCardState } from "@/server/b056-trial";
+import { formatTrialDate, parseTrialPlan, previewTrialEnd } from "@/server/b056-trial-rules";
+import { TrialConfirm } from "@/components/b056-trial-confirm";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; trial?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const query = await searchParams;
   const session = await guardEffectiveSession(await getSession(), "settings.edit");
   const gate = await upgradeGate(session, FREE_UNITS);
   const t = makeT(session.locale);
+  // R5-OWNVIEW (MGT-138): under brand_v3 the page opens with the approved lead and 「屋主看得到什麼」; the rest of
+  // the page is unchanged (later R5 slices). Flag OFF renders exactly as before.
+  const v3 = await brandV3EnabledForOrg(session.orgId);
   const mail = can(session, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   const interimOn = session.environment === "live" && (await isPricingInterimEnabled(session.liveOrgId));
-  const tier = interimOn ? await commercialTier(session.liveOrgId) : null;
+  const trial = await trialCardState(session);
+  const tier = trial ? trial.plan.tier : interimOn ? await commercialTier(session.liveOrgId) : null;
+  const confirmPlan = trial?.offer === "admin" ? parseTrialPlan(query.trial) : null;
   return (
     <>
-      <PageHeader title={t("i_nav_settings")} />
+      {v3 ? <>
+        <PageHeader title={brandV3OwnViewCopy(session.locale).lead} />
+        <Suspense fallback={<OwnerViewLoading locale={session.locale} />}><OwnerViewSection session={session} /></Suspense>
+      </> : <PageHeader title={t("i_nav_settings")} />}
       <PartnerConsentHistory session={session} />
       <PayeeSettings session={session} />
       <ErrorBanner t={t} error={query.error} />
@@ -38,6 +54,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {mail ? (
         <form className="card pad" action={actionOrgMail} style={{ maxWidth: 720, marginBottom: 16 }}>
           <h3>{t("i_mail_org")}</h3>
+          {/* R5-NOTIFY (MGT-135-AC2): under brand_v3 the tenant switches live on 通知設定; the R5-OWNVIEW side-card row
+              「提醒租客・在「通知設定」」 is this page's one link line, and actionOrgMail keeps the stored values. */}
+          {v3 ? null : <>
           <label className="row">
             <input type="checkbox" name="tenantLease" defaultChecked={mail.tenantLease} data-testid="tenant-lease-mail" />
             {t("i_mail_tenant_lease")}
@@ -46,6 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <input type="checkbox" name="tenantOverdue" defaultChecked={mail.tenantOverdue} data-testid="tenant-overdue-mail" />
             {t("i_mail_tenant_overdue")}
           </label>
+          </>}
           <div className="fg">
             <label className="f">{t("i_mail_contact_email")}</label>
             <input className="inp" name="contactEmail" type="email" defaultValue={mail.contactEmail} data-testid="org-contact-email" />
@@ -66,11 +86,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {t("i_sandbox_plan")}
           </div>
         ) : null}
-        {interimOn ? (
+        {interimOn || trial ? (
           <UsageCard
             locale={session.locale}
             plan={tier === "standard" || tier === "pro" || tier === "free" ? tier : "free"}
             units={await countActiveUnits(session.liveOrgId)}
+            trial={trial?.plan.kind === "trial" && trial.plan.trial ? {
+              plan: trial.plan.trial.plan,
+              endsOn: formatTrialDate(trial.plan.trial.endsAt),
+              daysLeft: trial.daysLeft!,
+            } : null}
+            offer={trial?.offer}
           />
         ) : gate.redirectTo || session.environment === "sandbox" ? null : (
           <p data-testid="settings-plan">{t("i_settings_plan")}</p>
@@ -92,6 +118,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </p>
         </div>
       ) : null}
+      {confirmPlan ? <TrialConfirm locale={session.locale} plan={confirmPlan} endsOn={formatTrialDate(previewTrialEnd(confirmPlan, new Date()))} /> : null}
     </>
   );
 }

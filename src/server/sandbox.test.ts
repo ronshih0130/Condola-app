@@ -99,17 +99,17 @@ test("sample names stay tagged once and phones become E.164", () => {
   assert.equal(sampleIdMask(1), "A******001");
 });
 
-test("sandbox ignores the free cap and live allows four units or a plan or trial", () => {
+test("sandbox ignores the free cap and live allows five units or a plan or trial", () => {
   const free = { tier: "free", trialUntil: null };
   assert.equal(overFree({ environment: "sandbox", activeUnits: 100, plan: free, now }), false);
-  assert.equal(overFree({ environment: "live", activeUnits: 4, plan: free, now }), false);
-  assert.equal(overFree({ environment: "live", activeUnits: 5, plan: free, now }), true);
-  assert.equal(overFree({ environment: "live", activeUnits: 5, plan: { tier: "beta", trialUntil: null }, now }), true);
+  assert.equal(overFree({ environment: "live", activeUnits: 5, plan: free, now }), false);
+  assert.equal(overFree({ environment: "live", activeUnits: 6, plan: free, now }), true);
+  assert.equal(overFree({ environment: "live", activeUnits: 6, plan: { tier: "beta", trialUntil: null }, now }), true);
   assert.equal(overFree({ environment: "live", activeUnits: 9, plan: { tier: "pro", trialUntil: null }, now }), false);
   assert.equal(overFree({ environment: "live", activeUnits: 9, plan: { tier: "business", trialUntil: null }, now }), false);
   assert.equal(overFree({ environment: "live", activeUnits: 9, plan: { tier: "standard", trialUntil: null }, now }), false);
   assert.equal(overFree({ environment: "live", activeUnits: 9, plan: { tier: "free", trialUntil: "2099-01-01" }, now }), false);
-  assert.equal(overFree({ environment: "live", activeUnits: 5, plan: { tier: "free", trialUntil: "2020-01-01" }, now }), true);
+  assert.equal(overFree({ environment: "live", activeUnits: 6, plan: { tier: "free", trialUntil: "2020-01-01" }, now }), true);
 });
 
 test("sandbox delivery is logged and never uses the live demo sender", () => {

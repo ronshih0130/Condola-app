@@ -7,6 +7,21 @@ function read(file: string) {
   return readFileSync(file, "utf8");
 }
 
+test("B-104 helpers are app-only service gateways, absent from the RPC allowlist", () => {
+  const sql = read("supabase/migrations/20261115160000_b104_vendor_b013_read_helpers.sql");
+  assert.doesNotMatch(sql, /CREATE (?:OR REPLACE )?FUNCTION public\./);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of [
+    "b104_current_repair_version(uuid,uuid)", "b104_vendor_command_exists(uuid,uuid,uuid)",
+    "b104_vendor_latest_event(uuid,uuid,uuid,uuid)",
+  ]) {
+    assert.ok(compact.includes(`REVOKEEXECUTEONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated;`));
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+    assert.ok(!read("supabase/rpc-allowlist.txt").includes(signature.split("(")[0]));
+    assert.ok(read("scripts/check-function-privileges.sh").includes(`app.${signature}`));
+  }
+});
+
 function walkSources(dir: string): string {
   const chunks: string[] = [];
   function walk(current: string) {
@@ -93,6 +108,25 @@ test("the session cookie is an app token and tx pins app.active_org_id before SE
   assert.match(db, /SET LOCAL ROLE service_role/);
 });
 
+test("PR-015 two owner reader replacements stay private to app and service_role", () => {
+  const sql = read("supabase/migrations/20261115130000_b013_current_owner_authority.sql");
+  assert.doesNotMatch(sql, /CREATE (?:OR REPLACE )?FUNCTION public\./);
+  const signatures = [
+    "b013_owner_pending(uuid,uuid,text,uuid)",
+    "b013_owner_history(uuid,uuid,text,uuid,uuid)",
+  ];
+  assert.deepEqual([...sql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)/g)].map(match => match[1]),
+    signatures.map(signature => signature.split("(")[0]));
+  assert.doesNotMatch(sql, /CURRENT_DATE/i);
+  assert.doesNotMatch(sql, /app\.b013_decide_estimate/);
+  const compact = sql.replace(/\s+/g, "");
+  for (const signature of signatures) {
+    assert.ok(compact.includes(`REVOKEALLONFUNCTIONapp.${signature}FROMPUBLIC,anon,authenticated,service_role;`));
+    assert.ok(compact.includes(`GRANTEXECUTEONFUNCTIONapp.${signature}TOservice_role;`));
+    assert.ok(!read("supabase/rpc-allowlist.txt").includes(signature.split("(")[0]));
+  }
+});
+
 test("the lock migration checks caller org and revokes the country trigger", () => {
   const sql = read("supabase/migrations/20261030100000_lock_public_function_execute.sql");
   assert.match(sql, /app\.active_org_id/);
@@ -113,4 +147,70 @@ test("the lock migration checks caller org and revokes the country trigger", () 
   assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION public\.condola_property_address_key/);
   assert.match(sql, /ALTER FUNCTION public\.condola_property_address_key\(text\) SET search_path = pg_catalog/);
   assert.match(sql, /sort before this one, so the\n-- REVOKEs apply and do not NOTICE-skip/);
+});
+
+test("B3b exact signatures are inventoried without authenticated RPC permission", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b3_staff_repair_turns(uuid,uuid,text,uuid,uuid,uuid,text,jsonb,integer)", "app.b3_vendor_repair_turn(text)"]) {
+    assert.ok(allow.includes(`# service-only: ${signature}`));
+    assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).includes(signature));
+  }
+  assert.doesNotMatch(read("supabase/migrations/20261115170100_b3_staff_repair_turns.sql"), /CREATE FUNCTION public\./);
+  assert.doesNotMatch(read("supabase/migrations/20261115170200_b3_vendor_repair_turn.sql"), /CREATE FUNCTION public\./);
+});
+
+test("B-093 owner gateways are inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b093_owner_decided(uuid,uuid,text,uuid,jsonb,integer)", "app.b093_owner_decided_ticket(uuid,uuid,text,uuid,uuid)"]) {
+    assert.ok(allow.includes(`# service-only: ${signature}`));
+    assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b093_")));
+  }
+  assert.doesNotMatch(read("supabase/migrations/20261115200000_b093_owner_decided.sql"), /FUNCTION public\./);
+});
+
+test("MF-3 top-up gateways are inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.mf3_topup_record(uuid,uuid,text,uuid,uuid,uuid,uuid,bigint,date,text)", "app.mf3_topup_view(uuid,uuid,text,uuid,text,uuid)"]) {
+    assert.ok(allow.includes(`# service-only: ${signature}`));
+    assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("mf3_")));
+  }
+  assert.doesNotMatch(read("supabase/migrations/20261116140000_mf3_deposit_topup.sql"), /FUNCTION public\./);
+});
+
+test("B-063 vendor workbench gateway is inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  assert.ok(allow.includes("# service-only: app.b063_vendor_workbench(text,uuid)"));
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b063_")));
+  assert.doesNotMatch(read("supabase/migrations/20261116100000_b063_vendor_workbench.sql"), /FUNCTION public\./);
+});
+
+test("B-109 shared-meter gateways are inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b109_shared_meter_save(uuid,uuid,text,uuid,uuid,uuid,uuid[],text,numeric)", "app.b109_shared_meter_view(uuid,uuid,text,uuid,uuid)",
+    "app.b109_shared_meter_split(uuid,uuid,text,uuid,uuid,date,numeric,bigint)"]) assert.ok(allow.includes(`# service-only: ${signature}`), signature);
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b109_")));
+  assert.doesNotMatch(read("supabase/migrations/20261116180000_b109_shared_meter.sql"), /FUNCTION public\./);
+});
+
+test("B-076a phone-history reader is inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  assert.ok(allow.includes("# service-only: app.b076a_phone_history(uuid,uuid,text,uuid,uuid,bigint,integer)"));
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b076a_")));
+  assert.doesNotMatch(read("supabase/migrations/20261116170000_b076a_phone_history.sql"), /FUNCTION public\./);
+});
+
+test("B-109b functions are inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b109_split_shares(jsonb,bigint,bigint)", "app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)"])
+    assert.ok(allow.includes(`# service-only: ${signature}`), signature);
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b109b_") || line.includes("b109_split")));
+  assert.doesNotMatch(read("supabase/migrations/20261116230000_b109b_shared_meter_bills.sql"), /FUNCTION public\./);
+});
+
+test("B-091 owner-rule gateways are inventoried service-only, never authenticated RPC", () => {
+  const allow = read("supabase/rpc-allowlist.txt");
+  for (const signature of ["app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)", "app.b091_owner_rule_view(uuid,uuid,text,uuid)",
+    "app.b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)"]) assert.ok(allow.includes(`# service-only: ${signature}`), signature);
+  assert.ok(!allow.split("\n").filter(line => !line.startsWith("#")).some(line => line.includes("b091_")));
+  assert.doesNotMatch(read("supabase/migrations/20261116240000_b091_owner_rules.sql"), /FUNCTION public\./);
 });

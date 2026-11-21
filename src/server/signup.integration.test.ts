@@ -46,6 +46,12 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
     );
     assert.equal(seeded.rows[0]?.standard_price, 20);
     assert.equal(seeded.rows[0]?.free_units, 4);
+    // C4 (Ron 2026-11-13): new partner codes default to 5 free units; the issued ANJU2026 allowance stays as negotiated (OQ-005).
+    const freeDefault = await query<{ column_default: string | null }>(
+      `SELECT column_default FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'partner_codes' AND column_name = 'free_units'`,
+    );
+    assert.equal(freeDefault.rows[0]?.column_default, "5");
     assert.equal(await goLiveLocked(), false);
 
     const first = await startSignup({
@@ -235,6 +241,58 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
     if (orgs.length) {
       await query(`DELETE FROM organizations WHERE id = ANY($1::uuid[]) OR live_org_id = ANY($1::uuid[])`, [orgs]).catch(() => undefined);
     }
+    if (users.length) {
+      await query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [users]).catch(() => undefined);
+    }
+  }
+});
+
+test("an expired unused signup verification cannot confirm", { timeout: 180_000 }, async () => {
+  const savedEnv = process.env.CONDOLA_ENV;
+  const savedUrl = process.env.SUPABASE_URL;
+  const savedPublicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.CONDOLA_ENV;
+  delete process.env.SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const stamp = Date.now().toString(36);
+  const email = `expired.${stamp}@example.com`;
+  const users: string[] = [];
+  try {
+    assert.equal(signupLinksExposed(), true);
+    const started = await startSignup({
+      email,
+      password: "Fresh1234",
+      confirm: "Fresh1234",
+      partnerCode: "",
+      origin: "http://127.0.0.1:43123",
+      meta,
+      consent: true,
+    });
+    assert.equal(started.ok, true);
+    if (!started.ok || started.status !== "verify" || !started.devToken) throw new Error("expected a local confirm link");
+
+    const found = await query<{ id: string }>(`SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+    const userId = found.rows[0]?.id;
+    assert.ok(userId);
+    users.push(userId);
+
+    const expired = await query(
+      `UPDATE signup_verifications SET expires_at = now() WHERE user_id = $1 AND used_at IS NULL AND (expires_at IS NULL OR expires_at > now())`,
+      [userId],
+    );
+    assert.equal(expired.rowCount, 1);
+
+    const confirmed = await confirmSignupToken(started.devToken, meta);
+    assert.equal(confirmed.ok, false);
+    if (confirmed.ok) throw new Error("expected an expired confirmation");
+    assert.equal(confirmed.error, "expired");
+  } finally {
+    if (savedEnv === undefined) delete process.env.CONDOLA_ENV;
+    else process.env.CONDOLA_ENV = savedEnv;
+    if (savedUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = savedUrl;
+    if (savedPublicUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = savedPublicUrl;
     if (users.length) {
       await query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [users]).catch(() => undefined);
     }

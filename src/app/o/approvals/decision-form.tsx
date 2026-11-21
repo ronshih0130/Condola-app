@@ -4,6 +4,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { repairApprovalCopy } from "@/i18n/repair-approval";
 
+import { postOwnerDecision } from "./decision-request";
+
 type Copy = ReturnType<typeof repairApprovalCopy>;
 
 export function DecisionForm({ versionId, copy, children }: {
@@ -21,12 +23,7 @@ export function DecisionForm({ versionId, copy, children }: {
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/owner-repair-decision", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, versionId, decision, reason: reason.trim() || null }),
-      });
-      const result: { status?: string } = await response.json();
-      const status = result.status;
+      const status = await postOwnerDecision({ requestId: String(requestId), versionId, decision, reason: reason.trim() || null });
       setMessage(status === "recorded" ? copy.recorded
         : status === "rejected_conflict" ? copy.rejected_conflict
         : status === "rejected_disabled" ? copy.rejected_disabled

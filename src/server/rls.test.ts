@@ -751,3 +751,46 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
     });
   }
 });
+
+test("anon cannot read advisor stop-bleed tables or views", { timeout: 60_000 }, async () => {
+  const stopBleedTables = [
+    "partner_codes",
+    "firm_partner_prices",
+    "firm_price_overrides",
+    "signup_verifications",
+    "signup_drafts",
+    "funnel_events",
+    "upgrade_requests",
+  ];
+  const stopBleedViews = ["owner_lease_tenants", "tenant_lease_picker"];
+
+  await withClient(async (client) => {
+    for (const relation of [...stopBleedTables, ...stopBleedViews]) {
+      await client.query("BEGIN");
+      try {
+        await client.query("SET LOCAL ROLE anon");
+        await assert.rejects(
+          () => client.query(`SELECT 1 FROM ${relation} LIMIT 1`),
+          /permission denied/i,
+          `anon should not be able to SELECT from ${relation}`,
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    }
+
+    for (const relation of stopBleedTables) {
+      await client.query("BEGIN");
+      try {
+        await client.query("SET LOCAL ROLE authenticated");
+        await assert.rejects(
+          () => client.query(`SELECT 1 FROM ${relation} LIMIT 1`),
+          /permission denied/i,
+          `authenticated should not be able to SELECT from ${relation}`,
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    }
+  });
+});

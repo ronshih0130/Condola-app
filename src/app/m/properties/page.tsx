@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { archiveCopy } from "@/i18n/record-archive";
@@ -22,7 +23,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
     <>
       <PageHeader
         title={t("s_e03a6ec")}
-        actions={
+        actions={rows.length > 0 ?
           <>
             <Link className="btn" href="/m/archive">{archiveCopy(session.locale).entry}</Link>
             <a className="btn" href="/api/export" data-testid="export-properties">
@@ -36,7 +37,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
             <Link className="btn pri" href="/m/properties/new">
               + {t("s_aed91da")}
             </Link>
-          </>
+          </> : null
         }
       />
       <div className="card">
@@ -47,6 +48,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
           placeholder={t("i_search_ph_properties")}
           clearLabel={t("i_search_clear")}
         />
+        {rows.length === 0 ? <ManagementEmptyState session={session} page={q || page > 1 ? "SRCH" : "PROP"} actionHref={q || page > 1 ? "/m/properties" : undefined} /> : (
         <table className="t rf" data-testid="property-list">
           <thead>
             <tr>
@@ -59,11 +61,6 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={6}>{q ? t("i_search_none") : t("i_empty")}</td>
-              </tr>
-            ) : null}
             {rows.map((row) => (
               <tr key={row.id} className="click">
                 <td>
@@ -83,6 +80,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
             ))}
           </tbody>
         </table>
+        )}
       </div>
       <ListPager
         path="/m/properties"

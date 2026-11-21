@@ -140,6 +140,23 @@
   }
 
   async function vendor(config) {
+    // VEN-31 first binding requires state/nonce/PKCE even inside a LIFF host.
+    if (config.vendorMatch) {
+      try {
+        let flow = config.flow;
+        if (!flow) {
+          const response = await fetch("/api/line/flows", { method: "POST", credentials: "same-origin", cache: "no-store",
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purpose: "login", persona: "vendor", orgId: config.orgId, vendorMatch: "true", csrf: config.csrf }) });
+          if (!response.ok) throw new Error("unavailable");
+          flow = (await response.json()).flow;
+        }
+        startOAuth(flow);
+      } catch {
+        // A failure before any flow exists lands on the static V-LINK error; its retry restarts this same org entry.
+        location.assign("/v/link?error=1" + (config.flow ? "" : "&org=" + encodeURIComponent(config.orgId)));
+      }
+      return;
+    }
     // Exactly the landings /api/line/session can return for a vendor flow: job claim, return path
     // (/vendor-account or /v/liff), or the vendor consent entry wrapping either return path.
     const landings = ["/v/liff/job", "/vendor-account", "/v/liff", "/consent?next=%2Fvendor-account", "/consent?next=%2Fv%2Fliff"];

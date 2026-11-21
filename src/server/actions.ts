@@ -1,5 +1,7 @@
 "use server";
 
+import { paymentReturnTo } from "./payment-return-to";
+
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 
 import { requireCurrentConsent } from "./consent-gate";
@@ -339,6 +341,7 @@ import { readProxyOwnerConfirmed } from "./b010-proxy-confirm-rules";
 
 export async function actionConfirmPayment(formData: FormData) {
   await requireCurrentConsent();
+  const returnTo = paymentReturnTo(formData.get("returnTo"));
   const id = text(formData.get("paymentId"));
   try {
     const session = await guardEffectiveSession(await getSession(), "pay.record");
@@ -346,21 +349,22 @@ export async function actionConfirmPayment(formData: FormData) {
       proxyOwnerConfirmed: readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed")),
       source: "staff_ui",
     });
-    redirect("/m/payments");
+    redirect(returnTo);
   } catch (error) {
-    bounce("/m/payments", error);
+    bounce(returnTo, error);
   }
 }
 
 export async function actionRejectPayment(formData: FormData) {
   await requireCurrentConsent();
+  const returnTo = paymentReturnTo(formData.get("returnTo"));
   const id = text(formData.get("paymentId"));
   try {
     const session = await guardEffectiveSession(await getSession(), "pay.record");
     await rejectPayment(session, id, text(formData.get("reason")));
-    redirect("/m/payments");
+    redirect(returnTo);
   } catch (error) {
-    bounce("/m/payments", error);
+    bounce(returnTo, error);
   }
 }
 

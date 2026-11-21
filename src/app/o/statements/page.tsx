@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { OwnerReportPage, OwnerReportLoading } from "@/components/v3/o/report/page";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -8,9 +11,15 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function OwnerStatementsPage() {
+export default async function OwnerStatementsPage({ searchParams }: { searchParams: Promise<{ month?: string | string[] }> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    const { month } = await searchParams;
+    return <Suspense key={typeof month === "string" ? month : "latest"} fallback={<OwnerReportLoading locale={session.locale} />}>
+      <OwnerReportPage session={session} month={month} />
+    </Suspense>;
+  }
   const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const rows = await listStatements(session);

@@ -23,6 +23,8 @@ import { CHALLENGE_COOKIE, listSessions, mfaStatus, peekChallenge } from "@/serv
 import { memberEmailPrefs } from "@/server/mail-settings";
 import { can } from "@/server/perms";
 import { getSession } from "@/server/session";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { AccountV3Page } from "@/components/v3/m/settings/account-page";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,9 @@ export default async function AccountPage({
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
+  // R5-ACCT (MGT-137): under brand_v3 this is 設定 › 我的帳號 over the same account functions and actions. The
+  // reminder switches (通知設定, MGT-135) and the company 2FA rule (團隊, MGT-133-AC7) are not on it. Flag OFF as before.
+  if (await brandV3EnabledForOrg(session.orgId)) return <AccountV3Page session={session} params={params} />;
   const showMailPrefs = session.kind === "staff" && (session.role === "admin" || session.role === "manager");
   const [sessions, factor, mailPrefs] = await Promise.all([
     listSessions(session.userId),

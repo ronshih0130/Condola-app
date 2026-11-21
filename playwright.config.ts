@@ -9,6 +9,8 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:43123",
     trace: "retain-on-failure",
+    // Required for ci-shadow / headless-only runners: avoids CVDisplayLink and GUI-session dependency.
+    headless: true,
   },
   webServer: [
     {
@@ -37,5 +39,5 @@ export default defineConfig({
       },
     },
   ],
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], headless: true } }],
 });

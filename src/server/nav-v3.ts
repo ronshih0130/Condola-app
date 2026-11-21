@@ -1,0 +1,159 @@
+import { receiptTitleCopy } from "../i18n/owner-finance-replies";
+import { ownerRepairCopy } from "../i18n/lanes/repair-owner-policy";
+import { brandV3OwnerDecidedCopy } from "../i18n/lanes/brand-v3-owner-decided";
+import { brandV3OwnerRulesCopy } from "../i18n/lanes/brand-v3-owner-rules";
+import { centerCopy } from "../i18n/lanes/notification-center";
+import type { CenterAdmission } from "./notification-center";
+import { archiveCopy } from "../i18n/record-archive";
+import { makeT, type Locale } from "../i18n";
+import { brandV3NavigationCopy, brandV3OwnerShellCopy, type NavigationCopyKey } from "../i18n/lanes/brand-v3";
+import { brandV3AssignCopy } from "../i18n/lanes/brand-v3-assign";
+import { can, hasPersonalReminders, noPermHref, type PermKey } from "./perms";
+import type { Session } from "./types";
+
+/** "maintAssign": B-059 設定 › 單位分派 (GS-46), native admin or manager, and only while maint_unit_assign is on. */
+type Visibility = PermKey | "any" | "admin" | "maintAssign";
+/** Facts the layout reads for this request; this model itself never reads the database. */
+export type NavV3Extra = { maintAssign?: boolean };
+export type NavV3Link = { key: string; href: string; perm: Visibility };
+export type ManagerAreaV3 = NavV3Link & {
+  id: string; icon: "today" | "chat" | "box" | "doc" | "coin" | "tool" | "gear" | "more";
+  links: readonly NavV3Link[];
+};
+const link = (key: string, href: string, perm: Visibility): NavV3Link => ({ key, href, perm });
+
+/** Approved B-043 AREAS, in fixed order. This model never reads the database. */
+export const MANAGER_AREAS_V3: readonly ManagerAreaV3[] = [
+  { id: "today", icon: "today", ...link("i_today", "/m", "dash.view"), links: [] },
+  { id: "messages", icon: "chat", ...link("i_nav_msg", "/m/messages", "messages.send"), links: [] },
+  { id: "properties", icon: "box", ...link("v3.properties", "/m/properties", "props.view"), links: [
+    link("i_nav_props", "/m/properties", "props.view"), link("i_nav_units", "/m/units", "props.view"),
+    link("i_nav_tenants", "/m/tenants", "props.view"), link("i_nav_owners", "/m/owners", "props.view"),
+    link("archive.archive", "/m/archive", "props.view"),
+  ] },
+  { id: "leases", icon: "doc", ...link("i_nav_leases", "/m/leases", "props.view"), links: [] },
+  { id: "money", icon: "coin", ...link("v3.money", "/m/rent", "stmt.view"), links: [
+    link("i_nav_rent", "/m/rent", "stmt.view"), link("i_nav_inbox", "/m/payments", "pay.record"),
+    link("i_nav_bank", "/m/bank", "bank.reconcile"), link("i_nav_stmt", "/m/statements", "stmt.view"),
+    link("i_nav_expenses", "/m/expenses", "exp.add"), link("i_nav_reports", "/m/reports", "stmt.view"),
+    link("i_nav_close", "/m/close", "month.close"),
+  ] },
+  { id: "maintenance", icon: "tool", ...link("v3.maintenance", "/m/tickets", "any"), links: [] },
+  { id: "settings", icon: "gear", ...link("i_sec_set", "/m/settings", "any"), links: [
+    link("i_nav_settings", "/m/settings", "settings.edit"), link("v3.team", "/m/team", "team.manage"),
+    link("v3.roles", "/m/roles", "team.manage"), link("i_nav_notify", "/m/notify", "settings.edit"),
+    link("i_nav_audit", "/m/audit", "admin"), link("i_nav_pricing", "/m/upgrade", "settings.edit"),
+    link("v3.import", "/m/import", "props.edit"), link("assign.nav", "/m/assign", "maintAssign"), link("i_account", "/m/account", "any"),
+  ] },
+];
+
+function permitted(session: Session, item: NavV3Link, extra: NavV3Extra = {}) {
+  if (session.kind !== "staff" || !session.role) return false;
+  if (item.perm === "maintAssign") {
+    const native = session.customRole?.nativeRole ?? session.role;
+    return extra.maintAssign === true && (native === "admin" || native === "manager") && can(session, "props.edit");
+  }
+  // The existing archive reader additionally guards props.edit for custom authority.
+  if (item.href === "/m/archive" && session.customRole && !can(session, "props.edit")) return false;
+  // 角色權限: the approved design files it under team.manage; the page itself admits settings.edit.
+  if (item.href === "/m/roles") return can(session, "team.manage") && can(session, "settings.edit");
+  // 通知設定 (R5-NOTIFY, MGT-135-AC1): everyone with personal reminders (admin, manager); the layout admits them.
+  if (item.href === "/m/notify") return hasPersonalReminders(session);
+  if (item.perm === "admin") return session.role === "admin" && !noPermHref(item.href, session);
+  if (item.perm === "any") return item.href !== "/m/tickets" || !noPermHref(item.href, session);
+  return can(session, item.perm);
+}
+export function areasFor(session: Session, extra: NavV3Extra = {}): ManagerAreaV3[] {
+  return MANAGER_AREAS_V3.filter(area => permitted(session, area, extra)).flatMap(area => {
+    const links = area.links.filter(item => permitted(session, item, extra));
+    return area.links.length && !links.length ? [] : [{ ...area, links, href: links[0]?.href ?? area.href }];
+  });
+}
+export function roleHomeV3(kind: Session["kind"], role: Session["role"]) {
+  if (kind === "tenant") return "/t";
+  if (kind === "owner") return "/o";
+  if (role === "accountant") return "/m/payments";
+  if (role === "admin" || role === "manager") return "/m";
+  return "/m/tickets";
+}
+/**
+ * Where this staff session lands under brand_v3 (MGT-48/49): the role's landing when the
+ * effective session can open it; otherwise the first area it can open; otherwise 我的帳號,
+ * which every staff member can open. Never a page that sends the user to /m/noperm.
+ */
+export function landingV3(session: Session) {
+  if (session.kind !== "staff") return roleHomeV3(session.kind, session.role);
+  const opens = (href: string) => !noPermHref(href, session);
+  const preferred = roleHomeV3(session.kind, session.role);
+  if (opens(preferred)) return preferred;
+  for (const area of areasFor(session)) if (opens(area.href)) return area.href;
+  return "/m/account";
+}
+export function tabsFor(session: Session, extra: NavV3Extra = {}): ManagerAreaV3[] {
+  const areas = areasFor(session, extra);
+  if (areas.length <= 5) return areas;
+  let tabs = areas.slice(0, 4);
+  const landing = areas.find(area => area.id === areaForPath(landingV3(session))?.id);
+  if (landing && !tabs.includes(landing)) tabs = [...tabs.slice(0, 3), landing];
+  return [...tabs, { id: "more", icon: "more", ...link("v3.more", "/m/more", "any"), links: [] }];
+}
+
+export const NO_AREA_PATHS_V3 = ["/m/noperm", "/m/admin", "/m/more"] as const;
+export function pathWithin(path: string, href: string) { return path === href || (href !== "/m" && path.startsWith(`${href}/`)); }
+const cleanPath = (path: string) => path.split(/[?#]/)[0].replace(/\/$/, "") || "/";
+export function areaForPath(pathname: string): ManagerAreaV3 | null {
+  const path = cleanPath(pathname);
+  if (NO_AREA_PATHS_V3.some(href => pathWithin(path, href))) return null;
+  if (pathWithin(path, "/m/notifications")) return MANAGER_AREAS_V3[0];
+  if (pathWithin(path, "/m/handover")) return MANAGER_AREAS_V3[3];
+  // B-102: a room's own invite (/m/rooms/{room}/invite) sits under 物件與租客, like the unit invite under /m/units.
+  if (pathWithin(path, "/m/rooms")) return MANAGER_AREAS_V3.find(area => area.id === "properties") ?? null;
+  return MANAGER_AREAS_V3.find(area => area.links.length
+    ? area.links.some(item => pathWithin(path, item.href)) : pathWithin(path, area.href)) ?? null;
+}
+export function navLabel(key: string, locale: Locale) {
+  if (key === "archive.archive") return archiveCopy(locale).archive;
+  if (key === "assign.nav") return brandV3AssignCopy(locale).title;
+  return key.startsWith("v3.") ? brandV3NavigationCopy(locale)[key.slice(3) as NavigationCopyKey] : makeT(locale)(key);
+}
+/** No invented detail-page titles: only approved area/sub-page names. */
+export function crumbsForAreas(pathname: string, areas: readonly ManagerAreaV3[], locale: Locale): string[] {
+  const path = cleanPath(pathname);
+  if (path === "/m/more") return [brandV3NavigationCopy(locale).more];
+  const area = areas.find(item => item.id === areaForPath(path)?.id);
+  if (!area) return [];
+  const sub = area.links.find(item => pathWithin(path, item.href));
+  // R5-OWNVIEW frame (MGT-138): 規則與資料 is named under 設定 (「設定 › 規則與資料」) although it is the area's first page;
+  // R5-NOTIFY frame (MGT-135): likewise 「設定 › 通知設定」, which is a manager's first settings page.
+  return [navLabel(area.key, locale), ...(sub && (path !== area.href || sub.href === "/m/settings" || sub.href === "/m/notify") ? [navLabel(sub.key, locale)] : [])];
+}
+export function crumbFor(pathname: string, session: Session) {
+  return crumbsForAreas(pathname, areasFor(session), session.locale);
+}
+
+export type OwnerEntryV3 = { id: string; href: string; label: string; icon: "today" | "doc" | "bell" | "more" | "tool" };
+export type OwnerNavigationV3 = { areas: OwnerEntryV3[]; more: OwnerEntryV3[] };
+
+/** OWN-27-AC5: local interim live entries only; do not infer access from property membership alone. */
+export function ownerNavigationV3(session: Session, properties: { id: string; name: string }[], repairPolicyIds: string[], admission: CenterAdmission, receiptTitleAvailable = false, decidedAvailable = false, rulesAvailable = false): OwnerNavigationV3 {
+  if (session.kind !== "owner") return { areas: [], more: [] };
+  const copy = brandV3OwnerShellCopy(session.locale);
+  const areas: OwnerEntryV3[] = [
+    { id: "home", href: "/o", label: copy.home, icon: "today" },
+    { id: "statements", href: "/o/statements", label: copy.statements, icon: "doc" },
+  ];
+  // Exactly NotificationCenterEntry's admission rule, including its busy/retry destination.
+  if (admission !== "disabled" && admission !== "denied") areas.push({ id: "notifications", href: "/o/notifications", label: centerCopy(session.locale).title, icon: "bell" });
+  const more: OwnerEntryV3[] = [
+    // RO-MORE: 授權規則 then 核准紀錄 at the top of 更多 (B-094 / B-093); each hidden until its page is live.
+    ...(rulesAvailable ? [{ id: "rules", href: "/o/rules", label: brandV3OwnerRulesCopy(session.locale).title, icon: "tool" as const }] : []),
+    ...(decidedAvailable ? [{ id: "decided", href: "/o/decided", label: brandV3OwnerDecidedCopy(session.locale).title, icon: "doc" as const }] : []),
+    ...(receiptTitleAvailable ? [{ id: "receipt-title", href: "/o/receipt-title", label: receiptTitleCopy(session.locale).title, icon: "doc" as const }] : []),
+    // OWN-34-AC1: while 授權規則 is live it replaces the separate per-property 修繕規則 entries (its first section).
+    ...properties.filter(property => !rulesAvailable && repairPolicyIds.includes(property.id)).map(property => ({
+      id: `repair-policy-${property.id}`, href: `/o/repair-policy/${property.id}`,
+      label: `${property.name} · ${ownerRepairCopy(session.locale).entry}`, icon: "tool" as const,
+    })),
+  ];
+  return { areas, more };
+}

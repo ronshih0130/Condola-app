@@ -37,6 +37,22 @@ test("migration manifest includes every changed SQL file and classifies unsafe c
     assert.match(b030, /revokes/);
     assert.match(b030, /grants role-specific gateway EXECUTE/);
     assert.match(b030, /assignment trigger/);
+    const b104 = manifest.split("\n").find(line => line.startsWith("| 20261115160000_b104_vendor_b013_read_helpers.sql |"));
+    assert.ok(b104);
+    assert.match(b104, /\| A \| yes \|/);
+    assert.match(b104, /ACLs apply only to these new functions/);
+    const p015 = manifest.split("\n").find(line => line.startsWith("| 20261115130000_b013_current_owner_authority.sql |"));
+    assert.ok(p015);
+    assert.match(p015, /\| A \| no \|/);
+    assert.match(p015, /PR-015 \/ B-080 Tier 2/);
+    assert.match(p015, /only the two readers app\.b013_owner_pending and app\.b013_owner_history/);
+    assert.match(p015, /org-local date property-owner authority predicate/);
+    assert.match(p015, /Leaves app\.b013_decide_estimate unchanged/);
+    assert.doesNotMatch(p015, /CURRENT_DATE/i);
+    const p015Sql = readFileSync(path.join(out, "20261115130000_b013_current_owner_authority.sql"), "utf8");
+    assert.deepEqual([...p015Sql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)/g)].map(match => match[1]),
+      ["b013_owner_pending", "b013_owner_history"]);
+    assert.doesNotMatch(p015Sql, /CURRENT_DATE/i);
     assert.match(manifest, /20261025120000_id_consent_notice\.sql \| A \| yes \|/);
     assert.match(readFileSync(path.join(out, "PERMISSIONS.md"), "utf8"), /Live database check was not run/);
   } finally {

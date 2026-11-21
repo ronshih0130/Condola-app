@@ -22,16 +22,16 @@ export function BrandLink({ v2 }: { v2?: boolean } = {}) {
   );
 }
 
-export function LocaleLinks() {
+export function LocaleLinks({ currentLocale }: { currentLocale?: "zh-TW" | "en" } = {}) {
   const path = usePathname() || "/";
   const t = useT();
   const next = encodeURIComponent(path);
   return (
     <span className="seg">
-      <a data-testid="locale-zh" href={`/api/demo/locale?set=zh-TW&next=${next}`}>
+      <a role={currentLocale ? "menuitem" : undefined} aria-current={currentLocale === "zh-TW" ? "true" : undefined} data-testid="locale-zh" href={`/api/demo/locale?set=zh-TW&next=${next}`}>
         {t("i_lang_zh")}
       </a>
-      <a data-testid="locale-en" href={`/api/demo/locale?set=en&next=${next}`}>
+      <a role={currentLocale ? "menuitem" : undefined} aria-current={currentLocale === "en" ? "true" : undefined} data-testid="locale-en" href={`/api/demo/locale?set=en&next=${next}`}>
         {t("i_lang_en")}
       </a>
     </span>
@@ -81,21 +81,22 @@ export function PersonaSelect({
   );
 }
 
-export function SignOutButton({ testId = "sign-out" }: { testId?: string }) {
+export function SignOutButton({ testId = "sign-out", shellMenu = false }: { testId?: string; shellMenu?: boolean }) {
   const t = useT();
   return (
     <form action="/api/auth/sign-out" method="post">
-      <button className="btn sm" type="submit" data-testid={testId}>
-        {t("i_sign_out")}
+      <button role={shellMenu ? "menuitem" : undefined} className="btn sm" type="submit" data-testid={testId}>
+        {t(shellMenu ? "s_66ab2dd" : "i_sign_out")}
       </button>
     </form>
   );
 }
 
-export function ResetButton({ testId = "reset-demo" }: { testId?: string }) {
+export function ResetButton({ testId = "reset-demo", shellMenu = false }: { testId?: string; shellMenu?: boolean }) {
   const t = useT();
   return (
     <button
+      role={shellMenu ? "menuitem" : undefined}
       className="btn sm"
       type="button"
       data-testid={testId}

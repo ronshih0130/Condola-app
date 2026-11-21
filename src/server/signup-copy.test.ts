@@ -71,8 +71,8 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(zh.i_price_seat_std, "5 個席次");
   assert.equal(zh.i_price_seat_pro, "不限席次");
   assert.equal(zh.i_price_free_amt, "NT$0");
-  assert.equal(zh.i_price_std_amt, "第 5 戶起每戶每月 NT$30");
-  assert.equal(zh.i_price_pro_amt, "第 5 戶起每戶每月 NT$40");
+  assert.equal(zh.i_price_std_amt, "第 6 戶起每戶每月 NT$39");
+  assert.equal(zh.i_price_pro_amt, "第 6 戶起每戶每月 NT$59");
   assert.equal(zh.i_price_trial, "前 3 個月免費");
   assert.equal(zh.s_de922fa, "匯出物件（CSV）");
   assert.equal("i_price_free_feat" in zh, false);

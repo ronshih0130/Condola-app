@@ -2,7 +2,7 @@ import { SANDBOX_SAMPLE_CSV } from "../data/sandbox-sample";
 import type { OrgEnvironment } from "./org-scope";
 
 export const SAMPLE_LABEL = "範例資料";
-export const FREE_ACTIVE_UNITS = 4;
+export const FREE_ACTIVE_UNITS = 5;
 
 export type SampleCounts = {
   properties: number;

@@ -3,16 +3,28 @@ name: CI
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    # `edited` (Lauren 6-W): the PR gate reads the PR body (R2 Spec-Change, R4
+    # Verification), so editing the title or body starts a fresh run.
+    types: [opened, synchronize, reopened, labeled, edited]
     # Site-only changes are covered by site.yml (test + build + secret-scan).
     # Mixed PRs that also touch app paths still run this workflow.
     paths-ignore:
       - "site/**"
+  # Pushes run CI on main only; feature branches get CI from their pull request
+  # (one run per push instead of two). Any branch can still be run by hand.
   push:
     branches:
-      - "**"
+      - main
     paths-ignore:
       - "site/**"
+
+# CI throughput (CEO, Ron-approved 2026-11-15): a newer push to the same pull
+# request cancels its older, superseded run. Push and workflow_dispatch runs each
+# get their own group (run_id), so a run on main is never cancelled or replaced,
+# not even while pending (GitHub replaces a pending run in a shared group).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -59,10 +71,22 @@ jobs:
       - run: npm ci
       - name: Install PDF raster tools
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
-      - run: npm run typecheck
-      - run: npm run lint
+      # Lauren 6-W: hosted CI and the Mac shadow (ci-shadow.yml) run the same PR gate,
+      # `npm run gate:pr` (scripts/gate-pr.sh: typecheck -> lint -> check-pr-rules R2 + R4 ->
+      # test:unit). scripts/ci-pr-context.mjs finds the PR in the GitHub API (this pull_request,
+      # re-read so a re-run sees the current body; or the PR merged as HEAD; or, on a dispatched
+      # branch, that branch's PR) and writes its body, title and base. The read-only workflow
+      # token is given to that step only. A run with no PR behind HEAD fails there.
+      - name: PR context for gate:pr
+        env:
+          GH_API_TOKEN: ${{ github.token }}
+        run: node scripts/ci-pr-context.mjs "$RUNNER_TEMP/pr-context"
+      - name: PR gate (npm run gate:pr)
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/pr-context"
+          PR_TITLE="$(cat "$ctx/title")" PR_BODY_FILE="$ctx/body.md" npm run gate:pr -- --base "$(cat "$ctx/base")"
       - run: npm run copy:check
-      - run: npm run test:unit
       - name: Apply schema and seed
         run: |
           sudo apt-get update
@@ -74,6 +98,14 @@ jobs:
           npm run db:reset
       - name: Check function execute privileges
         run: bash scripts/check-function-privileges.sh
+      # Lauren 3-W: re-run the red-on-base proofs (every AGENTS.md Rule Table row,
+      # and a bug-fix PR's pasted runs against its base) instead of trusting the
+      # pasted text; needs the database server for integration-test proofs.
+      - name: Re-run proofs (npm run gate:proofs)
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/pr-context"
+          PR_TITLE="$(cat "$ctx/title")" PR_BODY_FILE="$ctx/body.md" npm run gate:proofs -- --base "$(cat "$ctx/base")"
       - run: npm run test:rls
       - run: npm run cf:build
       - run: npm run test:worker

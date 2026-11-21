@@ -1,3 +1,8 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { IncomeReportPageV3 } from "@/components/v3/m/reports/page";
+import { ReportSkeleton } from "@/components/v3/m/reports/report";
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { archiveCopy } from "@/i18n/record-archive";
@@ -28,10 +33,14 @@ function queryString(period: ReportPeriod, property: string, owner: string) {
 export default async function IncomeExpenseReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; month?: string; from?: string; to?: string; property?: string; owner?: string; error?: string }>;
+  searchParams: Promise<{ mode?: string; month?: string; from?: string; to?: string; property?: string; owner?: string; cursor?: string; error?: string }>;
 }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    const input = await searchParams;
+    return <Suspense key={JSON.stringify(input)} fallback={<ReportSkeleton />}><IncomeReportPageV3 session={session} input={input} /></Suspense>;
+  }
   const t = makeT(session.locale);
   const params = await searchParams;
   const choices = await reportFilterOptions(session);
@@ -75,7 +84,7 @@ export default async function IncomeExpenseReportPage({
         </p>
       ) : null}
       <ErrorBanner t={t} error={errorKey} />
-      <form className="card pad" method="get" data-testid="report-filters" style={{ margin: "16px 0", maxWidth: 960 }}>
+      <form className="card pad" method="get" id="report-filters" data-testid="report-filters" style={{ margin: "16px 0", maxWidth: 960 }}>
         <div className="row" style={{ gap: 12, alignItems: "end", flexWrap: "wrap" }}>
           <div className="fg" style={{ minWidth: 140 }}>
             <label className="f">{t("i_report_mode")}</label>
@@ -125,9 +134,7 @@ export default async function IncomeExpenseReportPage({
       </form>
       <div className="card">
         {rows.length === 0 ? (
-          <div className="empty" data-testid="report-empty">
-            {t("i_report_empty")}
-          </div>
+          <ManagementEmptyState session={session} page="RPT" />
         ) : (
           <RfTable testId="report-list">
             <thead>

@@ -69,6 +69,10 @@ const nextConfig: NextConfig = {
       { source: "/join", headers: INVITE_HEADERS },
       { source: "/accept/:path*", headers: INVITE_HEADERS },
       { source: "/m/team", headers: INVITE_HEADERS },
+      { source: "/m/units/:unitId/invite/:path*", headers: INVITE_HEADERS },
+      // B-102 INV-ROOM: a room's own invite, and the all-rooms list (links and QR codes on screen).
+      { source: "/m/rooms/:roomId/invite/:path*", headers: INVITE_HEADERS },
+      { source: "/m/units/:unitId/room-invites", headers: INVITE_HEADERS },
     ];
   },
 };

@@ -468,12 +468,7 @@ test("BLK-MAC-24 vendor-job-response route: held ticket -> bounded wait -> retry
   await db.query(`INSERT INTO public.repair_vendor_jobs(org_id,ticket_id,vendor_name,vendor_phone,contact_window,token_hash,expires_at)
     VALUES($1,$2,'S3 lock vendor','+886900111225','day',$3,clock_timestamp()+interval '2 hours')`, [ORG_ID, vendorTicket, hashVendorToken(token)]);
   const body = { token, requestId: randomUUID(), versionId, action: "reject", reason: "Not available this week" };
-  // CLONE-ONLY BRIDGE for a pre-existing gap (not part of the S3 fix): vendor-job.ts
-  // mutationScope reads app.b013_estimate_heads as service_role, but 20261105170000
-  // revokes every B-013 table from service_role, so with flags ON the route fails with
-  // 42501 before reaching the gateway. Granted in this disposable clone only, revoked below.
-  await db.query("GRANT SELECT ON app.b013_estimate_heads TO service_role");
-  try {
+  // B-104 readers run with unchanged table revocations; no clone-only grant.
   const held = await behindHeldTicket(vendorTicket, "b013_record_vendor_appointment", () => vendorResponsePost(jsonPost("/api/vendor-job-response", body)));
   const response = held.value as Response | undefined;
   const json = response ? await response.json() : undefined;
@@ -488,7 +483,6 @@ test("BLK-MAC-24 vendor-job-response route: held ticket -> bounded wait -> retry
   t.diagnostic(`vendor-job-response retry: http=${retry.status} status=${again.status}`);
   assert.equal(retry.status, 200);
   assert.equal(again.status, "recorded");
-  } finally { await db.query("REVOKE SELECT ON app.b013_estimate_heads FROM service_role"); }
 });
 
 /** Tenant recipient of a ticket-backed center event: b028_center_session's tenant

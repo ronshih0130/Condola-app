@@ -64,7 +64,7 @@ test("dashboard money uses an NT$ prefix and the received tile says 已繳", () 
   assert.equal(moneyLabel(0, "TWD", "en"), "NT$0");
   assert.equal(moneyLabel(1_200_000, "TWD", "en"), "NT$12,000");
 
-  const dash = read("./m/page.tsx");
+  const dash = read("../components/dashboard-content.tsx");
   assert.match(dash, /moneyLabel/);
   assert.doesNotMatch(dash, /formatMoney/);
   assert.match(dash, /data-testid="dash-received"/);
@@ -72,7 +72,7 @@ test("dashboard money uses an NT$ prefix and the received tile says 已繳", () 
   assert.match(dash, /data-testid="dash-property-amounts"/);
   assert.match(dash, /t\("i_paid"\)/);
   assert.match(dash, /t\("i_open_balance"\)/);
-  assert.match(dash, /\{money\(received\)\} \/ \{money\(billed\)\}/);
+  assert.match(dash, /\{received \? money\(received\) : "—"\} \/ \{billed \? money\(billed\) : "—"\}/);
   assert.match(dash, /money\(row\.balance, row\.currency\)/);
 });
 
