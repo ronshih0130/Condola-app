@@ -20,7 +20,7 @@ Box copies: `/workspace/ops` and `/workspace/condola-hub`. Cite hub paths/sectio
    - Commit the regenerated `product-map.md`, `product-map.data.json` and `product-map.html`. Refresh the prod flag snapshot only with `--refresh-flags`, which runs the read-only prod query wrapper on the box; never change prod flags for this. `--check` exits 1 when the map is stale.
    - In the app PR body, cite the hub commit that updated the map: `Product-Map: <hub sha>`. Use `Product-Map: n/a — <reason>` only if the PR changes no feature, spec, state or flag (e.g. pure refactor, CI, deps).
 
-Documentation rule only; no CI job enforces it yet. Wiring it into `.github/workflows` needs a separate PR with the CEO's exact-SHA GO (P47).
+Documentation rule only; no CI job enforces it yet. Wiring it into `.github/workflows` is a separate PR, merged under §17 (P89).
 
 ## 2. Stack and commands
 Production runtime is Cloudflare Workers + Supabase (Postgres, RLS) + TypeScript. This is NOT a Vercel/Next.js host. Local `npm run dev|build|start` invoke the Next.js CLI only because the Worker is built with OpenNext (`npm run cf:build` = `opennextjs-cloudflare build …`). Do not assume Vercel, `next start` in production, or generic Next.js hosting.
@@ -112,3 +112,19 @@ When a mistake class shows up a second time (a reviewer FAIL, a revert, a CI bre
 |---|---|---|---|---|---|
 | RT-01 | A local PR gate grows a switch that skips or fakes a check | Lauren 6 r1 BLOCKING, hub `20-build/lauren-1-6/item6-review-codex.md` (#255) | `scripts/gate-pr.test.ts` | `d7471dd1` | `DRY_RUN\|FAIL_AT\|SKIP` |
 | RT-02 | A timeout or cleanup path leaves a test process running after the verdict | Lauren 3 r1 BLOCKING 3 and r2 BLOCKING (twice), hub `20-build/lauren-1-6/item3-review-codex.md` (#259) | `scripts/red-on-base.test.mjs` | `3912a1dd` | `was still running` |
+
+## 17. Merge rules (P89)
+
+A PR that touches `.github/workflows` (CI) may be merged by its author, Mac Claude included, with no CEO pre-merge GO, once all three hold:
+
+1. Hosted CI is green on the exact head SHA.
+2. A non-author-family review has passed, with `--author-source` derived per PR via `/workspace/ops/review-author-check.sh`.
+3. The PR's `## Verification` section is updated to that SHA.
+
+The CEO reviews afterwards and can order a revert. A revert goes to `main` the normal way (never force-push). Ordinary code and docs PRs already merge this way (hosted CI green + non-author review + Verification on the exact SHA).
+
+**Still need a CEO exact-SHA GO before merge:** changes to permissions, tokens or secrets; `pull_request_target`; required checks or branch protection; deploy or release workflows; new runners or spend; and anything touching prod deploys, flags, migrations, payments or auth. P89 states this as prod deploys, flags, payments/auth, migrations, and 機密／權限; those clauses cover the list above.
+
+Prod releases still need QA exact-SHA sign-off plus a CEO GO.
+
+This supersedes, for non-exception cases only, the 2026-11-18 12:48 PST rule that every `.github/workflows` PR needs a CEO exact-SHA GO.
