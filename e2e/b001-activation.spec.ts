@@ -21,10 +21,11 @@ const owner:Omit<Session,"sessionId">={...base,userId:USERS.owner,kind:"owner",r
 const tenant:Omit<Session,"sessionId">={...base,userId:USERS.tenant,kind:"tenant",role:null};
 
 async function setup(db:Client,zero:boolean,sessionIds:string[]) {
-  const adminS:Session={...base,sessionId:await insertTestAuthSession(db,USERS.admin)};
-  const ownerS:Session={...owner,sessionId:await insertTestAuthSession(db,USERS.owner)};
-  const tenantS:Session={...tenant,sessionId:await insertTestAuthSession(db,USERS.tenant)};
-  sessionIds.push(adminS.sessionId,ownerS.sessionId,tenantS.sessionId);
+  // Track each session as soon as it exists, so a later failure still cleans it up (Codex #133 SHOULD).
+  const session=async (user:string)=>{const id=await insertTestAuthSession(db,user);sessionIds.push(id);return id;};
+  const adminS:Session={...base,sessionId:await session(USERS.admin)};
+  const ownerS:Session={...owner,sessionId:await session(USERS.owner)};
+  const tenantS:Session={...tenant,sessionId:await session(USERS.tenant)};
   const property=randomUUID(),unit=randomUUID(),lease=randomUUID();
   await db.query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=$1`,[ORG_ID]);
   await db.query(`INSERT INTO properties(id,org_id,name,country_code,currency,timezone) VALUES ($1,$2,'Synthetic signing','TW','TWD','Asia/Taipei')`,[property,ORG_ID]);
@@ -159,5 +160,12 @@ for(const width of [390,1280]) for(const zero of [false,true]) test(`real e-sign
     await visitSigner(page,"tenant",lease);
     await expect(page.getByTestId("esign-flow")).toHaveCount(0);await expect(page.getByRole("heading",{name:"我的租約"})).toBeVisible();
     expect(errors).toEqual([]);
-  } finally {if(sessionIds.length) await db.query("DELETE FROM auth_sessions WHERE id=ANY($1::uuid[])",[sessionIds]);await db.query("UPDATE organizations SET feature_flags=$2 WHERE id=$1",[ORG_ID,original]);await db.end();}
+  } finally {
+    // Each cleanup step runs even if an earlier one fails; the first failure is still reported (Codex #133 SHOULD).
+    const failures:unknown[]=[];
+    if(sessionIds.length) await db.query("DELETE FROM auth_sessions WHERE id=ANY($1::uuid[])",[sessionIds]).catch(e=>failures.push(e));
+    await db.query("UPDATE organizations SET feature_flags=$2 WHERE id=$1",[ORG_ID,original]).catch(e=>failures.push(e));
+    await db.end().catch(e=>failures.push(e));
+    if(failures.length) throw failures[0];
+  }
 });
