@@ -12,9 +12,3 @@
 另見 /workspace/ops/ROADMAP.md（長期重點規劃 P1–P4，排優先順序時以此為準）。
 - llm-route 任務可以附上證件照片（身分證、居留證、護照、駕照、id-photo bucket 檔案），不遮罩、不擋（Ron 2026-10-27 15:25，取代 CEO 同日的禁令）。隱私權政策同步更新揭露（R&D 負責文案）。
 - 遵守 PRINCIPLES 29：同一問題失敗 2 次即換路；卡點超過 1 小時無進展即升級 CEO 裁決。
-
-## Mode B amendment (root AGENTS.md; Ron bootstrap authorization, 2026-10-29)
-
-Rules 1/6 apply to Mode A orchestration. In Mode B, Ron is CEO; Codex desktop implements and runs local/staging checks, and Claude desktop Code tab supplies independent Class B QA/zh copy under the root operating contract. Model CLIs and llm-route are not required for these desktop actions. Ron additionally authorized native subagents at appropriate tiers and highest-tier planning/review; native review does not silently replace the recorded Claude Class B sign-off gate.
-
-For this 20-build session, the latest direct Ron instructions and 20-build/AGENTS.md govern: no production credentials or access (including read-only), no emergency-token exception on this Mac, no external Email/LINE/Slack sends, no changes to protected legal text, and no secret values in prompts/logs/Git. Historical Rules 8/PRINCIPLES source-transfer exceptions do not authorize those actions here.
