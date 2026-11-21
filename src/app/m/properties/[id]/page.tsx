@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { PropertyV3Page } from "@/components/v3/m/properties/page";
+import { PropertyLoading } from "@/components/v3/m/properties/property";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -26,6 +30,10 @@ export default async function PropertyPage({
   const { id } = await params;
   const query = await searchParams;
   const session = await getSession();
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/property.css" /><link rel="stylesheet" href="/brand/v3/archive.css" /><Suspense key={id} fallback={<PropertyLoading locale={session.locale} />}><PropertyV3Page session={session} id={id} query={query} /></Suspense></>;
+  }
   const t = makeT(session.locale);
   const detail = await propertyDetail(session, id);
   if (!detail) notFound();

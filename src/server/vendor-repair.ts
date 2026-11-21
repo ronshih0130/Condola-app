@@ -94,7 +94,7 @@ function vendorLinkDecision(global: unknown, flags: unknown, orgId: string): boo
   return vendorLinkOn(global, flags, orgId);
 }
 
-type OpenJob = {
+export type OpenJob = {
   job_id: string;
   org_id: string;
   ticket_id: string;
@@ -189,8 +189,7 @@ export async function orgVendorDispatchEnabled(orgId: string) {
 export async function currentRepairVersionId(client: Client, orgId: string, ticketId: string) {
   assertIdentifiers(orgId, ticketId);
   const row = await maybe<{ version_id: string | null }>(client,
-    "SELECT h.current_version_id::text AS version_id"
-    + " FROM app.b013_estimate_heads h WHERE h.org_id=$1::uuid AND h.ticket_id=$2::uuid",
+    "SELECT app.b104_current_repair_version($1::uuid,$2::uuid)::text AS version_id",
     [orgId, ticketId],
   );
   if (row?.version_id) assertIdentifiers(row.version_id);
@@ -761,7 +760,11 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
 export async function loadVendorJob(token: string): Promise<VendorJobPage | null> {
   const job = await openJob(token);
   if (!job) return null;
-  return svc(null, async (client) => {
+  return svc(null, client => loadVendorJobOn(client, token, job));
+}
+
+/** Internal: caller owns the transaction and admitted token lookup. No secret cleanup. */
+export async function loadVendorJobOn(client: Client, token: string, job: OpenJob): Promise<VendorJobPage | null> {
     const enhanced = await vendorLinkEnabledOn(client, job.org_id);
     if (enhanced) await lockTicketThenJobs(client, job.org_id, job.ticket_id);
     const still = await maybe<{ job_id: string }>(client, `SELECT job_id::text FROM app.open_vendor_job($1)`, [
@@ -880,7 +883,6 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
       issuePhotos,
       donePhotos,
     };
-  });
 }
 
 export async function submitVendorReport(token: string, input: { done: boolean; cost: string }) {

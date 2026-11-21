@@ -4,7 +4,8 @@
 // Stories: PLT-26..30 (display rates / calculator / apply form), MGT-53,
 // decisions C1–C4 (C1 rev 23:37 — trial CTA always shown, no pricing_trial* gate).
 // These display rates are UI-only and MUST NOT invoice: billing.ts constants
-// stay 30/40/4. Dependency-free: no db, no react, no next, no billing.ts import.
+// stay 30/40 with FREE_UNITS = 5 (C4, Ron 2026-11-13; billing.test.ts keeps INTERIM_FREE_UNITS equal
+// to FREE_UNITS). Dependency-free: no db, no react, no next, no billing.ts import.
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

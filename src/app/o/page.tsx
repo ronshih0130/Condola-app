@@ -1,3 +1,8 @@
+import { OwnerHomeV3 } from "@/components/v3/owner/home";
+import { OwnerUnitsView } from "@/components/v3/owner/units";
+import { ownerUnits } from "@/server/b092-owner-units";
+import { ownerHomeEstimates } from "@/server/owner-home-v3";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
 import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { NotificationCenterEntry } from "@/components/notification-center-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
@@ -11,13 +16,19 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function OwnerHomePage() {
+export default async function OwnerHomePage({ searchParams }: { searchParams: Promise<{ estimate?: string | string[] }> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await guardEffectiveSession(await getSession(), null);
   const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
-  const [rows, privacy] = await Promise.all([ownerHome(session), ownerPrivacy(session.orgId)]);
-  return (
+  const v3 = await brandV3EnabledForOrg(session.orgId);
+  const legacyData = await Promise.all([ownerHome(session), ownerPrivacy(session.orgId)]).catch(error => {
+    if (!v3) throw error;
+    return null;
+  });
+  if (!legacyData) return <OwnerHomeV3 name={session.name} locale={session.locale} state={{ status: "error" }} />;
+  const [rows, privacy] = legacyData;
+  const legacy = (
     <div data-v2-page={v2 ? "o-home" : undefined}>
       <h2>{t("i_hello", { name: session.name })}</h2>
       <NotificationCenterEntry session={session} />
@@ -45,4 +56,17 @@ export default async function OwnerHomePage() {
       </table>
     </div>
   );
+  if (!v3) return legacy;
+  const state = await ownerHomeEstimates(session);
+  const estimate = (await searchParams)?.estimate;
+  return <>
+    {/* PLT-52-AC6…AC8: the O-EST relay reuses the TK-RELAY rail styles (ON-only asset, like /m/tickets/[id]). */}
+    {/* eslint-disable-next-line @next/next/no-css-tags -- ON-only stylesheet, scoped to html[data-brand-v3] */}
+    <link rel="stylesheet" href="/brand/v3/ticket-relay.css" />
+    <OwnerHomeV3 name={session.name} locale={session.locale} state={state} estimate={typeof estimate === "string" ? estimate : undefined}
+      firm={privacy.name} />
+    {/* B-092 RO-UNITS (OWN-33, OQ-095): 「我的物件」 replaces the interim tenant card under v3 (首頁 until 總覽 exists).
+        Unauthorised spaces are absent and no phone is shown (phones belong to the RO-UNIT panel). */}
+    {state.status === "ready" ? <OwnerUnitsView result={await ownerUnits(session)} locale={session.locale} /> : null}
+  </>;
 }

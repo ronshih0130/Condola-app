@@ -42,4 +42,11 @@ ADR-107 | 2026-10-27 PT | Plan authorized | Prepare old disposable-evidence clea
 ADR-108 | 2026-10-27 PT | Accepted | Freeze/push only after every board lane ships with T+15 PASS or CEO parks it with recovery ref | Preserve in-flight work | Then freeze→Origin push→GitHub mirror; queue is a dated snapshot | decisions.md Q8.
 ADR-109 | 2026-10-27 PT | Accepted | Keep ten short docs; PRDs per feature with index/template; map existing assets | Reduce agent reading cost | Agent order: AGENTS→HANDOFF→lane PRD; migrate design specs | decisions.md Q9.
 
+## Phase 0 (Mac, CEO ruling 2026-11-13 PT)
+ADR-110 | 2026-11-13 PT | Accepted with amendments (CEO) | `FREE_UNITS` = 5 everywhere; invoice allowance and editable capacity stay separate concepts; partner grants unchanged, billing only | Single source of truth for free units | Partner snapshots untouched | docs/phase0/adr/ADR-110-free-unit-threshold.md
+ADR-111 | 2026-11-13 PT | Accepted with amendments (CEO) | Trial engine: dedicated record, lazy effective plan, job `0 16 * * *` UTC, persisted `paused`, per-user dismissal, Standard cap 5 incl. admin | B-056 | Paid wins over trial | docs/phase0/adr/ADR-111-trial-engine-state-machine.md
+ADR-112 | 2026-11-13 PT | Accepted with amendments (CEO) | New tables: RLS on, no client grants, owned by the migration role; FORCE without policies only if staging proves rolsuper/rolbypassrls, else named owner policy | Post-INC-RLS-1112 default | Owner proof is a pre-merge gate for schema PRs | docs/phase0/adr/ADR-112-post-inc-rls-1112-new-table-default.md
+ADR-113 | 2026-11-13 PT | Accepted (CEO) | Reconcile the flag registry; expiries to 2026-12-31; static key check deferred | Flag hygiene | Shared evaluator later | docs/phase0/adr/ADR-113-flag-registry-reconciliation.md
+ADR-114 | 2026-11-13 PT | Accepted (CEO) | Four-party shell is chrome only; nav stays B-043 | Avoid permission code in chrome | — | docs/phase0/adr/ADR-114-four-party-shell-vs-nav.md
+
 Sources: `/workspace/ops/PRINCIPLES.md`; `/workspace/ops/RULES.md`; `app_decisions.md` (referenced as `_app_decisions.md` in Q9); `decisions.md` Q1–Q9; `MVP_Scope_v0.5.md`; `ROADMAP.md`.

@@ -1,3 +1,4 @@
+import { vendorMatchContextOn } from "./vendor-match";
 import { LINE_JOB_COOKIE } from "./vendor-scope";
 import { NextResponse } from "next/server";
 import { sessionCookie, SESSION_COOKIE } from "../auth";
@@ -109,14 +110,24 @@ export function createLineHandlers(deps: { resolveSecret?: SecretResolver; excha
   }),
   callback: (request: Request) => lineResponse(async () => {
    envGate(); const url = new URL(request.url), proof = browserProof(request);
-   const result = await callbackLineLogin({ flow: cookie(request, LINE_FLOW_COOKIE) ?? "", state: url.searchParams.get("state") ?? "",
-    verifier: cookie(request, LINE_PKCE_COOKIE) ?? "", code: url.searchParams.get("code") ?? undefined,
-    error: url.searchParams.get("error") ?? undefined, origin: url.origin }, proof, resolve, exchange, meta(request), auth(request));
+   const result = await (async (): Promise<Awaited<ReturnType<typeof callbackLineLogin>>> => {
+    try {
+     const result = await callbackLineLogin({ flow: cookie(request, LINE_FLOW_COOKIE) ?? "", state: url.searchParams.get("state") ?? "",
+      verifier: cookie(request, LINE_PKCE_COOKIE) ?? "", code: url.searchParams.get("code") ?? undefined,
+      error: url.searchParams.get("error") ?? undefined, origin: url.origin }, proof, resolve, exchange, meta(request), auth(request));
+     return result;
+    } catch (error) {
+     // Only a proof-bound B101 flow may recover to V-LINK; foreign/legacy flows keep their exact error contract.
+     try { await lineTransaction(c => vendorMatchContextOn(c, cookie(request, LINE_FLOW_COOKIE) ?? "", proof, true)); }
+     catch { throw error; }
+     return { next: "/v/link?error=1" };
+    }
+   })();
    const res = new NextResponse(null, { status: 303, headers: { ...privateHeaders, Location: new URL(result.next, url.origin).toString() } });
    if ("token" in result && result.token) { const co = sessionCookie(result.token, false); res.cookies.set(co.name, co.value, { ...co.options, secure: true }); }
    // A vendor job claim (B-035) is not an account session and sets no portal preferences.
    if ("jobClaim" in result) lineCookie(res, LINE_JOB_COOKIE, result.jobClaim);
-   if ("orgId" in result) portalCookies(res, result);
+   if ("orgId" in result && result.orgId && result.persona) portalCookies(res, { orgId: result.orgId, persona: result.persona });
    res.cookies.set(LINE_PKCE_COOKIE, "", { path: "/", maxAge: 0 }); return res;
   }),
   session: (request: Request) => lineResponse(async () => {

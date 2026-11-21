@@ -34,9 +34,18 @@ test("B-021 production callers are confined to the owner decision and scoped vie
     "app/o/approvals/[ticketId]/page.tsx",
     "app/o/approvals/approval-cards.tsx",
     "app/o/approvals/decision-form.tsx",
+    "app/o/approvals/emergency.tsx",
+    "components/v3/owner/home.tsx",
+    "server/owner-home-v3.ts",
     "app/o/approvals/page.tsx",
+    // B-093 RO-MORE: the rendering control only (repairApprovalsEnabled) decides whether 核准紀錄 is listed.
+    "app/o/layout.tsx",
+    // B-093 RO-DECIDED view: existing result/field labels from i18n/repair-approval only (no service import).
+    "components/v3/o/decided/decided.tsx",
     "server/vendor-job.ts",
     "server/vendor-repair.ts",
+    // MGT-150 TK-RELAY: the existing scoped manager view (managerApprovalView) only, for admin/manager estimate viewers.
+    "server/b3-ticket-relay.ts",
   ].sort());
 });
 
@@ -55,13 +64,29 @@ test("B-021 service uses contracted gateways and the registered rendering contro
   ];
   const seen = new Set<string>();
   for (const match of source.matchAll(/\b(app|public)\.([a-z_][a-z0-9_]*)\b/gi)) {
-    assert.equal(match[1], "app", "No direct public schema access");
+    // O-HOME: only display columns joined to the owner gateway's admitted rows.
+    // No independent table scan, alternate admission, private notes or write path.
+    if (match[1] === "public") {
+      const before = source.slice(Math.max(0, (match.index ?? 0) - 40), match.index ?? 0);
+      if (["maintenance_tickets", "properties"].includes(match[2])) assert.match(before, /LEFT JOIN $/);
+      // The home projection's read-only authority clause: the owner's CURRENT property_owners row
+      // (ownerPropertyScope rule, bound to the session user). No other table and no write.
+      else if (match[2] === "property_owners") assert.match(before, /WHERE EXISTS \(SELECT 1 FROM $/);
+      else if (match[2] === "contacts") assert.match(before, /property_owners hpo JOIN $/);
+      // PR-015: the organization's time zone for the org-local current-owner date (same rule as the gateways).
+      else if (match[2] === "organizations") assert.match(before, /" JOIN $/);
+      else assert.fail(`unexpected public table ${match[2]}`);
+      continue;
+    }
+    assert.equal(match[1], "app", "Only gateways and the two pinned home display joins");
     assert.ok(allowed.includes(match[2]), "Non-gateway reference: " + match[0]);
     assert.match(source.slice((match.index ?? 0) + match[0].length), /^\s*\(/);
     seen.add(match[2]);
   }
   assert.deepEqual([...seen].sort(), [...allowed].sort());
   assert.match(source, /svc\(session\.userId,/);
+  assert.match(source, /homeDetails \? " LEFT JOIN public\.maintenance_tickets t ON t\.id=r\.ticket_id AND t\.org_id=\$1 AND t\.property_id=r\.property_id/);
+  assert.match(source, /LEFT JOIN public\.properties p ON p\.id=r\.property_id AND p\.org_id=\$1/);
   assert.match(source, /B-013 shared state; B-021 flag-gated/);
   const readerNames = [...source.matchAll(/"(b013_(?:owner_pending|owner_history|manager_view))"/g)].map(match => match[1]);
   assert.deepEqual([...new Set(readerNames)].sort(), ["b013_manager_view", "b013_owner_history", "b013_owner_pending"]);

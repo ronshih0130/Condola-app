@@ -1,9 +1,9 @@
 import { validPartnerTerm, validPartnerUnits, type PartnerOverride } from "./partner-controls-rules";
 /** Whole NT$ prices. Subscription invoices, estimates, and the pricing calculator all call quoteMonthly. */
 
-export const LIST_STANDARD = 30;
-export const LIST_PRO = 40;
-export const FREE_UNITS = 4;
+export const LIST_STANDARD = 39;
+export const LIST_PRO = 59;
+export const FREE_UNITS = 5;
 
 /**
  * A unit counts for billing when its lease is active and either executed

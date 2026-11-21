@@ -29,14 +29,15 @@ permissions:
 jobs:
   shadow:
     name: shadow (self-hosted macOS)
-    # One ci-shadow at a time on the single Mac mini: group per-repository and
-    # NOT per-ref, so two shadows can never run on the same machine at once.
-    # cancel-in-progress is false: the flag is evaluated for the incoming run,
-    # so a push to main would otherwise cancel a running workflow_dispatch
-    # parity run in this group. Runs serialize; they do not supersede.
+    # Per-ref for pull requests, per-run otherwise (CEO, Ron-approved 2026-11-15):
+    # superseded pull_request runs would be cancelled; push and workflow_dispatch
+    # runs each get their own group (run_id), so a push to main is never cancelled
+    # or replaced, not even while pending. The single Mac mini runner still runs
+    # one job at a time, so two shadows cannot overlap on the machine. This
+    # workflow triggers only on push to main and workflow_dispatch.
     concurrency:
-      group: ci-shadow-${{ github.repository }}
-      cancel-in-progress: false
+      group: ci-shadow-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     # Forks never run this job; only this repo on push or manual dispatch.
     if: >-
       github.repository == 'ronshih0130/Condola-app' &&
@@ -281,15 +282,22 @@ jobs:
           fi
           pdftoppm -v 2>&1 | head -n1 || true
 
-      - run: npm run typecheck
-      - run: npm run lint
+      # Lauren 6-W: the same PR gate as hosted ci.yml, `npm run gate:pr`
+      # (typecheck -> lint -> check-pr-rules R2 + R4 -> test:unit), with the PR
+      # body, title and base from scripts/ci-pr-context.mjs (the PR merged as
+      # HEAD, found in the GitHub API; on a dispatched branch, that branch's PR). The read-only token
+      # goes to the context step only. nice leaves CPU for interactive work
+      # (NODE_OPTIONS rejects --test-concurrency).
+      - name: PR context for gate:pr
+        env:
+          GH_API_TOKEN: ${{ github.token }}
+        run: node scripts/ci-pr-context.mjs "$RUNNER_TEMP/pr-context"
+      - name: PR gate (npm run gate:pr)
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/pr-context"
+          PR_TITLE="$(cat "$ctx/title")" PR_BODY_FILE="$ctx/body.md" nice -n 10 npm run gate:pr -- --base "$(cat "$ctx/base")"
       - run: npm run copy:check
-      # Cap Node test concurrency at 4 to leave CPU/RAM for Ron's interactive
-      # Claude Code work on this same Mac. `test:unit` is one `tsx --test` run
-      # over many files with no built-in cap; the appended `--` arg flows to
-      # the tsx test runner (NODE_OPTIONS=--test-concurrency is rejected by
-      # Node, so it must be a CLI arg, not an env var). package.json unchanged.
-      - run: npm run test:unit -- --test-concurrency=4
 
       # --- Disposable PostgreSQL 16 (macOS, no Docker) -------------------
       - name: Start disposable PostgreSQL 16
@@ -370,10 +378,17 @@ jobs:
       - name: Check function execute privileges
         run: bash scripts/check-function-privileges.sh
 
-      # Cap Node test concurrency at 4 to share the Mac with interactive Claude
-      # Code work (appended `--` arg; harmless if the file is already
-      # --test-concurrency=1 or a single file). NODE_OPTIONS can't carry it.
-      - run: npm run test:rls -- --test-concurrency=4
+      # Lauren 3-W: the same proof re-run as hosted ci.yml (Rule Table rows and a
+      # bug-fix PR's pasted red-on-base runs), after the disposable database is up.
+      - name: Re-run proofs (npm run gate:proofs)
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/pr-context"
+          PR_TITLE="$(cat "$ctx/title")" PR_BODY_FILE="$ctx/body.md" nice -n 10 npm run gate:proofs -- --base "$(cat "$ctx/base")"
+
+      # Same command as hosted ci.yml. No `--` passthrough: package.json pins
+      # --test-concurrency=1 per batch (batches share one database).
+      - run: npm run test:rls
 
       # --- Node 22 LTS (wrangler lane only) ------------------------------
       # Switch to the preinstalled Node 22 by prepending it to PATH. No
@@ -390,9 +405,9 @@ jobs:
       # Dual-Node: deps were installed under Node 20 by `npm ci` above.
       # cf:build / test:worker run under Node 22 WITHOUT re-running npm ci.
       - run: npm run cf:build
-      # Cap Node test concurrency at 4 to share the Mac with interactive Claude
-      # Code work (appended `--` arg; harmless for a single-file suite).
-      - run: npm run test:worker -- --test-concurrency=4
+      # Same command as hosted ci.yml (an appended `--` arg lands after the file
+      # list and is read as a path); nice leaves CPU for interactive work.
+      - run: nice -n 10 npm run test:worker
 
       # --- Playwright (workflow_dispatch only; back on Node 20) ----------
       # Re-prepend the preinstalled Node 20 bin so it wins over Node 22.

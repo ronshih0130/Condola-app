@@ -1,3 +1,8 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { BankV3Page, type BankSearchParams } from "@/components/v3/m/bank/page";
+import { BankLoading } from "@/components/v3/m/bank/bank";
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { BankMatching } from "@/components/bank-matching";
@@ -12,15 +17,24 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function BankPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function BankPage({ searchParams }: { searchParams: Promise<BankSearchParams> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
-  if (await bankMatchingEnabled(session)) {
+  const v3 = await brandV3EnabledForOrg(session.orgId);
+  const matching = await bankMatchingEnabled(session);
+  // R1-BANK redesigns the bank-matching board only. An org without `bank_matching` keeps today's import/match page
+  // (also under brand_v3) instead of a v3 "unavailable" state (found on staging, deploy 10 preview).
+  if (v3 && matching) {
+    // The v3-only public stylesheet follows the existing shell/today asset convention.
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/bank.css" /><Suspense fallback={<BankLoading locale={session.locale} />}><BankV3Page session={session} params={params} /></Suspense></>;
+  }
+  if (matching) {
     const board = await bankBoard(session);
     if (!board) throw new Error("Bank matching unavailable");
-    return <><PageHeader title={t("i_nav_bank")} crumb={t("s_01cca89")} /><ErrorBanner t={t} error={params.error} /><BankMatching data={board} locale={session.locale} /></>;
+    return <><PageHeader title={t("i_nav_bank")} crumb={t("s_01cca89")} /><ErrorBanner t={t} error={params.error} /><BankMatching data={board} locale={session.locale} empty={<ManagementEmptyState session={session} page="BANK" />} /></>;
   }
   const [payment, matches] = await Promise.all([latestUnmatchedPayment(session), listMatches(session)]);
   const sample = payment
@@ -36,13 +50,13 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
       <PageHeader title={t("i_nav_bank")} crumb={t("s_01cca89")} />
       <ErrorBanner t={t} error={params.error} />
       <div className="grid2">
-        <BankImport sample={sample} />
+        <div id="bank-import"><BankImport sample={sample} primary={matches.length > 0} /></div>
         <div className="card">
           <div className="hd">
             <h3>{t("i_match")}</h3>
           </div>
           {matches.length === 0 ? (
-            <div className="empty">{t("i_bank_empty")}</div>
+            <ManagementEmptyState session={session} page="BANK" />
           ) : (
             <table className="t rf">
               <tbody>

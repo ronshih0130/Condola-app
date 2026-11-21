@@ -106,6 +106,570 @@ SQL
   done
 } | psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q
 
+# PR-015 owner gateway ACL/config probe. The general scan below covers public;
+# the two owner readers must retain service-only execution after CREATE OR REPLACE.
+# Also check the unchanged decision function's existing ACL/config and 3s lock timeout.
+# Reader authority uses the org-local date, same as the existing decision function.
+psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+DO $p015_owner_gateways$
+DECLARE signature text; fn record;
+BEGIN
+  FOREACH signature IN ARRAY ARRAY[
+    'app.b013_owner_pending(uuid,uuid,text,uuid)',
+    'app.b013_owner_history(uuid,uuid,text,uuid,uuid)',
+    'app.b013_decide_estimate(uuid,uuid,text,uuid,uuid,uuid,text,text,bytea)'
+  ] LOOP
+    SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+    IF NOT fn.prosecdef OR NOT coalesce(fn.proconfig @> ARRAY['search_path=pg_catalog, public, app, pg_temp'],false)
+      OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+      OR has_function_privilege('anon',fn.oid,'EXECUTE')
+      OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+      OR EXISTS (SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) acl
+        WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') THEN
+      RAISE EXCEPTION 'PR-015 owner gateway ACL/config mismatch: %',signature;
+    END IF;
+    IF fn.proname='b013_decide_estimate'
+      AND NOT coalesce(fn.proconfig @> ARRAY['lock_timeout=3s'],false) THEN
+      RAISE EXCEPTION 'PR-015 decision lock timeout missing: %',signature;
+    END IF;
+  END LOOP;
+END $p015_owner_gateways$;
+SQL
+
+# B-104 service-only helper ACL/config probe (app is deliberately not RPC-exposed).
+psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+-- B3b service-only gateway ACL/config probe, migration-owned VOLATILE readers.
+DO $b3b_gateways$
+DECLARE signature text; fn record;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b3_staff_repair_turns(uuid,uuid,text,uuid,uuid,uuid,text,jsonb,integer)',
+  'app.b3_vendor_repair_turn(text)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B3b gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+END $b3b_gateways$;
+-- B-093 service-only gateway ACL/config probe, migration-owned VOLATILE owner readers.
+DO $b093_gateways$
+DECLARE signature text; fn record;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b093_owner_decided(uuid,uuid,text,uuid,jsonb,integer)',
+  'app.b093_owner_decided_ticket(uuid,uuid,text,uuid,uuid)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-093 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+END $b093_gateways$;
+-- MF-3 / MGT-151 service-only top-up gateway ACL/config probe; the table keeps RLS and no application grants.
+DO $mf3_topup$
+DECLARE signature text; fn record; role_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.mf3_topup_record(uuid,uuid,text,uuid,uuid,uuid,uuid,bigint,date,text)',
+  'app.mf3_topup_view(uuid,uuid,text,uuid,text,uuid)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'MF-3 top-up gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.deposit_settlement_topups'::regclass) THEN
+  RAISE EXCEPTION 'MF-3 top-up table RLS is off';
+ END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  IF has_table_privilege(role_name,'app.deposit_settlement_topups','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+   RAISE EXCEPTION 'MF-3 top-up table grant to %',role_name;
+  END IF;
+ END LOOP;
+END $mf3_topup$;
+-- B-063 service-only gateway ACL/config probe, migration-owned VOLATILE vendor workbench reader.
+DO $b063_gateway$
+DECLARE fn record;
+BEGIN
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b063_vendor_workbench(text,uuid)'::regprocedure;
+ IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+  OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+  OR has_function_privilege('anon',fn.oid,'EXECUTE')
+  OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+    WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-063 gateway ACL/config mismatch: app.b063_vendor_workbench(text,uuid)';
+ END IF;
+END $b063_gateway$;
+-- B-105 service-only gateways and internal helpers, migration-owned VOLATILE definers; private table revoked.
+DO $b105_gateways$
+DECLARE signature text; fn record; role_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b105_vendor_case(text,boolean)',
+  'app.b105_vendor_case_admitted(text,boolean)',
+  'app.b105_vendor_decide(text,boolean,uuid,text,date,text)',
+  'app.b105_vendor_attach_photo(text,boolean,uuid,text,text,text,bigint,text)',
+  'app.b105_enabled(uuid,boolean)',
+  'app.b105_read_job(text,boolean)',
+  'app.b105_vendor_write_job(text,boolean)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b105_enabled%'
+     AND signature NOT LIKE 'app.b105_read_job%' AND signature NOT LIKE 'app.b105_vendor_write_job%')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-105 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.b105_vendor_job_decisions'::regclass) THEN
+  RAISE EXCEPTION 'B-105 table RLS is off';
+ END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  IF has_table_privilege(role_name,'app.b105_vendor_job_decisions','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege(role_name,'app.b105_vendor_job_decisions','SELECT,INSERT,UPDATE,REFERENCES') THEN
+   RAISE EXCEPTION 'B-105 table privilege leaked to %',role_name;
+  END IF;
+ END LOOP;
+END $b105_gateways$;
+-- B-109 ADV-METER service-only gateway ACL/config probe; the config table keeps RLS and no application grants.
+DO $b109_gateways$
+DECLARE signature text; fn record; role_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b109_shared_meter_save(uuid,uuid,text,uuid,uuid,uuid,uuid[],text,numeric)',
+  'app.b109_shared_meter_view(uuid,uuid,text,uuid,uuid)',
+  'app.b109_shared_meter_split(uuid,uuid,text,uuid,uuid,date,numeric,bigint)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-109 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.b109_shared_meter_configs'::regclass) THEN
+  RAISE EXCEPTION 'B-109 config table RLS is off';
+ END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  IF has_table_privilege(role_name,'app.b109_shared_meter_configs','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege(role_name,'app.b109_shared_meter_configs','SELECT,INSERT,UPDATE,REFERENCES') THEN
+   RAISE EXCEPTION 'B-109 config table grant to %',role_name;
+  END IF;
+ END LOOP;
+END $b109_gateways$;
+-- B-076a service-only phone-history reader ACL/config probe (migration-owned, VOLATILE, no table).
+DO $b076a_gateway$
+DECLARE fn record;
+BEGIN
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b076a_phone_history(uuid,uuid,text,uuid,uuid,bigint,integer)'::regprocedure;
+ IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+  OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+  OR has_function_privilege('anon',fn.oid,'EXECUTE')
+  OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+    WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-076a gateway ACL/config mismatch';
+ END IF;
+END $b076a_gateway$;
+-- B-110 service-only gateways and internal helpers, migration-owned VOLATILE definers; private table revoked.
+DO $b110_gateways$
+DECLARE signature text; fn record; role_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b110_vendor_share(text,boolean,text,text)',
+  'app.b110_staff_share(uuid,uuid,text,uuid,boolean,uuid,text,boolean)',
+  'app.b110_staff_revoke(uuid,uuid,text,uuid,boolean,uuid)',
+  'app.b110_share_view(text,boolean)',
+  'app.b110_share_photo(text,boolean,uuid)',
+  'app.b110_enabled(uuid,boolean)',
+  'app.b110_expires_at(app.case_shares)',
+  'app.b110_live(app.case_shares,timestamptz)',
+  'app.b110_share_for(uuid,uuid,text,uuid,uuid,text,boolean)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b110_enabled(%' AND signature NOT LIKE 'app.b110_expires_at(%' AND signature NOT LIKE 'app.b110_live(%' AND signature NOT LIKE 'app.b110_share_for(%')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-110 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.case_shares'::regclass) THEN
+  RAISE EXCEPTION 'B-110 table RLS is off';
+ END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  IF has_table_privilege(role_name,'app.case_shares','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege(role_name,'app.case_shares','SELECT,INSERT,UPDATE,REFERENCES') THEN
+   RAISE EXCEPTION 'B-110 table privilege leaked to %',role_name;
+  END IF;
+ END LOOP;
+END $b110_gateways$;
+DO $b104_helpers$
+DECLARE signature text; fn record; table_name text; role_name text;
+BEGIN
+  FOREACH signature IN ARRAY ARRAY[
+    'app.b104_current_repair_version(uuid,uuid)',
+    'app.b104_vendor_command_exists(uuid,uuid,uuid)',
+    'app.b104_vendor_latest_event(uuid,uuid,uuid,uuid)'
+  ] LOOP
+    SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+    IF NOT fn.prosecdef OR fn.provolatile <> 's'
+      OR fn.proowner <> 'postgres'::regrole
+      OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+      OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+      OR has_function_privilege('anon',fn.oid,'EXECUTE')
+      OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+      OR EXISTS (SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) acl
+        WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') THEN
+      RAISE EXCEPTION 'B-104 helper ACL/config mismatch: %',signature;
+    END IF;
+  END LOOP;
+  FOREACH table_name IN ARRAY ARRAY[
+    'b013_estimate_heads','b013_estimate_versions','b013_estimate_decisions',
+    'b013_repair_emergencies','b013_repair_appointments','b013_repair_commands','b013_repair_event_outbox'
+  ] LOOP
+    FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+      IF has_table_privilege(role_name,('app.'||table_name)::regclass,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+        RAISE EXCEPTION 'B-104 private table privilege leaked: % %',role_name,table_name;
+      END IF;
+    END LOOP;
+  END LOOP;
+END $b104_helpers$;
+-- B-112 service-only gateways and internal helpers, migration-owned VOLATILE definers; private ledger revoked.
+DO $b112_gateways$
+DECLARE signature text; fn record; role_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b112_vendor_address(text,uuid,boolean)',
+  'app.b112_save_vendor_address(text,uuid,boolean,uuid,integer,text)',
+  'app.b112_enabled(uuid,boolean)',
+  'app.b112_account_profile(text,uuid,boolean,boolean)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b112_enabled%' AND signature NOT LIKE 'app.b112_account_profile%')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-112 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='app.b112_address_saves'::regclass) THEN
+  RAISE EXCEPTION 'B-112 table RLS is off';
+ END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  IF has_table_privilege(role_name,'app.b112_address_saves','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege(role_name,'app.b112_address_saves','SELECT,INSERT,UPDATE,REFERENCES') THEN
+   RAISE EXCEPTION 'B-112 table privilege leaked to %',role_name;
+  END IF;
+ END LOOP;
+END $b112_gateways$;
+-- B-065 service-only gateways and internal helpers, migration-owned VOLATILE definers; private table revoked.
+DO $b065_gateways$
+DECLARE signature text; fn record; role_name text; table_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b065_issuer_view(text,uuid,boolean)',
+  'app.b065_save_issuer_type(text,uuid,boolean,uuid,text)',
+  'app.b065_enabled(uuid,boolean)',
+  'app.b065_account_contact(text,uuid,boolean,boolean)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b065_enabled%' AND signature NOT LIKE 'app.b065_account_contact%')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-065 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ FOREACH table_name IN ARRAY ARRAY['app.b065_issuer_types','app.b065_issuer_requests'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=table_name::regclass) THEN
+   RAISE EXCEPTION 'B-065 table RLS is off: %',table_name;
+  END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'B-065 table privilege leaked to % on %',role_name,table_name;
+   END IF;
+  END LOOP;
+ END LOOP;
+END $b065_gateways$;
+-- B-091 owner-rule gateway ACL/config probe; both tables keep RLS and no application grants.
+DO $b091_gateways$
+DECLARE signature text; fn record; role_name text; table_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b091_owner_rule_set(uuid,uuid,text,uuid,uuid,text,integer,text)',
+  'app.b091_owner_rule_view(uuid,uuid,text,uuid)',
+  'app.b091_staff_rule_changes(uuid,uuid,text,uuid,uuid,bigint,integer)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-091 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ FOREACH table_name IN ARRAY ARRAY['app.b091_owner_rule_revisions','app.b091_owner_rule_commands'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=table_name::regclass) THEN
+   RAISE EXCEPTION 'B-091 table RLS is off: %',table_name;
+  END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'B-091 table grant to % on %',role_name,table_name;
+   END IF;
+  END LOOP;
+ END LOOP;
+END $b091_gateways$;
+-- B-109b service-only functions: the pure split helper (IMMUTABLE) and the run config gateway (VOLATILE); the
+-- replaced app.b109_shared_meter_split keeps the B-109 probe above.
+DO $b109b_functions$
+DECLARE signature text; fn record;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b109_split_shares(jsonb,bigint,bigint)',
+  'app.b109b_run_config(uuid,uuid,text,uuid,uuid,date,date)'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>(CASE WHEN signature LIKE 'app.b109_split_shares%' THEN 'i' ELSE 'v' END)::"char"
+   OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-109b function ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+END $b109b_functions$;
+-- B-097 / B-098 service-only gateways, migration-owned VOLATILE definers; private tables revoked.
+DO $b097_gateways$
+DECLARE signature text; fn record; role_name text; table_name text;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b097_vendor_done_view(text,boolean)',
+  'app.b097_vendor_complete(text,boolean,uuid,text)',
+  'app.b097_staff_reopen(uuid,uuid,text,uuid,boolean,uuid,uuid,text)',
+  'app.b098_vendor_tenant_phone(text,boolean)',
+  'app.b097_reopen_open(app.b097_completions,timestamp with time zone)',
+  'app.b097_supersede_completion()'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> (signature NOT LIKE 'app.b097_reopen_open%' AND signature NOT LIKE 'app.b097_supersede_completion%')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-097 gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ FOREACH table_name IN ARRAY ARRAY['app.b097_completions','app.b097_requests'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=table_name::regclass) THEN
+   RAISE EXCEPTION 'B-097 table RLS is off: %',table_name;
+  END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'B-097 table privilege leaked to % on %',role_name,table_name;
+   END IF;
+  END LOOP;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='b097_supersede_completion' AND tgrelid='public.maintenance_tickets'::regclass
+  AND tgfoid='app.b097_supersede_completion()'::regprocedure AND tgenabled='O') THEN
+  RAISE EXCEPTION 'B-097 supersede trigger missing or disabled';
+ END IF;
+END $b097_gateways$;
+-- B-102 INV-ROOM: the new room-issue gateway and the replaced B2 invite functions stay service-only definers.
+DO $b102_invites$
+DECLARE signature text; fn record;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.unit_line_issue_room(uuid,uuid,uuid,text,uuid)',
+  'app.unit_line_ensure_room(uuid,uuid,uuid,text,uuid)',
+  'app.unit_line_issue(uuid,uuid,text,uuid)',
+  'app.unit_line_rotate(uuid,uuid,text,uuid)',
+  'app.unit_line_accept(uuid,uuid,text,uuid,text,text,text,uuid,text)',
+  'app.unit_line_include_on_lease(uuid,uuid,uuid,uuid[])'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v'
+   OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-102 invite function ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+END $b102_invites$;
+-- B-092 OWN-UNITS: the owner units reader is a service-only VOLATILE definer.
+DO $b092_units$
+DECLARE fn record;
+BEGIN
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b092_owner_units(uuid,uuid,text,uuid)'::regprocedure;
+ IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+  OR has_function_privilege('anon',fn.oid,'EXECUTE') OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-092 owner units ACL/config mismatch';
+ END IF;
+END $b092_units$;
+-- B-092 RO-UNIT: the owner single-unit reader is a service-only VOLATILE definer.
+DO $b092_unit$
+DECLARE fn record;
+BEGIN
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b092_owner_unit(uuid,uuid,text,uuid,uuid,uuid)'::regprocedure;
+ IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+  OR has_function_privilege('anon',fn.oid,'EXECUTE') OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-092 owner unit ACL/config mismatch';
+ END IF;
+END $b092_unit$;
+-- B-059: two service-only VOLATILE definer gateways, one internal flag helper (owner only) and four STABLE definer
+-- RLS helpers that authenticated may execute (and nobody else); both tables RLS on with no application grant.
+DO $b059$
+DECLARE fn record; sig text; role_name text;
+BEGIN
+ FOREACH sig IN ARRAY ARRAY['app.b059_assign_view(uuid,uuid,text,uuid,uuid)','app.b059_assign_save(uuid,uuid,text,uuid,uuid,uuid,uuid[])'] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=sig::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR NOT has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('anon',fn.oid,'EXECUTE') OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-059 gateway ACL/config mismatch: %', sig;
+  END IF;
+ END LOOP;
+ FOREACH sig IN ARRAY ARRAY['app.b059_scoped_orgs()','app.b059_visible_units()','app.b059_own_members()','app.b059_ticket_visible(uuid)','app.b059_flag_on(uuid)'] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=sig::regprocedure;
+  IF NOT fn.prosecdef OR fn.provolatile<>'s' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+   OR has_function_privilege('anon',fn.oid,'EXECUTE') OR has_function_privilege('service_role',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE') IS DISTINCT FROM (sig<>'app.b059_flag_on(uuid)')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-059 RLS helper ACL/config mismatch: %', sig;
+  END IF;
+ END LOOP;
+ FOREACH sig IN ARRAY ARRAY['app.b059_unit_assignments','app.b059_assign_commands'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=sig::regclass) THEN RAISE EXCEPTION 'B-059 table RLS off: %', sig; END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,sig,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'B-059 table grant: % on %', role_name, sig;
+   END IF;
+  END LOOP;
+ END LOOP;
+ IF (SELECT count(*) FROM pg_policy WHERE polname IN ('b059_maint_unit_scope','b059_maint_unit_photo_scope') AND NOT polpermissive)<>2 THEN
+  RAISE EXCEPTION 'B-059 restrictive policies missing';
+ END IF;
+END $b059$;
+-- B-065 phase B P1 stamp gateways (service-only; writers also lock_timeout=3s), internal helpers with no role EXECUTE,
+-- the IMMUTABLE art check; three private tables with RLS on and no application privileges.
+DO $b065_stamp$
+DECLARE signature text; fn record; role_name text; table_name text; gateway boolean; writer boolean;
+BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'app.b065_stamp_view(text,uuid,boolean)',
+  'app.b065_stamp_preview_by_grant(text,uuid,uuid)',
+  'app.b065_receipt_stamp(text,uuid,boolean)',
+  'app.b065_receipt_stamp_by_grant(text,uuid,uuid)',
+  'app.b065_save_stamp(text,uuid,boolean,uuid,text,text,text,text,integer[])',
+  'app.b065_save_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,integer[])',
+  'app.b065_consent_stamp(text,uuid,boolean,uuid,text,text,text,text,text,integer[])',
+  'app.b065_consent_stamp_by_grant(text,uuid,uuid,uuid,text,text,text,text,text,integer[])',
+  'app.b065_stamp_version_guard()',
+  'app.b065_stamp_consent_guard()',
+  'app.b065_stamp_inputs(public.vendor_profiles)',
+  'app.b065_inputs_sha256(jsonb)',
+  'app.b065_inputs_fit(jsonb)',
+  'app.b065_art_meta_ok(text,text,text,integer[])',
+  'app.b065_grant_enabled(uuid)',
+  'app.b065_stamp_account(text,uuid,boolean,boolean)',
+  'app.b065_stamp_grant(text,uuid,uuid,boolean)',
+  'app.b065_stamp_locks(uuid,uuid)',
+  'app.b065_stamp_state(uuid,uuid,public.vendor_profiles,text)',
+  'app.b065_stamp_write(text,text,uuid,uuid,uuid,uuid,public.vendor_profiles,uuid,text,text,text,text,text,integer[])'
+ ] LOOP
+  SELECT * INTO STRICT fn FROM pg_proc WHERE oid=signature::regprocedure;
+  gateway:=signature ~ '^app\.b065_(stamp_view|stamp_preview_by_grant|receipt_stamp|receipt_stamp_by_grant|save_stamp|save_stamp_by_grant|consent_stamp|consent_stamp_by_grant)\(';
+  writer:=signature ~ '^app\.b065_(save|consent)_stamp';
+  IF NOT fn.prosecdef OR fn.provolatile<>'v' OR fn.proowner<>'postgres'::regrole
+   OR fn.proconfig IS DISTINCT FROM (CASE WHEN writer THEN ARRAY['search_path=pg_catalog, pg_temp','lock_timeout=3s']
+     ELSE ARRAY['search_path=pg_catalog, pg_temp'] END)
+   OR has_function_privilege('service_role',fn.oid,'EXECUTE') <> gateway
+   OR has_function_privilege('anon',fn.oid,'EXECUTE')
+   OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+   RAISE EXCEPTION 'B-065 stamp gateway ACL/config mismatch: %',signature;
+  END IF;
+ END LOOP;
+ SELECT * INTO STRICT fn FROM pg_proc WHERE oid='app.b065_svg_canonical(text)'::regprocedure;
+ IF fn.prosecdef OR fn.provolatile<>'i' OR fn.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, pg_temp']
+  OR has_function_privilege('service_role',fn.oid,'EXECUTE') OR has_function_privilege('anon',fn.oid,'EXECUTE')
+  OR has_function_privilege('authenticated',fn.oid,'EXECUTE')
+  OR EXISTS(SELECT 1 FROM aclexplode(coalesce(fn.proacl,acldefault('f',fn.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') THEN
+  RAISE EXCEPTION 'B-065 stamp gateway ACL/config mismatch: app.b065_svg_canonical(text)';
+ END IF;
+ FOREACH table_name IN ARRAY ARRAY['app.b065_stamp_versions','app.b065_stamp_consents','app.b065_stamp_requests'] LOOP
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=table_name::regclass) THEN
+   RAISE EXCEPTION 'B-065 stamp table RLS is off: %',table_name;
+  END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   IF has_table_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,table_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'B-065 stamp table privilege leaked to % on %',role_name,table_name;
+   END IF;
+  END LOOP;
+ END LOOP;
+END $b065_stamp$;
+SQL
+
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"
 if [[ -f "$default_file" ]]; then
   psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'

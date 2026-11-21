@@ -88,8 +88,8 @@
     "sha256": "df532d8d0b2e5c78c7c206e8e7ef9d9ae1d270a704a46a51d7b271703737763e"
   },
   "src/server/partners.ts#requestUpgrade": {
-    "reason": "Account upgrade request; action has default-deny custom guard",
-    "sha256": "13024e1cb45622cfa2b227a2b313d8aea243d8ddf4a6ae4ab2510935761e1b32"
+    "reason": "Account upgrade request; action has default-deny custom guard. B-056 PR-2: with pricing_trial ON for the org the settings.plan write is skipped (request + audit only); no new authority, same admin gate.",
+    "sha256": "b63184a881d6ff072248677c1ce64ea3ca1134910f73932fab6ca7913a4ef87e"
   },
   "src/server/sandbox.ts#ensureSandbox": {
     "reason": "Session provisioning infrastructure, before feature entry authority",
@@ -122,6 +122,34 @@
   "src/app/api/vendor-job-completion/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
     "sha256": "93b0ee792b3461c19897efd5d1ac76e4b5b40da1695cd08c684f7a46ef381f2f"
+  },
+  "src/app/api/vendor-jobs/case-complete/route.ts#POST": {
+    "reason": "B-097 vendor bearer authority via the service-only app.b097_vendor_complete gateway (assigned vendor's B-105 case token, accepted and open, vendor_job_v3); no member session",
+    "sha256": "394d941dd1fae3132804e7821df6624049429886ab10bc601be3659431f08ca9"
+  },
+  "src/app/v/[token]/done/page.tsx#VendorCaseDonePage": {
+    "reason": "B-097 vendor bearer page RV-DONE: the same token gateways as /v/[token] (loadVendorJob, vendorTokenBrand, app.b105_vendor_case) plus the service-only app.b097_vendor_done_view read; 404 unless vendor_job_v3 admits this token on an accepted open case; no staff role or session",
+    "sha256": "bad03099c82b2de4f76f7c1070b15f4031726163467e038c9b00f4b3cf6a5f9f"
+  },
+  "src/app/v/[token]/time/page.tsx#VendorCaseTimePage": {
+    "reason": "B-098 vendor bearer page RV-TIME (phone part): the same token gateways as /v/[token] plus the service-only app.b098_vendor_tenant_phone reader; 404 unless the assigned vendor's accepted open case; no staff role or session",
+    "sha256": "9f00c8f1fadfa9d471bdd233d61ae37492a26b952ea0eeff7840bbc3c088ec11"
+  },
+  "src/app/api/vendor-jobs/case-decision/route.ts#POST": {
+    "reason": "B-105 vendor bearer authority via the service-only app.b105_vendor_decide gateway (token-only admission, vendor_job_v3); no member session",
+    "sha256": "aa9e903f8195e757a60b721e19af8ea0649bfd47a2e9d0df9589df6e80213ea5"
+  },
+  "src/app/api/vendor-jobs/case-photos/confirm/route.ts#POST": {
+    "reason": "B-105 vendor bearer authority: upload grant bound to the token hash, then the service-only app.b105_vendor_attach_photo gateway (token-only admission, vendor_job_v3); no member session",
+    "sha256": "75a4480dc8d562a707baec34fca35101655abd02d49e3b58a7c4dfa3fc9591cc"
+  },
+  "src/app/v/[token]/photos/page.tsx#VendorCasePhotosPage": {
+    "reason": "B-105 vendor bearer page: the same token gateways as /v/[token] (loadVendorJob, vendorTokenBrand) plus the service-only app.b105_vendor_case read; 404 unless vendor_job_v3 admits this token; no staff role or session",
+    "sha256": "1a5e0002149fc635ccd10106d5e55297ae600f3fdd10ba9f38667a858ce1df87"
+  },
+  "src/app/api/vendor-jobs/case-share/route.ts#POST": {
+    "reason": "B-110 vendor bearer authority: the B-105 case token through the service-only app.b110_vendor_share gateway (closed case with a document, vendor_docs_v3 gate); no member session",
+    "sha256": "7fd3fed858cca665c7e6254db60823aa8f1f37690ee9e11ebb06a020222d1362"
   },
   "src/app/api/vendor-job-response/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
@@ -188,20 +216,20 @@
     "sha256": "362ef5682a4bd0e062162f18e5999df82bc006e8639349be72fbb03e0980518f"
   },
   "src/server/consent-actions.ts#actionAcceptReconsent": {
-    "reason": "Account identity and consent bootstrap; independent from organization custom grants",
-    "sha256": "10c8031fda59584898da31c62b34a40f9ab6429bfea65abda6f3efb7f3c74534"
+    "reason": "Account identity and consent bootstrap; independent from organization custom grants; B-043 changes only the staff home fallback via the org brand flag",
+    "sha256": "eef0f079b06180a1e8f1841693196aa329fcd022856cb6cb1349b9cb4a857d1c"
   },
   "src/app/consent/page.tsx#ReconsentPage": {
-    "reason": "Account identity and consent bootstrap; independent from organization custom grants",
-    "sha256": "ecde6becb0b02237ec72e81322b7249f5563dfb3a6f5372d39b1155baf96dea4"
+    "reason": "Account identity and consent bootstrap; independent from organization custom grants; B-043 changes only the staff home fallback via the org brand flag",
+    "sha256": "c1d0448122fa2c292e24014aab2e23be426510a0d553faf0034c6e3f4878c993"
   },
   "src/app/login/page.tsx#LoginPage": {
-    "reason": "Account identity and consent bootstrap; independent from organization custom grants",
-    "sha256": "899dec0604a65875d1de2d79366bbf6c773e83bcf65590a0f5715462089e5ead"
+    "reason": "Account identity and consent bootstrap; independent from organization custom grants; B-043 changes only the staff home fallback via the org brand flag",
+    "sha256": "eefecbedd8e77f35a930ba0d24893d549b562e19ed7f32d957330fb243098e87"
   },
   "src/app/m/account/page.tsx#AccountPage": {
-    "reason": "Account identity and consent bootstrap; independent from organization custom grants",
-    "sha256": "7eaf7068b2470dd0bb1ce6ce3431049aba7d833230526518a9c2b6c922783bb2"
+    "reason": "Account identity and consent bootstrap; independent from organization custom grants; B-073 R5-ACCT reads only the org brand flag to hand the request to AccountV3Page (src/components/v3/m/settings/account-page.tsx), which reads the caller's own account through accountRead (guardEffectiveSession(session, null) first) and posts to today's account actions unchanged",
+    "sha256": "fd06fa85a669b02e23d7e01d1c1289906e8a3f0b0d1bb8999392dd6396d9e558"
   },
   "src/app/signup/firm/page.tsx#FirmPage": {
     "reason": "Account identity and consent bootstrap; independent from organization custom grants",
@@ -240,8 +268,8 @@
     "sha256": "4efbd863fefbdc8a0957ad2194d855cdcb3e75e3ac5e97015f9edfca196f6722"
   },
   "src/app/m/admin/page.tsx#PlatformAdminPage": {
-    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and \u5165\u5e33\u65e5 render only after that same gate; no member-role authority and no outbound.",
-    "sha256": "a50156ad1ac07ead3a5660aff49d753d5c92e4ff79b11f0649779a5c65ebfe4d"
+    "reason": "Platform administrator identity, independent of member role; exact existing platform gate required. B-045 C2 apply queue and 入帳日 render only after that same gate; no member-role authority and no outbound.",
+    "sha256": "a5d784a60085c2b40d3cc2a7b55fc73b91e0a518e108b91828d8ff694febcaf5"
   },
   "src/server/pricing-apply-actions.ts#actionSubmitPricingApply": {
     "reason": "Pricing apply form (PLT-30). Independent of organization custom grants. Access is canAccessPricingApply: flag OFF or internal-only ON without an allowlisted staff live org => notFound() before insert; public mode (enabled===true AND public===true) keeps the anonymous submit path; allowlisted staff may submit during internal-only ON. Optional session stamps org/user when present. No outbound.",
@@ -283,9 +311,13 @@
     "reason": "Tenant-only preference gateway rejects staff before any query",
     "sha256": "7a80824228f92e5cd7dd26c266b6ca00c4e76a73d3ee27aae9791f9ab5212cfd"
   },
+  "src/app/v/documents/[token]/page.tsx#VendorDocumentsPage": {
+    "reason": "B-025 vendor document-grant bearer page (vendorDocumentContext admits the grant token, no staff role or session). GS-32 adds one presentation read through the same grant admission (vendorDocsV3Brand) gated by vendor_docs_v3 + brand_v3; writes stay on the existing B-025 actions.",
+    "sha256": "49eecb77b4ec3c3d9061b56817e3c3aab36d6e14a4405c6b6633e26266981778"
+  },
   "src/app/v/[token]/page.tsx#VendorJobPage": {
-    "reason": "Vendor bearer gateway authenticates token, never staff native role",
-    "sha256": "7b60d284374ad77e21e56db4a88dacc1fbffaacd31069e6cd92565319bf1737c"
+    "reason": "Vendor bearer gateway authenticates token, never staff native role; v3 notification links reuse legacy sharing visibility and centerVendorAdmission B101: adds only a strict B035/B026/brand_v3 gate and login CTA; no account list or session is granted by this token page. OFF markup remains pinned to 3e87c93. B-105: adds one vendor_job_v3 case read through the service-only app.b105_vendor_case bearer gateway and an early return to the RV case view; still token-only, no staff role or session. B-097: passes the 回報完工 stage flag (derived from the same case read) to the RV case view; no new authority. PLT-52-AC9/AC10: for an open case only, one more bearer read (loadVendorCaseRelay: token admission, brand_v3, capability, the M3 projection and the B-105 case on one service RR client) yields an allowlisted relay kind (plus that snapshot's 回報完工 readiness, which must match the page's) or null; no new authority, still token-only.",
+    "sha256": "dfd7eebc44d13d1b16aef3f9384b8e0e8bca455048d376fca12e283f8d4b3dd8"
   },
   "src/server/notification-center.ts#centerVendorAdmission": {
     "reason": "Vendor bearer gateway authenticates token, never staff native role",
@@ -323,6 +355,18 @@
     "reason": "Internal: authority/lock helper only; all request callers must guard first and remain scanned through this body",
     "sha256": "293ba54f4b7b50c3a71831731cd21c8ff7246927e340d65063d9def1f835ec4b"
   },
+  "src/server/payment-result-events.ts#lockOwnerPaymentResultContext": {
+    "reason": "Internal: owner authority/lock helper only; all request callers must guard first and remain scanned through this body",
+    "sha256": "53510afeb470d16002b3136907c8d9ce5173668f0e418af7eb1208ead00f25a0"
+  },
+  "src/server/payment-result-events.ts#authorizeOwnerPaymentConfirm": {
+    "reason": "Internal: owner-payment authorization helper only; all request callers must guard first and remain scanned through this body",
+    "sha256": "e406d9e74d2cdc042db607d8d46bb5a27d28b00a37ea8a04e0c85d207eb55077"
+  },
+  "src/server/payment-result-events.ts#ownerElevated": {
+    "reason": "Internal: maps svcOn transaction boundaries onto a savepoint so privileged owner confirmation cannot commit surrounding authenticated work; callers must remain scanned",
+    "sha256": "ce58b62c1276ec488cc4c9f8abfe1cc94236a6436a7025ba99378c444f7cf0bf"
+  },
   "src/server/payee.ts#logPayeeIngress": {
     "reason": "Payee ingress denial audit only; no business data; operation gateways have separate guards",
     "sha256": "8867ba3fafcfaafdaa5c42ef0e5d7f674756e6c58d8924fdfdae485a63d7b5a3"
@@ -337,11 +381,11 @@
   },
   "src/app/o/approvals/page.tsx#ApprovalsPage": {
     "reason": "Owner portal page checks owner identity before its rollout and decision queries",
-    "sha256": "7de2fe28e386ad256a0bcba124e1bdc6b5031f2fdcfecb33c01cd359a6d80fc7"
+    "sha256": "868bfd91aebdafc622f803c82295a683a7a55c12ba6f7de4cd48e4d8878fb7a7"
   },
   "src/app/o/approvals/[ticketId]/page.tsx#ApprovalHistoryPage": {
-    "reason": "Owner portal page checks owner identity before its rollout and decision queries",
-    "sha256": "abdb51db44c67546bbd9a2b0c4ff17c51213ed02d41f8d15d985960bc3a8c805"
+    "reason": "Owner portal page checks owner identity before its rollout and decision queries; under brand_v3 a decided ticket renders the B-093 RO-DECIDED view, whose reader applies guardEffectiveSession and the admitted owner gateway",
+    "sha256": "65ea8db14182160f2653fde32fd8f1c096ed12f7776bcbc07a4f6a454aea4b06"
   },
   "src/app/api/mock-subscription/route.ts#POST": {
     "reason": "Local HMAC-signed mock provider fixture webhook, loopback host only; no member session",
@@ -363,6 +407,14 @@
     "reason": "Vendor account self-service by auth-cookie identity; vendor-owned records only, no member session",
     "sha256": "c68abfc520c19ea8da5093dde29f53ee57b93c47c4af3f662b45d584ac9113c1"
   },
+  "src/app/api/vendor-account/address/route.ts#POST": {
+    "reason": "B-112 vendor account bearer: the account session cookie via vendorWorkbenchAccess (consent, open workbench), then the service-only app.b112_save_vendor_address gateway that re-admits the session and the caller's own vendor account; no staff role or member session",
+    "sha256": "3962c2a4a16986cad7bc7520c2b4f1ab1db4f27e8727e9c326bfd19a33b7cfde"
+  },
+  "src/app/api/vendor-account/issuer-type/route.ts#POST": {
+    "reason": "B-065 vendor account bearer: the account session cookie via vendorWorkbenchAccess (consent, open workbench), then the service-only app.b065_save_issuer_type gateway that re-admits the session and the caller's own vendor account; no staff role or member session",
+    "sha256": "4d9f5e17ebbec46bd06797d29f7501f02f3a84ddadf473ab92d25e265ae7e1ba"
+  },
   "src/app/api/vendor-account/route.ts#POST": {
     "reason": "Vendor account self-service by auth-cookie identity; vendor-owned records only, no member session",
     "sha256": "2ccb3abbd16f5261f4e36cf0a3f6a533d71b5a17891b890cfc5988ad04f77a8e"
@@ -374,6 +426,10 @@
   "src/server/vendor-accounts.ts#authorizeVendorAccountStaffRequest": {
     "reason": "Establish identity: auth-cookie session and live admin/manager membership; every staff operation guards separately",
     "sha256": "19dbff2d54251c65e26737ba8adbfaaedb941856d36dc52409b5f554071de136"
+  },
+  "src/server/vendor-workbench.ts#vendorWorkbenchJobOpen": {
+    "reason": "Vendor account self-service by auth-cookie identity (B-063 row opener): same admission as the workbench pages (no account session or a job token alone, stale consent, non-vendor persona, OFF), then only a job both B-026 history and app.b063_vendor_workbench return for this account in the open workbench organization; reads that one job's stored link pinned by job and org; no member session, no staff role",
+    "sha256": "51ecaff4ce67e567c102b456fbc0db845ff1defee846e1be60e126b1fed6ae3d"
   },
   "src/app/api/vendor-documents/route.ts#POST": {
     "reason": "Vendor bearer authority; no member session",
@@ -506,5 +562,51 @@
   "src/server/unit-line-invite-api.ts#handleAcceptExisting": {
     "reason": "Existing-account unit invite accept; the session user binds only themselves under the same 4-seat cap; no staff authority",
     "sha256": "045966ea2326243622c0d997dc5d7a2215a95564b95a09653e3d7ac3331d0ca3"
+  },
+  "src/server/onboarding-progress.ts#readSetupStepOn": {
+    "reason": "Aggregate setup reader shared by every staff page, not a feature grant: resolves current custom role, requires an existing effective native-ceiling permission, validates active membership/session and effective permission in a lock-free read-only snapshot, and filters steps and returned permissions with can. Only flagged live admin/manager completion opens a separate write transaction, revalidating authority and completion conditions under the existing rollout/org/member/session locks before one audited write. No caller-selected permission or mutation input.",
+    "sha256": "2278bffca9275589fa3f8557956564411307bdd71a73fd51fb9280cfb31e162d"
+  },
+  "src/server/onboarding-progress.ts#readSetupStep": {
+    "reason": "Connection wrapper only; readSetupStepOn owns identity, membership, effective-permission and completion-write authorization. No business SQL before that reader.",
+    "sha256": "f6aacd09dd20517f74faa326fc9850986865ae16262394c49dae92f255553ab6"
+  },
+  "src/components/management-empty-state.tsx#ManagementEmptyState": {
+    "reason": "Presentation adapter only; readSetupStep validates current staff authority and returns effective permissions. Resolves CTA with those permissions; no server action or independent business SQL. Brand v3 only substitutes a decorative illustration after a fail-closed organization presentation flag; CTA authority is unchanged.",
+    "sha256": "4fc7b8ba53b7d63e9ff1ba7b018c2853c186886b364f517d370f901b2e3c5e98"
+  },
+  "src/server/brand-v3.ts#brandV3EnabledForOrg": {
+    "reason": "Presentation-only organization brand flag reader: exact JSON opt-in plus effective v2; fails closed, reads no business records, grants no permission and performs no mutation.",
+    "sha256": "d0f24ea47ac673125dbda63c4be7c71d514775b96df2d011ab4b70327d3b4faf"
+  },
+  "src/server/b3-vendor-repair-turn.ts#loadVendorRepairTurns": {
+    "reason": "Vendor token boundary: full loader/capability/sharing admission and one writable repeatable-read projection; OFF delegates to existing loaders.",
+    "sha256": "6802fc5f98fb4e0e753628d6e49edb8a0b78bec39576558aa0a361009cb89b19"
+  },
+  "src/server/vendor-repair.ts#loadVendorJobOn": {
+    "reason": "Internal vendor token loader: caller-owned client and token lookup; repeats capability/sharing/identity admission on that client; no independent transaction.",
+    "sha256": "f6f123ecfde27e694234128d35c36644ca62b35527640f6ed4d7e9c0821aa8e0"
+  },
+  "src/server/brand-v3.ts#brandV3ReadForOrg": {
+    "reason": "Presentation flag lookup only, before business admission. Failure throws; does not disclose business data or authorize any party.",
+    "sha256": "63a8cc5d8075c80ddcc5c9589be4f9eaef7677ae1bef08850a51dfdb1f5b997a"
+  },
+  "src/server/b3-vendor-repair-turn.ts#loadVendorRepairTurnsOn": {
+    "reason": "Internal vendor token boundary: caller-owned writable repeatable-read client; repeats token, policy, identity, sharing, capability and final expiry checks; no nested transaction.",
+    "sha256": "81d71ed33c7b90abfb2dd23cd8e4aceb81414af29c8cf98daf0a8b485441a2b2"
+  },
+  "src/server/vendor-job.ts#resolveVendorJobStateOn": {
+    "reason": "Internal vendor action-state read: invoked only after complete token capability/sharing admission by loadVendorRepairTurnsOn; token-derived scope, same client, B-104 helpers only.",
+    "sha256": "28268a97928d7c1690ccdc81e53f97e4e4cc98d4472e762f08b1a6db46a22fca"
+  },
+  "src/app/(line)/v/link/route.ts#GET": {
+    "classification": "identity-establishment",
+    "reason": "B101 V-LINK: browser/CSRF-cookie proof plus consumed verified OAuth flow; exact org/contact open-job snapshot only, no staff authority or token-only history.",
+    "sha256": "e51bc061e46f5f4194ad5446bc329353f4d7d980ba199b239e1a949ddb02cbd2"
+  },
+  "src/app/(line)/v/link/route.ts#POST": {
+    "classification": "identity-establishment",
+    "reason": "B101 V-LINK: same-origin CSRF plus browser-bound verified flow; durable per-row removal or frozen-list confirmation, rechecks gates/identity/persona; account session only after confirmation. No staff authority.",
+    "sha256": "053dbbffdd723c99f7302997963ef6486496545e946d654cac8f2226a0f09093"
   }
 }

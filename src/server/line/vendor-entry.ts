@@ -1,3 +1,4 @@
+import { brandV2Enabled } from "../brand-v2";
 import { NextResponse } from "next/server";
 import { hashVendorToken, vendorTokenAcceptable } from "../vendor-repair-rules";
 import { readLineConfig } from "./config";
@@ -10,7 +11,7 @@ import { vendorScopeOn } from "./vendor-scope";
  * B-035 "continue in LINE" gate for the existing /v/[token] page. Read-only: env OFF performs no query,
  * and every strict platform/org/channel/job check mirrors createLineFlow so a shown entry can start a flow.
  */
-export async function vendorLineEntryEnabled(token: string): Promise<boolean> {
+export async function vendorLineEntryEnabled(token: string, match = false): Promise<boolean> {
  if (!readLineConfig().platformEnabled || !vendorTokenAcceptable(token)) return false;
  try {
   return await lineTransaction(async c => {
@@ -18,7 +19,8 @@ export async function vendorLineEntryEnabled(token: string): Promise<boolean> {
    const pinned = (await c.query<{ org_id: string }>("SELECT org_id FROM repair_vendor_jobs WHERE token_hash=$1", [hash])).rows[0];
    if (!pinned) return false;
    await channelOn(c, pinned.org_id, "vendor");
-   await vendorScopeOn(c, hash, pinned.org_id);
+   await vendorScopeOn(c, hash, pinned.org_id, match);
+   if (match && !(await c.query("SELECT app.b101_enabled($1,$2) enabled", [pinned.org_id, brandV2Enabled()])).rows[0].enabled) return false;
    return true;
   });
  } catch { return false; }

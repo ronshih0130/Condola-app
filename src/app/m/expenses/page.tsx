@@ -1,3 +1,4 @@
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -37,10 +38,10 @@ export default async function ExpensesPage({
     <>
       <PageHeader
         title={t("i_nav_expenses")}
-        actions={
+        actions={rows.length > 0 ?
           <Link className="btn pri" href={newHref} data-testid="new-expense">
             {t("i_expense_new")}
-          </Link>
+          </Link> : null
         }
       />
       <p className="small muted">{t("i_expense_hint")}</p>
@@ -87,9 +88,7 @@ export default async function ExpensesPage({
       </form>
       <div className="card">
         {rows.length === 0 ? (
-          <div className="empty" data-testid="expense-empty">
-            {t("i_expense_empty")}
-          </div>
+          <ManagementEmptyState session={session} page="EXP" actionHref={newHref} />
         ) : (
           <RfTable testId="expense-list">
             <thead>

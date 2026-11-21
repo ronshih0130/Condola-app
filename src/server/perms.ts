@@ -202,3 +202,13 @@ export function validCustomRoleScope(session: Session) {
   return !!policy && policy.orgId === session.orgId && policy.userId === session.userId &&
     policy.sessionId === session.sessionId && policy.nativeRole === session.role;
 }
+
+/**
+ * B-073 / R5-NOTIFY (設定 › 通知設定, MGT-135-AC1): who has personal reminder choices (「寄給我的」). As 我的帳號
+ * today: native admin and manager. An assigned custom role also needs settings.edit, the key the existing
+ * saveMemberEmailPrefs guard applies. Only the brand_v3 page and nav read this; flag OFF routes are unchanged.
+ */
+export function hasPersonalReminders(session: Session) {
+  if (session.kind !== "staff" || (session.role !== "admin" && session.role !== "manager")) return false;
+  return session.customRole ? can(session, "settings.edit") : true;
+}

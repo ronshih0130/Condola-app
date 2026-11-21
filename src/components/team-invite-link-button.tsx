@@ -56,7 +56,9 @@ export function TeamInviteLinkDisplay({ link, initiallyCopied = false }: {
   );
 }
 
-export function TeamInviteLinkButton({ invitationId }: { invitationId: string }) {
+/** `label` / `buttonClassName` let the brand_v3 team page (R5-TEAM) draw this as the text action 「重寄邀請」;
+ * without them it renders exactly as before. The issuing path and its gates are unchanged. */
+export function TeamInviteLinkButton({ invitationId, label, buttonClassName = "btn sm" }: { invitationId: string; label?: string; buttonClassName?: string }) {
   const t = useT();
   const pathname = usePathname();
   const [link, setLink] = useState<TeamInviteLink | null>(null);
@@ -126,8 +128,8 @@ export function TeamInviteLinkButton({ invitationId }: { invitationId: string })
 
   return (
     <div className="col">
-      <button className="btn sm" type="button" disabled={busy} aria-busy={busy || undefined} onClick={() => void issue()}>
-        {t("i_team_invite_copy")}
+      <button className={buttonClassName} type="button" disabled={busy} aria-busy={busy || undefined} onClick={() => void issue()}>
+        {label ?? t("i_team_invite_copy")}
       </button>
       <p className="small muted">{t("i_team_invite_rotates")}</p>
       {error ? <p className="small" role="alert">{error}</p> : null}

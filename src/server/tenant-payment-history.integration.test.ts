@@ -8,6 +8,11 @@ import { query, tx, withClient } from './db';
 import { buildStoredConsent } from './consent';
 import { confirmPayment, recordPayment, rejectPayment, reversePayment } from './domain';
 import { tenantPaymentHistory } from './tenant-payment-history';
+import * as React from 'react';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { TenantBillSummary } from '../components/tenant-payment-history';
+Object.assign(globalThis, { React });
 import { tenantBillLines } from './money';
 import { tenantPayeeVisible } from './pay-note';
 import { safeMinor, sumMinor } from './tenant-payment-history-rules';
@@ -177,6 +182,31 @@ test('FR-Q6-01: monthly total due = rent + utilities − 代墊 credit, sourced 
  assert.equal(april.grossMinor,'108500');assert.equal(april.offsetMinor,'3000');assert.equal(april.paidMinor,'0');assert.equal(april.dueMinor,'105500');assert.equal(april.carryMinor,'0');
  assert.deepEqual(april.components.map(c=>[c.key,c.amountMinor,c.source.invoiceNumber,c.source.lineNo]),[['rent','100000',number,1],['utility','8500',number,2],['offset','-3000',number,3]]);
  assert.equal(ready.monthlyDue.reduce((sum,p)=>sum+BigInt(p.dueMinor)-BigInt(p.carryMinor),BigInt(0)).toString(),String(ready.bill.balanceMinor));
+});
+
+test('B-018 LPQ: an amount at or above 2^53 makes the tenant read unavailable and never yields a number',async()=>{
+ for (const amount of ['9007199254740992','9007199254740993']) {
+  const a=await tenant(),f=await fixture(a.contact);await enable();
+  const inv=(await query<{id:string}>(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,period_start,period_end,status) VALUES($1,$2,$3,$4,'TWD','2090-04-05','2090-04-01','2090-04-30','open') RETURNING id::text`,[ORG_ID,f.p,f.lease,`BIG-${randomUUID().slice(0,8)}`])).rows[0].id;
+  await query(`INSERT INTO invoice_lines(org_id,invoice_id,line_no,charge_type,description,unit_amount_minor,amount_minor) VALUES($1,$2,1,'rent','Synthetic rent',1,$3::bigint)`,[ORG_ID,inv,amount]);
+  const result=await tenantPaymentHistory(a.s,f.lease,{view:'current'});
+  assert.deepEqual(result,{state:'unavailable'});
+  assert.doesNotMatch(JSON.stringify(result),/\d{6,}/);
+ }
+});
+
+test('B-018 monthly note: a credit bill never points the tenant to an outstanding balance that is not shown',async()=>{
+ const a=await tenant(),f=await fixture(a.contact);await enable();
+ for (const [month,kind,amount] of [['04','rent',100000],['05','credit',-120000]] as const) {
+  const inv=(await query<{id:string}>(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,period_start,period_end,status) VALUES($1,$2,$3,$4,'TWD',$5::date,$6::date,$7::date,'open') RETURNING id::text`,[ORG_ID,f.p,f.lease,`NOTE-${randomUUID().slice(0,8)}`,`2090-${month}-05`,`2090-${month}-01`,`2090-${month}-28`])).rows[0].id;
+  await query(`INSERT INTO invoice_lines(org_id,invoice_id,line_no,charge_type,description,unit_amount_minor,amount_minor) VALUES($1,$2,1,$3,'Synthetic',$4::numeric,$4::bigint)`,[ORG_ID,inv,kind,amount]);
+ }
+ const ready=await tenantPaymentHistory(a.s,f.lease,{view:'current'});assert.equal(ready.state,'ready');if(ready.state!=='ready')throw Error('Unavailable');
+ assert.equal(ready.bill.state,'credit');assert.ok(ready.monthlyDue.length>0);
+ const en=renderToStaticMarkup(createElement(TenantBillSummary,{data:ready,locale:'en'}));
+ const zh=renderToStaticMarkup(createElement(TenantBillSummary,{data:ready,locale:'zh-TW'}));
+ assert.match(en,/Current bill credit/);assert.doesNotMatch(en,/current outstanding balance above/);assert.match(en,/the current bill above \(balance or credit\) is what is actually open/);
+ assert.doesNotMatch(zh,/「目前未結帳單餘額」為準/);assert.match(zh,/實際未結金額或抵扣餘額以上方目前帳單為準/);
 });
 
 test('normal paid utility correction produces signed credit and preserves tenant report history',async()=>{

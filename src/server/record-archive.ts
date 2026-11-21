@@ -1,7 +1,7 @@
 import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { createHash } from "node:crypto";
 import type { Client } from "pg";
-import type { ArchiveCommandInput, ArchiveItem, ArchiveList, ArchiveObserved, ArchiveOutcome, ArchiveRef, ArchiveView, RenderedArchiveScope } from "@/lib/record-archive";
+import type { ArchiveCommandInput, ArchiveTab, ArchiveCounts, ArchiveItem, ArchiveList, ArchiveObserved, ArchiveOutcome, ArchiveRef, ArchiveView, RenderedArchiveScope } from "@/lib/record-archive";
 import { isArchiveCommand, isArchiveRef, sameArchiveScope } from "@/lib/record-archive";
 import { tx } from "./db";
 import { lockArchiveAncestry } from "./record-archive-admission";
@@ -25,7 +25,8 @@ async function enabled(c:Client,s:Session) {
 export async function recordArchiveEnabledFor(c:Client,orgId:string):Promise<boolean> {
  const q=await c.query(`SELECT 1 FROM public.organizations o JOIN public.platform_settings f ON f.key='record_archive' WHERE o.id=$1 AND o.feature_flags->'record_archive'='true'::jsonb AND f.value->'enabled'='true'::jsonb AND CASE WHEN jsonb_typeof(f.value->'allowed_org_ids')='array' THEN NOT EXISTS (SELECT 1 FROM jsonb_array_elements(f.value->'allowed_org_ids') AS item(value) WHERE jsonb_typeof(item.value)<>'string' OR (item.value #>> '{}') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') ELSE false END AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)`,[orgId]);return q.rowCount===1;
 }
-async function observe(c:Client,s:Session,ref:ArchiveRef):Promise<ArchiveObserved|null> {
+type PresentationMetadata = Pick<ArchiveObserved,"archivedBy"|"restoreEligible">;
+async function observe(c:Client,s:Session,ref:ArchiveRef,presentation=false):Promise<ArchiveObserved|null> {
  const joins=ref.kind==='property' ? `FROM public.properties p` : ref.kind==='unit' ? `FROM public.units u JOIN public.properties p ON p.id=u.property_id AND p.org_id=u.org_id` : `FROM public.rooms r JOIN public.units u ON u.id=r.unit_id AND u.org_id=r.org_id JOIN public.properties p ON p.id=u.property_id AND p.org_id=u.org_id`;
  const u=ref.kind==='property' ? null : 'u'; const r=ref.kind==='room' ? 'r' : null;
  const opt=(alias:string|null, expression:string, fallback='NULL::text')=>alias ? expression : fallback;
@@ -35,9 +36,22 @@ async function observe(c:Client,s:Session,ref:ArchiveRef):Promise<ArchiveObserve
  const inherited:ArchiveObserved['inherited']=[];
  if(ref.kind!=='property' && row.property_archived) inherited.push({ref:{kind:'property',id:row.property_id},archivedAtUtc:row.property_archived});
  if(ref.kind==='room' && row.unit_archived) inherited.push({ref:{kind:'unit',id:row.unit_id!},archivedAtUtc:row.unit_archived});
- return {ref:{kind:ref.kind,id},propertyId:row.property_id,unitId:row.unit_id,roomId:row.room_id,mode:row.mode,name:ref.kind==='property'?row.property_name:ref.kind==='unit'?row.unit_label!:row.room_label!,propertyName:row.property_name,unitLabel:row.unit_label,roomLabel:row.room_label,archivedAtUtc:ref.kind==='property'?row.property_archived:ref.kind==='unit'?row.unit_archived:row.room_archived,inherited,version:createHash('sha256').update(JSON.stringify(row)).digest('hex')};
+ const metadata:PresentationMetadata = {};
+ if(presentation) {
+  const ownAt=ref.kind==='property'?row.property_archived:ref.kind==='unit'?row.unit_archived:row.room_archived;
+  const source=ownAt?{ref,archivedAtUtc:ownAt}:inherited[0];
+  metadata.archivedBy=null;
+  if(source) {
+   const table=source.ref.kind==='property'?'properties':source.ref.kind==='unit'?'units':'rooms';
+   // RLS and the selected organization remain in force. No audit payload leaves this reader.
+   const actor=await c.query<{name:string|null}>(`SELECT nullif(btrim(p.display_name),'') AS name FROM public.audit_log a LEFT JOIN public.profiles p ON p.id=a.actor_user_id WHERE a.org_id=$1 AND a.table_name=$2 AND a.row_id=$3 AND (a.changed_cols @> ARRAY['archived_at']::text[] OR a.action::text='insert') AND a.new_row->>'archived_at' IS NOT NULL AND (a.new_row->>'archived_at')::timestamptz=$4::timestamptz ORDER BY a.occurred_at DESC,a.id DESC LIMIT 1`,[s.orgId,table,source.ref.id,source.archivedAtUtc]);
+   metadata.archivedBy=actor.rows[0]?.name??null;
+  }
+  metadata.restoreEligible=s.role==='admin' && can(s,'props.edit') && !!ownAt && inherited.length===0 && (ref.kind!=='room'||row.mode==='by_room') && await enabled(c,s);
+ }
+ return {...metadata,ref:{kind:ref.kind,id},propertyId:row.property_id,unitId:row.unit_id,roomId:row.room_id,mode:row.mode,name:ref.kind==='property'?row.property_name:ref.kind==='unit'?row.unit_label!:row.room_label!,propertyName:row.property_name,unitLabel:row.unit_label,roomLabel:row.room_label,archivedAtUtc:ref.kind==='property'?row.property_archived:ref.kind==='unit'?row.unit_archived:row.room_archived,inherited,version:createHash('sha256').update(JSON.stringify(row)).digest('hex')};
 }
-type Facts={lease_active:boolean;signing_active:boolean;repair_active:boolean;dispatch_active:boolean;utility_active:boolean;finance_outstanding:boolean;invite_pending:boolean;lease_history:boolean;repair_history:boolean;utility_history:boolean;finance_history:boolean;lease_active_id:string|null;signing_lease_id:string|null;repair_active_id:string|null;dispatch_ticket_id:string|null;lease_history_id:string|null;repair_history_id:string|null;expense_history_id:string|null};
+type Facts={lease_active_count:number;lease_active:boolean;signing_active:boolean;repair_active:boolean;dispatch_active:boolean;utility_active:boolean;finance_outstanding:boolean;invite_pending:boolean;lease_history:boolean;repair_history:boolean;utility_history:boolean;finance_history:boolean;lease_active_id:string|null;signing_lease_id:string|null;repair_active_id:string|null;dispatch_ticket_id:string|null;lease_history_id:string|null;repair_history_id:string|null;expense_history_id:string|null};
 async function facts(c:Client,s:Session,o:ArchiveObserved):Promise<Facts> {
  const leaseScope=`l.org_id=$1 AND l.property_id=$2 AND ($3::text='property' OR ($3='unit' AND l.unit_id=$4::uuid) OR ($3='room' AND (l.target_room_id=$5::uuid OR l.target_unit_id=$4::uuid)))`;
  const ticketScope=`t.org_id=$1 AND t.property_id=$2 AND ($3::text='property' OR ($3='unit' AND t.unit_id=$4::uuid) OR ($3='room' AND t.room_id=$5::uuid))`;
@@ -47,6 +61,7 @@ async function facts(c:Client,s:Session,o:ArchiveObserved):Promise<Facts> {
    ($3='room' AND (m.room_id=$5::uuid OR EXISTS (SELECT 1 FROM utility_allocation_lines al LEFT JOIN leases l ON l.org_id=al.org_id AND l.id=al.lease_id WHERE al.org_id=ur.org_id AND al.run_id=ur.id AND (al.room_id=$5::uuid OR l.target_room_id=$5::uuid OR l.target_unit_id=$4::uuid)))))`;
  const expenseScope=`e.org_id=$1 AND e.property_id=$2 AND ($3::text='property' OR ($3='unit' AND e.unit_id=$4::uuid) OR ($3='room' AND EXISTS (SELECT 1 FROM maintenance_tickets t WHERE t.org_id=e.org_id AND t.id=e.ticket_id AND t.room_id=$5::uuid)))`;
  const q=await c.query<Facts>(`SELECT
+  (SELECT count(*)::int FROM leases l WHERE ${leaseScope} AND l.status IN ('active','pending_signature')) lease_active_count,
   EXISTS(SELECT 1 FROM leases l WHERE ${leaseScope} AND l.status IN ('active','pending_signature')) lease_active,
   EXISTS(SELECT 1 FROM leases l JOIN esign_cases ec ON ec.org_id=l.org_id AND ec.lease_id=l.id JOIN esign_versions ev ON ev.case_id=ec.id WHERE ${leaseScope} AND ev.status IN ('sent','partially_signed')) signing_active,
   EXISTS(SELECT 1 FROM maintenance_tickets t WHERE ${ticketScope} AND t.status IN ('open','triaged','assigned','in_progress','on_hold')) repair_active,
@@ -69,7 +84,7 @@ async function facts(c:Client,s:Session,o:ArchiveObserved):Promise<Facts> {
 }
 function factItems(f:Facts, ref:ArchiveRef) {
  const blockers:ArchiveItem[]=[];const warnings:ArchiveItem[]=[];const history:ArchiveItem[]=[];
- if(f.lease_active)blockers.push({category:'leases',label:'lease_active',href:f.lease_active_id?`/m/leases/${f.lease_active_id}`:'/m/leases'});
+ if(f.lease_active)blockers.push({category:'leases',label:'lease_active',count:f.lease_active_count,href:f.lease_active_id?`/m/leases/${f.lease_active_id}`:'/m/leases'});
  if(f.signing_active)blockers.push({category:'signing',label:'signing_active',href:f.signing_lease_id?`/m/leases/${f.signing_lease_id}`:'/m/leases'});
  if(f.repair_active)blockers.push({category:'repairs',label:'repair_active',href:f.repair_active_id?`/m/tickets/${f.repair_active_id}`:'/m/tickets'});
  if(f.dispatch_active)blockers.push({category:'dispatch',label:'dispatch_active',href:f.dispatch_ticket_id?`/m/tickets/${f.dispatch_ticket_id}`:'/m/tickets'});
@@ -83,22 +98,32 @@ function factItems(f:Facts, ref:ArchiveRef) {
  return {blockers,warnings,history};
 }
 /** Dependency queries in the view are advisory; the command repeats them under locks. */
-export async function archiveView(s:Session,ref:ArchiveRef):Promise<ArchiveView> {
+export async function archiveView(s:Session,ref:ArchiveRef,presentation=false):Promise<ArchiveView> {
   s = await guardEffectiveSession(s, "props.edit");
  if(!eligible(s)||!isArchiveRef(ref))return unavailable;
- try {return await tx(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {if(!await current(c,s))return unavailable;const observed=await observe(c,s,ref);if(!observed)return unavailable;const found=await facts(c,s,observed);const writeEnabled=can(s,'props.edit') && await enabled(c,s);if(!await current(c,s))return unavailable;const items=factItems(found,ref);return {state:'ready',observed,writeEnabled,canArchive:writeEnabled && !observed.archivedAtUtc && items.blockers.length===0,canRestore:writeEnabled && Boolean(observed.archivedAtUtc) && observed.inherited.length===0 && (ref.kind!=='room'||observed.mode==='by_room'),...items,coverage:(['leases','signing','repairs','dispatch','utilities','finance','invitations'] as const).map(category=>({category,state:category==='signing'&&!can(s,'props.edit')?'unknown' as const:'verified' as const}))};}),{orgId:s.orgId,environment:s.environment});} catch {return unavailable;}
+ try {return await tx(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {if(!await current(c,s))return unavailable;const observed=await observe(c,s,ref,presentation);if(!observed)return unavailable;const found=await facts(c,s,observed);const writeEnabled=can(s,'props.edit') && await enabled(c,s);if(!await current(c,s))return unavailable;const items=factItems(found,ref);return {state:'ready',observed,writeEnabled,canArchive:writeEnabled && !observed.archivedAtUtc && items.blockers.length===0,canRestore:s.role==='admin'&&(writeEnabled && Boolean(observed.archivedAtUtc) && observed.inherited.length===0 && (ref.kind!=='room'||observed.mode==='by_room')),...items,coverage:(['leases','signing','repairs','dispatch','utilities','finance','invitations'] as const).map(category=>({category,state:category==='signing'&&!can(s,'props.edit')?'unknown' as const:'verified' as const}))};}),{orgId:s.orgId,environment:s.environment});} catch {return unavailable;}
 }
-export async function archiveList(s:Session,after?:string):Promise<ArchiveList> {
+const ARCHIVE_POPULATION = `SELECT 'property'::text kind,p.id::text id FROM public.properties p WHERE p.org_id=$1 AND p.archived_at IS NOT NULL UNION ALL SELECT 'unit',u.id::text FROM public.units u JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND (u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL) UNION ALL SELECT 'room',r.id::text FROM public.rooms r JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE r.org_id=$1 AND (r.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL)`;
+export async function archiveList(s:Session,after?:string,tab?:ArchiveTab):Promise<ArchiveList> {
   s = await guardEffectiveSession(s, "props.edit");
  if(!eligible(s))return unavailable;
+ if(tab!==undefined&&!['all','property','unit','owner'].includes(tab))return unavailable;
  if(after!==undefined&&typeof after!=='string')return unavailable;
  const match=after===undefined?null:/^(property|unit|room):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(after);
  if(after!==undefined&&!match)return unavailable;
- try {return await tx(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {if(!await current(c,s))return unavailable;const ids=(await c.query<ArchiveRef>(`SELECT kind,id FROM (SELECT 'property'::text kind,p.id::text id FROM public.properties p WHERE p.org_id=$1 AND p.archived_at IS NOT NULL UNION ALL SELECT 'unit',u.id::text FROM public.units u JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND (u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL) UNION ALL SELECT 'room',r.id::text FROM public.rooms r JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE r.org_id=$1 AND (r.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL)) x WHERE ($2::text IS NULL OR (kind,id)>($2::text,$3::text)) ORDER BY kind,id LIMIT 201`,[s.orgId,match?.[1]??null,match?.[2]??null])).rows;const rows:ArchiveObserved[]=[];for(const ref of ids.slice(0,200)){const item=await observe(c,s,ref);if(!item)return unavailable;rows.push(item);}if(!await current(c,s))return unavailable;const hasMore=ids.length>200,last=rows.at(-1);return {state:'ready',rows,hasMore,nextCursor:hasMore&&last?`${last.ref.kind}:${last.ref.id}`:null};}),{orgId:s.orgId,environment:s.environment});} catch{return unavailable;}
+ try {return await tx(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {if(!await current(c,s))return unavailable;let counts:ArchiveCounts|undefined;
+ if(tab!==undefined) {
+  // P52 (PENDING-RON PR-018): owner writes are absent from the existing archive contract.
+  const totals=await c.query<{property:number;unit:number;total:number}>(`SELECT count(*) FILTER(WHERE kind='property')::int property,count(*) FILTER(WHERE kind IN ('unit','room'))::int unit,count(*)::int total FROM (${ARCHIVE_POPULATION}) population`,[s.orgId]);
+  counts={...totals.rows[0],owner:0};
+ }
+ const ids=(await c.query<ArchiveRef>(`SELECT kind,id FROM (${ARCHIVE_POPULATION}) x WHERE ($2::text IS NULL OR (kind,id)>($2::text,$3::text)) AND ($4::text IS NULL OR $4='all' OR ($4='property' AND kind='property') OR ($4='unit' AND kind IN ('unit','room'))) ORDER BY kind,id LIMIT 201`,[s.orgId,match?.[1]??null,match?.[2]??null,tab??null])).rows;const rows:ArchiveObserved[]=[];for(const ref of ids.slice(0,200)){const item=await observe(c,s,ref,tab!==undefined);if(!item)return unavailable;rows.push(item);}if(!await current(c,s))return unavailable;const hasMore=ids.length>200,last=rows.at(-1);return {state:'ready',rows,...(counts?{counts}:{}),hasMore,nextCursor:hasMore&&last?`${last.ref.kind}:${last.ref.id}`:null};}),{orgId:s.orgId,environment:s.environment});} catch{return tab===undefined?unavailable:{state:'unavailable',readFailed:true};}
 }
 export async function archiveCommand(s:Session,input:ArchiveCommandInput):Promise<ArchiveOutcome> {
   s = await guardEffectiveSession(s, "props.edit");
  if(!isArchiveCommand(input)||!eligible(s)||!can(s,'props.edit')||!sameArchiveScope(input.renderedScope,archiveScope(s)))return {state:'forbidden'};
+ // Round 2 (Ron 2026-11-14 ~19:29 PT): admins and managers archive; only an admin restores (hub OQ-070).
+ if(input.desired==='active' && s.role!=='admin')return {state:'forbidden'};
  try{return await tx<ArchiveOutcome>(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {
   if(!await current(c,s))return {state:'forbidden'};
   if(!await enabled(c,s))return {state:'disabled'};
@@ -111,6 +136,7 @@ export async function archiveCommand(s:Session,input:ArchiveCommandInput):Promis
   if(locked.rowCount!==1)return {state:'forbidden'};
   if(!await current(c,s))return {state:'forbidden'};
   if(!await enabled(c,s))return {state:'disabled'};
+  if(input.desired==='active' && (await c.query<{ok:boolean|null}>(`SELECT app.has_role($1::uuid,'{admin}'::org_role[]) AS ok`,[s.orgId])).rows[0]?.ok!==true)return {state:'forbidden'};
   const observed=await observe(c,s,input.ref);if(!observed)return {state:'forbidden'};
   if(observed.version!==input.expectedVersion)return {state:'stale'};
   const archived=observed.archivedAtUtc!==null;

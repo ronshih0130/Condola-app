@@ -1,0 +1,55 @@
+/* B-105 Round 7 batch 3 vendor case. Loaded only by the vendor_job_v3 case view; every rule is scoped
+   to the V-TOKEN shell and uses its canonical tokens. Tap targets stay at least 44px. */
+.v-token-v3 .v-case-card, .v-token-v3 .v-case-other { margin-top: 16px; }
+.v-token-v3 .v-case-badge { display: inline-block; padding: 4px 10px; border-radius: var(--r-pill); font-size: var(--fs-caption); background: var(--c-tint-soft); color: var(--c-primary); }
+.v-token-v3 .v-case-badge-warn { background: var(--c-warning-soft); color: var(--c-warning); }
+.v-token-v3 .v-case-form, .v-token-v3 .v-case-sheet form { display: grid; gap: 12px; }
+.v-token-v3 .v-case-field { font-weight: 600; }
+.v-token-v3 .v-case-input { width: 100%; min-height: 44px; padding: 10px 12px; font: inherit; font-size: 16px; color: var(--c-text); background: var(--c-surface); border: 1px solid var(--c-border-strong); border-radius: var(--r-sm); }
+.v-token-v3 .v-case-help { margin: 0; color: var(--c-text-2); font-size: var(--fs-caption); }
+.v-token-v3 .v-case-block { width: 100%; margin: 0; }
+.v-token-v3 .v-case-text { min-height: 44px; border: 0; background: transparent; color: var(--c-primary); font: inherit; cursor: pointer; }
+.v-token-v3 .v-case-error { padding: 12px 16px; border-radius: var(--r-md); background: var(--c-warning-soft); color: var(--c-warning); }
+.v-token-v3 .v-case-error p { margin: 0 0 8px; }
+.v-token-v3 .v-case-list { margin: 0; padding: 0; list-style: none; }
+.v-token-v3 .v-case-list a { display: flex; align-items: center; min-height: 44px; padding-block: 8px; border-bottom: 1px solid var(--c-border); color: var(--c-text); text-decoration: none; }
+.v-token-v3 .v-case-list li:last-child a { border-bottom: 0; }
+.v-token-v3 .v-case-crumb { margin: 16px 0 0; color: var(--c-text-2); font-size: var(--fs-caption); }
+.v-token-v3 .v-case-seg { display: inline-flex; margin-top: 16px; padding: 4px; gap: 4px; border-radius: var(--r-pill); background: var(--c-surface-2); }
+.v-token-v3 .v-case-seg a { display: inline-flex; align-items: center; justify-content: center; min-width: 88px; min-height: 44px; padding: 8px 16px; border-radius: var(--r-pill); color: var(--c-text-2); text-decoration: none; }
+.v-token-v3 .v-case-seg a[aria-current="page"] { background: var(--c-surface); color: var(--c-primary); box-shadow: var(--shadow-1); font-weight: 600; }
+.v-token-v3 .v-case-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; padding: 0; list-style: none; }
+.v-token-v3 .v-case-tiles li { display: grid; gap: 6px; font-size: var(--fs-caption); color: var(--c-text-2); }
+.v-token-v3 .v-case-tiles img, .v-token-v3 .v-case-ph { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r-md); background: var(--c-surface-2); }
+.v-token-v3 .v-case-info { margin: 0; padding: 12px 16px; border-radius: var(--r-md); background: var(--c-tint-soft); color: var(--c-text); }
+.v-token-v3 .v-case-upload { display: grid; gap: 12px; }
+.v-token-v3 .v-case-file { position: absolute; width: 1px; height: 1px; min-height: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.v-token-v3 .v-case-file:focus-visible + label { outline: 2px solid var(--c-focus); outline-offset: 3px; }
+.v-token-v3 .v-case-upload label[aria-disabled="true"] { opacity: .6; cursor: wait; }
+.v-token-v3 .v-case-share-entry { display: flex; align-items: center; width: 100%; min-height: 44px; padding-block: 8px; border: 0; background: transparent; color: var(--c-text); font: inherit; text-align: start; cursor: pointer; }
+.v-token-v3 .v-case-share { display: grid; gap: 12px; }
+.v-token-v3 .v-case-toast { margin: 0; padding: 12px 16px; border-radius: var(--r-md); background: var(--c-tint-soft); }
+.v-token-v3 .v-case-toast:empty { padding: 0; background: none; }
+/* PLT-52-AC9 (RV-RELAY, RV-RELAY-WAIT): the TK-RELAY rail inside the job card. Bearer pages have no
+   html[data-brand-v3], so the rail, role avatars, navy pill and clock are restated here, scoped to the shell. */
+.v-token-v3 .v3-party-relay { margin: 16px 0; min-width: 0; }
+.v-token-v3 .v3-rail { display: flex; list-style: none; margin: 0; padding: 0; min-width: 0; }
+.v-token-v3 .v3-st { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; text-align: center; font-size: .85em; line-height: 1.35; color: var(--c-text-2); }
+.v-token-v3 .v3-st + .v3-st::before { content: ""; position: absolute; top: 1.2em; right: 50%; width: 100%; height: 2px; margin-top: -1px; background: var(--c-border); }
+.v-token-v3 .v3-st.done + .v3-st::before { background: var(--c-primary); }
+.v-token-v3 .v3-st.done { color: var(--c-text); }
+.v-token-v3 .v3-st.now { color: var(--c-text); font-weight: 700; }
+.v-token-v3 .v3-st.next { color: var(--c-text-3); }
+.v-token-v3 .v3-st.next .party { opacity: .8; }
+.v-token-v3 .v3-st-l { display: inline-flex; align-items: center; white-space: nowrap; max-width: 100%; }
+.v-token-v3 .v3-st-s { font-weight: 400; color: var(--c-text-2); overflow-wrap: anywhere; max-width: 100%; }
+.v-token-v3 .v3-st.next .v3-st-s { color: var(--c-text-3); }
+.v-token-v3 .v3-st-s.v3-st-wait { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .15em; }
+.v-token-v3 .v3-st-wait .v3-st-t { white-space: nowrap; }
+.v-token-v3 .v3-st-s.v3-st-wait .v3-wait { width: 1em; height: 1em; margin: 0; }
+.v-token-v3 .v3-st .party { display: inline-grid; place-items: center; width: 2.4em; height: 2.4em; flex: none; position: relative; z-index: 1; margin-bottom: 4px; border: 1.5px solid; border-radius: 30%; font-weight: 700; line-height: 1; }
+.v-token-v3 .v3-st .party-m { background: var(--c-party-m-fill); border-color: var(--c-party-m-line); color: var(--c-party-m-fg); }
+.v-token-v3 .v3-st .party-t { background: var(--c-party-t-fill); border-color: var(--c-party-t-line); color: var(--c-party-t-fg); }
+.v-token-v3 .v3-st .party-o { background: var(--c-party-o-fill); border-color: var(--c-party-o-line); color: var(--c-party-o-fg); }
+.v-token-v3 .v3-st .party-v { background: var(--c-party-v-fill); border-color: var(--c-party-v-line); color: var(--c-party-v-fg); }
+.v-token-v3 .v3-st .turn-tag { display: inline-flex; align-items: center; border-radius: var(--r-btn); background: var(--c-primary); color: var(--c-on-primary); padding: .05em .48em; font-weight: 700; }

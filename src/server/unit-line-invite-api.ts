@@ -1,3 +1,4 @@
+import { requireStaffInviteUnit } from "./b040-staff-ui";
 import { NextResponse } from "next/server";
 import { FlowError } from "./errors";
 import type { Session } from "./types";
@@ -52,6 +53,7 @@ export async function handleStaffLive(
   if (!session) return emptySession();
   if (!UUID_RE.test(unitId)) return badId();
   try {
+    await requireStaffInviteUnit(session, unitId);
     const cur = await currentInvite(session, unitId);
     const rows = await listBindings(session, unitId);
     const filtered = rows.filter(
@@ -88,6 +90,7 @@ export async function handleStaffIssue(
   if (!session) return emptySession();
   if (!UUID_RE.test(unitId)) return badId();
   try {
+    await requireStaffInviteUnit(session, unitId);
     const cur = await currentInvite(session, unitId);
     if (cur) {
       return json(
@@ -131,6 +134,7 @@ export async function handleStaffRotate(
   if (!session) return emptySession();
   if (!UUID_RE.test(unitId)) return badId();
   try {
+    await requireStaffInviteUnit(session, unitId);
     const rotated = await rotateInvite(session, unitId);
     const after = await currentInvite(session, unitId);
     return json(

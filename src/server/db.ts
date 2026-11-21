@@ -247,9 +247,22 @@ async function rollBack(client: Client, error: unknown): Promise<never> {
  * that those flows are server-side. Callers must authorize first.
  */
 /** service_role transaction on a connection the caller already holds. */
-export async function svcOn<T>(client: Client, userId: string | null, fn: (client: Client) => Promise<T>, options?: { isolation?: "repeatable read"; readOnly?: boolean }): Promise<T> {
+export type SvcOptions = { isolation?: "read committed" | "repeatable read"; readOnly?: boolean };
+
+/**
+ * BEGIN statement for svcOn. Read-only defaults to REPEATABLE READ (one snapshot); an explicit
+ * isolation is honoured on writable transactions too (B-056 r3-final #5: the snapshot builder
+ * runs READ COMMITTED under its row lock).
+ */
+export function svcBeginStatement(options?: SvcOptions): string {
+  const level = options?.isolation ?? (options?.readOnly ? "repeatable read" : null);
+  const isolation = level === "repeatable read" ? " ISOLATION LEVEL REPEATABLE READ" : level === "read committed" ? " ISOLATION LEVEL READ COMMITTED" : "";
+  return `BEGIN${isolation}${options?.readOnly ? " READ ONLY" : ""}`;
+}
+
+export async function svcOn<T>(client: Client, userId: string | null, fn: (client: Client) => Promise<T>, options?: SvcOptions): Promise<T> {
   try {
-    await client.query(options?.readOnly ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN");
+    await client.query(svcBeginStatement(options));
     if (userId) {
       await client.query(
         `SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'service_role', true)`,
@@ -267,6 +280,6 @@ export async function svcOn<T>(client: Client, userId: string | null, fn: (clien
   }
 }
 
-export async function svc<T>(userId: string | null, fn: (client: Client) => Promise<T>, options?: { isolation?: "repeatable read"; readOnly?: boolean }): Promise<T> {
+export async function svc<T>(userId: string | null, fn: (client: Client) => Promise<T>, options?: SvcOptions): Promise<T> {
   return withClient((client) => svcOn(client, userId, fn, options));
 }

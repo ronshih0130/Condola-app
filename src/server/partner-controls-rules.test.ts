@@ -43,6 +43,6 @@ test("billing keeps legacy quote byte-for-byte OFF and reverts at expiry", () =>
   const input = { units: 25, tier: "standard" as const, cycle: "month" as const, now: new Date(override.startsAt) };
   const old = quoteMonthly(input);
   assert.equal(JSON.stringify(quoteMonthly({ ...input, unitOverride: null })), JSON.stringify(old));
-  assert.equal(quoteMonthly({ ...input, unitOverride: override }).monthly, 150);
+  assert.equal(quoteMonthly({ ...input, unitOverride: override }).monthly, 195); // 5 billable units × NT$39 (C4b)
   assert.deepEqual(quoteMonthly({ ...input, now: new Date(override.expiresAt), unitOverride: override }), old);
 });

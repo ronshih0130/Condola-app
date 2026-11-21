@@ -1,0 +1,150 @@
+/* Keep root controls mounted across client navigation and layout error fallbacks.
+   Only a mounted v3 shell replaces them with its own account controls and sandbox banner. */
+html[data-brand="v2"][data-brand-v3] body:has([data-v3-shell]) > header.top,
+html[data-brand="v2"][data-brand-v3] body:has([data-v3-shell]) > .env-banner{ display:none; }
+/* B-043 app.js/index.html/extra.css + approved shared-navy-shell.css (desktop B).
+   Only shell selectors are ported. Colors/radii use the existing v3/v2 tokens;
+   font sizes resolve the mockup's fs-body=16, fs-small=14 and responsive fs-h1 tokens.
+   Phase 1b controls follow SH-ME/SH-ORG/SH-SANDBOX/SH-TRIAL. */
+html[data-brand="v2"][data-brand-v3] .v3-shell{ min-height:100vh; display:flex; flex-direction:column; }
+/* The empty-state primary is fixed at the bottom on phones and sits above a bottom nav of this height
+   (globals.css .es-primary uses --m-bottom-nav-height). The v3 phone tab bar is 64px tall. */
+html[data-brand="v2"][data-brand-v3] .v3-shell{ --m-bottom-nav-height:64px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy{ display:grid; grid-template-columns:minmax(0,1fr) 44px; grid-template-rows:auto auto; column-gap:8px; row-gap:2px; align-items:center; background:var(--c-primary); color:var(--c-on-primary); border-bottom:0; height:auto; min-height:56px; padding:max(10px,env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px)); position:sticky; top:0; z-index:30; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy .wm{ grid-column:1; grid-row:1; font-family:var(--font-display); font-weight:800; font-size:1.125rem; color:inherit; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy .cap{ grid-column:1 / -1; grid-row:2; min-width:0; color:inherit; opacity:.92; font-size:1rem; overflow-wrap:anywhere; text-align:left; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .sidebar{ display:contents; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .side-head, html[data-brand="v2"][data-brand-v3] .v3-shell .snav, html[data-brand="v2"][data-brand-v3] .v3-shell .deskbar{ display:none; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-content{ order:1; flex:1; min-width:0; width:auto; max-width:none; margin:0; padding:16px 14px calc(80px + env(safe-area-inset-bottom,0px)); overflow:visible; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar{ position:fixed; bottom:0; left:0; right:0; height:auto; min-height:64px; padding-bottom:env(safe-area-inset-bottom,0px); background:var(--c-surface); border-top:1px solid var(--c-border); display:flex; z-index:20; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar :is(a,button){ flex:1; min-width:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:11px; color:var(--c-text-3); text-decoration:none; min-height:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar :is(a,button).on{ color:var(--c-primary); font-weight:700; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .snav a{ display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--r-sm); text-decoration:none; min-height:44px; min-width:44px; font-weight:500; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .snav svg{ flex:none; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .subchips{ display:flex; gap:8px; overflow-x:auto; margin:0 -14px 14px; padding:4px 14px; scrollbar-width:none; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .subchips a{ flex:none; display:inline-flex; align-items:center; min-height:44px; min-width:44px; padding:0 14px; border-radius:var(--r-pill); border:1px solid var(--c-border-strong); background:var(--c-surface); color:var(--c-text-2); text-decoration:none; font-size:.875rem; font-weight:600; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .subchips a.on{ background:var(--c-primary); border-color:var(--c-primary); color:var(--c-on-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .v3-more .sheet{ background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); padding:8px 0; box-shadow:var(--shadow-1); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .v3-more .sheet a{ display:flex; gap:12px; align-items:center; padding:12px 16px; min-height:56px; min-width:44px; text-decoration:none; color:var(--c-text); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .v3-more .sheet a.sub{ padding-left:42px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .v3-more .sheet a + a{ border-top:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .v3-shell :is(a,button,summary):focus-visible{ outline:2px solid var(--c-focus); outline-offset:-2px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .subchips a.on:focus-visible{ outline-color:var(--c-on-primary); outline-offset:-4px; }
+/* Keep legal links reachable above the fixed phone tabs, without changing their tree. */
+html[data-brand="v2"][data-brand-v3] body:has(.v3-shell) .site-foot{ padding-bottom:calc(64px + env(safe-area-inset-bottom,0px)); }
+/* Phones: when the empty-state primary is fixed (globals.css, ≤600px), leave room for the button and the tab bar. */
+@media(max-width:600px) {
+  html[data-brand="v2"][data-brand-v3] .v3-shell .shell-content:has(.es-primary){ padding-bottom:calc(120px + var(--m-bottom-nav-height,0px) + env(safe-area-inset-bottom,0px)); }
+}
+@media(min-width:37.5em) and (max-width:63.99em) {
+  html[data-brand="v2"][data-brand-v3] .v3-shell .shell-content{ max-width:640px; margin:0 auto; width:100%; }
+}
+@media(min-width:64em) {
+  html[data-brand="v2"][data-brand-v3] .v3-shell{ --m-bottom-nav-height:0px; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell{ display:grid; grid-template-columns:280px minmax(0,1fr); align-items:start; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy, html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar, html[data-brand="v2"][data-brand-v3] .v3-shell .subchips{ display:none; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .sidebar{ display:flex; flex-direction:column; position:sticky; top:0; height:100vh; max-height:100vh; overflow-y:auto; padding:22px 14px 18px; background:var(--c-primary); color:var(--c-on-primary); }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .side-head{ display:block; margin-bottom:16px; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .side-head .wm{ display:block; font-family:var(--font-display); font-weight:800; font-size:22px; color:inherit; margin-bottom:10px; padding:0 6px; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .side-head .cap{ color:inherit; opacity:.92; width:100%; text-align:left; padding:8px 6px; overflow-wrap:anywhere; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .snav{ display:block; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .snav a{ color:rgb(from var(--c-on-primary) r g b / .88); }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .snav a:hover{ background:rgb(from var(--c-on-primary) r g b / .1); }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .snav a.on{ background:rgb(from var(--c-on-primary) r g b / .18); color:var(--c-on-primary); font-weight:700; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .snav a.sub{ padding-left:42px; font-weight:500; font-size:.875rem; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .snav a.sub.on{ font-weight:700; box-shadow:inset 3px 0 0 var(--c-on-primary); }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .shell-content{ padding:22px 30px 48px; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .deskbar{ display:flex; align-items:center; gap:10px; background:var(--c-surface); border-bottom:1px solid var(--c-border); min-height:56px; margin:-22px -30px 16px; padding:8px 30px; position:sticky; top:0; z-index:20; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .page-title-desk{ display:block; font-size:clamp(1.375rem, 1.2rem + .5vw, 1.625rem); font-weight:700; margin:0; flex:1; min-width:0; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .sidebar :is(a,button,summary):focus-visible{ outline-color:var(--c-on-primary); outline-offset:-4px; }
+  html[data-brand="v2"][data-brand-v3] body:has(.v3-shell) .site-foot{ margin-left:310px !important; padding-bottom:0; }
+}
+
+/* SH-ME / SH-ORG: one active popup, outside the sticky bars' stacking contexts. */
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-avatar{ display:flex; align-items:center; justify-content:center; min-width:44px; width:44px; min-height:44px; padding:0; border:1px solid currentColor; border-radius:var(--r-pill); background:transparent; color:inherit; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy .shell-avatar{ grid-column:2; grid-row:1; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-avatar .party{ margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-context{ display:block; min-width:44px; min-height:44px; padding:0; border:0; border-radius:var(--r-sm); background:transparent; font:inherit; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-dim{ position:fixed; inset:0; z-index:80; background:rgb(from var(--c-primary) r g b / .45); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup{ position:fixed; z-index:81; padding:16px; background:var(--c-surface); color:var(--c-text); border:1px solid var(--c-border); border-radius:var(--r-lg); box-shadow:var(--shadow-2); overflow-y:auto; overflow-wrap:anywhere; max-height:calc(100dvh - 24px); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup-avatar{ left:0; right:0; bottom:0; padding-bottom:calc(16px + env(safe-area-inset-bottom,0px)); border-bottom-left-radius:0; border-bottom-right-radius:0; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup-org{ left:14px; right:14px; top:var(--shell-popup-top); max-height:calc(100dvh - var(--shell-popup-top) - 16px); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup :is(a,button){ display:flex; align-items:center; min-height:44px; min-width:44px; color:var(--c-primary); font:inherit; text-decoration:none; border-radius:var(--r-sm); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup :is(.shell-account,.btn){ padding:10px 12px; width:100%; background:transparent; border:0; box-shadow:none; justify-content:flex-start; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup :is(a,button):hover{ text-decoration:underline; text-underline-offset:3px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-menu-heading{ padding:0 12px 12px; border-bottom:1px solid var(--c-divider); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-menu-heading p{ margin:4px 0 0; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-language{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 12px; flex-wrap:wrap; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-language > span{ display:flex; align-items:center; min-height:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-language .seg{ display:inline-flex; padding:0; gap:0; border:1px solid var(--c-primary); border-radius:var(--r-pill); background:transparent; overflow:hidden; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-language .seg a{ justify-content:center; padding:0 16px; border-radius:var(--r-pill); background:transparent; color:var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-language .seg a[aria-current="true"]{ background:var(--c-primary); color:var(--c-on-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-language .seg a[aria-current="true"]:focus-visible{ outline-color:var(--c-on-primary); outline-offset:-4px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup-org a{ justify-content:space-between; gap:8px; padding:8px 12px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup-org hr{ border:0; border-top:1px solid var(--c-divider); margin:8px 0; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy :is(a,button):focus-visible{ outline-color:var(--c-on-primary); outline-offset:-4px; }
+/* SH-SANDBOX / SH-TRIAL: informational surfaces, outline CTA and text actions only. */
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-banner{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:16px; margin:0 0 16px; border-radius:var(--r-md); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-sandbox{ background:var(--c-info-soft); color:var(--c-text); border:1px solid var(--c-info); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-sandbox p{ margin:4px 0 0; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-banner :is(a,button){ display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; color:var(--c-primary); background:transparent; box-shadow:none; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-trial{ background:var(--c-warning-soft); color:var(--c-text); border:1px solid var(--c-warning); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-trial > span:last-child{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-trial .btn{ border:1px solid var(--c-primary); border-radius:var(--r-pill); white-space:normal; text-align:center; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-trial .x{ width:auto; height:auto; padding:0 12px; border:0; font:inherit; text-decoration:underline; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .build-sha{ margin-top:24px; }
+@media(min-width:64em) {
+  html[data-brand="v2"][data-brand-v3] .v3-shell .shell-dim{ background:transparent; }
+  html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup{ top:var(--shell-popup-top); left:var(--shell-popup-left); right:auto; bottom:auto; width:320px; max-height:calc(100dvh - var(--shell-popup-top) - 16px); border-radius:var(--r-lg); padding-bottom:16px; }
+}
+/* SH-NONAME: the same white avatar square, holding the 我的帳號 person icon instead of a letter. */
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-avatar-noname svg{ width:1.1em; height:1.1em; display:block; }
+
+/* OV-SH-PHONE/DESK/MORE: owner uses the shared shell, with an admitted bell and a More sheet. */
+html[data-brand="v2"][data-brand-v3] .v3-shell .tabbar button{ border:0; border-radius:0; padding:0; background:transparent; font-family:inherit; cursor:pointer; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-bell{ display:flex; align-items:center; justify-content:center; min-width:44px; width:44px; min-height:44px; color:inherit; border-radius:var(--r-pill); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy:has(.shell-bell){ grid-template-columns:minmax(0,1fr) 44px 44px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy .shell-bell{ grid-column:2; grid-row:1; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .appbar.navy:has(.shell-bell) .shell-avatar{ grid-column:3; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead{ background:var(--c-tint-soft); color:var(--c-text); padding:8px 0 16px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-phone-lead h1{ margin:0; font-family:var(--font-display); }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-popup-more{ left:0; right:0; bottom:0; padding-bottom:calc(16px + env(safe-area-inset-bottom,0px)); border-bottom-left-radius:0; border-bottom-right-radius:0; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-more-entry{ padding:12px; gap:12px; }
+html[data-brand="v2"][data-brand-v3] .v3-shell .shell-more-entry svg{ flex:none; }
+/* OV-SH-DESK-HEAD (round 7 batch 4): owners and vendors keep the phone heading on desktop, in the sand lead under
+   the title row; the title row names the area. Managers have no sand lead. */
+@media(min-width:64em) {
+  html[data-brand="v2"][data-brand-v3] .v3-owner-shell .shell-phone-lead{ display:block; padding:16px 20px; margin:0 0 16px; border-radius:var(--r-lg); }
+  html[data-brand="v2"][data-brand-v3] .v3-owner-shell .page-title-desk{ font-size:1rem; font-weight:600; color:var(--c-text-2); }
+}
+
+/* R5-OWNVIEW (設定 › 規則與資料 › 屋主看得到什麼, MGT-138): the block and its side card; two columns when there is room. */
+html[data-brand="v2"][data-brand-v3] .v3-ownview{ display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr)); align-items:start; gap:16px; margin:16px 0; max-width:960px; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-card{ display:grid; gap:12px; align-content:start; min-width:0; padding:20px 24px; background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--r-lg); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview :is(h2,p,dl,dd){ margin:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview h2{ font-size:1.125rem; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-desc,
+html[data-brand="v2"][data-brand-v3] .v3-ownview-sub{ color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-row{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0; border-top:1px solid var(--c-border); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-text{ min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-text b{ display:block; font-weight:600; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-sub{ display:block; font-size:.88em; margin-top:2px; overflow-wrap:anywhere; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch{ flex:none; display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; padding:0; border:0; background:transparent; cursor:pointer; border-radius:var(--r-btn); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-knob{ position:relative; display:block; width:42px; height:24px; border-radius:var(--r-btn); background:var(--c-border-strong); transition:background-color .15s; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-knob::after{ content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:var(--c-on-primary); transition:transform .15s; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch[aria-checked="true"] .v3-ownview-knob{ background:var(--c-primary); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch[aria-checked="true"] .v3-ownview-knob::after{ transform:translateX(18px); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch[aria-disabled="true"]{ cursor:progress; opacity:.6; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch:focus-visible{ outline:2px solid transparent; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-switch:focus-visible .v3-ownview-knob{ box-shadow:0 0 0 2px var(--c-on-primary),0 0 0 4px var(--c-focus); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-error{ color:var(--c-danger); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-kv > div{ display:flex; justify-content:space-between; gap:16px; padding:8px 0; color:var(--c-text-2); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-kv dd{ color:var(--c-text); font-weight:600; text-align:end; overflow-wrap:anywhere; min-width:0; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-kv a{ display:inline-flex; align-items:center; min-height:44px; color:var(--c-brand-ink); }
+html[data-brand="v2"][data-brand-v3] .v3-ownview :is(a,.btn):focus-visible{ outline:2px solid var(--c-focus); outline-offset:3px; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview .btn{ justify-self:start; min-height:44px; }
+html[data-brand="v2"][data-brand-v3] .v3-ownview-skeleton{ display:block; height:20px; border-radius:var(--r-sm); background:var(--c-surface-2); }
+@media (prefers-reduced-motion:reduce) {
+  html[data-brand="v2"][data-brand-v3] .v3-ownview-knob,
+  html[data-brand="v2"][data-brand-v3] .v3-ownview-knob::after{ transition:none; }
+}

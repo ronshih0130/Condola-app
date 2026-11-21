@@ -13,7 +13,7 @@ import { GET as vendorAccount } from "../app/api/vendor-account/route";
 import { createSession } from "./auth";
 import { readSessionOn } from "./session";
 import { resolveIdentity } from "./identity";
-import { tenantLeases, ownerPropertyNames, ownerHome, listStatements, statementDetail, statementPdfSource } from "./queries";
+import { tenantLeases, ownerPropertyNames, ownerHome, listStatements, statementDetail, statementPdfSource, ownerStatementRentSource, ownerStatementPropertyNames } from "./queries";
 import { lineHash, type LinePersona } from "./line/login-token";
 import { randomProof } from "./line/login-link";
 import { LINE_BROWSER_COOKIE, LINE_CSRF_COOKIE } from "./line/login-routes";
@@ -165,6 +165,12 @@ test("owner invitation derives company/persona atomically; only own properties/r
  assert.ok(properties.some(p => p.id === property)); assert.ok(reports.some(r => r.id === report));
  assert.ok(!reports.some(r => r.id === foreignReport)); assert.ok(await statementDetail(s, report));
  assert.equal(await statementDetail(s, foreignReport), null); assert.equal(await statementPdfSource(s, foreignReport), null);
+ // Month-selected ids only; the foreign report never contributes names.
+ const withNames = await ownerStatementPropertyNames(s, [report, foreignReport]);
+ assert.deepEqual(withNames.map(r => r.id), [report]);
+ assert.ok(withNames[0].properties && withNames[0].properties.length > 0);
+ assert.equal(await ownerStatementRentSource(s, report), null);
+ assert.equal(await ownerStatementRentSource(s, foreignReport), null);
  assert.equal((await pdf(report, a.token)).status, 200);
  const foreign = await pdf(foreignReport, a.token), missing = await pdf(randomUUID(), a.token);
  assert.equal(foreign.status, 404); assert.equal(missing.status, 404); assert.equal(await foreign.text(), await missing.text());
@@ -172,6 +178,119 @@ test("owner invitation derives company/persona atomically; only own properties/r
  assert.ok(properties.every(p => ownIds.includes(p.id)));
  const home = await ownerHome(s); assert.ok(home.length > 0);
 });
+// Real SQL fixtures: write through the suite's superuser client, read through the
+// production authenticated, org-pinned reader. No trigger is disabled on insert.
+type RentSourceCase = {
+ name: string;
+ payments: { amount: number; confirmedAt?: string; otherProperty?: boolean; ledgerOf?: number }[];
+ lines: { amount: number; payment: number | null; otherProperty?: boolean }[];
+ rent: number;
+ expected: { count: number; date: string } | null;
+ mixed?: boolean;
+};
+const rentSourceCases: RentSourceCase[] = [
+ { name: "valid split lines reconcile per payment and return distinct count/latest local date",
+  payments: [{ amount: 10000 }, { amount: 5000, confirmedAt: "2095-01-12T19:00:00Z" }],
+  lines: [{ amount: 3000, payment: 0 }, { amount: 7000, payment: 0 }, { amount: 5000, payment: 1 }],
+  rent: 15000, expected: { count: 2, date: "2095-01-12" } },
+ { name: "two 7500 lines cannot reuse one 10000 payment for rent 15000",
+  payments: [{ amount: 10000 }], lines: [{ amount: 7500, payment: 0 }, { amount: 7500, payment: 0 }], rent: 15000, expected: null },
+ { name: "one unlinked rent line denies partial provenance",
+  payments: [{ amount: 7500 }, { amount: 7500 }], lines: [{ amount: 7500, payment: 0 }, { amount: 7500, payment: null }], rent: 15000, expected: null },
+ { name: "UTC midnight rolls back to the previous day in the org timezone",
+  payments: [{ amount: 10000, confirmedAt: "2095-01-11T00:05:00Z" }], lines: [{ amount: 10000, payment: 0 }],
+  rent: 10000, expected: { count: 1, date: "2095-01-10" } },
+ { name: "linked mixed-property report is denied by the owner statement scope",
+  payments: [{ amount: 7500 }, { amount: 7500, otherProperty: true }],
+  lines: [{ amount: 7500, payment: 0 }, { amount: 7500, payment: 1, otherProperty: true }], rent: 15000, expected: null, mixed: true },
+ { name: "one line linked to two qualifying payments is ambiguous",
+  payments: [{ amount: 10000 }, { amount: 10000, ledgerOf: 0 }], lines: [{ amount: 10000, payment: 0 }], rent: 20000, expected: null },
+ { name: "line sum must equal the issued rent even when every payment has capacity",
+  payments: [{ amount: 20000 }], lines: [{ amount: 15000, payment: 0 }], rent: 16000, expected: null },
+ { name: "a zero rent line is not valid attribution",
+  payments: [{ amount: 10000 }], lines: [{ amount: 10000, payment: 0 }, { amount: 0, payment: 0 }], rent: 10000, expected: null },
+ { name: "rent may use only part of a payment if its attributed sum reconciles",
+  payments: [{ amount: 20000 }], lines: [{ amount: 7000, payment: 0 }, { amount: 8000, payment: 0 }],
+  rent: 15000, expected: { count: 1, date: "2095-01-10" } },
+];
+for (const scenario of rentSourceCases) test(`O-RPT-SRC PostgreSQL: ${scenario.name}`, async () => {
+ const statementId = randomUUID();
+ const demoMode = process.env.DEMO_MODE;
+ try {
+  await db.query("UPDATE organizations SET timezone='America/Los_Angeles' WHERE id=$1", [ORG_ID]);
+  const ownLease = (await db.query<{ id: string; currency: string }>(
+   "SELECT id,currency FROM leases WHERE org_id=$1 AND property_id=$2 ORDER BY id LIMIT 1", [ORG_ID, property])).rows[0];
+  assert.ok(ownLease, "seed supplies an owned property with a real lease FK");
+  const otherLease = scenario.mixed ? (await db.query<{ id: string; property_id: string }>(
+   `SELECT l.id,l.property_id FROM leases l WHERE l.org_id=$1 AND l.currency=$3
+     AND NOT EXISTS (SELECT 1 FROM property_owners po WHERE po.property_id=l.property_id AND po.owner_contact_id=$2)
+     ORDER BY l.id LIMIT 1`, [ORG_ID, contact, ownLease.currency])).rows[0] : undefined;
+  if (scenario.mixed) assert.ok(otherLease, "seed supplies another property outside this owner's scope");
+  // The seeded org has payment_results_v2 OFF. Do not alter controls or bypass its trigger.
+  assert.equal((await db.query(`SELECT coalesce(feature_flags->'payment_results_v2'='true'::jsonb,false) enabled
+   FROM organizations WHERE id=$1`, [ORG_ID])).rows[0].enabled, false);
+  await db.query(`INSERT INTO owner_statements(id,org_id,owner_contact_id,currency,period_start,period_end,status,
+    rent_received_minor,closing_balance_minor,issued_by,issued_at)
+   VALUES($1,$2,$3,$4,'2095-01-01','2095-01-31','issued',$5,$5,$6,'2095-02-01T00:00:00Z')`,
+   [statementId, ORG_ID, contact, ownLease.currency, scenario.rent, USERS.admin]);
+  const ledgerIds: string[] = [];
+  for (const pay of scenario.payments) {
+   const paymentId = randomUUID(), ledgerId = pay.ledgerOf === undefined ? randomUUID() : ledgerIds[pay.ledgerOf];
+   assert.ok(ledgerId);
+   const propertyId = pay.otherProperty ? otherLease!.property_id : property;
+   const leaseId = pay.otherProperty ? otherLease!.id : ownLease.id;
+   const confirmedAt = pay.confirmedAt ?? "2095-01-10T18:00:00Z";
+   if (pay.ledgerOf === undefined) {
+    await db.query(`INSERT INTO ledger_transactions(id,org_id,property_id,lease_id,kind,currency,effective_date,source_table,source_id,created_by)
+     VALUES($1,$2,$3,$4,'payment',$5,'2095-01-10','payments',$6,$7)`,
+     [ledgerId, ORG_ID, propertyId, leaseId, ownLease.currency, paymentId, USERS.admin]);
+    // Both entries in one statement satisfy the deferred balance/currency trigger.
+    await db.query(`INSERT INTO ledger_entries(org_id,transaction_id,account,amount_minor,currency,property_id,lease_id)
+     VALUES($1,$2,'cash_clearing',$3::bigint,$4,$5,$6),($1,$2,'tenant_receivable',-$3::bigint,$4,$5,$6)`,
+     [ORG_ID, ledgerId, pay.amount, ownLease.currency, propertyId, leaseId]);
+   }
+   await db.query(`INSERT INTO payments(id,org_id,property_id,lease_id,currency,amount_minor,paid_on,method,status,source,
+     submitted_by,confirmed_by,confirmed_at,updated_at,ledger_transaction_id,is_deposit)
+    VALUES($1,$2,$3,$4,$5,$6,'2095-01-10','bank_transfer','confirmed','manager_entry',$7,$7,$8,$8,$9,false)`,
+    [paymentId, ORG_ID, propertyId, leaseId, ownLease.currency, pay.amount, USERS.admin, confirmedAt, ledgerId]);
+   ledgerIds.push(ledgerId);
+  }
+  for (const line of scenario.lines) {
+   await db.query(`INSERT INTO owner_statement_lines(org_id,statement_id,property_id,line_type,description,amount_minor,ledger_transaction_id)
+    VALUES($1,$2,$3,'rent','Local rent source fixture',$4,$5)`,
+    [ORG_ID, statementId, line.otherProperty ? otherLease!.property_id : property, line.amount,
+     line.payment === null ? null : ledgerIds[line.payment]]);
+  }
+  const s = ownerSession();
+  assert.deepEqual(await ownerStatementRentSource(s, statementId), scenario.expected);
+  assert.equal(await ownerStatementRentSource(s, foreignReport), null);
+  if (scenario.mixed) {
+   assert.equal(await statementDetail(s, statementId), null);
+   assert.deepEqual(await ownerStatementPropertyNames(s, [statementId]), []);
+   // Positive control: unchanged financial rows reconcile once BOTH properties
+   // are authorized. This distinguishes owner scope denial from a broken fixture.
+   const ownershipId = randomUUID();
+   try {
+    await db.query(`INSERT INTO property_owners(id,org_id,property_id,owner_contact_id,is_primary,effective_from)
+     VALUES($1,$2,$3,$4,false,current_date)`, [ownershipId, ORG_ID, otherLease!.property_id, contact]);
+    assert.ok(await statementDetail(s, statementId));
+    assert.deepEqual(await ownerStatementRentSource(s, statementId), { count: 2, date: "2095-01-10" });
+   } finally {
+    await db.query("DELETE FROM property_owners WHERE id=$1", [ownershipId]);
+   }
+   assert.equal(await ownerStatementRentSource(s, statementId), null);
+  }
+ } finally {
+  // Ledger rows and audit rows are append-only even for a superuser. Reuse the
+  // suite's existing reset helper ONLY in its disposable clone to remove all
+  // fixtures (including partial setup) and restore the seeded organization.
+  process.env.DEMO_MODE = "true";
+  try { await resetAndSeed(); } finally {
+   if (demoMode === undefined) delete process.env.DEMO_MODE; else process.env.DEMO_MODE = demoMode;
+  }
+ }
+});
+
 test("ownership removal immediately removes property, home and reports, including previously issued PDFs", async () => {
  const a = await accepted();
  assert.equal((await pdf(report, a.token)).status, 200);

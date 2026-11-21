@@ -16,6 +16,11 @@ import { getSession } from "@/server/session";
 import { loadVendorDispatch } from "@/server/vendor-repair";
 import { ticketPhotoRecovery } from "@/server/upload-recovery";
 import { ApprovalPanel } from "./approval-panel";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { loadTicketRelay } from "@/server/b3-ticket-relay";
+import { TicketRelayV3 } from "@/components/v3/m/tickets/ticket-relay";
+import { TicketDocumentsV3 } from "@/components/v3/m/tickets/ticket-documents";
+import { loadTicketDocuments } from "@/server/gs32-vendor-docs";
 
 export const dynamic = "force-dynamic";
 
@@ -45,16 +50,25 @@ export default async function TicketDetailPage({
   const currency = ticket.currency || ticket.property_currency;
   const readonly = t("i_repair_readonly_role");
   const draftAmount = minorToInput(ticket.final_cost) || minorToInput(ticket.estimated_cost) || "0";
+  // MGT-150 (TK-RELAY / TK-RELAY-MNT): brand_v3 only; the relay reader owns its own admission.
+  const relay = await brandV3EnabledForOrg(session.orgId) ? await loadTicketRelay(session, ticket.id) : null;
+  // GS-32 DOC-VOID (m-docs): vendor_docs_v3 + brand_v3 + vendor_documents; OFF renders nothing.
+  const documents = relay ? await loadTicketDocuments(session, ticket.id).catch(() => null) : null;
   return (
     <>
-      <PageHeader
+      {relay ? <>
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/brand/v3/ticket-relay.css" />
+        <TicketRelayV3 relay={relay} place={displaySampleName(ticket.place)} item={ticket.title} locale={session.locale} />
+        {documents?.state === "ready" ? <TicketDocumentsV3 locale={session.locale} currency={documents.currency} documents={documents.documents} /> : null}
+      </> : <PageHeader
         title={`${t("i_repair_page")} #${ticket.number}`}
         crumb={<Link href="/m/tickets">{t("i_repair_back")}</Link>}
-      />
+      />}
       <ErrorBanner t={t} error={query.error} />
-      <h2>
+      {relay ? null : <h2>
         #{ticket.number} {ticket.title}
-      </h2>
+      </h2>}
       <p className="muted">
         <Link href={`/m/properties/${ticket.property_id}`} data-testid="repair-property">
           {displaySampleName(ticket.property_name)}

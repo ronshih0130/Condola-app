@@ -1,3 +1,8 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { LeasesV3Page } from "@/components/v3/m/leases/page";
+import { LeasesLoading } from "@/components/v3/m/leases/leases";
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
@@ -15,6 +20,10 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const raw = await searchParams;
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/leases.css" /><Suspense key={`${raw.q ?? ""}:${raw.page ?? ""}`} fallback={<LeasesLoading locale={session.locale} />}><LeasesV3Page session={session} params={raw} /></Suspense></>;
+  }
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
   const result = await searchLeases(session, raw);
@@ -25,14 +34,15 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
     <>
       <PageHeader
         title={t("s_fba85ae")}
-        actions={
+        actions={rows.length > 0 ?
           <Link className="btn pri" href="/m/leases/new">
             + {t("s_e96eefc")}
-          </Link>
+          </Link> : null
         }
       />
       <div className="card">
         <ListSearch action="/m/leases" q={q} label={t("i_search")} placeholder={t("i_search_ph_leases")} clearLabel={t("i_search_clear")} />
+        {rows.length === 0 ? <ManagementEmptyState session={session} page={q || page > 1 ? "SRCH" : "LEASE"} actionHref={q || page > 1 ? "/m/leases" : undefined} /> : (
         <RfTable testId="lease-list">
           <thead>
             <tr>
@@ -46,11 +56,6 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={7}>{q ? t("i_search_none") : t("i_empty")}</td>
-              </tr>
-            ) : null}
             {rows.map((row) => (
               <tr key={row.id} className="click">
                 <Cell>
@@ -86,6 +91,7 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
             ))}
           </tbody>
         </RfTable>
+        )}
       </div>
       <ListPager
         path="/m/leases"

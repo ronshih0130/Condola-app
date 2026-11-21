@@ -5,6 +5,7 @@ import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { listFlaggedFirms, listPartnerCodes } from "@/server/partners";
 import { isPlatformAdmin } from "@/server/platform";
+import { FREE_UNITS } from "@/server/billing";
 import { actionClearPriceOverride, actionCreatePartnerCode, actionSetPriceOverride } from "@/server/signup-actions";
 import { getSession } from "@/server/session";
 // B-045 C2 / PLT-30: internal-admin-only apply queue with 入帳日 (paid-received) column.
@@ -57,7 +58,7 @@ export default async function PlatformAdminPage({ searchParams }: { searchParams
             </div>
             <div className="fg">
               <label className="f">{t("i_admin_free_units")}</label>
-              <input className="inp" name="freeUnits" type="number" min={0} defaultValue={4} />
+              <input className="inp" name="freeUnits" type="number" min={0} defaultValue={FREE_UNITS} />
             </div>
             <div className="fg">
               <label className="f">{t("i_admin_trial")}</label>

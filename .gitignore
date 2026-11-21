@@ -52,3 +52,9 @@ next-env.d.ts
 *.age
 
 *.key
+
+# Brand 3.0 visual evidence (copied to condola-hub receipts)
+/e2e/results/brand-v3/
+
+# Local scratch (gate logs, PR-body drafts); never committed (Lauren 3-W)
+.tmp/

@@ -1,3 +1,8 @@
+import { Suspense } from "react";
+import { brandV3EnabledForOrg } from "@/server/brand-v3";
+import { TenantOneV3Page } from "@/components/v3/m/tenants/tenant-one-page";
+import { TenantOneLoading } from "@/components/v3/m/tenants/tenant-one";
+import { ManagementEmptyState } from "@/components/management-empty-state";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { tenantDirectoryHistory } from "@/server/tenant-directory";
@@ -25,12 +30,16 @@ export default async function TenantPage({
   const { id } = await params;
   const query = await searchParams;
   const session = await getSession();
+  if (await brandV3EnabledForOrg(session.orgId)) {
+    // eslint-disable-next-line @next/next/no-css-tags
+    return <><link rel="stylesheet" href="/brand/v3/tenants.css" /><Suspense key={id} fallback={<TenantOneLoading locale={session.locale} />}><TenantOneV3Page session={session} id={id} /></Suspense></>;
+  }
   const t = makeT(session.locale);
   const directory=await tenantDirectoryHistory(session,id,query);
   if(directory.state==="enabled") {
     const view=directory.canViewContact?await directoryContactEditView(session,id):null;
     if(!directory.contact){if(view?.state==='recovery_only'||view?.state==='disabled')return <><DirectoryUnavailable locale={session.locale} path="/m/tenants"/><TenantDirectoryEditor key={`${session.userId}:${session.orgId}:${session.environment}:${id}`} locale={session.locale} scope={`${session.userId}:${session.orgId}:${session.environment}`} contactId={id} view={view}/></>;notFound();}
-    return <><TenantDirectoryDetail locale={session.locale} result={directory} audit={query.audit}/>{view?<TenantDirectoryEditor key={`${session.userId}:${session.orgId}:${session.environment}:${id}`} locale={session.locale} scope={`${session.userId}:${session.orgId}:${session.environment}`} contactId={id} view={view}/>:null}</>;
+    return <><TenantDirectoryDetail locale={session.locale} result={directory} audit={query.audit} empty={<ManagementEmptyState session={session} page="TENID" />}/>{view?<TenantDirectoryEditor key={`${session.userId}:${session.orgId}:${session.environment}:${id}`} locale={session.locale} scope={`${session.userId}:${session.orgId}:${session.environment}`} contactId={id} view={view}/>:null}</>;
   }
   if(directory.state==="unavailable") return <DirectoryUnavailable locale={session.locale} path="/m/tenants"/>;
   const detail = await tenantDetail(session, id);
@@ -44,7 +53,7 @@ export default async function TenantPage({
           <h3>{t("i_nav_leases")}</h3>
         </div>
         {detail.leases.length === 0 ? (
-          <div className="empty">{t("i_tenant_no_lease")}</div>
+          <ManagementEmptyState session={session} page="TENID" />
         ) : (
           <table className="t rf">
             <thead>

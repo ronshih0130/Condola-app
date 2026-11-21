@@ -3,10 +3,13 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 
-const FORBIDDEN = ["房東", "房客", "收款", "收租", "即將推出", "測試模式", "範例沙盒", "示範"];
+// Ron 2026-11-13 terminology decision: 「收款」 only in the manager nav name and the owner/vendor own-status strings
+// (exact allowlists below); 收租 and 代收 are banned phrases everywhere; Condola is never the subject of 收款.
+const FORBIDDEN = ["房東", "房客", "收款", "收租", "代收", "即將推出", "測試模式", "範例沙盒", "示範", "欠租", "本月實收"];
 
 const PHRASES = [
   "🧪 測試模式",
@@ -49,11 +52,57 @@ function sourceFiles() {
   return out;
 }
 
+// Approved manager-area exception: one exact property in its owning lane only.
+function withoutManagerAreaName(source: string, rel: string) {
+  const exact = /^    money: "收款",$/gm;
+  if (rel !== "src/i18n/lanes/brand-v3.ts" || [...source.matchAll(exact)].length !== 1) return source;
+  return source.replace(exact, '    money: "",');
+}
+
+// PR-018 / PR-019 P52: exact approved report section names only. Do not exempt
+// the containing file, the banned substring globally, or duplicate/extended values.
+function withoutApprovedReportRentNames(source: string, rel: string) {
+  if (rel !== "src/i18n/lanes/brand-v3-report.ts") return source;
+  for (const exact of [/^    earlyRent: "預收租金",$/gm, /^    earlyRentHeading: "另外列：預收租金",$/gm]) {
+    if ([...source.matchAll(exact)].length === 1) source = source.replace(exact, "");
+  }
+  return source;
+}
+
+// PENDING-RON PR-016 (Ron 2026-11-15 11:42 PT): exact owner/vendor own-status strings, in their own lane only.
+const OWN_STATUS_LANE = "src/i18n/lanes/brand-v3-own-status.ts";
+// B-063 adds two approved vendor empty-state strings (VEN-14-AC4 V-EMPTY; V-RECV empty, PR-018).
+const OWN_STATUS_EXACT = ["代屋主確認收款", "收款帳戶是屋主的，你只是代他在系統裡記下「已收到」，不是代他收錢。", "已代{屋主}記下這筆收款。", "收款", "待收款", "待收款紀錄",
+  "目前沒有未結案件，也沒有待收款。免下載 App，用這個網頁就行。", "還沒有待收款紀錄"];
+function withoutOwnStatus(source: string, rel: string) {
+  if (rel !== OWN_STATUS_LANE) return source;
+  let out = source;
+  for (const exact of OWN_STATUS_EXACT) out = out.split(`"${exact}"`).join('""');
+  return out;
+}
+
+// GS-32 rec-type1-preview: the approved vendor-frontend-1112 primary (VEN-21-AC4, rec-preview), exact, in its own lane only.
+const VENDOR_DOCS_LANE = "src/i18n/lanes/brand-v3-vendor-docs.ts";
+function withoutVendorDocsIssue(source: string, rel: string) {
+  if (rel !== VENDOR_DOCS_LANE) return source;
+  const exact = /^    issue: "確認已全額收款並開立", close: "關閉",$/gm;
+  return [...source.matchAll(exact)].length === 1 ? source.replace(exact, '    issue: "", close: "關閉",') : source;
+}
+
+// PR-018 (Ron 2026-11-15, round 5 strings approved as written): the R5-ADD maintenance role description names the
+// manager 「收款」 area (the exempt nav name above). Exactly one line in the R5-TEAM lane only (MGT-133-AC2/AC3).
+const R5_TEAM_LANE = "src/i18n/lanes/brand-v3-r5-team.ts";
+function withoutR5TeamRole(source: string, rel: string) {
+  if (rel !== R5_TEAM_LANE) return source;
+  const exact = /^    roleMaintenance: "處理報修、聯絡租客；看不到收款和報表。",$/gm;
+  return [...source.matchAll(exact)].length === 1 ? source.replace(exact, '    roleMaintenance: "",') : source;
+}
+
 function hitsFor(words: string[]) {
   const hits: string[] = [];
   for (const file of sourceFiles()) {
-    const text = decode(read(file));
     const rel = relative(root, file);
+    const text = withoutR5TeamRole(withoutVendorDocsIssue(withoutApprovedReportRentNames(withoutOwnStatus(withoutManagerAreaName(decode(read(file)), rel), rel), rel), rel), rel);
     if (file.endsWith(".json")) {
       const data = JSON.parse(text) as Record<string, unknown>;
       for (const [key, value] of Object.entries(data)) {
@@ -124,19 +173,18 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.equal(zh.i_outstanding, "未繳清租客");
   assert.equal(zh.i_receipt, "收據（範例檔名）");
   assert.equal(zh.i_pick_room_type, "請選擇房型");
-  const dash = read(join(root, "src/app/m/page.tsx"));
+  const dash = read(join(root, "src/components/dashboard-content.tsx"));
   assert.match(dash, /i_outstanding/);
   assert.doesNotMatch(dash, /未收款/);
   const statements = read(join(root, "src/app/m/statements/page.tsx"));
   assert.match(statements, /i_receipt/);
   assert.doesNotMatch(statements, /示範檔名/);
-  assert.match(dash, /session\.environment === "live" && data\.properties\.length === 0/);
-  assert.match(dash, /data-testid="dash-first-property"/);
-  assert.match(dash, /i_dash_step1/);
-  assert.match(dash, /i_dash_step2/);
-  assert.match(dash, /i_dash_step3/);
-  assert.match(dash, /<p className="small">\s*<a href="\/api\/env\?set=sandbox&next=\/m" data-testid="dash-sample">/);
-  assert.doesNotMatch(dash, /className="btn"[^"]*" data-testid="dash-sample"/);
+  assert.match(dash, /!setup\.hasUnits/);
+  assert.match(dash, /<EmptyState id="DASH"/);
+  assert.doesNotMatch(dash, /i_dash_step[123]|i_empty/);
+  const emptyActions = read(join(root, "src/lib/empty-cta.ts"));
+  assert.match(emptyActions, /es_DASH_sample/);
+  assert.match(emptyActions, /\/api\/env\?set=sandbox&next=\/m/);
   const settings = read(join(root, "src/app/m/settings/page.tsx"));
   assert.match(settings, /data-testid="settings-plan"/);
   assert.match(settings, /i_settings_plan/);
@@ -250,4 +298,116 @@ test("the build stamps a short git SHA into the staff footer and /api/version", 
   assert.match(layout, /BUILD_SHA/);
   const route = read(join(root, "src/app/api/version/route.ts"));
   assert.match(route, /sha: BUILD_SHA/);
+});
+
+
+test("PLT-49-AC4: only the exact single manager navigation area value is exempt", () => {
+  const lane = "src/i18n/lanes/brand-v3.ts";
+  const allowed = '    money: "收款",';
+  assert.equal(withoutManagerAreaName(allowed, lane).includes("收款"), false);
+  for (const source of [allowed + "\n" + allowed, '    other: "收款",', '    money: "待收款",', '    money: "收款紀錄",', allowed + ' // 收款', 'const text = "收款";']) {
+    assert.equal(withoutManagerAreaName(source, lane).includes("收款"), true, source);
+  }
+  assert.equal(withoutManagerAreaName(allowed, "src/i18n/zh-TW.json").includes("收款"), true);
+  const source = read(join(root, lane));
+  assert.equal([...source.matchAll(/收款/g)].length, 1);
+  assert.equal(withoutManagerAreaName(source, lane).includes("收款"), false);
+  assert.deepEqual(hitsFor(FORBIDDEN), []);
+});
+
+test("PR-019: only exact approved early-rent names in the report lane are exempt", () => {
+  const lane = "src/i18n/lanes/brand-v3-report.ts";
+  for (const allowed of ['    earlyRent: "預收租金",', '    earlyRentHeading: "另外列：預收租金",']) {
+    assert.equal(withoutApprovedReportRentNames(allowed, lane).includes("收租"), false);
+    for (const source of [allowed + "\n" + allowed, allowed + " // 收租", allowed.replace("預收租金", "預收租金紀錄"),
+      allowed.replace("earlyRent", "other"), 'const text = "收租";', allowed + '\n    other: "收租",']) {
+      assert.equal(withoutApprovedReportRentNames(source, lane).includes("收租"), true, source);
+    }
+    assert.equal(withoutApprovedReportRentNames(allowed, "src/i18n/lanes/brand-v3.ts").includes("收租"), true);
+  }
+  assert.deepEqual(hitsFor(FORBIDDEN), []);
+});
+
+test("PR-016: the owner/vendor own-status lane holds exactly the approved 「收款」 strings, each once, and nothing else with 收款", () => {
+  const source = read(join(root, OWN_STATUS_LANE));
+  for (const exact of OWN_STATUS_EXACT) assert.equal(source.split(`"${exact}"`).length - 1, 1, exact);
+  const stripped = withoutOwnStatus(decode(source), OWN_STATUS_LANE).replace(/^\s*\/\/.*$/gm, "");
+  assert.equal(stripped.includes("收款"), false, "only the exact approved literals may contain 收款");
+  // The exemption is file-scoped: the same literal elsewhere is still a hit.
+  assert.equal(withoutOwnStatus('"代屋主確認收款"', "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
+});
+
+
+test("GS-32 exemption covers exactly one approved line in the vendor-docs lane", () => {
+  const lane = read(join(root, VENDOR_DOCS_LANE));
+  assert.equal(withoutVendorDocsIssue(lane, VENDOR_DOCS_LANE).includes("收款"), false);
+  assert.equal(withoutVendorDocsIssue('    issue: "確認已全額收款並開立", close: "關閉",', "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
+  assert.equal(withoutVendorDocsIssue('    other: "確認已全額收款並開立",', VENDOR_DOCS_LANE).includes("收款"), true);
+});
+
+test("PR-018 R5-TEAM exemption covers exactly the approved maintenance role description, in its lane only", () => {
+  const allowed = '    roleMaintenance: "處理報修、聯絡租客；看不到收款和報表。",';
+  assert.equal(withoutR5TeamRole(allowed, R5_TEAM_LANE).includes("收款"), false);
+  for (const source of [allowed + "\n" + allowed, allowed + " // 收款", allowed.replace("roleMaintenance", "other"), 'const text = "收款";', allowed.replace("報表。", "報表和收款。")]) {
+    assert.equal(withoutR5TeamRole(source, R5_TEAM_LANE).includes("收款"), true, source);
+  }
+  assert.equal(withoutR5TeamRole(allowed, "src/i18n/lanes/brand-v3.ts").includes("收款"), true);
+  const lane = read(join(root, R5_TEAM_LANE));
+  assert.equal([...lane.matchAll(/收款/g)].length, 1);
+  assert.equal(withoutR5TeamRole(lane, R5_TEAM_LANE).includes("收款"), false);
+});
+
+// One copy value at a time, read by the TypeScript parser (cooked values: escapes and line continuations resolved).
+// A template's literal parts are joined with its expressions left out, so `租多啦${x}收款` is one claim while
+// `${a ? "租多啦" : "收款"}` is two separate values; nested literals are checked on their own. JSON values likewise.
+// Whitespace (incl. U+3000 and line breaks) is removed and there is no distance limit.
+const SUBJECT = /(Condola|租多啦)[\s\S]*(收款|收租|代收)/i;
+// Invisible format characters (soft hyphen, zero-width, bidi marks, word joiner, BOM) are removed with the whitespace.
+const squash = (value: string) => value.replace(/[\s\u3000\u00ad\u200b-\u200f\u2060\ufeff]+/g, "");
+// JSX text and quoted JSX attributes render character references; ordinary TS/JSON strings keep them literal.
+// Named references are case-sensitive (unknown names stay literal). The XHTML set has no CJK letters, so the only
+// named references that could hide a claim are the punctuation, whitespace and invisible ones listed here.
+const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0", ensp: "\u2002",
+  emsp: "\u2003", thinsp: "\u2009", shy: "\u00ad", zwnj: "\u200c", zwj: "\u200d", lrm: "\u200e", rlm: "\u200f" };
+const jsxDecode = (value: string) => value.replace(/&(#[xX][0-9a-fA-F]+|#[0-9]+|[A-Za-z][A-Za-z0-9]*);/g, (whole, ref: string) =>
+  ref[0] !== "#" ? (Object.hasOwn(NAMED, ref) ? NAMED[ref] : whole)
+  : String.fromCodePoint(Number.parseInt(ref.slice(ref[1].toLowerCase() === "x" ? 2 : 1), ref[1].toLowerCase() === "x" ? 16 : 10)));
+function copyValues(source: string, fileName = "copy.tsx"): string[] {
+  if (fileName.endsWith(".json")) {
+    const out: string[] = [];
+    const walk = (v: unknown) => { if (typeof v === "string") out.push(v); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+    walk(JSON.parse(source)); return out;
+  }
+  const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.TSX);
+  const out: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxText(node) || (ts.isStringLiteral(node) && ts.isJsxAttribute(node.parent))) out.push(jsxDecode(node.text));
+    else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) out.push(node.text);
+    else if (ts.isTemplateExpression(node)) out.push(node.head.text + node.templateSpans.map(span => span.literal.text).join(""));
+    ts.forEachChild(node, visit);
+  };
+  visit(file); return out;
+}
+const subjectClaims = (source: string, fileName?: string) => copyValues(source, fileName).map(squash).filter(v => SUBJECT.test(v));
+
+test("terminology: Condola / 租多啦 is never the subject of 收款, 收租 or 代收 — in any source file, allowlisted lanes included", () => {
+  const hits = sourceFiles().flatMap(file => subjectClaims(read(file), file).map(value => `${relative(root, file)}: ${value}`));
+  assert.deepEqual(hits, []);
+  // Caught: plain, full-width space, a real line break in a template, escaped CRLF, LF and CRLF line continuations in
+  // quoted strings and templates, a long sentence, case, a split template, nested templates, JSX text and JSON.
+  const bad = ['x = "租多啦幫你收款";', 'x = "Condola 代收租金";', 'x = "由 Condola 收租";', 'x = "租多啦　會幫你收款";', 'x = `租多啦\n會幫你收款`;',
+    'x = "租多啦\\r\\n會幫你收款";', 'x = "租多啦\\\n會幫你收款";', 'x = "租多啦\\\r\n會幫你收款";', 'x = `租多啦\\\n會幫你收款`;',
+    `x = "租多啦${"，每個月固定在月初提醒租客並且".repeat(4)}代收";`, "x = 'condola collects 收款';",
+    'x = `租多啦\\\r\n會幫你收款`;', 'x = `租多啦${name}幫你收款`;', 'x = `租多啦${`會幫你`}收款`;', 'x = <p>租多啦會幫你收款</p>;',
+    'x = <p>租多啦收&#x6B3E;</p>;', 'x = <p>租多啦收&#27454;</p>;', 'x = <img alt="租多啦會幫你收&#x6b3e;" />;',
+    'x = <p>租多啦收&ensp;款</p>;', 'x = <img alt="租多啦收&ensp;款" />;', 'x = <p>租多啦收&thinsp;款</p>;',
+    'x = <p>租多啦收&zwj;款</p>;', 'x = <img alt="租多啦收&shy;款" />;', 'x = <p>租多啦收&#X6B3E;</p>;', 'x = "租多啦收\\u200B款";'];
+  for (const source of bad) assert.equal(subjectClaims(source).length, 1, source);
+  assert.equal(subjectClaims('{ "a": { "b": "租多啦\\n代收" } }', "copy.json").length, 1);
+  // Not claims: approved strings, separate values, mutually exclusive branches.
+  for (const source of ['x = "租多啦・廠商";', 'x = "收款帳戶是屋主的";', 'x = { brand: "租多啦", money: "收款" };',
+    'x = ["租多啦・屋主", "待收款"];', 'x = `${flag ? "租多啦" : "收款"}`;', 'x = "租多啦收&#x6B3E;";',
+    'x = <p>租多啦收&nBsP;款</p>;', 'x = <img alt="租多啦收&toString;款" />;']) {
+    assert.deepEqual(subjectClaims(source), [], source);
+  }
 });
