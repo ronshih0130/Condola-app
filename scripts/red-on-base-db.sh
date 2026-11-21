@@ -7,7 +7,8 @@
 #   node scripts/red-on-base.mjs --test <tests> --expect '<reason>' \
 #     --cmd "bash scripts/red-on-base-db.sh {tests}"
 #
-# Needs $DATABASE_URL pointing at a local server (127.0.0.1 / localhost / [::1])
+# Run it from the checkout root whose schema to use (red-on-base does). Needs
+# $DATABASE_URL pointing at a local server (127.0.0.1 / localhost / [::1])
 # and CONDOLA_RLS_DISPOSABLE=YES, the same guard as the integration tests, and
 # psql on PATH. It creates database condola_rob_<random> on that server, applies
 # supabase/stub/supabase_stub.sql and supabase/migrations/*.sql in order (psql
@@ -16,9 +17,11 @@
 # drops it on exit. Credentials go to psql through PG* environment variables,
 # never on the command line. Exit: the test run's status; 3 when setup fails.
 set -uo pipefail
-cd "$(dirname "$0")/.." || exit 3
-
 die() { echo "red-on-base-db: $*" >&2; exit 3; }
+# Works on the CURRENT directory (red-on-base runs it in each side's checkout),
+# not on this script's location: CI runs the head copy on the base side too.
+[ -d supabase/migrations ] && [ -f supabase/stub/supabase_stub.sql ] && [ -f src/server/seed.ts ] \
+  || die "run from a Condola checkout root (no supabase/migrations here: $PWD)"
 [ "$#" -gt 0 ] || die "no test files given"
 [ "${CONDOLA_RLS_DISPOSABLE:-}" = "YES" ] || die "CONDOLA_RLS_DISPOSABLE=YES is required (disposable local database only)"
 url="${DATABASE_URL:-}"

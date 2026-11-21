@@ -1,0 +1,5 @@
+## Verification
+```
+$ npm test
+ok
+```
