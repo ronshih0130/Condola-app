@@ -92,6 +92,14 @@ jobs:
           npm run db:reset
       - name: Check function execute privileges
         run: bash scripts/check-function-privileges.sh
+      # Lauren 3-W: re-run the red-on-base proofs (every AGENTS.md Rule Table row,
+      # and a bug-fix PR's pasted runs against its base) instead of trusting the
+      # pasted text; needs the database server for integration-test proofs.
+      - name: Re-run proofs (npm run gate:proofs)
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/pr-context"
+          PR_TITLE="$(cat "$ctx/title")" PR_BODY_FILE="$ctx/body.md" npm run gate:proofs -- --base "$(cat "$ctx/base")"
       - run: npm run test:rls
       - run: npm run cf:build
       - run: npm run test:worker

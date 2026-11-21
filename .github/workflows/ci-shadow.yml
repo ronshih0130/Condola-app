@@ -378,6 +378,14 @@ jobs:
       - name: Check function execute privileges
         run: bash scripts/check-function-privileges.sh
 
+      # Lauren 3-W: the same proof re-run as hosted ci.yml (Rule Table rows and a
+      # bug-fix PR's pasted red-on-base runs), after the disposable database is up.
+      - name: Re-run proofs (npm run gate:proofs)
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/pr-context"
+          PR_TITLE="$(cat "$ctx/title")" PR_BODY_FILE="$ctx/body.md" nice -n 10 npm run gate:proofs -- --base "$(cat "$ctx/base")"
+
       # Same command as hosted ci.yml. No `--` passthrough: package.json pins
       # --test-concurrency=1 per batch (batches share one database).
       - run: npm run test:rls
