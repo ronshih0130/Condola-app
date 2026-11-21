@@ -178,7 +178,8 @@ for (const scenario of scenarios) {
         expect(rows.rows[0].recorded).toBe(scenario.state === "reason");
         const rule = await db.query<{ regional_enabled: boolean; enforcement: string | null; max_months: string | null }>(`SELECT regional_enabled,enforcement,max_months::text FROM resolve_deposit_rule($1,$2,$3::date)`, [ORG_ID, property, "2035-01-01"]);
         expect(rule.rows[0].regional_enabled).toBe(scenario.enabled);
-        expect(rule.rows[0].enforcement).toBe(scenario.jurisdiction === "TW" ? "override_required" : scenario.jurisdiction === "US-CA" ? "warn" : "info");
+        // Regional OFF resolves no rule at all (c628b9e6; b007-deposit.integration.test.ts: OFF -> enforcement null).
+        expect(rule.rows[0].enforcement).toBe(!scenario.enabled ? null : scenario.jurisdiction === "TW" ? "override_required" : scenario.jurisdiction === "US-CA" ? "warn" : "info");
         expect(rule.rows[0].max_months).toBe(scenario.jurisdiction === "TW" ? "2" : scenario.jurisdiction === "US-CA" ? "1" : null);
         const evidence = await db.query<{ outcome: string; actor: string | null; reason: string | null; amount: string; rent: string; currency: string; source: string }>(
           `SELECT c.outcome::text,c.overridden_by::text AS actor,c.override_reason AS reason,

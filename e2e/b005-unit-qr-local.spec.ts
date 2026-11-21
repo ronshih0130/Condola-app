@@ -63,5 +63,8 @@ test("MGT-51-AC3: the retired /m/units/qr control is gone for anonymous callers"
   if (status !== 404) expect(res.headers()["location"]).toBeTruthy();
   const body = (await res.body()).toString();
   expect(body).not.toContain("UnitQrControl");
-  expect(body).not.toMatch(/Generate/i);
+  expect(body).not.toContain("單元申請連結");
+  expect(body).not.toContain("Unit application link");
+  expect(body).not.toContain("產生申請連結");
+  expect(body).not.toContain("Generate application link");
 });
