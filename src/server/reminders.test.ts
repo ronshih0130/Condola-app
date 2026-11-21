@@ -83,6 +83,7 @@ test("overdue reminders reach admins on day 1 and 7, and tenants only on day 1",
     tenants: [{ name: "周美玲", email: "tenant@example.com" }],
     staff: staff(),
     origin,
+    leaseStatus: "active",
   };
   const day1 = planOverdueReminders(row, "2026-10-31");
   assert.deepEqual(
