@@ -96,11 +96,13 @@ export type LeaseReminderInput = {
   tenants: unknown;
   staff: { name: string; email: string; prefs: unknown }[];
   origin: string;
+  /** Today in the organization's own time zone (QA B010 L3); `today` is only a fallback. */
+  orgToday?: string | null;
 };
 
 export function planLeaseReminders(row: LeaseReminderInput, today: string): ReminderPlan[] {
   if (row.environment !== "live" || row.status !== "active" || row.renewalStatus === "renewed" || !row.endDate) return [];
-  const days = daysUntil(row.endDate, today);
+  const days = daysUntil(row.endDate, row.orgToday || today);
   if (days !== 60 && days !== 30 && days !== 7) return [];
   const space = spaceLabel(row.unitLabel, row.roomLabel);
   const tenants = people(row.tenants);
@@ -168,11 +170,16 @@ export type OverdueReminderInput = {
   tenants: unknown;
   staff: { name: string; email: string; prefs: unknown }[];
   origin: string;
+  /** The invoice's lease. Only an active, not-terminated lease gets overdue mail (QA B010 L3). */
+  leaseStatus: string;
+  leaseTerminatedOn?: string | null;
+  /** Today in the organization's own time zone (QA B010 L3); `today` is only a fallback. */
+  orgToday?: string | null;
 };
 
 export function planOverdueReminders(row: OverdueReminderInput, today: string): ReminderPlan[] {
-  if (row.environment !== "live") return [];
-  const days = daysUntil(today, row.dueDate);
+  if (row.environment !== "live" || row.leaseStatus !== "active" || row.leaseTerminatedOn) return [];
+  const days = daysUntil(row.orgToday || today, row.dueDate);
   if (days !== 1 && days !== 7) return [];
   const space = spaceLabel(row.unitLabel, row.roomLabel);
   const tenants = people(row.tenants);
@@ -255,6 +262,7 @@ type LeaseSqlRow = {
   lease_id: string;
   org_id: string;
   environment: string;
+  org_today: string;
   status: string;
   renewal_status: string;
   start_date: string;
@@ -276,6 +284,9 @@ type InvoiceSqlRow = {
   invoice_id: string;
   org_id: string;
   environment: string;
+  org_today: string;
+  lease_status: string;
+  lease_terminated_on: string | null;
   due_date: string;
   period_start: string;
   balance_minor: string;
@@ -325,9 +336,14 @@ async function loadStaff(orgIds: string[]) {
   return grouped;
 }
 
-async function loadLeases() {
-  const rows = await query<LeaseSqlRow>(
+// Both legacy loaders take one instant and evaluate "today" in each
+// organization's own time zone (organizations.timezone), never a fixed
+// Asia/Taipei. An organization whose time zone PostgreSQL does not know is
+// skipped (no mail) rather than failing the whole run.
+export async function loadLegacyLeaseRows(now: Date = new Date(), execute: typeof query = query) {
+  const rows = await execute<LeaseSqlRow>(
     `SELECT l.id::text AS lease_id, l.org_id::text AS org_id, o.environment::text AS environment,
+            tz.org_today::text AS org_today,
             l.status::text AS status, l.renewal_status::text AS renewal_status,
             l.start_date::text AS start_date, l.end_date::text AS end_date, l.rent_amount_minor::text AS rent_minor,
             o.name AS org_name, o.contact_email::text AS contact_email, o.contact_phone,
@@ -337,6 +353,14 @@ async function loadLeases() {
             (${TENANTS_SQL}) AS tenants
        FROM leases l
        JOIN organizations o ON o.id = l.org_id
+       JOIN LATERAL (
+         -- AT TIME ZONE only ever sees a name PostgreSQL knows: an unknown
+         -- organizations.timezone drops the row here instead of failing the run.
+         SELECT ($1::timestamptz AT TIME ZONE z.name)::date AS org_today
+           FROM pg_timezone_names z
+          WHERE z.name = o.timezone
+          LIMIT 1
+       ) tz ON true
        JOIN properties p ON p.id = l.property_id
        JOIN units u ON u.id = l.unit_id
        LEFT JOIN rooms r ON r.id = l.target_room_id
@@ -353,14 +377,17 @@ async function loadLeases() {
         AND l.status = 'active'
         AND l.renewal_status IS DISTINCT FROM 'renewed'
         AND l.end_date IS NOT NULL
-        AND (l.end_date - (timezone('Asia/Taipei', now()))::date) IN (60, 30, 7)`,
+        AND (l.end_date - tz.org_today) IN (60, 30, 7)`,
+    [now.toISOString()],
   );
   return rows.rows;
 }
 
-async function loadInvoices() {
-  const rows = await query<InvoiceSqlRow>(
+export async function loadLegacyOverdueRows(now: Date = new Date(), execute: typeof query = query) {
+  const rows = await execute<InvoiceSqlRow>(
     `SELECT i.id::text AS invoice_id, i.org_id::text AS org_id, o.environment::text AS environment,
+            tz.org_today::text AS org_today,
+            l.status::text AS lease_status, l.terminated_on::text AS lease_terminated_on,
             i.due_date::text AS due_date, coalesce(i.period_start, i.due_date)::text AS period_start,
             i.balance_minor::text AS balance_minor, o.name AS org_name,
             o.contact_email::text AS contact_email, o.contact_phone, o.settings,
@@ -369,14 +396,24 @@ async function loadInvoices() {
             (${TENANTS_SQL}) AS tenants
        FROM invoices i
        JOIN organizations o ON o.id = i.org_id
+       JOIN LATERAL (
+         -- AT TIME ZONE only ever sees a name PostgreSQL knows: an unknown
+         -- organizations.timezone drops the row here instead of failing the run.
+         SELECT ($1::timestamptz AT TIME ZONE z.name)::date AS org_today
+           FROM pg_timezone_names z
+          WHERE z.name = o.timezone
+          LIMIT 1
+       ) tz ON true
        JOIN leases l ON l.id = i.lease_id
        JOIN properties p ON p.id = i.property_id
        JOIN units u ON u.id = l.unit_id
        LEFT JOIN rooms r ON r.id = l.target_room_id
       WHERE o.environment = 'live'
+        AND l.status = 'active'
+        AND l.terminated_on IS NULL
         AND i.status IN ('open', 'partially_paid')
         AND i.balance_minor > 0
-        AND ((timezone('Asia/Taipei', now()))::date - i.due_date) IN (1, 7)
+        AND (tz.org_today - i.due_date) IN (1, 7)
         AND (
           EXISTS (
             SELECT 1 FROM invoice_lines il
@@ -390,6 +427,7 @@ async function loadInvoices() {
             )
           )
         )`,
+    [now.toISOString()],
   );
   return rows.rows;
 }
@@ -437,9 +475,10 @@ export async function runDueReminders(now = new Date()) {
     console.warn(`reminders skipped: ${ready.reason}`);
     return { sent: 0, skipped: ready.reason };
   }
+  // Fallback only: every row carries its organization's own date (org_today).
   const today = taipeiToday(now);
   const origin = publicSiteOrigin("");
-  const [leases, invoices] = await Promise.all([loadLeases(), loadInvoices()]);
+  const [leases, invoices] = await Promise.all([loadLegacyLeaseRows(now), loadLegacyOverdueRows(now)]);
   const orgIds = [...new Set([...leases.map((row) => row.org_id), ...invoices.map((row) => row.org_id)])];
   const staff = await loadStaff(orgIds);
   const plans: ReminderPlan[] = [];
@@ -467,6 +506,7 @@ export async function runDueReminders(now = new Date()) {
           tenants: row.tenants,
           staff: staff.get(row.org_id) ?? [],
           origin,
+          orgToday: row.org_today,
         },
         today,
       ),
@@ -493,6 +533,9 @@ export async function runDueReminders(now = new Date()) {
           tenants: row.tenants,
           staff: staff.get(row.org_id) ?? [],
           origin,
+          leaseStatus: row.lease_status,
+          leaseTerminatedOn: row.lease_terminated_on,
+          orgToday: row.org_today,
         },
         today,
       ),
