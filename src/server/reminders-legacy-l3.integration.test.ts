@@ -35,6 +35,10 @@ test("L3: legacy loaders use the organization's time zone and skip ended leases"
       return id;
     };
     const active = await makeLease("active", "2026-11-30");                      // 30 days on the LA date (29 on Taipei's)
+    // Owner whose ownership ends on the LA date: still the owner "today" there (Codex D r1:
+    // the owner lookup used the session's current_date, not the organization's date).
+    const ownerContact = (await c.query<{ id: string }>(`INSERT INTO contacts(org_id,is_owner,display_name) VALUES($1,true,'L3 Owner') RETURNING id::text`, [ORG_ID])).rows[0].id;
+    await c.query(`INSERT INTO property_owners(org_id,property_id,owner_contact_id,effective_from,effective_to) VALUES($1,$2,$3,'2026-01-01','2026-10-31')`, [ORG_ID, property, ownerContact]);
     const ended = await makeLease("ended", "2026-10-29");
     const terminated = await makeLease("terminated", "2026-12-31", "2026-10-20");
     const activeButTerminated = await makeLease("active", "2026-12-31", "2026-10-20");
@@ -52,11 +56,18 @@ test("L3: legacy loaders use the organization's time zone and skip ended leases"
 
     const leases = (await loadLegacyLeaseRows(NOW, execute)).filter((r) => r.lease_id === active);
     assert.deepEqual(leases.map((r) => [r.lease_id, r.org_today]), [[active, "2026-10-31"]], "lease 30 days out on the LA date");
+    assert.equal(leases[0].owner_name, "L3 Owner", "owner effective through the org's local date is named");
 
     // Back on Asia/Taipei the same instant is 2026-11-01: day 2 and 29 days, so neither is selected.
     await c.query(`UPDATE organizations SET timezone='Asia/Taipei' WHERE id=$1`, [ORG_ID]);
     assert.deepEqual((await loadLegacyOverdueRows(NOW, execute)).filter((r) => mine.has(r.invoice_id)), []);
     assert.deepEqual((await loadLegacyLeaseRows(NOW, execute)).filter((r) => r.lease_id === active), []);
+    // Taipei orgs keep working (Codex D r1 SHOULD): one day earlier the same rows are day 1 and 30 days out there.
+    const TAIPEI_NOW = new Date("2026-10-30T20:00:00Z"); // 2026-10-31 04:00 in Taipei
+    const tpOverdue = (await loadLegacyOverdueRows(TAIPEI_NOW, execute)).filter((r) => mine.has(r.invoice_id));
+    assert.deepEqual(tpOverdue.map((r) => [r.invoice_id, r.org_today]), [[dueYesterdayLA, "2026-10-31"]], "Taipei day 1 still selected; ended leases still excluded");
+    const tpLeases = (await loadLegacyLeaseRows(TAIPEI_NOW, execute)).filter((r) => r.lease_id === active);
+    assert.deepEqual(tpLeases.map((r) => [r.lease_id, r.org_today, r.owner_name]), [[active, "2026-10-31", "L3 Owner"]], "Taipei lease 30 days out still selected");
 
     // An unknown time zone skips the organization instead of failing the run.
     await c.query("SAVEPOINT tz");

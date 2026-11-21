@@ -369,7 +369,7 @@ export async function loadLegacyLeaseRows(now: Date = new Date(), execute: typeo
            FROM property_owners po
            JOIN contacts c ON c.id = po.owner_contact_id
           WHERE po.property_id = p.id
-            AND (po.effective_to IS NULL OR po.effective_to >= current_date)
+            AND (po.effective_to IS NULL OR po.effective_to >= tz.org_today)
           ORDER BY po.is_primary DESC, po.created_at
           LIMIT 1
        ) owner ON true
