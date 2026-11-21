@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220" role="img" aria-labelledby="apply-join-title" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <title id="apply-join-title">既有進度線延伸到一個標示你的虛線加號節點，邀請你加入</title>
+  <rect x="10" y="18" width="300" height="184" rx="30" fill="#FFFFFF"/>
+  <path d="M24 132h54c38 0 38-42 76-42h32" stroke="#14325C"/>
+  <path d="M186 90h62" stroke="#7F8B9C" stroke-dasharray="6 7"/>
+  <circle cx="78" cy="132" r="16" fill="#E3EAF3" stroke="#14325C"/>
+  <circle cx="154" cy="90" r="16" fill="#FFFFFF" stroke="#14325C"/>
+  <circle cx="154" cy="90" r="4" fill="#2F6BFF" stroke="none"/>
+  <circle cx="248" cy="90" r="30" fill="#EEF2F6" stroke="#14325C" stroke-dasharray="6 7"/>
+  <path d="M237 90h22M248 79v22" stroke="#14325C"/>
+  <text x="248" y="153" text-anchor="middle" font-family="'Noto Sans TC',sans-serif" font-size="18" fill="#14325C" stroke="none">你</text>
+</svg>

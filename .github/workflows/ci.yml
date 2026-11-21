@@ -6,11 +6,17 @@ on:
     # `edited` (Lauren 6-W): the PR gate reads the PR body (R2 Spec-Change, R4
     # Verification), so editing the title or body starts a fresh run.
     types: [opened, synchronize, reopened, labeled, edited]
+    # Site-only changes are covered by site.yml (test + build + secret-scan).
+    # Mixed PRs that also touch app paths still run this workflow.
+    paths-ignore:
+      - "site/**"
   # Pushes run CI on main only; feature branches get CI from their pull request
   # (one run per push instead of two). Any branch can still be run by hand.
   push:
     branches:
       - main
+    paths-ignore:
+      - "site/**"
 
 # CI throughput (CEO, Ron-approved 2026-11-15): a newer push to the same pull
 # request cancels its older, superseded run. Push and workflow_dispatch runs each

@@ -23,6 +23,7 @@ const eslintConfig = [
       "public/vendor/**",
       "public/third-party/**",
       "third-party/upstream/**",
+      "site/**",
     ],
   },
   {

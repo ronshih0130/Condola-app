@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="600" viewBox="0 0 60 600" role="img" aria-labelledby="ecosystem-line-v-title" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <title id="ecosystem-line-v-title">縱向串起四方的進度線，第四個廠商節點以虛線表示即將推出</title>
+  <path d="M30 16v394" stroke="#14325C"/>
+  <path d="M30 410v174" stroke="#7F8B9C" stroke-dasharray="7 8"/>
+  <g stroke="#14325C" fill="#FFFFFF">
+    <circle cx="30" cy="75" r="14"/>
+    <circle cx="30" cy="225" r="14"/>
+    <circle cx="30" cy="375" r="14"/>
+  </g>
+  <circle cx="30" cy="75" r="4" fill="#2F6BFF" stroke="none"/>
+  <circle cx="30" cy="225" r="4" fill="#E3EAF3" stroke="none"/>
+  <circle cx="30" cy="375" r="4" fill="#E3EAF3" stroke="none"/>
+  <circle cx="30" cy="525" r="14" fill="#EEF2F6" stroke="#7F8B9C" stroke-dasharray="4 5"/>
+</svg>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 100 100">
+<style>
+  .c{stroke:#14325C}.a{fill:#2F6BFF}
+  @media (prefers-color-scheme: dark){.c{stroke:#FFFFFF}.a{fill:#7AA7FF}}
+</style>
+<path class="c" d="M78 40 L50 14 L22 40 C11 50 16 71 29 81 C43 91 64 90 78 80" fill="none" stroke="#14325C" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="a" cx="54" cy="56" r="8" fill="#2F6BFF"/></svg>

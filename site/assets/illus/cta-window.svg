@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="180" viewBox="0 0 220 180" role="img" aria-labelledby="cta-window-title" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <title id="cta-window-title">進度線收束成窗邊節點，一點鈷藍燈光安穩亮著</title>
+  <path d="M10 144c42 0 42-38 90-38" stroke="#14325C" stroke-opacity=".12"/>
+  <circle cx="100" cy="106" r="11" fill="#FFFFFF" stroke="#14325C"/>
+  <circle cx="100" cy="106" r="3" fill="#2F6BFF" stroke="none"/>
+  <rect x="128" y="24" width="72" height="128" rx="20" fill="#EEF2F6" stroke="#14325C"/>
+  <path d="M164 26v124M130 88h68" stroke="#14325C"/>
+  <circle cx="181" cy="57" r="8" fill="#2F6BFF" stroke="none"/>
+  <path d="M122 160h84" stroke="#14325C" stroke-opacity=".12"/>
+</svg>

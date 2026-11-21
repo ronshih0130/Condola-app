@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="400" viewBox="0 0 520 400" role="img" aria-labelledby="hero-title" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <title id="hero-title">散亂對話收攏成管理方、租客、屋主與即將加入的廠商節點，通往安穩亮著的窗</title>
+  <rect x="12" y="20" width="496" height="360" rx="36" fill="#FFFFFF" stroke="#E3EAF3" stroke-width="3"/>
+  <g fill="#EEF2F6" stroke="#7F8B9C" stroke-width="2.5">
+    <path d="M52 48h46a16 16 0 0 1 16 16v8a16 16 0 0 1-16 16H72L56 98V88h-4a16 16 0 0 1-16-16v-8a16 16 0 0 1 16-16Z"/>
+    <path d="M134 66h26a12 12 0 0 1 12 12v6a12 12 0 0 1-12 12h-8l-12 8v-8h-6a12 12 0 0 1-12-12v-6a12 12 0 0 1 12-12Z"/>
+    <path d="M76 116h36a14 14 0 0 1 14 14v6a14 14 0 0 1-14 14H98l-12 9v-9H76a14 14 0 0 1-14-14v-6a14 14 0 0 1 14-14Z"/>
+    <path d="M42 174h28a13 13 0 0 1 13 13v6a13 13 0 0 1-13 13H58l-12 8v-8h-4a13 13 0 0 1-13-13v-6a13 13 0 0 1 13-13Z"/>
+  </g>
+  <g fill="#7F8B9C">
+    <circle cx="60" cy="68" r="2.5"/><circle cx="75" cy="68" r="2.5"/><circle cx="90" cy="68" r="2.5"/>
+  </g>
+  <path d="M88 190c34 0 38 30 62 30 42 0 48 55 90 55s55-25 90-25 56-50 78-50 34-30 34-54" stroke="#14325C" stroke-width="3"/>
+  <g stroke="#14325C" stroke-width="3">
+    <circle cx="150" cy="220" r="25" fill="#E3EAF3"/>
+    <circle cx="240" cy="275" r="25" fill="#E3EAF3"/>
+    <circle cx="330" cy="250" r="25" fill="#E3EAF3"/>
+    <g fill="#FFFFFF">
+      <circle cx="150" cy="212" r="7"/><circle cx="240" cy="267" r="7"/><circle cx="330" cy="242" r="7"/>
+    </g>
+    <path d="M137 232c0-14 26-14 26 0M227 287c0-14 26-14 26 0M317 262c0-14 26-14 26 0"/>
+  </g>
+  <circle cx="408" cy="200" r="25" fill="#EEF2F6" stroke="#7F8B9C" stroke-width="3" stroke-dasharray="5 6"/>
+  <g stroke="#7F8B9C" stroke-width="2.5">
+    <circle cx="408" cy="192" r="7" fill="#FFFFFF"/>
+    <path d="M395 212c0-14 26-14 26 0"/>
+  </g>
+  <g font-family="'Plus Jakarta Sans','Noto Sans TC',sans-serif" font-size="14" text-anchor="middle" fill="#14325C">
+    <text x="150" y="264">管理方</text>
+    <text x="240" y="319">租客</text>
+    <text x="330" y="294">屋主</text>
+    <text x="408" y="244" fill="#7F8B9C">廠商</text>
+  </g>
+  <rect x="366" y="254" width="84" height="26" rx="13" fill="#EEF2F6"/>
+  <text x="408" y="272" text-anchor="middle" font-family="'Noto Sans TC',sans-serif" font-size="12" fill="#7F8B9C">即將推出</text>
+  <rect x="408" y="54" width="72" height="92" rx="18" fill="#E3EAF3" stroke="#14325C" stroke-width="3"/>
+  <path d="M444 56v88M410 100h68" stroke="#14325C" stroke-width="3"/>
+  <circle cx="461" cy="78" r="8" fill="#2F6BFF"/>
+</svg>

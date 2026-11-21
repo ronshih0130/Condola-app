@@ -1,0 +1,27 @@
+{
+  "name": "Condola 租多啦",
+  "short_name": "租多啦",
+  "theme_color": "#14325C",
+  "background_color": "#FFFFFF",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/android-chrome-192.png?v=2",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512.png?v=2",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-512.png?v=2",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="24" viewBox="0 0 80 24" role="img" aria-labelledby="sync-link-title" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  <title id="sync-link-title">兩支手機之間以鈷藍虛線與小節點連接同步進度</title>
+  <rect x="2" y="2" width="14" height="20" rx="10" fill="#FFFFFF" stroke="#14325C"/>
+  <rect x="64" y="2" width="14" height="20" rx="10" fill="#EEF2F6" stroke="#7F8B9C"/>
+  <path d="M22 12h36" stroke="#2F6BFF" stroke-dasharray="3 5"/>
+  <circle cx="40" cy="12" r="3.5" fill="#2F6BFF"/>
+</svg>

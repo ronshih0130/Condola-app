@@ -1,0 +1,38 @@
+# GitHub-hosted. Triggers only when site/** (or this workflow) changes.
+# Does not use a self-hosted runner or Cursor Origin.
+name: Site
+
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  push:
+    branches:
+      - "**"
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: test, build, secret-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: ".nvmrc"
+      - name: Site tests
+        run: npm test
+      - name: Site build (source check + prod 404/noindex artifact)
+        run: npm run build
+      - name: Secret scan (.env, tokens, wrangler.toml/vars)
+        run: npm run secret-scan

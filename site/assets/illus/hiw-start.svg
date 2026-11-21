@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" role="img" aria-labelledby="hiw-start-title" fill="none" stroke="#14325C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <title id="hiw-start-title">旅程起點，一個節點與向外展開的短線</title>
+  <path d="M60 76v32M60 14v12M22 58h12M86 58h12M32 30l8 8M80 38l8-8"/>
+  <circle cx="60" cy="58" r="18" fill="#E3EAF3"/>
+  <circle cx="60" cy="58" r="5" fill="#2F6BFF" stroke="none"/>
+</svg>
