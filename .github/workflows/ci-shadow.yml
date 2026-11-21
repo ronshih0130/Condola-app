@@ -282,13 +282,22 @@ jobs:
           fi
           pdftoppm -v 2>&1 | head -n1 || true
 
-      - run: npm run typecheck
-      - run: npm run lint
+      # Lauren 6-W: the same PR gate as hosted ci.yml, `npm run gate:pr`
+      # (typecheck -> lint -> check-pr-rules R2 + R4 -> test:unit), with the PR
+      # body, title and base from scripts/ci-pr-context.mjs (the PR merged as
+      # HEAD, found in the GitHub API; on a dispatched branch, that branch's PR). The read-only token
+      # goes to the context step only. nice leaves CPU for interactive work
+      # (NODE_OPTIONS rejects --test-concurrency).
+      - name: PR context for gate:pr
+        env:
+          GH_API_TOKEN: ${{ github.token }}
+        run: node scripts/ci-pr-context.mjs "$RUNNER_TEMP/pr-context"
+      - name: PR gate (npm run gate:pr)
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/pr-context"
+          PR_TITLE="$(cat "$ctx/title")" PR_BODY_FILE="$ctx/body.md" nice -n 10 npm run gate:pr -- --base "$(cat "$ctx/base")"
       - run: npm run copy:check
-      # Match hosted ci.yml: npm appends `--` args only to the last `&&` batch,
-      # where Node treats the flag as a file path. NODE_OPTIONS rejects
-      # --test-concurrency; use nice to leave CPU for interactive work.
-      - run: nice -n 10 npm run test:unit
 
       # --- Disposable PostgreSQL 16 (macOS, no Docker) -------------------
       - name: Start disposable PostgreSQL 16
