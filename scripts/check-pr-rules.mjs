@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -49,9 +49,12 @@ function parseArgs(argv) {
   return out;
 }
 
-const args = parseArgs(process.argv.slice(2));
+// Run as a CLI only when executed directly; scripts/gate-proofs.mjs imports the
+// R4 helpers below (Lauren 3-W) without running the checks.
+const IS_MAIN = !!process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+const args = IS_MAIN ? parseArgs(process.argv.slice(2)) : { _: [] };
 
-if (args.help) {
+if (IS_MAIN && args.help) {
   process.stdout.write(
     'Usage: node scripts/check-pr-rules.mjs [--base <ref>] [--head <ref>]\n' +
     '  [--pr-body <text>] [--pr-body-file <path>] [--pr-title <text>]\n' +
@@ -388,7 +391,8 @@ function runR3() {
 //      `RED-ON-BASE: PASS base=<sha> head=<sha> tests=<n>` (n >= 1), and the
 //      last `RED-ON-BASE:` summary anywhere in the section's code is that PASS
 //      (an earlier FAIL is fine; a later FAIL is not). Pasted output is still
-//      trusted text; CI (item 3-W) can re-run the proof.
+//      text: CI re-runs each such invocation itself (Lauren 3-W,
+//      scripts/gate-proofs.mjs, `npm run gate:proofs`).
 //
 // A PR is a bug fix when any of these holds:
 //   a. the PR title (--pr-title, $PR_TITLE or the GitHub event) is a `fix`
@@ -418,7 +422,7 @@ const RED_ON_BASE_INVOKE_RE = /^\s*(?:\$\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*n
 // Drop HTML comments outside fenced code blocks. A comment hides everything up
 // to its `-->`, fences included (as GitHub renders it); `<!--` inside a code
 // block is literal text.
-function stripHtmlComments(body) {
+export function stripHtmlComments(body) {
   const out = [];
   let fence = null;
   let inComment = false;
@@ -454,7 +458,7 @@ function stripHtmlComments(body) {
 
 // Returns { found, lines, blocks } for the Verification section(s). blocks are
 // arrays of the lines inside each fenced code block.
-function verificationSection(cleanBody) {
+export function verificationSection(cleanBody) {
   const lines = cleanBody.split('\n');
   const section = [];
   const blocks = [];
@@ -502,7 +506,7 @@ function blockEvidence(block) {
 }
 
 // Lines of the (comment-free) body that sit outside fenced code blocks.
-function proseLines(cleanBody) {
+export function proseLines(cleanBody) {
   const out = [];
   let fence = null;
   for (const line of cleanBody.split('\n')) {
@@ -517,7 +521,25 @@ function proseLines(cleanBody) {
   return out;
 }
 
-function isBugFix(cleanBody, title) {
+// The pasted red-on-base runs R4 accepts as bug-fix evidence: a line in a
+// Verification code block that invokes node scripts/red-on-base.mjs with --test
+// and --expect, and whose last RED-ON-BASE summary after it in that block is a
+// PASS. Returns { line, argText } per run, argText being what follows
+// `red-on-base.mjs` on the line. CI re-runs these (scripts/gate-proofs.mjs).
+export function acceptedRedOnBaseRuns(blocks) {
+  const runs = [];
+  for (const b of blocks) {
+    b.forEach((l, i) => {
+      const m = RED_ON_BASE_INVOKE_RE.exec(l);
+      if (!m || !/(?:^|\s)--test\s+\S/.test(m[1]) || !/(?:^|\s)--expect\s+\S/.test(m[1])) return;
+      const after = b.slice(i + 1).filter(x => RED_ON_BASE_ANY_SUMMARY_RE.test(x));
+      if (after.length > 0 && RED_ON_BASE_SUMMARY_RE.test(after[after.length - 1])) runs.push({ line: l.trim(), argText: m[1] });
+    });
+  }
+  return runs;
+}
+
+export function isBugFix(cleanBody, title) {
   const reasons = [];
   const prose = proseLines(cleanBody);
   if (title != null && FIX_TITLE_RE.test(title)) reasons.push('title is a fix: conventional commit');
@@ -555,12 +577,7 @@ function checkVerification(body, title) {
     // A block counts only if a line really invokes the runner (node
     // scripts/red-on-base.mjs --test ... --expect ...) and the last summary line
     // after that invocation in the block is a PASS.
-    const pasted = sec.blocks.some(b => b.some((l, i) => {
-      const m = RED_ON_BASE_INVOKE_RE.exec(l);
-      if (!m || !/(?:^|\s)--test\s+\S/.test(m[1]) || !/(?:^|\s)--expect\s+\S/.test(m[1])) return false;
-      const after = b.slice(i + 1).filter(x => RED_ON_BASE_ANY_SUMMARY_RE.test(x));
-      return after.length > 0 && RED_ON_BASE_SUMMARY_RE.test(after[after.length - 1]);
-    }));
+    const pasted = acceptedRedOnBaseRuns(sec.blocks).length > 0;
     const summaries = sec.blocks.flat().filter(x => RED_ON_BASE_ANY_SUMMARY_RE.test(x));
     if (summaries.length && !RED_ON_BASE_SUMMARY_RE.test(summaries[summaries.length - 1])) {
       problems.push(`the last RED-ON-BASE summary in Verification is not a PASS: ${summaries[summaries.length - 1].trim()}`);
@@ -650,4 +667,4 @@ function main() {
   process.exit(ok ? 0 : 1);
 }
 
-main();
+if (IS_MAIN) main();
