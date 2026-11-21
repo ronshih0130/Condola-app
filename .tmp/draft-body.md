@@ -1,5 +1,0 @@
-## Verification
-```
-$ npm test
-ok
-```
